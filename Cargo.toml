@@ -17,6 +17,7 @@ members = [
     "misc/py-repl",
     "misc/compute-shader",
     "misc/smach",
+    "unros/cakap",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]
@@ -67,6 +68,7 @@ networking = { path = "unros/networking" }
 obstacles = { path = "unros/obstacles" }
 compute-shader = { path = "misc/compute-shader" }
 py-repl = { path = "misc/py-repl" }
+cakap = { path = "unros/cakap" }
 
 # The following crates need to run at full power
 # in most contexts to be effective.

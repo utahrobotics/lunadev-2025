@@ -1,0 +1,11 @@
+[package]
+name = "cakap"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+laminar = { version = "0.5", optional = true }
+serde = { workspace = true }
+bitcode = "0.6.0"
+rkyv = { version = "0.7.44", optional = true }
+crc = "3.2.1"

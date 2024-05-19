@@ -14,6 +14,7 @@
 //! 5. The Service framework (analagous to ROS actions and services)
 
 #![allow(clippy::type_complexity)]
+#![feature(sync_unsafe_cell)]
 
 use std::{borrow::Cow, marker::PhantomData};
 
@@ -31,7 +32,6 @@ pub use log;
 pub use rand;
 pub use rayon;
 pub use tokio;
-
 
 #[derive(Clone, Debug)]
 pub struct DontDrop<T: ShouldNotDrop + ?Sized> {
