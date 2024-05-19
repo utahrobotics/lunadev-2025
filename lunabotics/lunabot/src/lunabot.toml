@@ -1,9 +1,0 @@
-# The rig of lunabot
-[children.camera]
-position = [0.0, 0.0, 0.0]
-
-[children.debug]
-position = [0.0, 0.0, 0.0]
-
-[children.imu01]
-position = [0.0, 0.0, 0.0]

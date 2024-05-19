@@ -1,8 +1,0 @@
-[gd_scene load_steps=2 format=3 uid="uid://s8kxwa7b8f1t"]
-
-[ext_resource type="Script" path="res://ray_scanner.gd" id="1_ukqj2"]
-
-[node name="RayScanner" type="Camera3D"]
-script = ExtResource("1_ukqj2")
-width = 32
-height = 18

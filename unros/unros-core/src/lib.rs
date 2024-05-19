@@ -14,11 +14,8 @@
 //! 5. The Service framework (analagous to ROS actions and services)
 
 #![allow(clippy::type_complexity)]
-#![feature(once_cell_try)]
-#![feature(ptr_metadata)]
-#![feature(alloc_layout_extra)]
 
-use std::{borrow::Cow, marker::PhantomData, path::Path, sync::OnceLock};
+use std::{borrow::Cow, marker::PhantomData};
 
 pub mod float;
 pub mod logging;
@@ -30,28 +27,11 @@ pub mod service;
 pub mod utils;
 
 pub use anyhow;
-use config::Config;
 pub use log;
 pub use rand;
 pub use rayon;
-use serde::Deserialize;
 pub use tokio;
 
-static CONFIG: OnceLock<Config> = OnceLock::new();
-
-/// Deserialize environment variables and the default config file into the given generic type.
-pub fn get_env<'de, T: Deserialize<'de>>() -> anyhow::Result<T> {
-    let mut config = Config::builder()
-        .add_source(config::Environment::with_prefix("").convert_case(config::Case::Snake));
-    if Path::new("settings.toml").exists() {
-        config = config.add_source(config::File::with_name("settings.toml"));
-    }
-    CONFIG
-        .get_or_try_init(|| config.build())?
-        .clone()
-        .try_deserialize()
-        .map_err(Into::into)
-}
 
 #[derive(Clone, Debug)]
 pub struct DontDrop<T: ShouldNotDrop + ?Sized> {

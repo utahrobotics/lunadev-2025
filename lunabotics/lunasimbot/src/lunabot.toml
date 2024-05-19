@@ -1,7 +1,0 @@
-# The rig of lunabot
-[children.camera]
-joint = { Hinge = { axis = [1.0, 0.0, 0.0] } }
-position = [0.0, 0.5, 0.0]
-
-[children.debug]
-position = [0.0, 0.0, 0.0]
