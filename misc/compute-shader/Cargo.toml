@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wgpu = "0.19"
+wgpu = "0.20"
 anyhow = { workspace = true }
 bytemuck = { workspace = true }
 tokio = { workspace = true }
