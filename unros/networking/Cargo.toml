@@ -12,5 +12,5 @@ fxhash = { workspace = true }
 serde = { workspace = true }
 # crossbeam = { workspace = true }
 spin_sleep = { workspace = true }
-bitcode = "0.5"
+bitcode = "0.6"
 # bimap = "0.6"
