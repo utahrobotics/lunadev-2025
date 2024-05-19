@@ -23,9 +23,7 @@ use tokio::{
 };
 
 use crate::{
-    logging::init_default_logger,
-    pubsub::{MonoPublisher, Publisher, PublisherRef, Subscriber},
-    setup_logging,
+    logging::init_default_logger, pubsub::{callee::Subscriber, caller::{Callbacks, ImmutCallbacks, ImmutCallbacksRef, SingleCallback}}, setup_logging
 };
 
 pub enum DumpPath {
@@ -70,7 +68,7 @@ pub(crate) struct RuntimeContextInner {
     sync_persistent_threads: SegQueue<SyncJoinHandle<()>>,
     persistent_backtraces: SegQueue<Weak<Backtrace>>,
     exiting: watch::Receiver<bool>,
-    end_pub: Publisher<EndCondition>,
+    end_pub: ImmutCallbacks<EndCondition>,
     dump_path: PathBuf,
     pub(crate) runtime_handle: Handle,
 }
@@ -100,10 +98,10 @@ impl Drop for RuntimeContext {
     fn drop(&mut self) {
         setup_logging!(self);
         if Arc::strong_count(&self.inner) == 1 {
-            self.inner.end_pub.set(EndCondition::AllContextDropped);
+            self.inner.end_pub.call(EndCondition::AllContextDropped);
         } else if self.quit_on_drop {
             warn!("Exiting from {}...", Backtrace::capture());
-            self.inner.end_pub.set(EndCondition::QuitOnDrop);
+            self.inner.end_pub.call(EndCondition::QuitOnDrop);
         }
     }
 }
@@ -287,7 +285,7 @@ enum EndCondition {
     RuntimeDropped,
 }
 
-static CTRL_C_PUB: OnceLock<PublisherRef<EndCondition>> = OnceLock::new();
+static CTRL_C_PUB: OnceLock<ImmutCallbacksRef<EndCondition>> = OnceLock::new();
 static HAS_REPL: AtomicBool = AtomicBool::new(false);
 
 pub fn has_repl() -> bool {
@@ -320,18 +318,18 @@ pub fn start_unros_runtime<T: Send + 'static, F: Future<Output = T> + Send + 'st
     builder(&mut runtime_builder);
 
     let ctrl_c_ref = CTRL_C_PUB.get_or_init(|| {
-        let publisher = Publisher::default();
+        let publisher = ImmutCallbacks::default();
         let publisher_ref = publisher.get_ref();
 
         ctrlc::set_handler(move || {
-            publisher.set(EndCondition::CtrlC);
+            publisher.call(EndCondition::CtrlC);
         })
         .expect("Failed to initialize Ctrl-C handler");
 
         publisher_ref
     });
     let end_sub = Subscriber::new(32);
-    ctrl_c_ref.accept_subscription(end_sub.create_subscription());
+    ctrl_c_ref.add_callback(Box::new(end_sub.create_callback()));
 
     let dump_path = runtime_builder.get_dump_path();
 
@@ -348,7 +346,7 @@ pub fn start_unros_runtime<T: Send + 'static, F: Future<Output = T> + Send + 'st
         sync_persistent_threads: SegQueue::new(),
         async_persistent_threads: SegQueue::new(),
         exiting,
-        end_pub: Publisher::default(),
+        end_pub: Callbacks::default(),
         dump_path,
         persistent_backtraces: SegQueue::new(),
         runtime_handle: runtime.handle().clone(),
@@ -396,7 +394,7 @@ pub fn start_unros_runtime<T: Send + 'static, F: Future<Output = T> + Send + 'st
                 res.ok()
             }
             _ = cpu_fut => unreachable!(),
-            end = end_sub.recv() => {
+            end = end_sub.recv_or_never() => {
                 HAS_REPL.store(false, Ordering::Release);
                 match end {
                     EndCondition::CtrlC => log::warn!("Ctrl-C received. Exiting..."),
@@ -420,7 +418,8 @@ pub fn start_unros_runtime<T: Send + 'static, F: Future<Output = T> + Send + 'st
             }
         }
     });
-    let mut end_pub = MonoPublisher::from(end_sub.create_subscription());
+    let mut end_pub = SingleCallback::default();
+    end_pub.add_callback(Box::new(end_sub.create_mut_callback()));
     let dropper = std::thread::spawn(move || {
         runtime.block_on(async {
             while let Some(handle) = run_ctx_inner.async_persistent_threads.pop() {
@@ -435,14 +434,14 @@ pub fn start_unros_runtime<T: Send + 'static, F: Future<Output = T> + Send + 'st
                 log::error!("Failed to join thread: {e:?}");
             }
         }
-        end_pub.set(EndCondition::RuntimeDropped);
+        end_pub.call(EndCondition::RuntimeDropped);
     });
 
     let runtime = TokioBuilder::new_current_thread().build().unwrap();
 
     runtime.block_on(async {
         loop {
-            match end_sub.recv().await {
+            match end_sub.recv_or_never().await {
                 EndCondition::CtrlC => log::warn!("Ctrl-C received. Force exiting..."),
                 EndCondition::RuntimeDropped => {
                     let _ = dropper.join();

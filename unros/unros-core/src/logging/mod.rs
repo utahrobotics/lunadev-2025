@@ -13,10 +13,9 @@ use std::{
 use fern::colors::{Color, ColoredLevelConfig};
 use log::Level;
 
-use crate::{
-    pubsub::{Publisher, PublisherRef},
-    runtime::{has_repl, MainRuntimeContext, RuntimeContextExt},
-};
+use crate::{pubsub::caller::{ImmutCallbacks, ImmutCallbacksRef}, 
+    runtime::{has_repl, MainRuntimeContext, RuntimeContextExt}};
+
 
 pub mod dump;
 pub mod rate;
@@ -73,7 +72,7 @@ macro_rules! setup_logging {
 }
 
 pub(crate) static START_TIME: OnceLock<Instant> = OnceLock::new();
-static LOG_PUB: OnceLock<PublisherRef<Arc<str>>> = OnceLock::new();
+static LOG_PUB: OnceLock<ImmutCallbacksRef<Arc<str>>> = OnceLock::new();
 
 /// Gets a reference to the `Publisher` for logs.
 ///
@@ -81,13 +80,13 @@ static LOG_PUB: OnceLock<PublisherRef<Arc<str>>> = OnceLock::new();
 /// Panics if the logger has not been initialized. If this method
 /// is called inside of or after `start_unros_runtime`, the logger is
 /// always initialized.
-pub fn get_log_pub() -> PublisherRef<Arc<str>> {
+pub fn get_log_pub() -> ImmutCallbacksRef<Arc<str>> {
     LOG_PUB.get().unwrap().clone()
 }
 
 #[derive(Default)]
 struct LogPub {
-    publisher: Mutex<Publisher<Arc<str>>>,
+    publisher: Mutex<ImmutCallbacks<Arc<str>>>,
 }
 
 impl log::Log for LogPub {
@@ -102,7 +101,7 @@ impl log::Log for LogPub {
         self.publisher
             .lock()
             .unwrap()
-            .set(format!("{}", record.args()).into_boxed_str().into());
+            .call(format!("{}", record.args()).into_boxed_str().into());
     }
 
     fn flush(&self) {}

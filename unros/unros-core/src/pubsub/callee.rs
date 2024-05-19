@@ -46,7 +46,15 @@ impl<T> Subscriber<T> {
         }
     }
 
-    pub fn create_conservative_callback(&self) -> impl Fn(T) -> ControlFlow<()> {
+    pub async fn recv_or_never(&self) -> T {
+        if let Some(value) = self.recv().await {
+            value
+        } else {
+            std::future::pending().await
+        }
+    }
+
+    pub fn create_conservative_callback(&self) -> impl Fn(T) -> ControlFlow<()> + Send + Sync where T: Send {
         let inner = Arc::downgrade(&self.inner.clone());
         move |value| {
             let Some(inner) = inner.upgrade() else {
@@ -59,7 +67,7 @@ impl<T> Subscriber<T> {
         }
     }
 
-    pub fn create_callback(&self) -> impl Fn(T) -> ControlFlow<()> {
+    pub fn create_callback(&self) -> impl Fn(T) -> ControlFlow<()> + Send + Sync where T: Send {
         let inner = Arc::downgrade(&self.inner.clone());
         move |value| {
             let Some(inner) = inner.upgrade() else {
@@ -70,5 +78,15 @@ impl<T> Subscriber<T> {
             }
             ControlFlow::Continue(())
         }
+    }
+
+    #[inline]
+    pub fn create_conservative_mut_callback(&self) -> impl FnMut(T) -> ControlFlow<()> + Send + Sync where T: Send {
+        self.create_conservative_callback()
+    }
+
+    #[inline]
+    pub fn create_mut_callback(&self) -> impl FnMut(T) -> ControlFlow<()> + Send + Sync where T: Send {
+        self.create_callback()
     }
 }
