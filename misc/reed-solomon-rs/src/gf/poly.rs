@@ -26,11 +26,9 @@ impl Polynom {
     pub fn set_length(&mut self, new_len: usize) {
         let old_len = self.len();
         self.length = new_len;
-        
+
         if self.dirty && new_len > old_len {
-            for x in self.iter_mut().skip(old_len)
-                                    .take(new_len - old_len) 
-            {
+            for x in self.iter_mut().skip(old_len).take(new_len - old_len) {
                 *x = 0;
             }
         } else if new_len < old_len {

@@ -23,7 +23,12 @@ use tokio::{
 };
 
 use crate::{
-    logging::init_default_logger, pubsub::{callee::Subscriber, caller::{Callbacks, ImmutCallbacks, ImmutCallbacksRef, SingleCallback}}, setup_logging
+    logging::init_default_logger,
+    pubsub::{
+        callee::Subscriber,
+        caller::{Callbacks, ImmutCallbacks, ImmutCallbacksRef, SingleCallback},
+    },
+    setup_logging,
 };
 
 pub enum DumpPath {

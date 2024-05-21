@@ -13,9 +13,10 @@ use std::{
 use fern::colors::{Color, ColoredLevelConfig};
 use log::Level;
 
-use crate::{pubsub::caller::{ImmutCallbacks, ImmutCallbacksRef}, 
-    runtime::{has_repl, MainRuntimeContext, RuntimeContextExt}};
-
+use crate::{
+    pubsub::caller::{ImmutCallbacks, ImmutCallbacksRef},
+    runtime::{has_repl, MainRuntimeContext, RuntimeContextExt},
+};
 
 pub mod dump;
 pub mod rate;

@@ -1,0 +1,134 @@
+use std::{hash::BuildHasherDefault, sync::RwLock};
+
+use bytes::BytesMut;
+use fxhash::FxHashMap;
+use reed_solomon::{Decoder, Encoder};
+
+use super::Layer;
+
+
+static REED_SOLOMON_ENCODERS: RwLock<FxHashMap<usize, Encoder>> =
+    RwLock::new(FxHashMap::with_hasher(BuildHasherDefault::new()));
+
+
+static REED_SOLOMON_DECODERS: RwLock<FxHashMap<usize, Decoder>> =
+    RwLock::new(FxHashMap::with_hasher(BuildHasherDefault::new()));
+
+
+pub struct ECC<T> {
+    pub forward: T,
+    ecc_frac: f32,
+    ecc_len: usize
+}
+
+impl<T> ECC<T> {
+    pub fn new(ecc_frac: f32, forward: T) -> Self {
+        ECC { forward, ecc_frac, ecc_len: (ecc_frac * 255.0).round() as usize }
+    }
+}
+
+#[derive(Debug)]
+pub enum ECCRecvError<E> {
+    TooCorrupted,
+    ForwardError(E)
+}
+
+impl<E> From<E> for ECCRecvError<E> {
+    fn from(e: E) -> Self {
+        ECCRecvError::ForwardError(e)
+    }
+}
+
+impl<T> Layer for ECC<T>
+where
+    T: Layer<SendItem = BytesMut, RecvItem = BytesMut>,
+{
+    type SendError = T::SendError;
+    type RecvError = ECCRecvError<T::RecvError>;
+
+    type SendItem = BytesMut;
+    type RecvItem = BytesMut;
+
+    async fn send(&mut self, data: Self::SendItem) -> Result<(), Self::SendError> {
+        REED_SOLOMON_ENCODERS.clear_poison();
+        let mut reader;
+        let mut encoder = 'get: {
+            reader = REED_SOLOMON_ENCODERS.read().unwrap();
+            if let Some(encoder) = reader.get(&self.ecc_len) {
+                break 'get encoder;
+            }
+            drop(reader);
+            let encoder = Encoder::new(self.ecc_len);
+            REED_SOLOMON_ENCODERS.write().unwrap().insert(self.ecc_len, encoder);
+            reader = REED_SOLOMON_ENCODERS.read().unwrap();
+            break 'get reader.get(&self.ecc_len).unwrap();
+        };
+        let max_payload = 255 - self.ecc_len;
+        let mut out = BytesMut::with_capacity((data.len() as f32 * (1.0 + self.ecc_frac)).ceil() as usize);
+        let mut iter = data.chunks_exact(max_payload);
+        while let Some(fragment) = iter.next() {
+            let ecc = encoder.encode(fragment);
+            out.extend_from_slice(&ecc);
+        }
+
+        if !iter.remainder().is_empty() {
+            let ecc_len = (iter.remainder().len() as f32 * self.ecc_frac).ceil() as usize;
+            encoder = 'get: {
+                if let Some(encoder) = reader.get(&ecc_len) {
+                    break 'get encoder;
+                }
+                drop(reader);
+                let encoder = Encoder::new(ecc_len);
+                REED_SOLOMON_ENCODERS.write().unwrap().insert(ecc_len, encoder);
+                reader = REED_SOLOMON_ENCODERS.read().unwrap();
+                break 'get reader.get(&ecc_len).unwrap();
+            };
+            let ecc = encoder.encode(iter.remainder());
+            out.extend_from_slice(&ecc);
+        }
+
+        self.forward.send(out).await
+    }
+
+    async fn recv(&mut self) -> Result<Self::RecvItem, Self::RecvError> {
+        let data = self.forward.recv().await?;
+        REED_SOLOMON_DECODERS.clear_poison();
+        let mut reader;
+        let mut decoder = 'get: {
+            reader = REED_SOLOMON_DECODERS.read().unwrap();
+            if let Some(decoder) = reader.get(&self.ecc_len) {
+                break 'get decoder;
+            }
+            drop(reader);
+            let decoder = Decoder::new(self.ecc_len);
+            REED_SOLOMON_DECODERS.write().unwrap().insert(self.ecc_len, decoder);
+            reader = REED_SOLOMON_DECODERS.read().unwrap();
+            break 'get reader.get(&self.ecc_len).unwrap();
+        };
+        
+        let mut out = BytesMut::with_capacity((data.len() as f32 / (1.0 + self.ecc_frac)).ceil() as usize);
+        let mut iter = data.chunks_exact(255);
+        while let Some(fragment) = iter.next() {
+            let corrected = decoder.correct(&fragment, None).map_err(|_| ECCRecvError::TooCorrupted)?;
+            out.extend_from_slice(corrected.data());
+        }
+
+        if !iter.remainder().is_empty() {
+            let ecc_len = (iter.remainder().len() as f32 * (1.0 - 1.0 / (1.0 + self.ecc_frac))).ceil() as usize;
+            decoder = 'get: {
+                if let Some(decoder) = reader.get(&ecc_len) {
+                    break 'get decoder;
+                }
+                drop(reader);
+                let decoder = Decoder::new(ecc_len);
+                REED_SOLOMON_DECODERS.write().unwrap().insert(ecc_len, decoder);
+                reader = REED_SOLOMON_DECODERS.read().unwrap();
+                break 'get reader.get(&ecc_len).unwrap();
+            };
+            let corrected = decoder.correct(iter.remainder(), None).map_err(|_| ECCRecvError::TooCorrupted)?;
+            out.extend_from_slice(corrected.data());
+        }
+
+        Ok(out)
+    }
+}

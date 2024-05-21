@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-serde = { workspace = true }
+# serde = { workspace = true }
 tokio = { workspace = true }
 fxhash = { workspace = true }
 bitcode = "0.6.0"
-rkyv = { version = "0.7.44", optional = true }
 pnet = "0.34.0"
 reed-solomon = { path = "../reed-solomon-rs" }
 reed-solomon-erasure = { version = "4.0", features = [ "simd-accel" ] }
 bytes = "1.6.0"
 rand = { workspace = true }
+indexmap = "2.2.6"

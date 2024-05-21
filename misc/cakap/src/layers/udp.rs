@@ -51,9 +51,9 @@ impl Layer for UdpTransport {
         let mut bytes = self.receiver.recv().await.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "Failed to receive packet"))?;
 
         if bytes.len() <= MutableUdpPacket::minimum_packet_size() {
-            bytes.truncate(bytes[0] as usize);
+            bytes.truncate(bytes.last().copied().unwrap_or_default() as usize);
         } else {
-            bytes.truncate(bytes.len() - 1);
+            bytes.truncate(bytes.len().saturating_sub(1));
         }
 
         Ok(bytes)

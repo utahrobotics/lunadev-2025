@@ -81,9 +81,15 @@ pub struct Callbacks<T, S = MutCallbackStorage<DefaultCallback<T>>, C = DefaultC
     phantom: PhantomData<(T, C)>,
 }
 
-pub type SharedCallbacks<T> = Callbacks<T, MutCallbackSharedStorage<DefaultCallback<T>>, DefaultCallback<T>>;
-pub type ImmutCallbacks<T> = Callbacks<T, ImmutCallbackStorage<Box<dyn Fn(T) -> ControlFlow<()> + Send + Sync>>, Box<dyn Fn(T) -> ControlFlow<()> + Send + Sync>>;
-pub type SingleCallback<T> = Callbacks<T, SingleCallbackStorage<DefaultCallback<T>>, DefaultCallback<T>>;
+pub type SharedCallbacks<T> =
+    Callbacks<T, MutCallbackSharedStorage<DefaultCallback<T>>, DefaultCallback<T>>;
+pub type ImmutCallbacks<T> = Callbacks<
+    T,
+    ImmutCallbackStorage<Box<dyn Fn(T) -> ControlFlow<()> + Send + Sync>>,
+    Box<dyn Fn(T) -> ControlFlow<()> + Send + Sync>,
+>;
+pub type SingleCallback<T> =
+    Callbacks<T, SingleCallbackStorage<DefaultCallback<T>>, DefaultCallback<T>>;
 
 pub struct CallbackHandle<C> {
     callback: Arc<SyncUnsafeCell<C>>,
@@ -245,8 +251,7 @@ impl<T: Clone, C: FnMut(T) -> ControlFlow<()>> Callbacks<T, MutCallbackSharedSto
     pub fn call(&mut self, value: T) {
         for _ in 0..self.storage.callbacks.len() {
             let mut callback = self.storage.callbacks.pop().unwrap();
-            if ControlFlow::Continue(()) == callback(value.clone())
-            {
+            if ControlFlow::Continue(()) == callback(value.clone()) {
                 self.storage.callbacks.push(callback);
             }
         }
@@ -258,9 +263,8 @@ impl<T: Clone, C: Fn(T) -> ControlFlow<()>> Callbacks<T, ImmutCallbackStorage<C>
         self.storage.callbacks.clear_poison();
         if let Ok(mut callbacks) = self.storage.callbacks.try_write() {
             for i in (0..callbacks.len()).rev() {
-                if ControlFlow::Break(()) == (callbacks.get_mut(i).unwrap())(value.clone())
-                {
-                   callbacks.swap_remove(i);
+                if ControlFlow::Break(()) == (callbacks.get_mut(i).unwrap())(value.clone()) {
+                    callbacks.swap_remove(i);
                 }
             }
         } else {
@@ -280,8 +284,7 @@ impl<T, C: FnMut(T) -> ControlFlow<()>> Callbacks<T, SingleCallbackStorage<C>, C
     pub fn call(&mut self, value: T) {
         match &mut self.storage {
             SingleCallbackStorage::Callback(callback) => {
-                if ControlFlow::Break(()) == callback(value)
-                {
+                if ControlFlow::Break(()) == callback(value) {
                     self.storage = SingleCallbackStorage::None;
                 }
             }
@@ -379,5 +382,10 @@ impl<T, S: Clone, C> Clone for CallbacksRef<T, S, C> {
     }
 }
 
-pub type SharedCallbacksRef<T> = CallbacksRef<T, MutCallbackSharedStorage<DefaultCallback<T>>, DefaultCallback<T>>;
-pub type ImmutCallbacksRef<T> = CallbacksRef<T, ImmutCallbackStorage<Box<dyn Fn(T) -> ControlFlow<()> + Send + Sync>>, Box<dyn Fn(T) -> ControlFlow<()> + Send + Sync>>;
+pub type SharedCallbacksRef<T> =
+    CallbacksRef<T, MutCallbackSharedStorage<DefaultCallback<T>>, DefaultCallback<T>>;
+pub type ImmutCallbacksRef<T> = CallbacksRef<
+    T,
+    ImmutCallbackStorage<Box<dyn Fn(T) -> ControlFlow<()> + Send + Sync>>,
+    Box<dyn Fn(T) -> ControlFlow<()> + Send + Sync>,
+>;
