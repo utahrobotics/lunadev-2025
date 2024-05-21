@@ -14,3 +14,4 @@ reed-solomon-erasure = { version = "4.0", features = [ "simd-accel" ] }
 bytes = "1.6.0"
 rand = { workspace = true }
 indexmap = "2.2.6"
+# bytemuck = { workspace = true }

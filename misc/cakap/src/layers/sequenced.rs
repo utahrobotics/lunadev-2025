@@ -1,31 +1,21 @@
 use bytes::BytesMut;
 
-use super::Layer;
+use super::{Layer, UInt};
 
-#[derive(Clone, Copy, Debug)]
-pub enum SequenceOptions {
-    U8 { window_size: u8 },
-    U16 { window_size: u16 },
-    U32 { window_size: u32 },
-    U64 { window_size: u64 },
-}
-
-impl Default for SequenceOptions {
-    fn default() -> Self {
-        SequenceOptions::U16 { window_size: 128 }
-    }
+pub fn default_window_size() -> UInt {
+    UInt::U16(128)
 }
 
 pub struct Sequenced<T> {
-    options: SequenceOptions,
+    window_size: UInt,
     counter: u64,
     pub forward: T,
 }
 
 impl<T> Sequenced<T> {
-    pub fn new(options: SequenceOptions, forward: T) -> Self {
+    pub fn new(window_size: UInt, forward: T) -> Self {
         Sequenced {
-            options,
+            window_size,
             counter: 0,
             forward,
         }
@@ -55,24 +45,10 @@ where
     type RecvItem = BytesMut;
 
     async fn send(&mut self, mut data: Self::SendItem) -> Result<(), Self::SendError> {
-        match self.options {
-            SequenceOptions::U8 { .. } => {
-                data.extend_from_slice(&(self.counter as u8).to_be_bytes());
-                self.counter = self.counter.wrapping_add(1) % u8::MAX as u64;
-            }
-            SequenceOptions::U16 { .. } => {
-                data.extend_from_slice(&(self.counter as u16).to_be_bytes());
-                self.counter = self.counter.wrapping_add(1) % u16::MAX as u64;
-            }
-            SequenceOptions::U32 { .. } => {
-                data.extend_from_slice(&(self.counter as u32).to_be_bytes());
-                self.counter = self.counter.wrapping_add(1) % u32::MAX as u64;
-            }
-            SequenceOptions::U64 { .. } => {
-                data.extend_from_slice(&(self.counter as u64).to_be_bytes());
-                self.counter = self.counter.wrapping_add(1) % u64::MAX as u64;
-            }
-        }
+        self.window_size
+            .to_variant()
+            .with_u64(self.counter)
+            .extend_bytes_mut(&mut data);
         self.forward.send(data).await
     }
 
@@ -80,36 +56,29 @@ where
         loop {
             let mut data = self.forward.recv().await?;
 
-            macro_rules! sequence {
-                ($num: ty, $len: literal, $window_size: ident) => {{
-                    let slice_index = data.len().saturating_sub($len);
-                    let counter_slice = data.split_at(slice_index).1;
-                    let incoming_index: [u8; $len] = counter_slice
-                        .try_into()
-                        .map_err(|_| SequencedRecvError::PacketTooSmall)?;
-                    let incoming_index = <$num>::from_be_bytes(incoming_index) as u64;
-                    let upper_window_index = (<$num>::MAX - $window_size) as u64;
-
-                    if incoming_index >= self.counter {
-                        if self.counter < $window_size as u64
-                            && incoming_index >= upper_window_index
-                        {
-                            continue;
-                        }
-                    } else if self.counter < upper_window_index {
-                        continue;
-                    }
-                    self.counter = incoming_index.wrapping_add(1) % <$num>::MAX as u64;
-                    data.truncate(slice_index);
-                }};
+            let window_size = self.window_size.to_u64();
+            if data.len() < window_size as usize {
+                return Err(SequencedRecvError::PacketTooSmall);
             }
-
-            match self.options {
-                SequenceOptions::U8 { window_size } => sequence!(u8, 1, window_size),
-                SequenceOptions::U16 { window_size } => sequence!(u16, 2, window_size),
-                SequenceOptions::U32 { window_size } => sequence!(u32, 4, window_size),
-                SequenceOptions::U64 { window_size } => sequence!(u64, 8, window_size),
+            let slice_index = data.len() - self.window_size.size();
+            let counter_slice = data.split_at(slice_index).1;
+            let incoming_index = self
+                .window_size
+                .to_variant()
+                .try_with_slice(counter_slice)
+                .unwrap()
+                .to_u64();
+            let max_value = self.window_size.to_variant().max_value().to_u64();
+            let upper_window_index = max_value - window_size;
+            if incoming_index >= self.counter {
+                if self.counter < window_size && incoming_index >= upper_window_index {
+                    continue;
+                }
+            } else if self.counter < upper_window_index {
+                continue;
             }
+            self.counter = incoming_index.wrapping_add(1) % max_value;
+            data.truncate(slice_index);
 
             break Ok(data);
         }

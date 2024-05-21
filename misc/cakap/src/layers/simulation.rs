@@ -16,7 +16,6 @@ pub enum RngVariant {
     Seeded(SmallRng),
 }
 
-
 pub struct Corruptor<T> {
     pub direction: Direction,
     pub rng: RngVariant,
@@ -40,23 +39,24 @@ where
             match &mut self.rng {
                 RngVariant::ThreadRng => {
                     let mut rng = rand::thread_rng();
-                    let bytes_to_corrupt =
-                        (data.len() as f32 * rng.gen_range(self.min_corruption_rate..=self.max_corruption_rate)).round() as usize;
+                    let bytes_to_corrupt = (data.len() as f32
+                        * rng.gen_range(self.min_corruption_rate..=self.max_corruption_rate))
+                    .round() as usize;
                     for _ in 0..bytes_to_corrupt {
                         let index = rng.gen_range(0..data.len());
                         data[index] = rng.gen();
                     }
                 }
                 RngVariant::Seeded(rng) => {
-                    let bytes_to_corrupt =
-                        (data.len() as f32 * rng.gen_range(self.min_corruption_rate..=self.max_corruption_rate)).round() as usize;
+                    let bytes_to_corrupt = (data.len() as f32
+                        * rng.gen_range(self.min_corruption_rate..=self.max_corruption_rate))
+                    .round() as usize;
                     for _ in 0..bytes_to_corrupt {
                         let index = rng.gen_range(0..data.len());
                         data[index] = rng.gen();
                     }
                 }
             }
-            
         }
         self.forward.send(data).await
     }
@@ -68,23 +68,24 @@ where
             match &mut self.rng {
                 RngVariant::ThreadRng => {
                     let mut rng = rand::thread_rng();
-                    let bytes_to_corrupt =
-                        (data.len() as f32 * rng.gen_range(self.min_corruption_rate..=self.max_corruption_rate)).round() as usize;
+                    let bytes_to_corrupt = (data.len() as f32
+                        * rng.gen_range(self.min_corruption_rate..=self.max_corruption_rate))
+                    .round() as usize;
                     for _ in 0..bytes_to_corrupt {
                         let index = rng.gen_range(0..data.len());
                         data[index] = rng.gen();
                     }
                 }
                 RngVariant::Seeded(rng) => {
-                    let bytes_to_corrupt =
-                        (data.len() as f32 * rng.gen_range(self.min_corruption_rate..=self.max_corruption_rate)).round() as usize;
+                    let bytes_to_corrupt = (data.len() as f32
+                        * rng.gen_range(self.min_corruption_rate..=self.max_corruption_rate))
+                    .round() as usize;
                     for _ in 0..bytes_to_corrupt {
                         let index = rng.gen_range(0..data.len());
                         data[index] = rng.gen();
                     }
                 }
             }
-            
         }
 
         Ok(data)
@@ -123,7 +124,6 @@ where
                     }
                 }
             }
-            
         }
         self.forward.send(data).await
     }

@@ -3,7 +3,6 @@ use std::{collections::HashMap, hash::BuildHasherDefault, sync::RwLock};
 use bytes::BytesMut;
 use fxhash::FxHashMap;
 use indexmap::{IndexMap, IndexSet};
-use rand::Rng;
 use reed_solomon_erasure::{galois_16, galois_8};
 
 use super::{Layer, UInt, UIntVariant};
@@ -41,6 +40,7 @@ impl<E> From<E> for FragmentRecvError<E> {
 
 pub struct Fragmenter<T> {
     pub max_fragment_payload_size: usize,
+    header_size: usize,
     redundant_factor: f32,
     max_fragment_count: UInt,
     max_active_fragments: UInt,
@@ -61,129 +61,57 @@ where
     type RecvItem = BytesMut;
 
     async fn send(&mut self, data: Self::SendItem) -> Result<(), Self::SendError> {
-        let mut fragment_count = data.len().div_ceil(self.max_fragment_payload_size);
+        let mut fragment_count = data.len().div_ceil(self.max_fragment_payload_size) as u64;
         let redundant_fragment_count =
-            (fragment_count as f32 * self.redundant_factor).round() as usize;
+            (fragment_count as f32 * self.redundant_factor).round() as u64;
         fragment_count += redundant_fragment_count;
 
-        let mut header_size;
-        let max_fragment_count = match self.max_fragment_count {
-            UInt::U8(n) => {
-                header_size = 1;
-                n as u64
-            }
-            UInt::U16(n) => {
-                header_size = 2;
-                n as u64
-            }
-            UInt::U32(n) => {
-                header_size = 4;
-                n as u64
-            }
-            UInt::U64(n) => {
-                header_size = 8;
-                n
-            }
-        };
-        if fragment_count as u64 > max_fragment_count {
+        // A Header is comprised of the fragment index, number of fragments, and fragment id
+        // let header_size = self.max_fragment_count.size() * 2 + self.fragment_id_type.size();
+        let max_fragment_count = self.max_fragment_count.to_u64();
+        if fragment_count > max_fragment_count {
             return Err(FragmentSendError::PacketTooBig);
         }
 
         let actual_fragment_payload_size = data
             .len()
-            .div_ceil(fragment_count - redundant_fragment_count);
+            .div_ceil((fragment_count - redundant_fragment_count) as usize);
 
-        let max_active_fragments = match self.max_active_fragments {
-            UInt::U8(n) => n as u64,
-            UInt::U16(n) => n as u64,
-            UInt::U32(n) => n as u64,
-            UInt::U64(n) => n as u64,
-        };
-        if self.send_active_fragments.len() as u64 == max_active_fragments {
+        let max_active_fragments = self.max_active_fragments.to_u64();
+        if self.send_active_fragments.len() as u64 >= max_active_fragments {
             self.send_active_fragments.shift_remove(&0);
         }
         let mut fragment_id;
         {
             let mut rng = rand::thread_rng();
             loop {
-                match self.fragment_id_type {
-                    UIntVariant::U8 => {
-                        fragment_id = rng.gen::<u8>() as u64;
-                        header_size += 1;
-                    }
-                    UIntVariant::U16 => {
-                        fragment_id = rng.gen::<u16>() as u64;
-                        header_size += 2;
-                    }
-                    UIntVariant::U32 => {
-                        fragment_id = rng.gen::<u32>() as u64;
-                        header_size += 4;
-                    }
-                    UIntVariant::U64 => {
-                        fragment_id = rng.gen::<u64>() as u64;
-                        header_size += 8;
-                    }
-                }
+                fragment_id = self.fragment_id_type.random(&mut rng).to_u64();
 
-                if !self.send_active_fragments.contains(&fragment_id) {
-                    self.send_active_fragments.insert(fragment_id);
+                if self.send_active_fragments.insert(fragment_id) {
                     break;
                 }
             }
         }
 
         for fragment_data in data.chunks(actual_fragment_payload_size) {
-            let mut fragment_packet = BytesMut::zeroed(actual_fragment_payload_size + header_size);
-            let end_point;
-            if fragment_data.len() < actual_fragment_payload_size {
-                end_point = fragment_data.len();
-            } else {
-                end_point = actual_fragment_payload_size;
-            }
-            fragment_packet[0..end_point].copy_from_slice(fragment_data);
+            let mut fragment_packet =
+                BytesMut::zeroed(actual_fragment_payload_size + self.header_size);
+            fragment_packet[0..fragment_data.len()].copy_from_slice(fragment_data);
 
-            let final_fragment_portion;
-            match self.max_fragment_count {
-                UInt::U8(n) => {
-                    fragment_packet[actual_fragment_payload_size..actual_fragment_payload_size + 1]
-                        .copy_from_slice(&n.to_be_bytes());
-                    final_fragment_portion =
-                        &mut fragment_packet[actual_fragment_payload_size + 1..];
-                }
-                UInt::U16(n) => {
-                    fragment_packet[actual_fragment_payload_size..actual_fragment_payload_size + 2]
-                        .copy_from_slice(&n.to_be_bytes());
-                    final_fragment_portion =
-                        &mut fragment_packet[actual_fragment_payload_size + 4..];
-                }
-                UInt::U32(n) => {
-                    fragment_packet[actual_fragment_payload_size..actual_fragment_payload_size + 4]
-                        .copy_from_slice(&n.to_be_bytes());
-                    final_fragment_portion =
-                        &mut fragment_packet[actual_fragment_payload_size + 4..];
-                }
-                UInt::U64(n) => {
-                    fragment_packet[actual_fragment_payload_size..actual_fragment_payload_size + 8]
-                        .copy_from_slice(&n.to_be_bytes());
-                    final_fragment_portion =
-                        &mut fragment_packet[actual_fragment_payload_size + 8..];
-                }
-            }
+            self.max_fragment_count
+                .copy_to_slice(
+                    &mut fragment_packet[actual_fragment_payload_size
+                        ..actual_fragment_payload_size + self.max_fragment_count.size()],
+                )
+                .unwrap();
+            let final_fragment_portion = &mut fragment_packet
+                [actual_fragment_payload_size + self.max_fragment_count.size()..];
 
-            match self.fragment_id_type {
-                UIntVariant::U8 => {
-                    final_fragment_portion.copy_from_slice(&(fragment_id as u8).to_be_bytes())
-                }
-                UIntVariant::U16 => {
-                    final_fragment_portion.copy_from_slice(&(fragment_id as u16).to_be_bytes())
-                }
-                UIntVariant::U32 => {
-                    final_fragment_portion.copy_from_slice(&(fragment_id as u32).to_be_bytes())
-                }
-                UIntVariant::U64 => {
-                    final_fragment_portion.copy_from_slice(&(fragment_id as u64).to_be_bytes())
-                }
-            }
+            self.fragment_id_type
+                .with_u64(fragment_id)
+                .copy_to_slice(final_fragment_portion)
+                .unwrap();
+
             self.forward.send(fragment_packet).await?;
         }
 
@@ -231,48 +159,53 @@ where
             }
             let fragment_index;
             let fragment_index_start;
+            let max_fragment_count;
             match self.max_fragment_count {
                 UInt::U8(n) => {
+                    max_fragment_count = n as u64;
                     fragment_index_start = fragment_id_start.saturating_sub(1);
                     let fragment_index_slice = &data[fragment_index_start..fragment_id_start];
                     let fragment_index_array: [u8; 1] = fragment_index_slice
                         .try_into()
                         .map_err(|_| FragmentRecvError::PacketTooSmall)?;
                     fragment_index = u8::from_be_bytes(fragment_index_array) as u64;
-                    if fragment_index >= n as u64 {
+                    if fragment_index >= max_fragment_count {
                         return Err(FragmentRecvError::BadFragmentIndex);
                     }
                 }
                 UInt::U16(n) => {
+                    max_fragment_count = n as u64;
                     fragment_index_start = fragment_id_start.saturating_sub(2);
                     let fragment_index_slice = &data[fragment_index_start..fragment_id_start];
                     let fragment_index_array: [u8; 2] = fragment_index_slice
                         .try_into()
                         .map_err(|_| FragmentRecvError::PacketTooSmall)?;
                     fragment_index = u16::from_be_bytes(fragment_index_array) as u64;
-                    if fragment_index >= n as u64 {
+                    if fragment_index >= max_fragment_count {
                         return Err(FragmentRecvError::BadFragmentIndex);
                     }
                 }
                 UInt::U32(n) => {
+                    max_fragment_count = n as u64;
                     fragment_index_start = fragment_id_start.saturating_sub(4);
                     let fragment_index_slice = &data[fragment_index_start..fragment_id_start];
                     let fragment_index_array: [u8; 4] = fragment_index_slice
                         .try_into()
                         .map_err(|_| FragmentRecvError::PacketTooSmall)?;
                     fragment_index = u32::from_be_bytes(fragment_index_array) as u64;
-                    if fragment_index >= n as u64 {
+                    if fragment_index >= max_fragment_count {
                         return Err(FragmentRecvError::BadFragmentIndex);
                     }
                 }
                 UInt::U64(n) => {
+                    max_fragment_count = n as u64;
                     fragment_index_start = fragment_id_start.saturating_sub(8);
                     let fragment_index_slice = &data[fragment_index_start..fragment_id_start];
                     let fragment_index_array: [u8; 8] = fragment_index_slice
                         .try_into()
                         .map_err(|_| FragmentRecvError::PacketTooSmall)?;
                     fragment_index = u64::from_be_bytes(fragment_index_array) as u64;
-                    if fragment_index >= n as u64 {
+                    if fragment_index >= max_fragment_count {
                         return Err(FragmentRecvError::BadFragmentIndex);
                     }
                 }
@@ -284,7 +217,10 @@ where
                 buffers[fragment_index as usize] = data;
             } else {
                 let mut buffers = Vec::new();
-                buffers.push(data);
+                for _ in 0..max_fragment_count {
+                    buffers.push(BytesMut::new());
+                }
+                buffers[fragment_index as usize] = data;
                 self.recv_active_fragments.insert(fragment_id, buffers);
             }
         }
