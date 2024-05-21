@@ -1,23 +1,23 @@
 [workspace]
 members = [
     "unros/unros-core",
-    "unros/camera",
-    "unros/apriltag",
-    "unros/localization",
-    "unros/serial",
-    "unros/navigator",
-    "unros/rig",
+    # "unros/camera",
+    # "unros/apriltag",
+    # "unros/localization",
+    # "unros/serial",
+    # "unros/navigator",
+    # "unros/rig",
     "unros/unros-macros",
     "unros/unros",
-    "unros/realsense",
+    # "unros/realsense",
     # "unros/camera-info",
-    "unros/networking",
-    "unros/obstacles",
+    # "unros/networking",
+    # "unros/obstacles",
 
     "misc/py-repl",
     "misc/compute-shader",
     "misc/smach",
-    "unros/cakap",
+    "misc/cakap",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]
@@ -68,7 +68,7 @@ networking = { path = "unros/networking" }
 obstacles = { path = "unros/obstacles" }
 compute-shader = { path = "misc/compute-shader" }
 py-repl = { path = "misc/py-repl" }
-cakap = { path = "unros/cakap" }
+cakap = { path = "misc/cakap" }
 
 # The following crates need to run at full power
 # in most contexts to be effective.
