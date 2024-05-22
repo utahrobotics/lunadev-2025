@@ -6,97 +6,57 @@
 
 use std::sync::Arc;
 
-#[cfg(unix)]
-use std::{sync::Mutex, time::Duration};
-
-#[cfg(unix)]
-pub use eye::hal::device::Description;
-#[cfg(unix)]
-use eye::hal::{
-    format::PixelFormat,
-    platform::Device,
-    traits::{Context as HalContext, Device as HalDevice, Stream},
-    PlatformContext,
-};
-#[cfg(unix)]
-use image::codecs::jpeg::JpegDecoder;
 use image::{imageops::FilterType, DynamicImage};
-use unros::{
-    anyhow,
-    node::SyncNode,
-    pubsub::{Publisher, PublisherRef},
-    runtime::RuntimeContext,
-    setup_logging, DontDrop, ShouldNotDrop,
+use nokhwa::{
+    pixel_format::RgbFormat,
+    query,
+    utils::{
+        CameraFormat, CameraIndex, FrameFormat, RequestedFormat, RequestedFormatType, Resolution,
+    },
 };
-#[cfg(not(unix))]
-pub struct Description {
-    pub uri: String,
-    pub product: String,
-}
-
-#[cfg(unix)]
-static PLATFORM: Mutex<Option<PlatformContext>> = Mutex::new(None);
+use unros::{
+    anyhow::{self, Context},
+    async_trait, asyncify_run, log,
+    pubsub::{Publisher, PublisherRef},
+    setup_logging, DropCheck, Node, NodeIntrinsics, RuntimeContext,
+};
 
 /// A pending connection to a camera.
 ///
 /// The connection is not created until this `Node` is ran.
-#[derive(ShouldNotDrop)]
-pub struct Camera<F = fn(DynamicImage, u32, u32) -> DynamicImage> {
+pub struct Camera {
     pub fps: u32,
+    pub camera_index: u32,
     pub res_x: u32,
     pub res_y: u32,
-    #[cfg(unix)]
-    device: Mutex<Device<'static>>,
-    description: Description,
+    camera_name: String,
     image_received: Publisher<Arc<DynamicImage>>,
-    dont_drop: DontDrop<Self>,
-    #[allow(dead_code)]
-    resizer: F,
-}
-
-fn crop_resize(img: DynamicImage, res_x: u32, res_y: u32) -> DynamicImage {
-    img.resize_to_fill(res_x, res_y, FilterType::Triangle)
+    intrinsics: NodeIntrinsics<Self>,
 }
 
 impl Camera {
     /// Creates a pending connection to the camera with the given index.
-    pub fn new(description: Description) -> anyhow::Result<Self> {
-        #[cfg(unix)]
-        let mut platform_lock;
-        #[cfg(unix)]
-        let platform = {
-            platform_lock = PLATFORM.lock().unwrap();
-            if platform_lock.is_none() {
-                *platform_lock = Some(
-                    PlatformContext::all()
-                        .next()
-                        .ok_or_else(|| anyhow::anyhow!("Unable to get PlatformContext"))?,
-                );
-            }
-            platform_lock.as_mut().unwrap()
-        };
-
+    pub fn new(camera_index: u32) -> anyhow::Result<Self> {
+        let tmp_camera = nokhwa::Camera::new(
+            CameraIndex::Index(camera_index),
+            RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate),
+        )
+        .context("Failed to initialize camera")?;
+        let camera_name = tmp_camera.info().human_name();
+        log::info!("Pinged {} with index {}", camera_name, camera_index);
         Ok(Self {
             fps: 0,
             res_x: 0,
             res_y: 0,
-            #[cfg(unix)]
-            device: Mutex::new(platform.open_device(&description.uri)?),
+            camera_index,
+            camera_name,
             image_received: Default::default(),
-            dont_drop: DontDrop::new(description.product.clone()),
-            description,
-            resizer: crop_resize,
+            intrinsics: Default::default(),
         })
     }
-}
 
-impl<F: FnMut(DynamicImage, u32, u32) -> DynamicImage + Send> Camera<F> {
     pub fn get_camera_name(&self) -> &str {
-        &self.description.product
-    }
-
-    pub fn get_camera_uri(&self) -> &str {
-        &self.description.uri
+        &self.camera_name
     }
 
     /// Gets a reference to the `Signal` that represents received images.
@@ -105,131 +65,75 @@ impl<F: FnMut(DynamicImage, u32, u32) -> DynamicImage + Send> Camera<F> {
     }
 }
 
-impl<F> SyncNode for Camera<F>
-where
-    F: FnMut(DynamicImage, u32, u32) -> DynamicImage + Send + 'static,
-{
-    type Result = anyhow::Result<()>;
-    const PERSISTENT: bool = true;
+#[async_trait]
+impl Node for Camera {
+    const DEFAULT_NAME: &'static str = "camera";
 
-    #[cfg(unix)]
-    fn run(mut self, context: RuntimeContext) -> Self::Result {
-        use std::io::Cursor;
+    fn get_intrinsics(&mut self) -> &mut NodeIntrinsics<Self> {
+        &mut self.intrinsics
+    }
 
+    async fn run(mut self, context: RuntimeContext) -> anyhow::Result<()> {
         setup_logging!(context);
-        self.dont_drop.ignore_drop = true;
-        let device = self.device.get_mut().unwrap();
-        let streams = device.streams()?;
 
-        let Some(mut stream_desc) = streams.into_iter().next() else {
-            return Err(anyhow::anyhow!(
-                "No streams available for {} at {}",
-                self.description.product,
-                self.description.uri
-            ));
-        };
+        let index = CameraIndex::Index(self.camera_index);
 
-        if self.res_x != 0 {
-            stream_desc.width = self.res_x;
-        }
-        if self.res_y != 0 {
-            stream_desc.height = self.res_y;
-        }
-
-        // stream_desc.pixfmt = PixelFormat::Rgb(8);
-
-        stream_desc.interval = if self.fps == 0 {
-            Duration::from_secs(1) / 30
-        } else {
-            Duration::from_secs(1) / self.fps
-        };
-
-        let mut stream = device.start_stream(&stream_desc)?;
-
-        loop {
-            let Some(result) = stream.next() else {
-                break Ok(());
-            };
-            let frame = result?;
-            if context.is_runtime_exiting() {
-                break Ok(());
-            }
-
-            let mut img = match &stream_desc.pixfmt {
-                PixelFormat::Gray(8) => continue,
-                PixelFormat::Rgb(8) => continue,
-                PixelFormat::Jpeg => {
-                    let decoder = JpegDecoder::new(Cursor::new(frame.to_vec())).unwrap();
-                    DynamicImage::from_decoder(decoder)?
-                }
-                _ => continue,
-            };
-
-            img = (self.resizer)(img, self.res_x, self.res_y);
-            if img.width() != self.res_x || img.height() != self.res_y {
-                error!(
-                    "Image was resized incorrectly to {}x{} instead of {}x{}",
-                    img.width(),
-                    img.height(),
-                    self.res_x,
-                    self.res_y
-                );
+        let requested = if self.fps > 0 {
+            if self.res_x > 0 && self.res_y > 0 {
+                RequestedFormat::new::<RgbFormat>(RequestedFormatType::Exact(CameraFormat::new(
+                    Resolution::new(self.res_x, self.res_y),
+                    FrameFormat::RAWRGB,
+                    self.fps,
+                )))
             } else {
+                RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestFrameRate(self.fps))
+            }
+        } else if self.res_x > 0 && self.res_y > 0 {
+            RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestResolution(
+                Resolution::new(self.res_x, self.res_y),
+            ))
+        } else {
+            RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate)
+        };
+
+        let res_x = self.res_x;
+        let res_y = self.res_y;
+
+        let drop_check = DropCheck::default();
+        let drop_obs = drop_check.get_observing();
+
+        asyncify_run(move || {
+            let mut camera =
+                nokhwa::Camera::new(index, requested).context("Failed to initialize camera")?;
+            camera.open_stream()?;
+            loop {
+                let frame = camera.frame()?;
+                if drop_obs.has_dropped() {
+                    break Ok(());
+                }
+                let decoded = frame.decode_image::<RgbFormat>().unwrap();
+                let mut img = DynamicImage::from(decoded);
+                if res_x != 0 && res_y != 0 {
+                    img = img.resize(res_x, res_y, FilterType::CatmullRom);
+                }
                 self.image_received.set(Arc::new(img));
             }
-        }
-        // let index = CameraIndex::Index(self.camera_index);
-
-        // let requested = if self.fps > 0 {
-        //     if self.res_x > 0 && self.res_y > 0 {
-        //         RequestedFormat::new::<RgbFormat>(RequestedFormatType::Exact(CameraFormat::new(
-        //             Resolution::new(self.res_x, self.res_y),
-        //             FrameFormat::RAWRGB,
-        //             self.fps,
-        //         )))
-        //     } else {
-        //         RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestFrameRate(self.fps))
-        //     }
-        // } else if self.res_x > 0 && self.res_y > 0 {
-        //     RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestResolution(
-        //         Resolution::new(self.res_x, self.res_y),
-        //     ))
-        // } else {
-        //     RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate)
-        // };
-
-        // let res_x = self.res_x;
-        // let res_y = self.res_y;
-    }
-    #[cfg(not(unix))]
-    fn run(mut self, context: RuntimeContext) -> Self::Result {
-        setup_logging!(context);
-        self.dont_drop.ignore_drop = true;
-        warn!("Camera node is not supported on this platform");
-        Ok(())
+        })
+        .await
     }
 }
 
 /// Returns an iterator over all the cameras that were identified on this computer.
-#[cfg(unix)]
 pub fn discover_all_cameras() -> anyhow::Result<impl Iterator<Item = Camera>> {
-    let ctx = PlatformContext::all()
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("Unable to get PlatformContext"))?;
-    Ok(ctx
-        .devices()?
+    Ok(query(nokhwa::utils::ApiBackend::Auto)?
         .into_iter()
-        .filter_map(|desc| match Camera::new(desc) {
-            Ok(cam) => Some(cam),
-            Err(e) => {
-                unros::log::error!("{e:?}");
-                None
-            }
+        .filter_map(|info| {
+            let CameraIndex::Index(n) = info.index() else {
+                return None;
+            };
+            let Ok(cam) = Camera::new(*n) else {
+                return None;
+            };
+            Some(cam)
         }))
-}
-
-/// Returns an iterator over all the cameras that were identified on this computer.
-#[cfg(not(unix))]
-pub fn discover_all_cameras() -> anyhow::Result<impl Iterator<Item = Camera>> {
-    Ok(std::iter::empty())
 }
