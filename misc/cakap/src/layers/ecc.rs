@@ -1,7 +1,8 @@
-use std::{hash::BuildHasherDefault, sync::RwLock};
+use std::hash::BuildHasherDefault;
 
 use bytes::BytesMut;
 use fxhash::FxHashMap;
+use parking_lot::{RwLock, RwLockWriteGuard};
 use reed_solomon::{Decoder, Encoder};
 
 use super::Layer;
@@ -51,20 +52,16 @@ where
     type RecvItem = BytesMut;
 
     async fn send(&mut self, data: Self::SendItem) -> Result<(), Self::SendError> {
-        REED_SOLOMON_ENCODERS.clear_poison();
         let mut reader;
         let mut encoder = 'get: {
-            reader = REED_SOLOMON_ENCODERS.read().unwrap();
+            reader = REED_SOLOMON_ENCODERS.read();
             if let Some(encoder) = reader.get(&self.ecc_len) {
                 break 'get encoder;
             }
             drop(reader);
             let encoder = Encoder::new(self.ecc_len);
-            REED_SOLOMON_ENCODERS
-                .write()
-                .unwrap()
-                .insert(self.ecc_len, encoder);
-            reader = REED_SOLOMON_ENCODERS.read().unwrap();
+            REED_SOLOMON_ENCODERS.write().insert(self.ecc_len, encoder);
+            reader = REED_SOLOMON_ENCODERS.read();
             break 'get reader.get(&self.ecc_len).unwrap();
         };
         let max_payload = 255 - self.ecc_len;
@@ -84,11 +81,8 @@ where
                 }
                 drop(reader);
                 let encoder = Encoder::new(ecc_len);
-                REED_SOLOMON_ENCODERS
-                    .write()
-                    .unwrap()
-                    .insert(ecc_len, encoder);
-                reader = REED_SOLOMON_ENCODERS.read().unwrap();
+                REED_SOLOMON_ENCODERS.write().insert(ecc_len, encoder);
+                reader = REED_SOLOMON_ENCODERS.read();
                 break 'get reader.get(&ecc_len).unwrap();
             };
             let ecc = encoder.encode(iter.remainder());
@@ -100,21 +94,18 @@ where
 
     async fn recv(&mut self) -> Result<Self::RecvItem, Self::RecvError> {
         let data = self.forward.recv().await?;
-        REED_SOLOMON_DECODERS.clear_poison();
         let mut reader;
         let mut decoder = 'get: {
-            reader = REED_SOLOMON_DECODERS.read().unwrap();
+            reader = REED_SOLOMON_DECODERS.read();
             if let Some(decoder) = reader.get(&self.ecc_len) {
                 break 'get decoder;
             }
             drop(reader);
             let decoder = Decoder::new(self.ecc_len);
-            REED_SOLOMON_DECODERS
-                .write()
-                .unwrap()
-                .insert(self.ecc_len, decoder);
-            reader = REED_SOLOMON_DECODERS.read().unwrap();
-            break 'get reader.get(&self.ecc_len).unwrap();
+            let mut writer = REED_SOLOMON_DECODERS.write();
+            writer.insert(self.ecc_len, decoder);
+            reader = RwLockWriteGuard::downgrade(writer);
+            reader.get(&self.ecc_len).unwrap()
         };
 
         let mut out =
@@ -136,12 +127,10 @@ where
                 }
                 drop(reader);
                 let decoder = Decoder::new(ecc_len);
-                REED_SOLOMON_DECODERS
-                    .write()
-                    .unwrap()
-                    .insert(ecc_len, decoder);
-                reader = REED_SOLOMON_DECODERS.read().unwrap();
-                break 'get reader.get(&ecc_len).unwrap();
+                let mut writer = REED_SOLOMON_DECODERS.write();
+                writer.insert(ecc_len, decoder);
+                reader = RwLockWriteGuard::downgrade(writer);
+                reader.get(&ecc_len).unwrap()
             };
             let corrected = decoder
                 .correct(iter.remainder(), None)
@@ -150,5 +139,10 @@ where
         }
 
         Ok(out)
+    }
+
+    #[inline(always)]
+    fn get_max_packet_size(&self) -> usize {
+        self.forward.get_max_packet_size()
     }
 }

@@ -27,6 +27,7 @@ pub trait Layer {
     fn recv(
         &mut self,
     ) -> impl std::future::Future<Output = Result<Self::RecvItem, Self::RecvError>>;
+    fn get_max_packet_size(&self) -> usize;
 }
 
 impl<'a, T: Layer> Layer for &'a mut T {
@@ -50,6 +51,11 @@ impl<'a, T: Layer> Layer for &'a mut T {
     ) -> impl std::future::Future<Output = Result<Self::RecvItem, Self::RecvError>> {
         T::recv(self)
     }
+
+    #[inline(always)]
+    fn get_max_packet_size(&self) -> usize {
+        T::get_max_packet_size(self)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -71,10 +77,10 @@ impl UInt {
         self.into()
     }
 
-    #[inline(always)]
-    pub(crate) fn copy_to_slice(self, slice: &mut [u8]) -> Result<(), TryFromSliceError> {
-        self.to_be_bytes().copy_to_slice(slice)
-    }
+    // #[inline(always)]
+    // pub(crate) fn copy_to_slice(self, slice: &mut [u8]) -> Result<(), TryFromSliceError> {
+    //     self.to_be_bytes().copy_to_slice(slice)
+    // }
 
     #[inline(always)]
     pub(crate) fn extend_bytes_mut(self, bytes: &mut BytesMut) {
@@ -97,6 +103,23 @@ impl UInt {
             Self::U32(_) => UIntVariant::U32,
             Self::U64(_) => UIntVariant::U64,
         }
+    }
+
+    pub fn with_u64(self, value: u64) -> Self {
+        match self {
+            Self::U8(_) => Self::U8(value as u8),
+            Self::U16(_) => Self::U16(value as u16),
+            Self::U32(_) => Self::U32(value as u32),
+            Self::U64(_) => Self::U64(value),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn try_with_slice(
+        self,
+        fragment_count_slice: &[u8],
+    ) -> Result<Self, TryFromSliceError> {
+        self.to_variant().try_with_slice(fragment_count_slice)
     }
 }
 

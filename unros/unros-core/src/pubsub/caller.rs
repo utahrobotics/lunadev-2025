@@ -1,11 +1,7 @@
-use std::{
-    cell::SyncUnsafeCell,
-    marker::PhantomData,
-    ops::ControlFlow,
-    sync::{Arc, RwLock},
-};
+use std::{cell::SyncUnsafeCell, marker::PhantomData, ops::ControlFlow, sync::Arc};
 
 use crossbeam::queue::SegQueue;
+use parking_lot::RwLock;
 
 /// A storage for callbacks that requires mutable access to add callbacks.
 pub struct MutCallbackStorage<C> {
@@ -167,12 +163,7 @@ impl<T: 'static> Callbacks<T, MutCallbackSharedStorage<DefaultCallback<T>>, Defa
 
 impl<T, C> Callbacks<T, ImmutCallbackStorage<C>, C> {
     pub fn add_callback(&self, callback: C) {
-        self.storage.callbacks.clear_poison();
-        self.storage
-            .callbacks
-            .write()
-            .unwrap()
-            .push(callback.into());
+        self.storage.callbacks.write().push(callback.into());
     }
 
     pub fn get_ref(&self) -> CallbacksRef<T, ImmutCallbackStorage<C>, C> {
@@ -192,11 +183,9 @@ impl<T: 'static> Callbacks<T, ImmutCallbackStorage<DefaultCallback<T>>, DefaultC
             callback: Arc::new(SyncUnsafeCell::new(callback.into())),
         };
         let weak = Arc::downgrade(&handle.callback);
-        self.storage.callbacks.clear_poison();
         self.storage
             .callbacks
             .write()
-            .unwrap()
             .push(Box::new(move |item| unsafe {
                 if let Some(callback) = weak.upgrade() {
                     (*callback.get())(item);
@@ -260,22 +249,16 @@ impl<T: Clone, C: FnMut(T) -> ControlFlow<()>> Callbacks<T, MutCallbackSharedSto
 
 impl<T: Clone, C: Fn(T) -> ControlFlow<()>> Callbacks<T, ImmutCallbackStorage<C>, C> {
     pub fn call(&self, value: T) {
-        self.storage.callbacks.clear_poison();
-        if let Ok(mut callbacks) = self.storage.callbacks.try_write() {
+        if let Some(mut callbacks) = self.storage.callbacks.try_write() {
             for i in (0..callbacks.len()).rev() {
                 if ControlFlow::Break(()) == (callbacks.get_mut(i).unwrap())(value.clone()) {
                     callbacks.swap_remove(i);
                 }
             }
         } else {
-            self.storage
-                .callbacks
-                .read()
-                .unwrap()
-                .iter()
-                .for_each(|callback| {
-                    callback(value.clone());
-                });
+            self.storage.callbacks.read().iter().for_each(|callback| {
+                callback(value.clone());
+            });
         }
     }
 }
@@ -338,12 +321,7 @@ impl<T: 'static> CallbacksRef<T, MutCallbackSharedStorage<DefaultCallback<T>>, D
 
 impl<T, C> CallbacksRef<T, ImmutCallbackStorage<C>, C> {
     pub fn add_callback(&self, callback: C) {
-        self.storage.callbacks.clear_poison();
-        self.storage
-            .callbacks
-            .write()
-            .unwrap()
-            .push(callback.into());
+        self.storage.callbacks.write().push(callback.into());
     }
 }
 
@@ -356,11 +334,9 @@ impl<T: 'static> CallbacksRef<T, ImmutCallbackStorage<DefaultCallback<T>>, Defau
             callback: Arc::new(SyncUnsafeCell::new(callback.into())),
         };
         let weak = Arc::downgrade(&handle.callback);
-        self.storage.callbacks.clear_poison();
         self.storage
             .callbacks
             .write()
-            .unwrap()
             .push(Box::new(move |item| unsafe {
                 if let Some(callback) = weak.upgrade() {
                     (*callback.get())(item);

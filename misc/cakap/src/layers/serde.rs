@@ -47,4 +47,9 @@ where
         let data = bitcode::decode(&source).map_err(BitcoderRecvError::DecodeError)?;
         Ok(data)
     }
+
+    #[inline(always)]
+    fn get_max_packet_size(&self) -> usize {
+        self.forward.get_max_packet_size()
+    }
 }

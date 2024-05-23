@@ -90,6 +90,11 @@ where
 
         Ok(data)
     }
+
+    #[inline(always)]
+    fn get_max_packet_size(&self) -> usize {
+        self.forward.get_max_packet_size()
+    }
 }
 
 pub struct Dropper<T> {
@@ -151,6 +156,11 @@ where
             break Ok(data);
         }
     }
+
+    #[inline(always)]
+    fn get_max_packet_size(&self) -> usize {
+        self.forward.get_max_packet_size()
+    }
 }
 
 pub struct Skip<T> {
@@ -199,59 +209,70 @@ where
             break Ok(data);
         }
     }
-}
 
-pub struct Delay<T> {
-    pub direction: Direction,
-    pub min_delay_msecs: usize,
-    pub max_delay_msecs: usize,
-    pub rng: RngVariant,
-    pub forward: T,
-}
-
-impl<T> Layer for Delay<T>
-where
-    T: Layer,
-{
-    type SendError = T::SendError;
-    type RecvError = T::RecvError;
-
-    type SendItem = T::SendItem;
-    type RecvItem = T::RecvItem;
-
-    async fn send(&mut self, data: Self::SendItem) -> Result<(), Self::SendError> {
-        if self.direction == Direction::Send || self.direction == Direction::Both {
-            let delay_msecs = match &mut self.rng {
-                RngVariant::ThreadRng => {
-                    rand::thread_rng().gen_range(self.min_delay_msecs..=self.max_delay_msecs)
-                }
-                RngVariant::Seeded(rng) => {
-                    rng.gen_range(self.min_delay_msecs..=self.max_delay_msecs)
-                }
-            };
-            tokio::time::sleep(std::time::Duration::from_millis(delay_msecs as u64)).await;
-        }
-        self.forward.send(data).await
-    }
-
-    async fn recv(&mut self) -> Result<Self::RecvItem, Self::RecvError> {
-        if self.direction == Direction::Recv || self.direction == Direction::Both {
-            let delay_msecs = match &mut self.rng {
-                RngVariant::ThreadRng => {
-                    rand::thread_rng().gen_range(self.min_delay_msecs..=self.max_delay_msecs)
-                }
-                RngVariant::Seeded(rng) => {
-                    rng.gen_range(self.min_delay_msecs..=self.max_delay_msecs)
-                }
-            };
-            tokio::time::sleep(std::time::Duration::from_millis(delay_msecs as u64)).await;
-        }
-        self.forward.recv().await
+    #[inline(always)]
+    fn get_max_packet_size(&self) -> usize {
+        self.forward.get_max_packet_size()
     }
 }
+
+// pub struct Delay<T> {
+//     pub direction: Direction,
+//     pub min_delay_msecs: usize,
+//     pub max_delay_msecs: usize,
+//     pub rng: RngVariant,
+//     pub forward: T,
+// }
+
+// impl<T> Layer for Delay<T>
+// where
+//     T: Layer,
+// {
+//     type SendError = T::SendError;
+//     type RecvError = T::RecvError;
+
+//     type SendItem = T::SendItem;
+//     type RecvItem = T::RecvItem;
+
+//     async fn send(&mut self, data: Self::SendItem) -> Result<(), Self::SendError> {
+//         if self.direction == Direction::Send || self.direction == Direction::Both {
+//             let delay_msecs = match &mut self.rng {
+//                 RngVariant::ThreadRng => {
+//                     rand::thread_rng().gen_range(self.min_delay_msecs..=self.max_delay_msecs)
+//                 }
+//                 RngVariant::Seeded(rng) => {
+//                     rng.gen_range(self.min_delay_msecs..=self.max_delay_msecs)
+//                 }
+//             };
+//             tokio::time::sleep(std::time::Duration::from_millis(delay_msecs as u64)).await;
+//         }
+//         self.forward.send(data).await
+//     }
+
+//     async fn recv(&mut self) -> Result<Self::RecvItem, Self::RecvError> {
+//         if self.direction == Direction::Recv || self.direction == Direction::Both {
+//             let delay_msecs = match &mut self.rng {
+//                 RngVariant::ThreadRng => {
+//                     rand::thread_rng().gen_range(self.min_delay_msecs..=self.max_delay_msecs)
+//                 }
+//                 RngVariant::Seeded(rng) => {
+//                     rng.gen_range(self.min_delay_msecs..=self.max_delay_msecs)
+//                 }
+//             };
+//             tokio::time::sleep(std::time::Duration::from_millis(delay_msecs as u64)).await;
+//         }
+//         self.forward.recv().await
+//     }
+
+//     #[inline(always)]
+//     fn get_max_packet_size(&self) -> usize {
+//         self.forward.get_max_packet_size()
+//     }
+// }
 
 pub struct DuplexTransport {
     inner: DuplexStream,
+    max_buf_usize: usize,
 }
 
 impl Layer for DuplexTransport {
@@ -275,9 +296,22 @@ impl Layer for DuplexTransport {
         self.inner.read_exact(&mut buffer).await?;
         Ok(buffer)
     }
+
+    fn get_max_packet_size(&self) -> usize {
+        self.max_buf_usize
+    }
 }
 
 pub fn duplex(max_buf_usize: usize) -> (DuplexTransport, DuplexTransport) {
-    let (a, b) = tokio::io::duplex(max_buf_usize);
-    (DuplexTransport { inner: a }, DuplexTransport { inner: b })
+    let (a, b) = tokio::io::duplex(max_buf_usize.saturating_add(std::mem::size_of::<usize>()));
+    (
+        DuplexTransport {
+            inner: a,
+            max_buf_usize,
+        },
+        DuplexTransport {
+            inner: b,
+            max_buf_usize,
+        },
+    )
 }

@@ -51,6 +51,7 @@ interprocess = { git = "https://github.com/kotauskas/interprocess", default-feat
 dst-init = "0.4.0"
 rayon = "1.10.0"
 bitvec = "1.0.1"
+parking_lot = "0.12.2"
 
 unros_core = { path = "unros/unros-core" }
 camera = { path = "unros/camera" }

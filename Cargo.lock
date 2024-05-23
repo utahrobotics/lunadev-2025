@@ -326,14 +326,17 @@ name = "cakap"
 version = "0.1.0"
 dependencies = [
  "bitcode",
+ "bytemuck",
  "bytes",
  "fxhash",
  "indexmap",
  "libc",
+ "parking_lot",
  "rand",
  "reed-solomon",
  "reed-solomon-erasure",
  "tokio",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2395,6 +2398,7 @@ dependencies = [
  "minifb",
  "nalgebra",
  "ordered-float",
+ "parking_lot",
  "rand",
  "rayon",
  "serde",

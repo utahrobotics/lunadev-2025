@@ -46,7 +46,6 @@ where
 
     async fn send(&mut self, mut data: Self::SendItem) -> Result<(), Self::SendError> {
         self.window_size
-            .to_variant()
             .with_u64(self.counter)
             .extend_bytes_mut(&mut data);
         self.forward.send(data).await
@@ -64,7 +63,6 @@ where
             let counter_slice = data.split_at(slice_index).1;
             let incoming_index = self
                 .window_size
-                .to_variant()
                 .try_with_slice(counter_slice)
                 .unwrap()
                 .to_u64();
@@ -82,5 +80,10 @@ where
 
             break Ok(data);
         }
+    }
+
+    #[inline(always)]
+    fn get_max_packet_size(&self) -> usize {
+        self.forward.get_max_packet_size()
     }
 }
