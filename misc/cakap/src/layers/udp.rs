@@ -78,8 +78,4 @@ impl Layer for UdpTransport {
         self.socket.recv_buf(&mut bytes).await?;
         Ok(bytes)
     }
-
-    fn get_max_packet_size(&self) -> usize {
-        self.maximum_packet_size
-    }
 }

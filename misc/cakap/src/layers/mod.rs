@@ -12,6 +12,7 @@ pub mod sequenced;
 pub mod serde;
 pub mod simulation;
 pub mod udp;
+pub mod reliable;
 
 pub trait Layer {
     type SendError;
@@ -27,7 +28,6 @@ pub trait Layer {
     fn recv(
         &mut self,
     ) -> impl std::future::Future<Output = Result<Self::RecvItem, Self::RecvError>>;
-    fn get_max_packet_size(&self) -> usize;
 }
 
 impl<'a, T: Layer> Layer for &'a mut T {
@@ -50,11 +50,6 @@ impl<'a, T: Layer> Layer for &'a mut T {
         &mut self,
     ) -> impl std::future::Future<Output = Result<Self::RecvItem, Self::RecvError>> {
         T::recv(self)
-    }
-
-    #[inline(always)]
-    fn get_max_packet_size(&self) -> usize {
-        T::get_max_packet_size(self)
     }
 }
 

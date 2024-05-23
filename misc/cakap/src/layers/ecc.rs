@@ -27,6 +27,14 @@ impl<T> ECC<T> {
             ecc_len: (ecc_frac * 255.0).round() as usize,
         }
     }
+
+    pub fn map<V>(self, new: V) -> ECC<V> {
+        ECC {
+            forward: new,
+            ecc_frac: self.ecc_frac,
+            ecc_len: self.ecc_len,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -139,10 +147,5 @@ where
         }
 
         Ok(out)
-    }
-
-    #[inline(always)]
-    fn get_max_packet_size(&self) -> usize {
-        self.forward.get_max_packet_size()
     }
 }

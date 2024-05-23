@@ -145,6 +145,19 @@ impl<T> Fragmenter<T> {
     pub fn builder() -> FragmenterBuilder {
         FragmenterBuilder::default()
     }
+
+    pub fn map<V>(self, new: V) -> Fragmenter<V> {
+        Fragmenter {
+            max_fragment_payload_size: self.max_fragment_payload_size,
+            redundant_factor: self.redundant_factor,
+            max_fragment_count: self.max_fragment_count,
+            max_active_fragments: self.max_active_fragments,
+            fragment_id_type: self.fragment_id_type,
+            send_active_fragments: self.send_active_fragments,
+            recv_active_fragments: self.recv_active_fragments,
+            forward: new,
+        }
+    }
 }
 
 impl<T> Layer for Fragmenter<T>
@@ -585,10 +598,5 @@ where
         }
         data.truncate((data.len() as u64 - padding) as usize);
         Ok(data)
-    }
-
-    #[inline(always)]
-    fn get_max_packet_size(&self) -> usize {
-        self.forward.get_max_packet_size()
     }
 }

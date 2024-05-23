@@ -47,9 +47,14 @@ where
         let data = bitcode::decode(&source).map_err(BitcoderRecvError::DecodeError)?;
         Ok(data)
     }
+}
 
-    #[inline(always)]
-    fn get_max_packet_size(&self) -> usize {
-        self.forward.get_max_packet_size()
+
+impl<T, L> Bitcoder<T, L> {
+    pub fn map<V>(self, new: V) -> Bitcoder<T, V> {
+        Bitcoder {
+            forward: new,
+            phantom: PhantomData,
+        }
     }
 }

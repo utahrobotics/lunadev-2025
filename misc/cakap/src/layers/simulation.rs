@@ -93,11 +93,6 @@ where
 
         Ok(data)
     }
-
-    #[inline(always)]
-    fn get_max_packet_size(&self) -> usize {
-        self.forward.get_max_packet_size()
-    }
 }
 
 pub struct Dropper<T> {
@@ -158,11 +153,6 @@ where
 
             break Ok(data);
         }
-    }
-
-    #[inline(always)]
-    fn get_max_packet_size(&self) -> usize {
-        self.forward.get_max_packet_size()
     }
 }
 
@@ -227,11 +217,6 @@ where
             break Ok(data);
         }
     }
-
-    #[inline(always)]
-    fn get_max_packet_size(&self) -> usize {
-        self.forward.get_max_packet_size()
-    }
 }
 
 // pub struct Delay<T> {
@@ -290,7 +275,6 @@ where
 
 pub struct DuplexTransport {
     inner: DuplexStream,
-    max_buf_usize: usize,
 }
 
 impl Layer for DuplexTransport {
@@ -314,11 +298,6 @@ impl Layer for DuplexTransport {
         self.inner.read_exact(&mut buffer).await?;
         Ok(buffer)
     }
-
-    #[inline(always)]
-    fn get_max_packet_size(&self) -> usize {
-        self.max_buf_usize
-    }
 }
 
 impl DuplexTransport {
@@ -339,11 +318,9 @@ pub fn duplex(max_buf_usize: usize) -> (DuplexTransport, DuplexTransport) {
     (
         DuplexTransport {
             inner: a,
-            max_buf_usize,
         },
         DuplexTransport {
             inner: b,
-            max_buf_usize,
         },
     )
 }
@@ -367,11 +344,6 @@ impl<T> Layer for Vec<T> {
     async fn recv(&mut self) -> Result<Self::RecvItem, Self::RecvError> {
         self.pop().ok_or(NoMorePackets)
     }
-
-    #[inline(always)]
-    fn get_max_packet_size(&self) -> usize {
-        usize::MAX
-    }
 }
 
 impl<T> Layer for VecDeque<T> {
@@ -391,11 +363,6 @@ impl<T> Layer for VecDeque<T> {
     async fn recv(&mut self) -> Result<Self::RecvItem, Self::RecvError> {
         self.pop_front().ok_or(NoMorePackets)
     }
-
-    #[inline(always)]
-    fn get_max_packet_size(&self) -> usize {
-        usize::MAX
-    }
 }
 
 impl<T> Layer for SegQueue<T> {
@@ -414,11 +381,6 @@ impl<T> Layer for SegQueue<T> {
     #[inline(always)]
     async fn recv(&mut self) -> Result<Self::RecvItem, Self::RecvError> {
         self.pop().ok_or(NoMorePackets)
-    }
-
-    #[inline(always)]
-    fn get_max_packet_size(&self) -> usize {
-        usize::MAX
     }
 }
 
@@ -440,11 +402,6 @@ impl<T> Layer for ArrayQueue<T> {
     async fn recv(&mut self) -> Result<Self::RecvItem, Self::RecvError> {
         self.pop().ok_or(NoMorePackets)
     }
-
-    #[inline(always)]
-    fn get_max_packet_size(&self) -> usize {
-        usize::MAX
-    }
 }
 
 impl<T> Layer for Arc<SegQueue<T>> {
@@ -464,11 +421,6 @@ impl<T> Layer for Arc<SegQueue<T>> {
     async fn recv(&mut self) -> Result<Self::RecvItem, Self::RecvError> {
         self.pop().ok_or(NoMorePackets)
     }
-
-    #[inline(always)]
-    fn get_max_packet_size(&self) -> usize {
-        usize::MAX
-    }
 }
 
 impl<T> Layer for Arc<ArrayQueue<T>> {
@@ -486,11 +438,6 @@ impl<T> Layer for Arc<ArrayQueue<T>> {
     #[inline(always)]
     async fn recv(&mut self) -> Result<Self::RecvItem, Self::RecvError> {
         self.pop().ok_or(NoMorePackets)
-    }
-
-    #[inline(always)]
-    fn get_max_packet_size(&self) -> usize {
-        usize::MAX
     }
 }
 

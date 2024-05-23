@@ -20,6 +20,14 @@ impl<T> Sequenced<T> {
             forward,
         }
     }
+
+    pub fn map<V>(self, new: V) -> Sequenced<V> {
+        Sequenced {
+            window_size: self.window_size,
+            counter: self.counter,
+            forward: new,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -80,10 +88,5 @@ where
 
             break Ok(data);
         }
-    }
-
-    #[inline(always)]
-    fn get_max_packet_size(&self) -> usize {
-        self.forward.get_max_packet_size()
     }
 }
