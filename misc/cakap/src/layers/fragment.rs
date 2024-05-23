@@ -51,7 +51,7 @@ enum Fragments {
         found_count: u64,
         target_count: u64,
         succeeded: bool,
-        padding: u64
+        padding: u64,
     },
     Unsorted {
         fragments: FxHashMap<u64, BytesMut>,
@@ -70,6 +70,7 @@ pub struct Fragmenter<T> {
     pub forward: T,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct FragmenterBuilder {
     pub max_fragment_size: u64,
     pub redundant_factor: f32,
@@ -78,8 +79,8 @@ pub struct FragmenterBuilder {
     pub fragment_id_type: UIntVariant,
 }
 
-impl FragmenterBuilder {
-    pub fn new() -> Self {
+impl Default for FragmenterBuilder {
+    fn default() -> Self {
         Self {
             max_fragment_size: 1450,
             redundant_factor: 0.2,
@@ -88,13 +89,26 @@ impl FragmenterBuilder {
             fragment_id_type: UIntVariant::U32,
         }
     }
+}
+
+impl FragmenterBuilder {
+    #[inline(always)]
+    pub fn redundant_factor(self, redundant_factor: f32) -> Self {
+        Self {
+            redundant_factor,
+            ..self
+        }
+    }
     pub fn build<T>(self, forward: T) -> Fragmenter<T> {
-        let partial_size = self.max_fragment_size - 1 - self.max_fragment_count.size() as u64 * 2 - self.fragment_id_type.size() as u64;
+        let partial_size = self.max_fragment_size
+            - 1
+            - self.max_fragment_count.size() as u64 * 2
+            - self.fragment_id_type.size() as u64;
         let max_fragment_payload_size = if let UInt::U64(n) = UInt::fit_u64(partial_size - 8) {
             UInt::U64(n)
         } else if let UInt::U32(n) = UInt::fit_u64(partial_size - 4) {
             UInt::U32(n)
-        } else if let UInt::U16(n) = UInt::fit_u64(partial_size - 2){
+        } else if let UInt::U16(n) = UInt::fit_u64(partial_size - 2) {
             UInt::U16(n)
         } else if let UInt::U8(n) = UInt::fit_u64(partial_size - 1) {
             UInt::U8(n)
@@ -107,8 +121,12 @@ impl FragmenterBuilder {
             max_fragment_count: self.max_fragment_count,
             max_active_fragments: self.max_active_fragment_sets,
             fragment_id_type: self.fragment_id_type,
-            send_active_fragments: IndexSet::with_capacity(self.max_active_fragment_sets.to_u64().try_into().unwrap()),
-            recv_active_fragments: IndexMap::with_capacity(self.max_active_fragment_sets.to_u64().try_into().unwrap()),
+            send_active_fragments: IndexSet::with_capacity(
+                self.max_active_fragment_sets.to_u64().try_into().unwrap(),
+            ),
+            recv_active_fragments: IndexMap::with_capacity(
+                self.max_active_fragment_sets.to_u64().try_into().unwrap(),
+            ),
             forward,
         }
     }
@@ -117,7 +135,7 @@ impl FragmenterBuilder {
 impl<T> Fragmenter<T> {
     #[inline(always)]
     pub fn builder() -> FragmenterBuilder {
-        FragmenterBuilder::new()
+        FragmenterBuilder::default()
     }
 }
 
@@ -144,7 +162,8 @@ where
         }
 
         // Calculate the number of fragments needed to store all the data
-        let data_fragment_count = (data.len() as u64).div_ceil(self.max_fragment_payload_size.to_u64());
+        let data_fragment_count =
+            (data.len() as u64).div_ceil(self.max_fragment_payload_size.to_u64());
 
         // The redundant fragments are for error correction
         let redundant_fragment_count =
@@ -159,16 +178,13 @@ where
 
         // The actual size of a fragment's payload can be smaller than the max fragment payload size,
         // reducing the amount of padding needed in the last fragment
-        let fragment_payload_size =
-            data.len().div_ceil(data_fragment_count.try_into().unwrap());
-        
-        let last_padding = (fragment_payload_size * usize::try_from(data_fragment_count).unwrap() - data.len()) as u64;
+        let fragment_payload_size = data.len().div_ceil(data_fragment_count.try_into().unwrap());
+
+        let last_padding = (fragment_payload_size * usize::try_from(data_fragment_count).unwrap()
+            - data.len()) as u64;
         padding += last_padding;
         // Pad the data with zeros to make it a multiple of the fragment payload size
-        data.put_bytes(
-            0,
-            last_padding.try_into().unwrap(),
-        );
+        data.put_bytes(0, last_padding.try_into().unwrap());
 
         // Find a fragment ID that is not already in use
         // We assume that fragment IDs older than max_active_fragments are no longer in use
@@ -214,7 +230,6 @@ where
                     reader = RwLockWriteGuard::downgrade(writer);
                     reader.get(&rs_key).unwrap()
                 };
-                // println!("{shards:?} {}");
                 encoder.encode_sep(&shards, &mut redundant_shards).unwrap();
             } else {
                 let mut redundant_shards: Vec<&mut [[u8; 2]]> = redundant_shards
@@ -259,7 +274,9 @@ where
             .enumerate()
         {
             let header_size = if (i as u64) < complete_packet_count {
-                1 + self.max_fragment_count.size() * 2 + self.fragment_id_type.size() + self.max_fragment_payload_size.size()
+                1 + self.max_fragment_count.size() * 2
+                    + self.fragment_id_type.size()
+                    + self.max_fragment_payload_size.size()
             } else {
                 1 + self.max_fragment_count.size() + self.fragment_id_type.size()
             };
@@ -305,7 +322,9 @@ where
 
             if packet_type >= 127 {
                 if data.len()
-                    < 1 + self.max_fragment_count.size() * 2 + self.fragment_id_type.size() + self.max_fragment_payload_size.size()
+                    < 1 + self.max_fragment_count.size() * 2
+                        + self.fragment_id_type.size()
+                        + self.max_fragment_payload_size.size()
                 {
                     return Err(FragmentRecvError::PacketTooSmall);
                 }
@@ -336,7 +355,9 @@ where
                     self.recv_active_fragments.shift_remove_index(0);
                 }
                 let fragment_size = if packet_type >= 127 {
-                    (data.len() - self.max_fragment_count.size() - self.max_fragment_payload_size.size()) as u64
+                    (data.len()
+                        - self.max_fragment_count.size()
+                        - self.max_fragment_payload_size.size()) as u64
                 } else {
                     data.len() as u64
                 };
@@ -392,8 +413,10 @@ where
                                 fragment_size,
                                 found_count,
                                 padding,
-                                target_count: (fragment_count as f32 / (1.0 + self.redundant_factor)).round() as u64,
-                                succeeded: false
+                                target_count: (fragment_count as f32
+                                    / (1.0 + self.redundant_factor))
+                                    .round() as u64,
+                                succeeded: false,
                             },
                         ) else {
                             unreachable!();
@@ -423,7 +446,7 @@ where
                     found_count,
                     target_count,
                     succeeded,
-                    padding
+                    padding,
                 } => {
                     if *fragment_size != data.len() as u64 {
                         self.recv_active_fragments.shift_remove(&fragment_id);
@@ -442,7 +465,13 @@ where
 
                     *found_count += 1;
                     if found_count >= target_count && !*succeeded {
-                        break (std::mem::take(fragments), *fragment_size, *target_count, *padding, succeeded);
+                        break (
+                            std::mem::take(fragments),
+                            *fragment_size,
+                            *target_count,
+                            *padding,
+                            succeeded,
+                        );
                     }
                 }
                 Fragments::Unsorted {
@@ -471,7 +500,10 @@ where
         let redundant_fragment_count =
             (target_count as f32 * self.redundant_factor).round() as usize;
 
-        let rs_key = (usize::try_from(target_count).unwrap(), redundant_fragment_count);
+        let rs_key = (
+            usize::try_from(target_count).unwrap(),
+            redundant_fragment_count,
+        );
         if fragments.len() < galois_8::Field::ORDER {
             let mut fragments: Vec<_> = fragments
                 .iter_mut()
@@ -500,7 +532,9 @@ where
                 reader = RwLockWriteGuard::downgrade(writer);
                 reader.get(&rs_key).unwrap()
             };
-            encoder.reconstruct_data(&mut fragments).map_err(FragmentRecvError::ReconstructionError)?;
+            encoder
+                .reconstruct_data(&mut fragments)
+                .map_err(FragmentRecvError::ReconstructionError)?;
         } else {
             let mut fragments: Vec<(&mut [[u8; 2]], bool)> = fragments
                 .iter_mut()
@@ -530,7 +564,9 @@ where
                 reader = RwLockWriteGuard::downgrade(writer);
                 reader.get(&rs_key).unwrap()
             };
-            encoder.reconstruct_data(&mut fragments).map_err(FragmentRecvError::ReconstructionError)?;
+            encoder
+                .reconstruct_data(&mut fragments)
+                .map_err(FragmentRecvError::ReconstructionError)?;
         }
 
         *succeeded = true;

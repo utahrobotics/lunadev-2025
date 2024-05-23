@@ -173,6 +173,20 @@ pub struct Skip<T> {
     pub forward: T,
 }
 
+impl<T> Skip<T> {
+    pub fn new(direction: Direction, skip_rate: f32, forward: T) -> Self {
+        Self {
+            direction,
+            skip_rate,
+            send_skipped: 0,
+            send_total: 0,
+            recv_skipped: 0,
+            recv_total: 0,
+            forward,
+        }
+    }
+}
+
 impl<T> Layer for Skip<T>
 where
     T: Layer,
@@ -299,6 +313,19 @@ impl Layer for DuplexTransport {
 
     fn get_max_packet_size(&self) -> usize {
         self.max_buf_usize
+    }
+}
+
+impl DuplexTransport {
+    pub fn drain_drop(mut self) {
+        tokio::spawn(async move {
+            let mut buf = [0u8; 1024];
+            loop {
+                if self.inner.read(&mut buf).await.is_err() {
+                    return;
+                }
+            }
+        });
     }
 }
 
