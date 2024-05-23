@@ -328,6 +328,7 @@ dependencies = [
  "bitcode",
  "bytemuck",
  "bytes",
+ "crossbeam",
  "fxhash",
  "indexmap",
  "libc",

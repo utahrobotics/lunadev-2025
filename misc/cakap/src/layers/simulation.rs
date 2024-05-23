@@ -1,4 +1,7 @@
+use std::{collections::VecDeque, convert::Infallible, sync::Arc};
+
 use bytes::BytesMut;
+use crossbeam::queue::{ArrayQueue, SegQueue};
 use rand::{rngs::SmallRng, Rng};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 
@@ -174,6 +177,7 @@ pub struct Skip<T> {
 }
 
 impl<T> Skip<T> {
+    #[inline(always)]
     pub fn new(direction: Direction, skip_rate: f32, forward: T) -> Self {
         Self {
             direction,
@@ -311,6 +315,7 @@ impl Layer for DuplexTransport {
         Ok(buffer)
     }
 
+    #[inline(always)]
     fn get_max_packet_size(&self) -> usize {
         self.max_buf_usize
     }
@@ -341,4 +346,162 @@ pub fn duplex(max_buf_usize: usize) -> (DuplexTransport, DuplexTransport) {
             max_buf_usize,
         },
     )
+}
+
+pub struct NoMorePackets;
+
+impl<T> Layer for Vec<T> {
+    type SendError = Infallible;
+    type RecvError = NoMorePackets;
+
+    type SendItem = T;
+    type RecvItem = T;
+
+    #[inline(always)]
+    async fn send(&mut self, data: Self::SendItem) -> Result<(), Self::SendError> {
+        self.push(data);
+        Ok(())
+    }
+
+    #[inline(always)]
+    async fn recv(&mut self) -> Result<Self::RecvItem, Self::RecvError> {
+        self.pop().ok_or(NoMorePackets)
+    }
+
+    #[inline(always)]
+    fn get_max_packet_size(&self) -> usize {
+        usize::MAX
+    }
+}
+
+impl<T> Layer for VecDeque<T> {
+    type SendError = Infallible;
+    type RecvError = NoMorePackets;
+
+    type SendItem = T;
+    type RecvItem = T;
+
+    #[inline(always)]
+    async fn send(&mut self, data: Self::SendItem) -> Result<(), Self::SendError> {
+        self.push_back(data);
+        Ok(())
+    }
+
+    #[inline(always)]
+    async fn recv(&mut self) -> Result<Self::RecvItem, Self::RecvError> {
+        self.pop_front().ok_or(NoMorePackets)
+    }
+
+    #[inline(always)]
+    fn get_max_packet_size(&self) -> usize {
+        usize::MAX
+    }
+}
+
+impl<T> Layer for SegQueue<T> {
+    type SendError = Infallible;
+    type RecvError = NoMorePackets;
+
+    type SendItem = T;
+    type RecvItem = T;
+
+    #[inline(always)]
+    async fn send(&mut self, data: Self::SendItem) -> Result<(), Self::SendError> {
+        self.push(data);
+        Ok(())
+    }
+
+    #[inline(always)]
+    async fn recv(&mut self) -> Result<Self::RecvItem, Self::RecvError> {
+        self.pop().ok_or(NoMorePackets)
+    }
+
+    #[inline(always)]
+    fn get_max_packet_size(&self) -> usize {
+        usize::MAX
+    }
+}
+
+pub struct NoSpace<T>(pub T);
+
+impl<T> Layer for ArrayQueue<T> {
+    type SendError = NoSpace<T>;
+    type RecvError = NoMorePackets;
+
+    type SendItem = T;
+    type RecvItem = T;
+
+    #[inline(always)]
+    async fn send(&mut self, data: Self::SendItem) -> Result<(), Self::SendError> {
+        self.push(data).map_err(NoSpace)
+    }
+
+    #[inline(always)]
+    async fn recv(&mut self) -> Result<Self::RecvItem, Self::RecvError> {
+        self.pop().ok_or(NoMorePackets)
+    }
+
+    #[inline(always)]
+    fn get_max_packet_size(&self) -> usize {
+        usize::MAX
+    }
+}
+
+impl<T> Layer for Arc<SegQueue<T>> {
+    type SendError = Infallible;
+    type RecvError = NoMorePackets;
+
+    type SendItem = T;
+    type RecvItem = T;
+
+    #[inline(always)]
+    async fn send(&mut self, data: Self::SendItem) -> Result<(), Self::SendError> {
+        self.push(data);
+        Ok(())
+    }
+
+    #[inline(always)]
+    async fn recv(&mut self) -> Result<Self::RecvItem, Self::RecvError> {
+        self.pop().ok_or(NoMorePackets)
+    }
+
+    #[inline(always)]
+    fn get_max_packet_size(&self) -> usize {
+        usize::MAX
+    }
+}
+
+impl<T> Layer for Arc<ArrayQueue<T>> {
+    type SendError = NoSpace<T>;
+    type RecvError = NoMorePackets;
+
+    type SendItem = T;
+    type RecvItem = T;
+
+    #[inline(always)]
+    async fn send(&mut self, data: Self::SendItem) -> Result<(), Self::SendError> {
+        self.push(data).map_err(NoSpace)
+    }
+
+    #[inline(always)]
+    async fn recv(&mut self) -> Result<Self::RecvItem, Self::RecvError> {
+        self.pop().ok_or(NoMorePackets)
+    }
+
+    #[inline(always)]
+    fn get_max_packet_size(&self) -> usize {
+        usize::MAX
+    }
+}
+
+pub fn segqueue_transport<T>() -> (Arc<SegQueue<T>>, Arc<SegQueue<T>>) {
+    let a = Arc::new(SegQueue::new());
+    let b = a.clone();
+    (a, b)
+}
+
+pub fn arrayqueue_transport<T>(capacity: usize) -> (Arc<ArrayQueue<T>>, Arc<ArrayQueue<T>>) {
+    let a = Arc::new(ArrayQueue::new(capacity));
+    let b = a.clone();
+    (a, b)
 }

@@ -15,6 +15,7 @@ rand = { workspace = true }
 indexmap = "2.2.6"
 libc = "*"
 parking_lot = { workspace = true }
+crossbeam = { workspace = true }
 # rkyv = "0.7.44"
 bytemuck = { workspace = true }
 [target.'cfg(windows)'.dependencies]
