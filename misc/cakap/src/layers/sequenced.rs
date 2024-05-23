@@ -55,8 +55,7 @@ where
         loop {
             let mut data = self.forward.recv().await?;
 
-            let window_size = self.window_size.to_u64();
-            if data.len() < window_size as usize {
+            if data.len() < self.window_size.size() as usize {
                 return Err(SequencedRecvError::PacketTooSmall);
             }
             let slice_index = data.len() - self.window_size.size();
@@ -67,6 +66,7 @@ where
                 .unwrap()
                 .to_u64();
             let max_value = self.window_size.to_variant().max_value().to_u64();
+            let window_size = self.window_size.to_u64();
             let upper_window_index = max_value - window_size;
             if incoming_index >= self.counter {
                 if self.counter < window_size && incoming_index >= upper_window_index {

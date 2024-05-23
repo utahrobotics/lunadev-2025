@@ -114,6 +114,18 @@ impl UInt {
         }
     }
 
+    pub fn fit_u64(value: u64) -> Self {
+        if value <= u8::MAX as u64 {
+            Self::U8(value as u8)
+        } else if value <= u16::MAX as u64 {
+            Self::U16(value as u16)
+        } else if value <= u32::MAX as u64 {
+            Self::U32(value as u32)
+        } else {
+            Self::U64(value)
+        }
+    }
+
     #[inline(always)]
     pub(crate) fn try_with_slice(
         self,
