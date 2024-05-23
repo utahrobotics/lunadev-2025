@@ -258,7 +258,7 @@ impl UIntBeBytes {
     }
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum UIntVariant {
     U8,
     U16,

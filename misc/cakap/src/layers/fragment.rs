@@ -104,17 +104,25 @@ impl FragmenterBuilder {
             - 1
             - self.max_fragment_count.size() as u64 * 2
             - self.fragment_id_type.size() as u64;
-        let max_fragment_payload_size = if let UInt::U64(n) = UInt::fit_u64(partial_size - 8) {
-            UInt::U64(n)
-        } else if let UInt::U32(n) = UInt::fit_u64(partial_size - 4) {
-            UInt::U32(n)
-        } else if let UInt::U16(n) = UInt::fit_u64(partial_size - 2) {
-            UInt::U16(n)
-        } else if let UInt::U8(n) = UInt::fit_u64(partial_size - 1) {
-            UInt::U8(n)
-        } else {
-            unreachable!("Unable to calculate max_fragment_payload_size");
-        };
+        let mut max_fragment_payload_size = UInt::fit_u64(partial_size - 8);
+        match max_fragment_payload_size {
+            UInt::U8(n) => if n > u8::MAX - 7 {
+                max_fragment_payload_size = UInt::U16(n as u16 + 6);
+            } else {
+                max_fragment_payload_size = UInt::U8(n + 7);
+            }
+            UInt::U16(n) => if n > u16::MAX - 6 {
+                max_fragment_payload_size = UInt::U32(n as u32 + 4);
+            } else {
+                max_fragment_payload_size = UInt::U16(n + 6);
+            }
+            UInt::U32(n) => if n > u32::MAX - 4 {
+                max_fragment_payload_size = UInt::U64(n as u64);
+            } else {
+                max_fragment_payload_size = UInt::U32(n + 4);
+            }
+            UInt::U64(_) => {}
+        }
         Fragmenter {
             max_fragment_payload_size,
             redundant_factor: self.redundant_factor,
