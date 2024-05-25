@@ -7,7 +7,7 @@ use indexmap::{IndexMap, IndexSet};
 use parking_lot::{RwLock, RwLockWriteGuard};
 use reed_solomon_erasure::{galois_16, galois_8, Field};
 
-use super::{Layer, UInt, UIntVariant};
+use super::{reliable::{HasReliableGuard, ReliableToken}, Layer, UInt, UIntVariant};
 
 static REED_SOLOMON_ERASURES_8: RwLock<FxHashMap<(usize, usize), galois_8::ReedSolomon>> =
     RwLock::new(FxHashMap::with_hasher(BuildHasherDefault::new()));
@@ -59,7 +59,7 @@ enum Fragments {
     },
 }
 
-pub struct Fragmenter<T> {
+pub struct Fragmented<T> {
     max_fragment_payload_size: UInt,
     redundant_factor: f32,
     max_fragment_count: UInt,
@@ -99,7 +99,7 @@ impl FragmenterBuilder {
             ..self
         }
     }
-    pub fn build<T>(self, forward: T) -> Fragmenter<T> {
+    pub fn build<T>(self, forward: T) -> Fragmented<T> {
         let partial_size = self.max_fragment_size
             - 1
             - self.max_fragment_count.size() as u64 * 2
@@ -123,7 +123,7 @@ impl FragmenterBuilder {
             }
             UInt::U64(_) => {}
         }
-        Fragmenter {
+        Fragmented {
             max_fragment_payload_size,
             redundant_factor: self.redundant_factor,
             max_fragment_count: self.max_fragment_count,
@@ -140,14 +140,14 @@ impl FragmenterBuilder {
     }
 }
 
-impl<T> Fragmenter<T> {
+impl<T> Fragmented<T> {
     #[inline(always)]
     pub fn builder() -> FragmenterBuilder {
         FragmenterBuilder::default()
     }
 
-    pub fn map<V>(self, new: V) -> Fragmenter<V> {
-        Fragmenter {
+    pub fn map<V>(self, new: V) -> Fragmented<V> {
+        Fragmented {
             max_fragment_payload_size: self.max_fragment_payload_size,
             redundant_factor: self.redundant_factor,
             max_fragment_count: self.max_fragment_count,
@@ -160,7 +160,7 @@ impl<T> Fragmenter<T> {
     }
 }
 
-impl<T> Layer for Fragmenter<T>
+impl<T> Layer for Fragmented<T>
 where
     T: Layer<SendItem = BytesMut, RecvItem = BytesMut>,
 {
@@ -598,5 +598,17 @@ where
         }
         data.truncate((data.len() as u64 - padding) as usize);
         Ok(data)
+    }
+}
+
+
+impl<T: HasReliableGuard> HasReliableGuard for Fragmented<T> {
+    #[inline(always)]
+    async fn reliable_guard_send(
+        &mut self,
+        data: BytesMut,
+        token: ReliableToken,
+    ) {
+        self.forward.reliable_guard_send(data, token).await
     }
 }
