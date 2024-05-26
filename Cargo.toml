@@ -16,8 +16,8 @@ members = [
 
     "misc/py-repl",
     "misc/compute-shader",
-    "misc/smach",
     "misc/cakap",
+    "urobotics/urobotics-core", "urobotics/urobotics-smach",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]

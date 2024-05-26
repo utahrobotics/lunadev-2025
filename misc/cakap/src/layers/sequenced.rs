@@ -1,6 +1,9 @@
 use bytes::BytesMut;
 
-use super::{reliable::{HasReliableGuard, ReliableToken}, Layer, UInt};
+use super::{
+    reliable::{HasReliableGuard, ReliableToken},
+    Layer, UInt,
+};
 
 pub fn default_window_size() -> UInt {
     UInt::U16(128)
@@ -91,14 +94,9 @@ where
     }
 }
 
-
 impl<T: HasReliableGuard> HasReliableGuard for Sequenced<T> {
     #[inline(always)]
-    async fn reliable_guard_send(
-        &mut self,
-        data: BytesMut,
-        token: ReliableToken,
-    ) {
+    async fn reliable_guard_send(&mut self, data: BytesMut, token: ReliableToken) {
         self.forward.reliable_guard_send(data, token).await
     }
 }

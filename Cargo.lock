@@ -2133,13 +2133,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "smach"
-version = "0.1.0"
-dependencies = [
- "tokio",
-]
-
-[[package]]
 name = "smallvec"
 version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2414,6 +2407,38 @@ version = "0.1.1"
 dependencies = [
  "quote",
  "syn 2.0.60",
+]
+
+[[package]]
+name = "urobotics-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "color-eyre",
+ "crossbeam",
+ "ctrlc",
+ "fern",
+ "ffmpeg-sidecar",
+ "image",
+ "log",
+ "minifb",
+ "nalgebra",
+ "ordered-float",
+ "parking_lot",
+ "rand",
+ "rayon",
+ "serde",
+ "simba",
+ "sysinfo",
+ "tokio",
+]
+
+[[package]]
+name = "urobotics-smach"
+version = "0.1.0"
+dependencies = [
+ "tokio",
 ]
 
 [[package]]

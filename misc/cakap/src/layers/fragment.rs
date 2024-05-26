@@ -7,7 +7,10 @@ use indexmap::{IndexMap, IndexSet};
 use parking_lot::{RwLock, RwLockWriteGuard};
 use reed_solomon_erasure::{galois_16, galois_8, Field};
 
-use super::{reliable::{HasReliableGuard, ReliableToken}, Layer, UInt, UIntVariant};
+use super::{
+    reliable::{HasReliableGuard, ReliableToken},
+    Layer, UInt, UIntVariant,
+};
 
 static REED_SOLOMON_ERASURES_8: RwLock<FxHashMap<(usize, usize), galois_8::ReedSolomon>> =
     RwLock::new(FxHashMap::with_hasher(BuildHasherDefault::new()));
@@ -106,20 +109,26 @@ impl FragmenterBuilder {
             - self.fragment_id_type.size() as u64;
         let mut max_fragment_payload_size = UInt::fit_u64(partial_size - 8);
         match max_fragment_payload_size {
-            UInt::U8(n) => if n > u8::MAX - 7 {
-                max_fragment_payload_size = UInt::U16(n as u16 + 6);
-            } else {
-                max_fragment_payload_size = UInt::U8(n + 7);
+            UInt::U8(n) => {
+                if n > u8::MAX - 7 {
+                    max_fragment_payload_size = UInt::U16(n as u16 + 6);
+                } else {
+                    max_fragment_payload_size = UInt::U8(n + 7);
+                }
             }
-            UInt::U16(n) => if n > u16::MAX - 6 {
-                max_fragment_payload_size = UInt::U32(n as u32 + 4);
-            } else {
-                max_fragment_payload_size = UInt::U16(n + 6);
+            UInt::U16(n) => {
+                if n > u16::MAX - 6 {
+                    max_fragment_payload_size = UInt::U32(n as u32 + 4);
+                } else {
+                    max_fragment_payload_size = UInt::U16(n + 6);
+                }
             }
-            UInt::U32(n) => if n > u32::MAX - 4 {
-                max_fragment_payload_size = UInt::U64(n as u64);
-            } else {
-                max_fragment_payload_size = UInt::U32(n + 4);
+            UInt::U32(n) => {
+                if n > u32::MAX - 4 {
+                    max_fragment_payload_size = UInt::U64(n as u64);
+                } else {
+                    max_fragment_payload_size = UInt::U32(n + 4);
+                }
             }
             UInt::U64(_) => {}
         }
@@ -601,14 +610,9 @@ where
     }
 }
 
-
 impl<T: HasReliableGuard> HasReliableGuard for Fragmented<T> {
     #[inline(always)]
-    async fn reliable_guard_send(
-        &mut self,
-        data: BytesMut,
-        token: ReliableToken,
-    ) {
+    async fn reliable_guard_send(&mut self, data: BytesMut, token: ReliableToken) {
         self.forward.reliable_guard_send(data, token).await
     }
 }

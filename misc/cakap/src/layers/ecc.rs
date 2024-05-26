@@ -5,7 +5,10 @@ use fxhash::FxHashMap;
 use parking_lot::{RwLock, RwLockWriteGuard};
 use reed_solomon::{Decoder, Encoder};
 
-use super::{reliable::{HasReliableGuard, ReliableToken}, Layer};
+use super::{
+    reliable::{HasReliableGuard, ReliableToken},
+    Layer,
+};
 
 static REED_SOLOMON_ENCODERS: RwLock<FxHashMap<usize, Encoder>> =
     RwLock::new(FxHashMap::with_hasher(BuildHasherDefault::new()));
@@ -150,14 +153,9 @@ where
     }
 }
 
-
 impl<T: HasReliableGuard> HasReliableGuard for ECC<T> {
     #[inline(always)]
-    async fn reliable_guard_send(
-        &mut self,
-        data: BytesMut,
-        token: ReliableToken,
-    ) {
+    async fn reliable_guard_send(&mut self, data: BytesMut, token: ReliableToken) {
         self.forward.reliable_guard_send(data, token).await
     }
 }

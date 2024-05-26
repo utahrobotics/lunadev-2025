@@ -315,14 +315,7 @@ impl DuplexTransport {
 
 pub fn duplex(max_buf_usize: usize) -> (DuplexTransport, DuplexTransport) {
     let (a, b) = tokio::io::duplex(max_buf_usize.saturating_add(std::mem::size_of::<usize>()));
-    (
-        DuplexTransport {
-            inner: a,
-        },
-        DuplexTransport {
-            inner: b,
-        },
-    )
+    (DuplexTransport { inner: a }, DuplexTransport { inner: b })
 }
 
 pub struct NoMorePackets;

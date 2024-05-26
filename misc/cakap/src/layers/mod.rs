@@ -8,11 +8,11 @@ use rand::Rng;
 
 pub mod ecc;
 pub mod fragment;
+pub mod reliable;
 pub mod sequenced;
 pub mod serde;
 pub mod simulation;
 pub mod udp;
-pub mod reliable;
 
 pub trait Layer {
     type SendError;

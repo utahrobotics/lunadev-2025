@@ -2,7 +2,10 @@ use std::{marker::PhantomData, ops::Deref};
 
 use bytes::BytesMut;
 
-use super::{reliable::{HasReliableGuard, ReliableToken}, Layer};
+use super::{
+    reliable::{HasReliableGuard, ReliableToken},
+    Layer,
+};
 
 pub struct Bitcoder<T, L> {
     pub forward: L,
@@ -49,7 +52,6 @@ where
     }
 }
 
-
 impl<T, L> Bitcoder<T, L> {
     pub fn map<V>(self, new: V) -> Bitcoder<T, V> {
         Bitcoder {
@@ -59,14 +61,9 @@ impl<T, L> Bitcoder<T, L> {
     }
 }
 
-
 impl<T, L: HasReliableGuard> HasReliableGuard for Bitcoder<T, L> {
     #[inline(always)]
-    async fn reliable_guard_send(
-        &mut self,
-        data: BytesMut,
-        token: ReliableToken,
-    ) {
+    async fn reliable_guard_send(&mut self, data: BytesMut, token: ReliableToken) {
         self.forward.reliable_guard_send(data, token).await
     }
 }
