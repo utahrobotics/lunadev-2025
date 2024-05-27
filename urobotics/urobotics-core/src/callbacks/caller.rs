@@ -22,7 +22,7 @@ pub fn was_callback_dropped() -> bool {
 }
 
 pub mod prelude {
-    pub use super::{drop_this_callback, retain_this_callback, was_callback_dropped};
+    pub use super::{drop_this_callback, retain_this_callback, was_callback_dropped, CallbacksRef};
 }
 
 #[macro_export]

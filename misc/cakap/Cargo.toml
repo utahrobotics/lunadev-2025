@@ -10,7 +10,6 @@ fxhash = { workspace = true }
 bitcode = "0.6.0"
 reed-solomon = { path = "../reed-solomon-rs" }
 reed-solomon-erasure = { version = "4.0", features = [ "simd-accel" ] }
-bytes = "1.6.0"
 rand = { workspace = true }
 indexmap = "2.2.6"
 libc = "*"
@@ -20,3 +19,4 @@ crossbeam = { workspace = true }
 bytemuck = { workspace = true }
 [target.'cfg(windows)'.dependencies]
 windows-sys = "*"
+bytes = { workspace = true }

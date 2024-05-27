@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "unros/unros-core",
     # "unros/camera",
     # "unros/apriltag",
     # "unros/localization",
@@ -8,7 +7,6 @@ members = [
     # "unros/navigator",
     # "unros/rig",
     "unros/unros-macros",
-    "unros/unros",
     # "unros/realsense",
     # "unros/camera-info",
     # "unros/networking",
@@ -17,10 +15,13 @@ members = [
     "misc/py-repl",
     "misc/compute-shader",
     "misc/cakap",
-    "urobotics/urobotics-core", "urobotics/urobotics-smach", "urobotics/urobotics-video",
+    "urobotics/urobotics-core", "urobotics/urobotics-smach",
+    "urobotics/urobotics-video",
+    "urobotics/urobotics-serial",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]
+
 
 [workspace.dependencies]
 fxhash = "0.2"
@@ -52,8 +53,8 @@ dst-init = "0.4.0"
 rayon = "1.10.0"
 bitvec = "1.0.1"
 parking_lot = "0.12.2"
+bytes = "1.6.0"
 
-unros_core = { path = "unros/unros-core" }
 camera = { path = "unros/camera" }
 apriltag = { path = "unros/apriltag" }
 localization = { path = "unros/localization" }
@@ -62,8 +63,6 @@ navigator = { path = "unros/navigator" }
 rig = { path = "unros/rig" }
 smach = { path = "misc/smach" }
 realsense = { path = "unros/realsense" }
-unros-macros = { path = "unros/unros-macros" }
-unros = { path = "unros/unros" }
 camera-info = { path = "unros/camera-info" }
 networking = { path = "unros/networking" }
 obstacles = { path = "unros/obstacles" }
