@@ -1,4 +1,4 @@
-#![feature(unboxed_closures)]
+#![feature(unboxed_closures, tuple_trait, fn_traits)]
 
 pub mod callbacks;
 pub mod logging;

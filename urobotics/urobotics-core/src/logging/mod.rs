@@ -31,13 +31,13 @@ static LOG_PUB: OnceLock<CallbacksRef<dyn Fn(&log::Record) + Send>> = OnceLock::
 /// Panics if the logger has not been initialized. If this method
 /// is called inside of or after `start_unros_runtime`, the logger is
 /// always initialized.
-pub fn get_log_pub() -> CallbacksRef<dyn Fn(log::Record) + Send> {
+pub fn get_log_pub() -> CallbacksRef<dyn Fn(&log::Record) + Send> {
     LOG_PUB.get().unwrap().clone()
 }
 
 #[derive(Default)]
 struct LogPub {
-    publisher: SharedCallbacks<dyn Fn(&log::Record) + Send>,
+    publisher: SharedCallbacks<dyn Fn(&log::Record)>,
 }
 
 impl log::Log for LogPub {
@@ -50,10 +50,11 @@ impl log::Log for LogPub {
             return;
         }
 
-        SharedCallbacks::<dyn Fn(log::Record) + Send>::call1(&self.publisher, record);
-        self.publisher.call1(record);
-        // Callbacks::<dyn Fn(&log::Record) + Send>::callback(&self.publisher, record);
-        // self.publisher.lock().call(record);
+        let _ = (record,).clone();
+        let c = self.publisher.storage.pop().unwrap();
+
+        (self.publisher.storage.pop().unwrap())(record);
+        (self.publisher)(record);
     }
 
     fn flush(&self) {}
