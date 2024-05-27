@@ -17,7 +17,7 @@ members = [
     "misc/py-repl",
     "misc/compute-shader",
     "misc/cakap",
-    "urobotics/urobotics-core", "urobotics/urobotics-smach",
+    "urobotics/urobotics-core", "urobotics/urobotics-smach", "urobotics/urobotics-video",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]
@@ -70,6 +70,7 @@ obstacles = { path = "unros/obstacles" }
 compute-shader = { path = "misc/compute-shader" }
 py-repl = { path = "misc/py-repl" }
 cakap = { path = "misc/cakap" }
+urobotics-core = { path = "urobotics/urobotics-core" }
 
 # The following crates need to run at full power
 # in most contexts to be effective.

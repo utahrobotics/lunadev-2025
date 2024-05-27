@@ -1,0 +1,13 @@
+[package]
+name = "urobotics-video"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+minifb = { git = "https://github.com/emoon/rust_minifb.git", rev = "633e6cd4f8f55fd9cbedc461976dde0f408bea35" }
+image = { workspace = true }
+ffmpeg-sidecar = { workspace = true }
+urobotics-core = { workspace = true }
+crossbeam = { workspace = true }
+log = { workspace = true }
+tokio = { workspace = true }
