@@ -54,6 +54,7 @@ impl log::Log for LogPub {
         let c = self.publisher.storage.pop().unwrap();
 
         (self.publisher.storage.pop().unwrap())(record);
+        self.publisher.call(record);
         (self.publisher)(record);
     }
 

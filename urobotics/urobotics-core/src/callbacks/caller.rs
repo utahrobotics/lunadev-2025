@@ -1,6 +1,7 @@
 use std::{cell::Cell, marker::Tuple, sync::Arc};
 
-use crossbeam::queue::SegQueue;
+use parking_lot::RwLock;
+
 
 thread_local! {
     static DROP_CALLBACK: Cell<bool> = Cell::new(false);
@@ -34,26 +35,26 @@ impl<T: ?Sized> Default for Callbacks<T> {
 
 // Callbacks FnMut
 
-impl<Args: Clone + Tuple> FnOnce<Args> for Callbacks<dyn FnMut<Args, Output = ()>> {
-    type Output = ();
+// impl<Args: Clone + Tuple> FnOnce<Args> for Callbacks<dyn FnMut<Args, Output = ()>> {
+//     type Output = ();
 
-    extern "rust-call" fn call_once(mut self, args: Args) -> Self::Output {
-        self.call_mut(args);
-    }
-}
+//     extern "rust-call" fn call_once(mut self, args: Args) -> Self::Output {
+//         self.call_mut(args);
+//     }
+// }
 
 
-impl<Args: Clone + Tuple> FnMut<Args> for Callbacks<dyn FnMut<Args, Output = ()>> {
-    extern "rust-call" fn call_mut(&mut self, args: Args) -> Self::Output {
-        for i in (0..self.storage.len()).rev() {
-            DROP_CALLBACK.set(false);
-            self.storage.get_mut(i).unwrap().call_mut(args.clone());
-            if DROP_CALLBACK.get() {
-                self.storage.swap_remove(i);
-            }
-        }
-    }
-}
+// impl<Args: Clone + Tuple> FnMut<Args> for Callbacks<dyn FnMut<Args, Output = ()>> {
+//     extern "rust-call" fn call_mut(&mut self, args: Args) -> Self::Output {
+//         for i in (0..self.storage.len()).rev() {
+//             DROP_CALLBACK.set(false);
+//             self.storage.get_mut(i).unwrap().call_mut(args.clone());
+//             if DROP_CALLBACK.get() {
+//                 self.storage.swap_remove(i);
+//             }
+//         }
+//     }
+// }
 
 impl<Args: Tuple> Callbacks<dyn FnMut<Args, Output = ()>> {
     pub fn add_callback(&mut self, callback: impl FnMut<Args, Output = ()> + 'static) {
@@ -70,39 +71,39 @@ impl<Args: Tuple> Callbacks<dyn Fn<Args, Output = ()>> {
 }
 
 
-impl<Args: Clone + Tuple> FnOnce<Args> for Callbacks<dyn Fn<Args, Output = ()>> {
-    type Output = ();
+// impl<Args: Clone + Tuple> FnOnce<Args> for Callbacks<dyn Fn<Args, Output = ()>> {
+//     type Output = ();
 
-    extern "rust-call" fn call_once(mut self, args: Args) -> Self::Output {
-        self.call_mut(args);
-    }
-}
-
-
-impl<Args: Clone + Tuple> FnMut<Args> for Callbacks<dyn Fn<Args, Output = ()>> {
-    extern "rust-call" fn call_mut(&mut self, args: Args) -> Self::Output {
-        for i in (0..self.storage.len()).rev() {
-            DROP_CALLBACK.set(false);
-            self.storage.get_mut(i).unwrap().call_mut(args.clone());
-            if DROP_CALLBACK.get() {
-                self.storage.swap_remove(i);
-            }
-        }
-    }
-}
+//     extern "rust-call" fn call_once(mut self, args: Args) -> Self::Output {
+//         self.call_mut(args);
+//     }
+// }
 
 
-impl<Args: Clone + Tuple> Fn<Args> for Callbacks<dyn Fn<Args, Output = ()>> {
-    extern "rust-call" fn call(&self, args: Args) -> Self::Output {
-        for i in (0..self.storage.len()).rev() {
-            (self.storage.get(i).unwrap()).call(args.clone());
-        }
-    }
-}
+// impl<Args: Clone + Tuple> FnMut<Args> for Callbacks<dyn Fn<Args, Output = ()>> {
+//     extern "rust-call" fn call_mut(&mut self, args: Args) -> Self::Output {
+//         for i in (0..self.storage.len()).rev() {
+//             DROP_CALLBACK.set(false);
+//             self.storage.get_mut(i).unwrap().call_mut(args.clone());
+//             if DROP_CALLBACK.get() {
+//                 self.storage.swap_remove(i);
+//             }
+//         }
+//     }
+// }
+
+
+// impl<Args: Clone + Tuple> Fn<Args> for Callbacks<dyn Fn<Args, Output = ()>> {
+//     extern "rust-call" fn call(&self, args: Args) -> Self::Output {
+//         for i in (0..self.storage.len()).rev() {
+//             (self.storage.get(i).unwrap()).call(args.clone());
+//         }
+//     }
+// }
 
 
 pub struct SharedCallbacks<C: ?Sized> {
-    pub(crate) storage: Arc<SegQueue<Box<C>>>,
+    pub(crate) storage: Arc<RwLock<Vec<Box<C>>>>,
 }
 
 
@@ -124,30 +125,30 @@ impl<T: ?Sized> SharedCallbacks<T> {
 
 // SharedCallbacks FnMut
 
-impl<Args: Clone + Tuple> FnOnce<Args> for SharedCallbacks<dyn FnMut<Args, Output = ()>> {
-    type Output = ();
+// impl<Args: Clone + Tuple> FnOnce<Args> for SharedCallbacks<dyn FnMut<Args, Output = ()>> {
+//     type Output = ();
 
-    extern "rust-call" fn call_once(mut self, args: Args) -> Self::Output {
-        self.call_mut(args);
-    }
-}
+//     extern "rust-call" fn call_once(mut self, args: Args) -> Self::Output {
+//         self.call_mut(args);
+//     }
+// }
 
-impl<Args: Clone + Tuple> FnMut<Args> for SharedCallbacks<dyn FnMut<Args, Output = ()>> {
-    extern "rust-call" fn call_mut(&mut self, args: Args) -> Self::Output {
-        for _ in 0..self.storage.len() {
-            DROP_CALLBACK.set(false);
-            let mut callback = self.storage.pop().unwrap();
-            callback.call_mut(args.clone());
-            if !DROP_CALLBACK.get() {
-                self.storage.push(callback);
-            }
-        }
-    }
-}
+// impl<Args: Clone + Tuple> FnMut<Args> for SharedCallbacks<dyn FnMut<Args, Output = ()>> {
+//     extern "rust-call" fn call_mut(&mut self, args: Args) -> Self::Output {
+//         for _ in 0..self.storage.len() {
+//             DROP_CALLBACK.set(false);
+//             let mut callback = self.storage.pop().unwrap();
+//             callback.call_mut(args.clone());
+//             if !DROP_CALLBACK.get() {
+//                 self.storage.push(callback);
+//             }
+//         }
+//     }
+// }
 
 impl<Args: Tuple> SharedCallbacks<dyn FnMut<Args, Output = ()>> {
     pub fn add_callback(&self, callback: impl FnMut<Args, Output = ()> + 'static) {
-        self.storage.push(Box::new(callback));
+        self.storage.write().push(Box::new(callback));
     }
 }
 
@@ -179,27 +180,20 @@ impl<Args: Tuple> SharedCallbacks<dyn FnMut<Args, Output = ()>> {
 //     }
 // }
 
-impl<'b, T: 'b> FnOnce<(&T,)> for SharedCallbacks<dyn for<'a> Fn<(&'a T,), Output = ()>> {
-    type Output = ();
-
-    extern "rust-call" fn call_once(self, args: (&T,)) -> Self::Output {
-        self.call(args);
-    }
-}
-
-impl<'b, T: 'b> FnMut<(&T,)> for SharedCallbacks<dyn for<'a> Fn<(&'a T,), Output = ()>> {
-    extern "rust-call" fn call_mut(&mut self, args: (&T,)) -> Self::Output {
-        self.call(args);
-    }
-}
-impl<'b, T: 'b> Fn<(&T,)> for SharedCallbacks<dyn for<'a> Fn<(&'a T,), Output = ()>> {
-    extern "rust-call" fn call(&self, args: (&T,)) -> Self::Output {
-        for _ in 0..self.storage.len() {
-            DROP_CALLBACK.set(false);
-            let callback = self.storage.pop().unwrap();
-            callback.call(args.clone());
-            if !DROP_CALLBACK.get() {
-                self.storage.push(callback);
+impl SharedCallbacks<dyn Fn(&log::Record)> {
+    pub fn call(&self, arg: &log::Record) {
+        if let Some(mut writer) = self.storage.try_write() {
+            for i in (0..writer.len()).rev() {
+                DROP_CALLBACK.set(false);
+                (writer.get_mut(i).unwrap())(arg);
+                if DROP_CALLBACK.get() {
+                    writer.swap_remove(i);
+                }
+            }
+        } else {
+            let reader = self.storage.read();
+            for func in reader.iter() {
+                func(arg);
             }
         }
     }
@@ -207,12 +201,12 @@ impl<'b, T: 'b> Fn<(&T,)> for SharedCallbacks<dyn for<'a> Fn<(&'a T,), Output = 
 
 impl<Args: Tuple> SharedCallbacks<dyn Fn<Args, Output = ()>> {
     pub fn add_callback(&self, callback: impl Fn<Args, Output = ()> + 'static) {
-        self.storage.push(Box::new(callback));
+        self.storage.write().push(Box::new(callback));
     }
 }
 
 pub struct CallbacksRef<T: ?Sized> {
-    storage: Arc<SegQueue<Box<T>>>,
+    storage: Arc<RwLock<Vec<Box<T>>>>,
 }
 
 impl<T: ?Sized> Clone for CallbacksRef<T> {
@@ -227,7 +221,7 @@ impl<T: ?Sized> Clone for CallbacksRef<T> {
 
 impl<Args: Tuple> CallbacksRef<dyn FnMut<Args, Output = ()>> {
     pub fn add_callback(&self, callback: impl FnMut<Args, Output = ()> + 'static) {
-        self.storage.push(Box::new(callback));
+        self.storage.write().push(Box::new(callback));
     }
 }
 
@@ -235,6 +229,6 @@ impl<Args: Tuple> CallbacksRef<dyn FnMut<Args, Output = ()>> {
 
 impl<Args: Tuple> CallbacksRef<dyn Fn<Args, Output = ()>> {
     pub fn add_callback(&self, callback: impl Fn<Args, Output = ()> + 'static) {
-        self.storage.push(Box::new(callback));
+        self.storage.write().push(Box::new(callback));
     }
 }
