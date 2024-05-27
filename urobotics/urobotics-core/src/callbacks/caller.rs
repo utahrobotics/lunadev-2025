@@ -1,4 +1,4 @@
-use std::{cell::Cell, marker::Tuple, sync::Arc};
+use std::{cell::Cell, sync::{Arc, Weak}};
 
 use parking_lot::RwLock;
 
@@ -15,198 +15,211 @@ pub fn retain_this_callback() {
     DROP_CALLBACK.with(|cell| cell.set(false));
 }
 
-pub struct Callbacks<C: ?Sized> {
-    storage: Vec<Box<C>>,
+pub fn was_callback_dropped() -> bool {
+    DROP_CALLBACK.get()
 }
 
-impl<T: ?Sized> Callbacks<T> {
-    pub fn append(&mut self, other: &mut Self) {
-        self.storage.append(&mut other.storage);
-    }
+
+pub mod prelude {
+    pub use super::{drop_this_callback, retain_this_callback, was_callback_dropped};
 }
 
-impl<T: ?Sized> Default for Callbacks<T> {
-    fn default() -> Self {
-        Self {
-            storage: Vec::default(),
+
+#[macro_export]
+macro_rules! define_callbacks {
+    ($vis: vis $name: ident Fn($($param: ident : $arg: ty),*)$($extra: tt)*) => {
+        use $crate::callbacks::caller::prelude::*;
+
+        #[derive(Default)]
+        $vis struct $name {
+            storage: Vec<Box<dyn Fn($($arg,)*)$($extra)*>>,
         }
-    }
-}
 
-// Callbacks FnMut
+        impl $name {
+            /// Takes ownership of all callbacks in other.
+            $vis fn append(&mut self, other: &mut Self) {
+                self.storage.append(&mut other.storage);
+            }
 
-// impl<Args: Clone + Tuple> FnOnce<Args> for Callbacks<dyn FnMut<Args, Output = ()>> {
-//     type Output = ();
-
-//     extern "rust-call" fn call_once(mut self, args: Args) -> Self::Output {
-//         self.call_mut(args);
-//     }
-// }
-
-
-// impl<Args: Clone + Tuple> FnMut<Args> for Callbacks<dyn FnMut<Args, Output = ()>> {
-//     extern "rust-call" fn call_mut(&mut self, args: Args) -> Self::Output {
-//         for i in (0..self.storage.len()).rev() {
-//             DROP_CALLBACK.set(false);
-//             self.storage.get_mut(i).unwrap().call_mut(args.clone());
-//             if DROP_CALLBACK.get() {
-//                 self.storage.swap_remove(i);
-//             }
-//         }
-//     }
-// }
-
-impl<Args: Tuple> Callbacks<dyn FnMut<Args, Output = ()>> {
-    pub fn add_callback(&mut self, callback: impl FnMut<Args, Output = ()> + 'static) {
-        self.storage.push(Box::new(callback));
-    }
-}
-
-// Callbacks Fn
-
-impl<Args: Tuple> Callbacks<dyn Fn<Args, Output = ()>> {
-    pub fn add_callback(&mut self, callback: impl Fn<Args, Output = ()> + 'static) {
-        self.storage.push(Box::new(callback));
-    }
-}
-
-
-// impl<Args: Clone + Tuple> FnOnce<Args> for Callbacks<dyn Fn<Args, Output = ()>> {
-//     type Output = ();
-
-//     extern "rust-call" fn call_once(mut self, args: Args) -> Self::Output {
-//         self.call_mut(args);
-//     }
-// }
-
-
-// impl<Args: Clone + Tuple> FnMut<Args> for Callbacks<dyn Fn<Args, Output = ()>> {
-//     extern "rust-call" fn call_mut(&mut self, args: Args) -> Self::Output {
-//         for i in (0..self.storage.len()).rev() {
-//             DROP_CALLBACK.set(false);
-//             self.storage.get_mut(i).unwrap().call_mut(args.clone());
-//             if DROP_CALLBACK.get() {
-//                 self.storage.swap_remove(i);
-//             }
-//         }
-//     }
-// }
-
-
-// impl<Args: Clone + Tuple> Fn<Args> for Callbacks<dyn Fn<Args, Output = ()>> {
-//     extern "rust-call" fn call(&self, args: Args) -> Self::Output {
-//         for i in (0..self.storage.len()).rev() {
-//             (self.storage.get(i).unwrap()).call(args.clone());
-//         }
-//     }
-// }
-
-
-pub struct SharedCallbacks<C: ?Sized> {
-    pub(crate) storage: Arc<RwLock<Vec<Box<C>>>>,
-}
-
-
-impl<T: ?Sized> Default for SharedCallbacks<T> {
-    fn default() -> Self {
-        Self {
-            storage: Arc::default(),
-        }
-    }
-}
-
-impl<T: ?Sized> SharedCallbacks<T> {
-    pub fn get_ref(&self) -> CallbacksRef<T> {
-        CallbacksRef {
-            storage: self.storage.clone(),
-        }
-    }
-}
-
-// SharedCallbacks FnMut
-
-// impl<Args: Clone + Tuple> FnOnce<Args> for SharedCallbacks<dyn FnMut<Args, Output = ()>> {
-//     type Output = ();
-
-//     extern "rust-call" fn call_once(mut self, args: Args) -> Self::Output {
-//         self.call_mut(args);
-//     }
-// }
-
-// impl<Args: Clone + Tuple> FnMut<Args> for SharedCallbacks<dyn FnMut<Args, Output = ()>> {
-//     extern "rust-call" fn call_mut(&mut self, args: Args) -> Self::Output {
-//         for _ in 0..self.storage.len() {
-//             DROP_CALLBACK.set(false);
-//             let mut callback = self.storage.pop().unwrap();
-//             callback.call_mut(args.clone());
-//             if !DROP_CALLBACK.get() {
-//                 self.storage.push(callback);
-//             }
-//         }
-//     }
-// }
-
-impl<Args: Tuple> SharedCallbacks<dyn FnMut<Args, Output = ()>> {
-    pub fn add_callback(&self, callback: impl FnMut<Args, Output = ()> + 'static) {
-        self.storage.write().push(Box::new(callback));
-    }
-}
-
-// SharedCallbacks Fn
-
-// impl<Args: Clone + Tuple> FnOnce<Args> for SharedCallbacks<dyn Fn<Args, Output = ()>> {
-//     type Output = ();
-
-//     extern "rust-call" fn call_once(self, args: Args) -> Self::Output {
-//         self.call(args);
-//     }
-// }
-
-// impl<Args: Clone + Tuple> FnMut<Args> for SharedCallbacks<dyn Fn<Args, Output = ()>> {
-//     extern "rust-call" fn call_mut(&mut self, args: Args) -> Self::Output {
-//         self.call(args);
-//     }
-// }
-// impl<Args: Clone + Tuple> Fn<Args> for SharedCallbacks<dyn Fn<Args, Output = ()>> {
-//     extern "rust-call" fn call(&self, args: Args) -> Self::Output {
-//         for _ in 0..self.storage.len() {
-//             DROP_CALLBACK.set(false);
-//             let callback = self.storage.pop().unwrap();
-//             callback.call(args.clone());
-//             if !DROP_CALLBACK.get() {
-//                 self.storage.push(callback);
-//             }
-//         }
-//     }
-// }
-
-impl SharedCallbacks<dyn Fn(&log::Record)> {
-    pub fn call(&self, arg: &log::Record) {
-        if let Some(mut writer) = self.storage.try_write() {
-            for i in (0..writer.len()).rev() {
-                DROP_CALLBACK.set(false);
-                (writer.get_mut(i).unwrap())(arg);
-                if DROP_CALLBACK.get() {
-                    writer.swap_remove(i);
+            /// Calls all callbacks.
+            /// 
+            /// This *does not* drop any callbacks that return `true` from `was_callback_dropped` and is thus
+            /// faster than `call`.
+            $vis fn call_immut(&self, $($param : $arg),*) {
+                for func in self.storage.iter() {
+                    func($($param),*);
                 }
             }
-        } else {
-            let reader = self.storage.read();
-            for func in reader.iter() {
-                func(arg);
+
+            /// Calls all callbacks.
+            /// 
+            /// This drops any callbacks that return `true` from `was_callback_dropped`, unlike `call_immut`.
+            $vis fn call(&mut self, $($param : $arg),*) {
+                for i in (0..self.storage.len()).rev() {
+                    retain_this_callback();
+                    let func = self.storage.get_mut(i).unwrap();
+                    func($(<$arg>::clone(&$param)),*);
+                    if was_callback_dropped() {
+                        let _ = self.storage.swap_remove(i);
+                    }
+                }
+            }
+
+            /// Adds a callback.
+            $vis fn add_callback(&mut self, callback: impl Fn($($arg),*)$($extra)* + 'static) {
+                self.storage.push(Box::new(callback));
             }
         }
-    }
+    };
+    ($vis: vis $name: ident FnMut($($param: ident : $arg: ty),*)$($extra: tt)*) => {
+        use $crate::callbacks::caller::prelude::*;
+
+        #[derive(Default)]
+        $vis struct $name {
+            storage: Vec<Box<dyn FnMut($($arg,)*)$($extra)*>>,
+        }
+
+        impl $name {
+            /// Takes ownership of all callbacks in other.
+            $vis fn append(&mut self, other: &mut Self) {
+                self.storage.append(&mut other.storage);
+            }
+
+            /// Calls all callbacks.
+            /// 
+            /// This drops any callbacks that return `true` from `was_callback_dropped`.
+            $vis fn call(&mut self, $($param : $arg),*) {
+                for i in (0..self.storage.len()).rev() {
+                    retain_this_callback();
+                    let mut func = self.storage.get_mut(i).unwrap();
+                    func($(<$arg>::clone(&$param)),*);
+                    if was_callback_dropped() {
+                        let _ = self.storage.swap_remove(i);
+                    }
+                }
+            }
+
+            /// Adds a callback.
+            $vis fn add_callback(&mut self, callback: impl FnMut($($arg),*)$($extra)* + 'static) {
+                self.storage.push(Box::new(callback));
+            }
+        }
+    };
 }
 
-impl<Args: Tuple> SharedCallbacks<dyn Fn<Args, Output = ()>> {
-    pub fn add_callback(&self, callback: impl Fn<Args, Output = ()> + 'static) {
-        self.storage.write().push(Box::new(callback));
-    }
+
+#[macro_export]
+macro_rules! define_shared_callbacks {
+    ($vis: vis $name: ident Fn($($param: ident : $arg: ty),*)$($extra: tt)*) => {
+        use $crate::callbacks::caller::prelude::*;
+        use $crate::parking_lot::RwLock;
+
+        #[derive(Default)]
+        pub struct $name {
+            storage: Arc<RwLock<Vec<Box<dyn Fn($($arg,)*)$($extra)*>>>>,
+            modified: std::sync::atomic::AtomicBool
+        }
+
+        impl Clone for $name {
+            fn clone(&self) -> Self {
+                Self {
+                    storage: self.storage.clone(),
+                    modified: std::sync::atomic::AtomicBool::new(false)
+                }
+            }
+        }
+
+        impl $name {
+            /// Calls all callbacks.
+            /// 
+            /// This attempts to drop callbacks when possible without contention. The algorithm
+            /// is heavily biased towards calling instead of dropping.
+            $vis fn call(&self, $($param : $arg),*) {
+                if self.modified.load(std::sync::atomic::Ordering::Relaxed) {
+                    if let Some(mut storage) = self.storage.try_write() {
+                        for i in (0..storage.len()).rev() {
+                            retain_this_callback();
+                            let func = storage.get_mut(i).unwrap();
+                            func($(<$arg>::clone(&$param)),*);
+                            if was_callback_dropped() {
+                                let _ = storage.swap_remove(i);
+                            }
+                        }
+                        self.modified.store(false, std::sync::atomic::Ordering::Relaxed);
+                    } else {
+                        for func in self.storage.read().iter() {
+                            func($(<$arg>::clone(&$param)),*);
+                        }
+                    }
+                } else {
+                    for func in self.storage.read().iter() {
+                        retain_this_callback();
+                        func($(<$arg>::clone(&$param)),*);
+                        if was_callback_dropped() {
+                            self.modified.store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
+                }
+            }
+
+            /// Adds a callback.
+            $vis fn add_callback(&self, callback: impl Fn($($arg),*)$($extra)* + 'static) {
+                self.storage.write().push(Box::new(callback));
+            }
+
+            /// Gets a weak reference that can be used to add callbacks.
+            $vis fn get_ref(&self) -> CallbacksRef<dyn Fn($($arg),*)$($extra)*> {
+                (&self.storage).into()
+            }
+        }
+    };
+    ($vis: vis $name: ident FnMut($($param: ident : $arg: ty),*)$($extra: tt)*) => {
+        use $crate::callbacks::caller::prelude::*;
+        use $crate::parking_lot::RwLock;
+
+        #[derive(Default, Clone)]
+        $vis struct $name {
+            storage: Arc<RwLock<Vec<Box<dyn FnMut($($arg,)*)$($extra)*>>>>,
+        }
+
+        impl $name {
+            /// Calls all callbacks.
+            /// 
+            /// This drops any callbacks that return `true` from `was_callback_dropped`.
+            $vis fn call(&self, $($param : $arg),*) {
+                let mut storage = self.storage.write();
+                for i in (0..storage.len()).rev() {
+                    retain_this_callback();
+                    let mut func = storage.get_mut(i).unwrap();
+                    func($(<$arg>::clone(&$param)),*);
+                    if was_callback_dropped() {
+                        let _ = storage.swap_remove(i);
+                    }
+                }
+            }
+
+            /// Adds a callback.
+            $vis fn add_callback(&self, callback: impl FnMut($($arg),*)$($extra)* + 'static) {
+                self.storage.write().push(Box::new(callback));
+            }
+
+            /// Gets a weak reference that can be used to add callbacks.
+            $vis fn get_ref(&self) -> CallbacksRef<dyn FnMut($($arg),*)$($extra)*> {
+                (&self.storage).into()
+            }
+        }
+    };
 }
+
 
 pub struct CallbacksRef<T: ?Sized> {
-    storage: Arc<RwLock<Vec<Box<T>>>>,
+    storage: Weak<RwLock<Vec<Box<T>>>>,
+}
+
+impl<T: ?Sized> From<&Arc<RwLock<Vec<Box<T>>>>> for CallbacksRef<T> {
+    fn from(storage: &Arc<RwLock<Vec<Box<T>>>>) -> Self {
+        Self { storage: Arc::downgrade(&storage) }
+    }
 }
 
 impl<T: ?Sized> Clone for CallbacksRef<T> {
@@ -217,18 +230,20 @@ impl<T: ?Sized> Clone for CallbacksRef<T> {
     }
 }
 
-// CallbacksRef FnMut
-
-impl<Args: Tuple> CallbacksRef<dyn FnMut<Args, Output = ()>> {
-    pub fn add_callback(&self, callback: impl FnMut<Args, Output = ()> + 'static) {
-        self.storage.write().push(Box::new(callback));
+impl<C: ?Sized> CallbacksRef<C> {
+    pub fn add_callback(&self, callback: Box<C>) {
+        if let Some(storage) = self.storage.upgrade() {
+            storage.write().push(callback.into());
+        }
     }
 }
 
-// CallbacksRef Fn
 
-impl<Args: Tuple> CallbacksRef<dyn Fn<Args, Output = ()>> {
-    pub fn add_callback(&self, callback: impl Fn<Args, Output = ()> + 'static) {
-        self.storage.write().push(Box::new(callback));
-    }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    define_callbacks!(TestCallbacks1 Fn(i: i32));
+    define_callbacks!(TestCallbacks2 FnMut(i: &i32));
+    define_shared_callbacks!(TestCallbacks3 Fn(i: &i32));
+    define_shared_callbacks!(TestCallbacks4 FnMut(i: &i32));
 }

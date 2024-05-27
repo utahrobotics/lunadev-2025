@@ -2,11 +2,9 @@ use std::{
     backtrace::Backtrace,
     borrow::Cow,
     future::Future,
-    io::BufRead,
     ops::Deref,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc, OnceLock, Weak,
     },
     thread::JoinHandle as SyncJoinHandle,
@@ -25,9 +23,8 @@ use tokio::{
 use crate::{
     callbacks::{
         callee::Subscriber,
-        caller::{Callbacks, SingleCallback},
-    },
-    logging::init_default_logger,
+        caller::CallbacksRef,
+    }, define_shared_callbacks, logging::init_default_logger
 };
 
 pub enum DumpPath {
@@ -67,7 +64,7 @@ impl RuntimeBuilder {
     }
 
     pub fn start<T: Send + 'static, F: Future<Output = T> + Send + 'static>(
-        self,
+        mut self,
         main: impl FnOnce(RuntimeContext) -> F,
     ) -> Option<T> {
         let pid = std::process::id();
@@ -80,7 +77,7 @@ impl RuntimeBuilder {
             .build_global();
 
         let ctrl_c_ref = CTRL_C_PUB.get_or_init(|| {
-            let publisher = ImmutCallbacks::default();
+            let publisher = EndCallbacks::default();
             let publisher_ref = publisher.get_ref();
 
             ctrlc::set_handler(move || {
@@ -108,7 +105,7 @@ impl RuntimeBuilder {
             sync_persistent_threads: SegQueue::new(),
             async_persistent_threads: SegQueue::new(),
             exiting,
-            end_pub: Callbacks::default(),
+            end_pub: EndCallbacks::default(),
             dump_path,
             persistent_backtraces: SegQueue::new(),
             runtime_handle: runtime.handle().clone(),
@@ -118,7 +115,7 @@ impl RuntimeBuilder {
             inner: run_ctx_inner.clone(),
         };
 
-        init_default_logger(&main_run_ctx);
+        let _ = init_default_logger(&main_run_ctx).apply();
 
         let cpu_fut = async {
             let mut sys = sysinfo::System::new();
@@ -159,7 +156,6 @@ impl RuntimeBuilder {
                 end = end_sub.recv_or_never() => {
                     match end {
                         EndCondition::CtrlC => log::warn!("Ctrl-C received. Exiting..."),
-                        EndCondition::QuitOnDrop => {}
                         EndCondition::AllContextDropped => log::warn!("All RuntimeContexts dropped. Exiting..."),
                         EndCondition::RuntimeDropped => unreachable!(),
                     }
@@ -179,8 +175,8 @@ impl RuntimeBuilder {
                 }
             }
         });
-        let mut end_pub = SingleCallback::default();
-        end_pub.add_callback(Box::new(end_sub.create_mut_callback()));
+        let end_pub = EndCallbacks::default();
+        end_pub.add_callback(end_sub.create_callback());
         let dropper = std::thread::spawn(move || {
             runtime.block_on(async {
                 while let Some(handle) = run_ctx_inner.async_persistent_threads.pop() {
@@ -230,12 +226,15 @@ impl Default for RuntimeBuilder {
     }
 }
 
+define_shared_callbacks!(EndCallbacks Fn(condition: EndCondition) + Send + Sync);
+
+
 pub(crate) struct RuntimeContextInner {
     async_persistent_threads: SegQueue<AsyncJoinHandle<()>>,
     sync_persistent_threads: SegQueue<SyncJoinHandle<()>>,
     persistent_backtraces: SegQueue<Weak<Backtrace>>,
     exiting: watch::Receiver<bool>,
-    end_pub: ImmutCallbacks<EndCondition>,
+    end_pub: EndCallbacks,
     dump_path: PathBuf,
     pub(crate) runtime_handle: Handle,
 }
@@ -343,9 +342,8 @@ impl RuntimeContext {
 #[derive(Clone, Copy)]
 enum EndCondition {
     CtrlC,
-    QuitOnDrop,
     AllContextDropped,
     RuntimeDropped,
 }
 
-static CTRL_C_PUB: OnceLock<ImmutCallbacksRef<EndCondition>> = OnceLock::new();
+static CTRL_C_PUB: OnceLock<CallbacksRef<dyn Fn(EndCondition) + Send + Sync>> = OnceLock::new();

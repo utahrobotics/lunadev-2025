@@ -1,7 +1,9 @@
-use std::{ops::ControlFlow, sync::Arc};
+use std::sync::Arc;
 
 use crossbeam::queue::ArrayQueue;
 use tokio::sync::Notify;
+
+use super::caller::drop_this_callback;
 
 struct SubscriberInner<T> {
     queue: ArrayQueue<T>,
@@ -54,51 +56,35 @@ impl<T> Subscriber<T> {
         }
     }
 
-    pub fn create_conservative_callback(&self) -> impl Fn(T) -> ControlFlow<()> + Send + Sync
+    pub fn create_conservative_callback(&self) -> impl Fn(T) + Send + Sync
     where
         T: Send,
     {
         let inner = Arc::downgrade(&self.inner.clone());
         move |value| {
             let Some(inner) = inner.upgrade() else {
-                return ControlFlow::Break(());
+                drop_this_callback();
+                return;
             };
             if inner.queue.push(value).is_ok() {
                 inner.notify.notify_one();
             }
-            ControlFlow::Continue(())
         }
     }
 
-    pub fn create_callback(&self) -> impl Fn(T) -> ControlFlow<()> + Send + Sync
+    pub fn create_callback(&self) -> impl Fn(T) + Send + Sync
     where
         T: Send,
     {
         let inner = Arc::downgrade(&self.inner.clone());
         move |value| {
             let Some(inner) = inner.upgrade() else {
-                return ControlFlow::Break(());
+                drop_this_callback();
+                return;
             };
             if inner.queue.force_push(value).is_none() {
                 inner.notify.notify_one();
             }
-            ControlFlow::Continue(())
         }
-    }
-
-    #[inline]
-    pub fn create_conservative_mut_callback(&self) -> impl FnMut(T) -> ControlFlow<()> + Send + Sync
-    where
-        T: Send,
-    {
-        self.create_conservative_callback()
-    }
-
-    #[inline]
-    pub fn create_mut_callback(&self) -> impl FnMut(T) -> ControlFlow<()> + Send + Sync
-    where
-        T: Send,
-    {
-        self.create_callback()
     }
 }

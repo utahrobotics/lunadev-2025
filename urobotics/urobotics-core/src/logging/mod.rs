@@ -6,24 +6,23 @@
 
 use std::{
     fmt::Write,
-    ops::Deref,
-    sync::{Arc, Once, OnceLock},
+    sync::{Arc, OnceLock},
     time::Instant,
 };
 
 use fern::colors::{Color, ColoredLevelConfig};
 use log::Level;
-use parking_lot::Mutex;
 
 use crate::{
-    callbacks::caller::{Callbacks, CallbacksRef, SharedCallbacks},
-    runtime::RuntimeContext,
+    callbacks::caller::CallbacksRef, define_shared_callbacks, runtime::RuntimeContext
 };
 
 pub mod rate;
 
 pub(crate) static START_TIME: OnceLock<Instant> = OnceLock::new();
-static LOG_PUB: OnceLock<CallbacksRef<dyn Fn(&log::Record) + Send>> = OnceLock::new();
+
+define_shared_callbacks!(pub LogCallbacks Fn(record: &log::Record) + Send + Sync);
+static LOG_PUB: OnceLock<CallbacksRef<dyn Fn(&log::Record) + Send + Sync>> = OnceLock::new();
 
 /// Gets a reference to the `Publisher` for logs.
 ///
@@ -31,13 +30,13 @@ static LOG_PUB: OnceLock<CallbacksRef<dyn Fn(&log::Record) + Send>> = OnceLock::
 /// Panics if the logger has not been initialized. If this method
 /// is called inside of or after `start_unros_runtime`, the logger is
 /// always initialized.
-pub fn get_log_pub() -> CallbacksRef<dyn Fn(&log::Record) + Send> {
-    LOG_PUB.get().unwrap().clone()
+pub fn get_log_pub() -> &'static CallbacksRef<dyn Fn(&log::Record) + Send + Sync> {
+    LOG_PUB.get().unwrap()
 }
 
 #[derive(Default)]
 struct LogPub {
-    publisher: SharedCallbacks<dyn Fn(&log::Record)>,
+    publisher: LogCallbacks,
 }
 
 impl log::Log for LogPub {
@@ -50,12 +49,7 @@ impl log::Log for LogPub {
             return;
         }
 
-        let _ = (record,).clone();
-        let c = self.publisher.storage.pop().unwrap();
-
-        (self.publisher.storage.pop().unwrap())(record);
         self.publisher.call(record);
-        (self.publisher)(record);
     }
 
     fn flush(&self) {}
@@ -107,14 +101,14 @@ pub fn init_default_logger(context: &RuntimeContext) -> fern::Dispatch {
 
     let _ = START_TIME.set(Instant::now());
 
-    let mut log_pub = LogPub::default();
-    let _ = LOG_PUB.set(log_pub.publisher.get_mut().get_ref());
+    let log_pub = LogPub::default();
+    let _ = LOG_PUB.set(log_pub.publisher.get_ref());
     let log_pub: Box<dyn log::Log> = Box::new(log_pub);
 
     fern::Dispatch::new()
         // Add blanket level filter -
         .level(log::LevelFilter::Debug)
-        .filter(|x| !(x.target().starts_with("wgpu") && x.level() >= Level::Info))
+        // .filter(|x| !(x.target().starts_with("wgpu") && x.level() >= Level::Info))
         // Output to stdout, files, and other Dispatch configurations
         .chain(
             fern::Dispatch::new()
@@ -138,13 +132,9 @@ pub fn init_default_logger(context: &RuntimeContext) -> fern::Dispatch {
         .chain(
             fern::Dispatch::new()
                 .level(log::LevelFilter::Info)
-                .filter(|_| !has_repl())
                 // This filter is to avoid logging panics to the console, since rust already does that.
                 // Note that the 'panic' target is set by us in eyre.rs.
                 .filter(|x| x.target() != "panic")
-                .filter(|x| {
-                    !(x.target() == "unros_core::logging::dump" && x.level() == Level::Info)
-                })
                 .format(move |out, message, record| {
                     let secs = START_TIME.get().unwrap().elapsed().as_secs_f32();
                     out.finish(format_args!(
