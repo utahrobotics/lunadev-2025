@@ -27,3 +27,4 @@ simba = { workspace = true }
 ordered-float = { workspace = true }
 minifb = { git = "https://github.com/emoon/rust_minifb.git", rev = "633e6cd4f8f55fd9cbedc461976dde0f408bea35" }
 parking_lot = { workspace = true }
+static_assertions = { workspace = true }

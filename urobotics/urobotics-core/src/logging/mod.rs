@@ -7,62 +7,63 @@
 use std::{
     fmt::Write,
     sync::{Arc, OnceLock},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use fern::colors::{Color, ColoredLevelConfig};
-use log::Level;
+use log::set_boxed_logger;
 
-use crate::{
-    callbacks::caller::CallbacksRef, define_shared_callbacks, runtime::RuntimeContext
-};
+use crate::{callbacks::caller::CallbacksRef, define_shared_callbacks, runtime::RuntimeContext};
 
 pub mod rate;
 
-pub(crate) static START_TIME: OnceLock<Instant> = OnceLock::new();
+pub static START_TIME: OnceLock<Instant> = OnceLock::new();
 
-define_shared_callbacks!(pub LogCallbacks Fn(record: &log::Record) + Send + Sync);
+pub fn get_program_time() -> Duration {
+    START_TIME.get_or_init(Instant::now).elapsed()
+}
+
+define_shared_callbacks!(pub LogCallbacks => Fn(record: &log::Record) + Send + Sync);
 static LOG_PUB: OnceLock<CallbacksRef<dyn Fn(&log::Record) + Send + Sync>> = OnceLock::new();
 
-/// Gets a reference to the `Publisher` for logs.
-///
-/// # Panics
-/// Panics if the logger has not been initialized. If this method
-/// is called inside of or after `start_unros_runtime`, the logger is
-/// always initialized.
-pub fn get_log_pub() -> &'static CallbacksRef<dyn Fn(&log::Record) + Send + Sync> {
-    LOG_PUB.get().unwrap()
+#[inline(always)]
+fn get_log_pub() -> &'static CallbacksRef<dyn Fn(&log::Record) + Send + Sync> {
+    LOG_PUB.get_or_init(|| {
+        let log_pub = LogPub::default();
+        let log_pub_ref = log_pub.callbacks.get_ref();
+        let _ = set_boxed_logger(Box::new(log_pub));
+        log_pub_ref
+    })
+}
+
+#[inline]
+pub fn add_log_callback(callback: impl Fn(&log::Record) + Send + Sync + 'static) {
+    get_log_pub().add_callback(Box::new(callback));
+}
+
+#[inline(always)]
+pub fn add_logger(logger: impl log::Log + 'static) {
+    add_log_callback(move |record| logger.log(record));
 }
 
 #[derive(Default)]
 struct LogPub {
-    publisher: LogCallbacks,
+    callbacks: LogCallbacks,
 }
 
 impl log::Log for LogPub {
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
-        !(metadata.target() == "unros_core::logging::dump" && metadata.level() == Level::Info)
+    fn enabled(&self, _metadata: &log::Metadata) -> bool {
+        true
     }
 
     fn log(&self, record: &log::Record) {
-        if !self.enabled(record.metadata()) {
-            return;
-        }
-
-        self.publisher.call(record);
+        self.callbacks.call(record);
     }
 
     fn flush(&self) {}
 }
 
-/// Initializes the default logging implementation.
-///
-/// This is called automatically in `run_all` and `async_run_all`, but
-/// there may be additional logs produced before these methods that would
-/// be ignored if the logger was not set up yet. As such, you may call this
-/// method manually, when needed. Calling this multiple times is safe and
-/// will not return errors.
-pub fn init_default_logger(context: &RuntimeContext) -> fern::Dispatch {
+pub fn init_panic_hook() {
     let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default().into_hooks();
     let panic_hook = panic_hook.into_panic_hook();
     eyre_hook.install().expect("Failed to install eyre hook");
@@ -93,17 +94,22 @@ pub fn init_default_logger(context: &RuntimeContext) -> fern::Dispatch {
         log::error!(target: "panic", "{log}");
         panic_hook(panic_info);
     }));
+}
 
+/// Initializes the default logging implementation.
+///
+/// This is called automatically in `run_all` and `async_run_all`, but
+/// there may be additional logs produced before these methods that would
+/// be ignored if the logger was not set up yet. As such, you may call this
+/// method manually, when needed. Calling this multiple times is safe and
+/// will not return errors.
+pub fn create_default_logger(context: &RuntimeContext) -> fern::Dispatch {
     let colors = ColoredLevelConfig::new()
         .warn(Color::Yellow)
         .error(Color::Red)
         .trace(Color::BrightBlack);
 
-    let _ = START_TIME.set(Instant::now());
-
-    let log_pub = LogPub::default();
-    let _ = LOG_PUB.set(log_pub.publisher.get_ref());
-    let log_pub: Box<dyn log::Log> = Box::new(log_pub);
+    get_program_time();
 
     fern::Dispatch::new()
         // Add blanket level filter -
@@ -113,7 +119,7 @@ pub fn init_default_logger(context: &RuntimeContext) -> fern::Dispatch {
         .chain(
             fern::Dispatch::new()
                 .format(move |out, message, record| {
-                    let secs = START_TIME.get().unwrap().elapsed().as_secs_f32();
+                    let secs = get_program_time().as_secs_f32();
                     out.finish(format_args!(
                         "[{:0>1}:{:.2} {} {}] {}",
                         (secs / 60.0).floor(),
@@ -126,8 +132,7 @@ pub fn init_default_logger(context: &RuntimeContext) -> fern::Dispatch {
                 .chain(
                     fern::log_file(context.get_dump_path().join(".log"))
                         .expect("Failed to create log file. Do we have permissions?"),
-                )
-                .chain(log_pub),
+                ),
         )
         .chain(
             fern::Dispatch::new()
@@ -136,7 +141,7 @@ pub fn init_default_logger(context: &RuntimeContext) -> fern::Dispatch {
                 // Note that the 'panic' target is set by us in eyre.rs.
                 .filter(|x| x.target() != "panic")
                 .format(move |out, message, record| {
-                    let secs = START_TIME.get().unwrap().elapsed().as_secs_f32();
+                    let secs = get_program_time().as_secs_f32();
                     out.finish(format_args!(
                         "\x1B[{}m[{:0>1}:{:.2} {}] {}\x1B[0m",
                         colors.get_color(&record.level()).to_fg_str(),

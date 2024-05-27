@@ -2430,6 +2430,7 @@ dependencies = [
  "rayon",
  "serde",
  "simba",
+ "static_assertions",
  "sysinfo",
  "tokio",
 ]

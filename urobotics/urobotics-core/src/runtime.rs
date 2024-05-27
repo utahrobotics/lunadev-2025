@@ -4,9 +4,7 @@ use std::{
     future::Future,
     ops::Deref,
     path::{Path, PathBuf},
-    sync::{
-        Arc, OnceLock, Weak,
-    },
+    sync::{Arc, OnceLock, Weak},
     thread::JoinHandle as SyncJoinHandle,
     time::{Duration, Instant},
 };
@@ -21,10 +19,9 @@ use tokio::{
 };
 
 use crate::{
-    callbacks::{
-        callee::Subscriber,
-        caller::CallbacksRef,
-    }, define_shared_callbacks, logging::init_default_logger
+    callbacks::{callee::Subscriber, caller::CallbacksRef},
+    define_shared_callbacks,
+    logging::create_default_logger,
 };
 
 pub enum DumpPath {
@@ -115,7 +112,7 @@ impl RuntimeBuilder {
             inner: run_ctx_inner.clone(),
         };
 
-        let _ = init_default_logger(&main_run_ctx).apply();
+        let _ = create_default_logger(&main_run_ctx).apply();
 
         let cpu_fut = async {
             let mut sys = sysinfo::System::new();
@@ -226,8 +223,7 @@ impl Default for RuntimeBuilder {
     }
 }
 
-define_shared_callbacks!(EndCallbacks Fn(condition: EndCondition) + Send + Sync);
-
+define_shared_callbacks!(EndCallbacks => Fn(condition: EndCondition) + Send + Sync);
 
 pub(crate) struct RuntimeContextInner {
     async_persistent_threads: SegQueue<AsyncJoinHandle<()>>,
