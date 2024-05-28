@@ -17,7 +17,7 @@ members = [
     "misc/cakap",
     "urobotics/urobotics-core", "urobotics/urobotics-smach",
     "urobotics/urobotics-video",
-    "urobotics/urobotics-serial",
+    "urobotics/urobotics-serial", "urobotics/urobotics-app",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]

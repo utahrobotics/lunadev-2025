@@ -12,6 +12,7 @@ use std::{
 use chrono::{DateTime, Datelike, Local, Timelike};
 use crossbeam::queue::SegQueue;
 use futures::{stream::FuturesUnordered, StreamExt};
+use fxhash::FxHashSet;
 use sysinfo::{Components, Pid};
 use tokio::{
     runtime::{Builder as TokioBuilder, Handle},
@@ -34,7 +35,9 @@ pub struct RuntimeBuilder {
     pub tokio_builder: TokioBuilder,
     pub dump_path: DumpPath,
     pub cpu_usage_warning_threshold: f32,
+    pub temperature_warning_threshold: f32,
     pub max_persistent_drop_duration: Duration,
+    pub ignore_component_temperature: FxHashSet<String>,
 }
 
 impl RuntimeBuilder {
@@ -119,6 +122,9 @@ impl RuntimeBuilder {
             let mut tasks = FuturesUnordered::new();
             
             for component in &mut components {
+                if self.ignore_component_temperature.contains(component.label()) {
+                    continue;
+                }
                 tasks.push(async {
                     let mut last_temp_check = Instant::now();
                     loop {
@@ -128,8 +134,8 @@ impl RuntimeBuilder {
                         }
                         component.refresh();
                         let temp = component.temperature();
-                        if temp >= self.cpu_usage_warning_threshold {
-                            log::warn!("{} at {temp:.1}%", component.label());
+                        if temp >= self.temperature_warning_threshold {
+                            log::warn!("{} at {temp:.1} °C", component.label());
                             last_temp_check = Instant::now();
                         }
                     }
@@ -137,6 +143,7 @@ impl RuntimeBuilder {
             }
 
             tasks.next().await;
+            std::future::pending().await
         };
 
         let cpu_usage_fut = async {
@@ -246,6 +253,8 @@ impl Default for RuntimeBuilder {
             },
             cpu_usage_warning_threshold: 80.0,
             max_persistent_drop_duration: Duration::from_secs(5),
+            temperature_warning_threshold: 80.0,
+            ignore_component_temperature: FxHashSet::default(),
         }
     }
 }

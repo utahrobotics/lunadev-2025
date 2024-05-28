@@ -8,6 +8,12 @@ use crate::runtime::RuntimeContext;
 pub trait FunctionConfig: DeserializeOwned {
     type Output;
     const PERSISTENT: bool;
+    const NAME: &'static str;
+    const DESCRIPTION: &'static str = "";
+
+    fn standalone(self, _value: bool) -> Self {
+        self
+    }
 
     fn run(self, context: &RuntimeContext) -> Self::Output;
     fn spawn(self, context: RuntimeContext) where Self: Send + 'static {
@@ -25,6 +31,12 @@ pub trait FunctionConfig: DeserializeOwned {
 
 pub trait AsyncFunctionConfig: DeserializeOwned {
     type Output;
+    const NAME: &'static str;
+    const DESCRIPTION: &'static str = "";
+
+    fn standalone(self, _value: bool) -> Self {
+        self
+    }
 
     fn run(self, context: &RuntimeContext) -> impl Future<Output = Self::Output>;
 }

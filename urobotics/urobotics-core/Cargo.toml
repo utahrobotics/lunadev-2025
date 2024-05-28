@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 fern = { version = "0.6", features = ["colored"] }
 chrono = { workspace = true }
+fxhash = { workspace = true }
 log = { workspace = true }
 tokio = { workspace = true }
 crossbeam = { workspace = true }

@@ -26,7 +26,9 @@ pub struct SerialConnection {
     #[serde(skip)]
     serial_output: BytesCallbacks,
     #[serde(skip)]
-    serial_input: Arc<OnceLock<Exclusive<WriteHalf<SerialStream>>>>
+    serial_input: Arc<OnceLock<Exclusive<WriteHalf<SerialStream>>>>,
+    #[serde(default)]
+    standalone: bool
 }
 
 fn default_baud_rate() -> u32 {
@@ -49,7 +51,8 @@ impl SerialConnection {
             serial_output: BytesCallbacks::default(),
             serial_input: Arc::default(),
             path: path.into(),
-            buffer_size: default_buffer_size()
+            buffer_size: default_buffer_size(),
+            standalone: false
         }
     }
 
@@ -103,22 +106,46 @@ impl PendingWriter {
 impl AsyncFunctionConfig for SerialConnection {
     type Output = std::io::Result<!>;
 
+    fn standalone(self, value: bool) -> Self {
+        Self {
+            standalone: value,
+            ..self
+        }
+    }
+
     async fn run(self, _context: &RuntimeContext) -> Self::Output {
         #[allow(unused_mut)]
         let mut stream = tokio_serial::new(self.path, self.baud_rate).open_native_async()?;
         #[cfg(unix)]
         stream.set_exclusive(true)?;
         stream.clear(tokio_serial::ClearBuffer::All)?;
-        let (mut reader, writer) = tokio::io::split(stream);
-        let _ = self.serial_input.set(Exclusive::new(writer));
-        drop(self.serial_input);
+        let (mut reader, mut writer) = tokio::io::split(stream);
 
         let mut buf = BytesMut::with_capacity(self.buffer_size);
-        loop {
-            let n = reader.read_buf(&mut buf).await?;
-            self.serial_output.call(buf.split_at(n).0);
+        if self.standalone {
+            tokio::spawn(async move {
+                tokio::io::copy(&mut tokio::io::stdin(), &mut writer).await.expect("Failed to copy stdin to serial port");
+            });
+            loop {
+                reader.read_buf(&mut buf).await?;
+                if let Ok(msg) = std::str::from_utf8(&buf) {
+                    print!("{msg}");
+                    buf.clear();
+                }
+            }
+        } else {
+            let _ = self.serial_input.set(Exclusive::new(writer));
+            drop(self.serial_input);
+            loop {
+                reader.read_buf(&mut buf).await?;
+                self.serial_output.call(&buf);
+                buf.clear();
+            }
         }
     }
+    
+    const NAME: &'static str = "serial";
+    const DESCRIPTION: &'static str = "Connects to a serial port and reads data from it.";
 }
 
 
