@@ -1,0 +1,17 @@
+[package]
+name = "urobotics"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+urobotics-core = { workspace = true }
+urobotics-app = { workspace = true , optional = true }
+urobotics-serial = { workspace = true , optional = true }
+urobotics-smach = { workspace = true , optional = true }
+urobotics-video = { workspace = true , optional = true }
+
+[features]
+app = ["urobotics-app"]
+serial = ["urobotics-serial"]
+smach = ["urobotics-smach"]
+video = ["urobotics-video"]

@@ -86,7 +86,7 @@ impl RuntimeBuilder {
 
             publisher_ref
         });
-        let end_sub = Subscriber::new(32);
+        let end_sub = Subscriber::new_unbounded();
         ctrl_c_ref.add_callback(Box::new(end_sub.create_callback()));
 
         let dump_path = self.get_dump_path();
@@ -100,14 +100,17 @@ impl RuntimeBuilder {
 
         let runtime = self.tokio_builder.build().unwrap();
         let (exiting_sender, exiting) = watch::channel(false);
+        let end_pub = EndCallbacks::default();
+        end_pub.add_callback(end_sub.create_callback());
         let run_ctx_inner = RuntimeContextInner {
             sync_persistent_threads: SegQueue::new(),
             async_persistent_threads: SegQueue::new(),
             exiting,
-            end_pub: EndCallbacks::default(),
+            end_pub,
             dump_path,
             persistent_backtraces: SegQueue::new(),
             runtime_handle: runtime.handle().clone(),
+            waiting_for_exit: Arc::new(()),
         };
         let run_ctx_inner = Arc::new(run_ctx_inner);
         let main_run_ctx = RuntimeContext {
@@ -246,8 +249,10 @@ impl RuntimeBuilder {
 
 impl Default for RuntimeBuilder {
     fn default() -> Self {
+        let mut tokio_builder = TokioBuilder::new_multi_thread();
+        tokio_builder.enable_all();
         Self {
-            tokio_builder: TokioBuilder::new_multi_thread(),
+            tokio_builder,
             dump_path: DumpPath::Default {
                 application_name: Cow::Borrowed("default"),
             },
@@ -268,6 +273,7 @@ pub(crate) struct RuntimeContextInner {
     exiting: watch::Receiver<bool>,
     end_pub: EndCallbacks,
     dump_path: PathBuf,
+    waiting_for_exit: Arc<()>,
     pub(crate) runtime_handle: Handle,
 }
 
@@ -276,15 +282,9 @@ pub struct RuntimeContext {
     pub(crate) inner: Arc<RuntimeContextInner>,
 }
 
-impl RuntimeContext {
-    pub async fn wait_for_exit(&self) {
-        let _ = self.inner.exiting.clone().changed().await;
-    }
-}
-
 impl Drop for RuntimeContext {
     fn drop(&mut self) {
-        if Arc::strong_count(&self.inner) == 1 {
+        if Arc::strong_count(&self.inner) - 1 == Arc::strong_count(&self.inner.waiting_for_exit) {
             self.inner.end_pub.call(EndCondition::AllContextDropped);
         }
     }
@@ -339,6 +339,14 @@ impl RuntimeContext {
 
     pub fn end_runtime(&self) {
         self.inner.end_pub.call(EndCondition::EndRequested);
+    }
+
+    pub async fn wait_for_exit(&self) {
+        let _waiting = self.inner.waiting_for_exit.clone();
+        if Arc::strong_count(&self.inner) - 1 == Arc::strong_count(&self.inner.waiting_for_exit) {
+            self.inner.end_pub.call(EndCondition::AllContextDropped);
+        }
+        let _ = self.inner.exiting.clone().changed().await;
     }
 }
 

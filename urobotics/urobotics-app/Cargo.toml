@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = "4.5.4"
+clap = { version = "4.5.4", features = ["cargo"] }
 urobotics-core = { workspace = true }
 fxhash = { workspace = true }
 toml = { workspace = true }

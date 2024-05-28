@@ -6,7 +6,6 @@ members = [
     # "unros/serial",
     # "unros/navigator",
     # "unros/rig",
-    "unros/unros-macros",
     # "unros/realsense",
     # "unros/camera-info",
     # "unros/networking",
@@ -17,7 +16,7 @@ members = [
     "misc/cakap",
     "urobotics/urobotics-core", "urobotics/urobotics-smach",
     "urobotics/urobotics-video",
-    "urobotics/urobotics-serial", "urobotics/urobotics-app",
+    "urobotics/urobotics-serial", "urobotics/urobotics-app", "examples/serial-example", "urobotics/urobotics",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]
@@ -70,6 +69,11 @@ compute-shader = { path = "misc/compute-shader" }
 py-repl = { path = "misc/py-repl" }
 cakap = { path = "misc/cakap" }
 urobotics-core = { path = "urobotics/urobotics-core" }
+urobotics-app = { path = "urobotics/urobotics-app" }
+urobotics-serial = { path = "urobotics/urobotics-serial" }
+urobotics-smach = { path = "urobotics/urobotics-smach" }
+urobotics-video = { path = "urobotics/urobotics-video" }
+urobotics = { path = "urobotics/urobotics" }
 
 # The following crates need to run at full power
 # in most contexts to be effective.

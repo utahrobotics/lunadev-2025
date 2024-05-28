@@ -1,3 +1,5 @@
+#![feature(never_type)]
+
 pub mod callbacks;
 pub mod logging;
 pub mod runtime;

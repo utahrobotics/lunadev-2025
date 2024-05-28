@@ -1,9 +1,10 @@
 use std::path::Path;
 
 pub use clap;
-use clap::ArgMatches;
+use clap::{arg, Arg, ArgMatches};
 use fxhash::FxHashMap;
 use urobotics_core::{function::{FunctionConfig, SendAsyncFunctionConfig}, runtime::RuntimeContext};
+use std::str::FromStr;
 
 #[macro_export]
 macro_rules! command {
@@ -14,12 +15,13 @@ macro_rules! command {
 
 pub struct Command {
     pub command: clap::Command,
-    functions: FxHashMap<String, Box<dyn FnOnce(toml::Table, RuntimeContext)>>
+    functions: FxHashMap<String, Box<dyn FnOnce(toml::Table, RuntimeContext) + Send>>
 }
 
 
 impl From<clap::Command> for Command {
-    fn from(command: clap::Command) -> Self {
+    fn from(mut command: clap::Command) -> Self {
+        command = command.arg(arg!([config] "optional path to a config file"));
         Self {
             command,
             functions: FxHashMap::default()
@@ -54,12 +56,17 @@ impl Command {
 
         if let Some(params) = sub_matches.get_many::<String>("parameters") {
             for param in params {
-                let sub_table: toml::Value = toml::from_str(&param).expect("Failed to parse parameter");
-                let toml::Value::Table(sub_table) = sub_table else {
-                    panic!("Parameter is not valid")
-                };
-                for (key, value) in sub_table {
-                    table.insert(key, value);
+                let Some(index) = param.find('=') else { panic!("{param} is not a key value association") };
+                let (key, mut value_str) = param.split_at(index);
+                value_str = value_str.split_at(1).1;
+                if let Ok(value) = bool::from_str(value_str) {
+                    table.insert(key.into(), toml::Value::Boolean(value));
+                } else if let Ok(number) = i64::from_str(value_str) {
+                    table.insert(key.into(), toml::Value::Integer(number));
+                } else if let Ok(number) = f64::from_str(value_str) {
+                    table.insert(key.into(), toml::Value::Float(number));
+                } else {
+                    table.insert(key.into(), value_str.into());
                 }
             }
         }
@@ -71,17 +78,21 @@ impl Command {
         matches
     }
 
-    pub fn add_function<F: FunctionConfig + Send + 'static>(&mut self) -> &mut Self {
+    pub fn add_function<F: FunctionConfig + Send + 'static>(mut self) -> Self {
+        self.command = self.command.subcommand(clap::Command::new(F::NAME).arg(Arg::new("parameters").num_args(..)));
         self.functions.insert(F::NAME.into(), Box::new(move |table, context| {
-            let config: F = toml::Value::Table(table).try_into().expect("Failed to parse config");
+            let mut config: F = toml::Value::Table(table).try_into().expect("Failed to parse config");
+            config = config.standalone(true);
             config.spawn(context);
         }));
         self
     }
 
-    pub fn add_async_function<F: SendAsyncFunctionConfig + Send + 'static>(&mut self) -> &mut Self {
+    pub fn add_async_function<F: SendAsyncFunctionConfig + Send + 'static>(mut self) -> Self {
+        self.command = self.command.subcommand(clap::Command::new(F::NAME).arg(Arg::new("parameters").num_args(..)));
         self.functions.insert(F::NAME.into(), Box::new(move |table, context| {
-            let config: F = toml::Value::Table(table).try_into().expect("Failed to parse config");
+            let mut config: F = toml::Value::Table(table).try_into().expect("Failed to parse config");
+            config = config.standalone(true);
             config.spawn(context);
         }));
         self

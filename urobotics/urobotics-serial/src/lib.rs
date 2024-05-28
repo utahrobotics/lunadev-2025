@@ -123,8 +123,12 @@ impl AsyncFunctionConfig for SerialConnection {
 
         let mut buf = BytesMut::with_capacity(self.buffer_size);
         if self.standalone {
-            tokio::spawn(async move {
-                tokio::io::copy(&mut tokio::io::stdin(), &mut writer).await.expect("Failed to copy stdin to serial port");
+            std::thread::spawn(move || {
+                let mut builder = tokio::runtime::Builder::new_current_thread();
+                builder.enable_all();
+                builder.build().unwrap().block_on(async {
+                    tokio::io::copy(&mut tokio::io::stdin(), &mut writer).await.expect("Failed to copy stdin to serial port");
+                });
             });
             loop {
                 reader.read_buf(&mut buf).await?;

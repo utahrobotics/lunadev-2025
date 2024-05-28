@@ -1,12 +1,53 @@
 use std::sync::Arc;
 
-use crossbeam::queue::ArrayQueue;
+use crossbeam::queue::{ArrayQueue, SegQueue};
 use tokio::sync::Notify;
 
 use super::caller::drop_this_callback;
 
+
+enum Queue<T> {
+    Bounded(ArrayQueue<T>),
+    Unbounded(SegQueue<T>),
+}
+
+
+impl<T> Queue<T> {
+    #[inline]
+    fn push(&self, value: T) -> Result<(), T> {
+        match self {
+            Self::Bounded(queue) => queue.push(value),
+            Self::Unbounded(queue) => {
+                queue.push(value);
+                Ok(())
+            }
+        }
+    }
+
+    #[inline]
+    fn force_push(&self, value: T) -> Option<T> {
+        match self {
+            Self::Bounded(queue) => queue.force_push(value),
+            Self::Unbounded(queue) => {
+                queue.push(value);
+                None
+            }
+        }
+    }
+
+    #[inline]
+    fn pop(&self) -> Option<T> {
+        match self {
+            Self::Bounded(queue) => queue.pop(),
+            Self::Unbounded(queue) => queue.pop(),
+        }
+    }
+
+}
+
+
 struct SubscriberInner<T> {
-    queue: ArrayQueue<T>,
+    queue: Queue<T>,
     notify: Notify,
 }
 
@@ -18,7 +59,15 @@ impl<T> Subscriber<T> {
     pub fn new(max_size: usize) -> Self {
         Self {
             inner: Arc::new(SubscriberInner {
-                queue: ArrayQueue::new(max_size),
+                queue: Queue::Bounded(ArrayQueue::new(max_size)),
+                notify: Notify::new(),
+            }),
+        }
+    }
+    pub fn new_unbounded() -> Self {
+        Self {
+            inner: Arc::new(SubscriberInner {
+                queue: Queue::Unbounded(SegQueue::new()),
                 notify: Notify::new(),
             }),
         }
