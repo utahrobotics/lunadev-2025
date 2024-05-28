@@ -13,7 +13,9 @@ use std::{
 use fern::colors::{Color, ColoredLevelConfig};
 use log::set_boxed_logger;
 
-use crate::{callbacks::caller::SharedCallbacksRef, define_shared_callbacks, runtime::RuntimeContext};
+use crate::{
+    callbacks::caller::SharedCallbacksRef, define_shared_callbacks, runtime::RuntimeContext,
+};
 
 pub mod rate;
 

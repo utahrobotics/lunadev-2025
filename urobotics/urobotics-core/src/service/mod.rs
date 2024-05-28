@@ -5,7 +5,7 @@
 use std::future::Future;
 
 pub struct Service<F: ?Sized> {
-    func: Box<F>
+    func: Box<F>,
 }
 
 macro_rules! implementation {
@@ -15,13 +15,13 @@ macro_rules! implementation {
                 (self.func)(schedule_data)
             }
         }
-        
+
         impl<ScheduleData, Fut: Future> Service<dyn FnMut(ScheduleData) -> Fut$($t)*> {
             pub fn call(&mut self, schedule_data: ScheduleData) -> Fut {
                 (self.func)(schedule_data)
             }
         }
-        
+
         impl<ScheduleData, F, T> From<F> for Service<dyn FnMut(ScheduleData) -> T$($t)*>
         where
             F: FnMut(ScheduleData) -> T + 'static$($t)*,

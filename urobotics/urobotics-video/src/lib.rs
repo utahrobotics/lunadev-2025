@@ -12,7 +12,8 @@ use std::{
     fmt::Display,
     net::SocketAddrV4,
     path::{Path, PathBuf},
-    sync::Arc, time::Duration,
+    sync::Arc,
+    time::Duration,
 };
 
 use crossbeam::{atomic::AtomicCell, utils::Backoff};
@@ -449,7 +450,7 @@ pub enum RtpQuality {
     Average,
     High,
     VeryHigh,
-    Custom(usize)
+    Custom(usize),
 }
 
 impl From<RtpQuality> for usize {
@@ -544,14 +545,16 @@ impl RtpVideoBuilder {
 }
 
 impl RtpVideoBuilder {
-    pub async fn build(&self, context: &RuntimeContext) -> Result<(VideoDataDump, String), VideoDumpInitError> {
+    pub async fn build(
+        &self,
+        context: &RuntimeContext,
+    ) -> Result<(VideoDataDump, String), VideoDumpInitError> {
         ffmpeg_sidecar::download::auto_download()
             .map_err(|e| VideoDumpInitError::FFMPEGInstallError(e.to_string()))?;
 
         let mut cmd = FfmpegCommand::new();
 
-        cmd
-            .hwaccel("auto")
+        cmd.hwaccel("auto")
             .format("rawvideo")
             .pix_fmt("rgb24")
             .size(self.in_width, self.in_height)
@@ -576,14 +579,12 @@ impl RtpVideoBuilder {
         }
 
         if let Some(max_bitrate) = self.max_bitrate {
-            cmd.args(
-                [
-                    "-maxrate",
-                    &format!("{}K", max_bitrate),
-                    "-bufsize",
-                    &format!("{}K", max_bitrate * 2)
-                ]
-            );
+            cmd.args([
+                "-maxrate",
+                &format!("{}K", max_bitrate),
+                "-bufsize",
+                &format!("{}K", max_bitrate * 2),
+            ]);
         }
 
         let output = cmd
@@ -608,7 +609,9 @@ impl RtpVideoBuilder {
         while !sdp_path.exists() {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
-        let sdp = tokio::fs::read_to_string(&sdp_path).await.map_err(VideoDumpInitError::IOError)?;
+        let sdp = tokio::fs::read_to_string(&sdp_path)
+            .await
+            .map_err(VideoDumpInitError::IOError)?;
 
         VideoDataDump::new(
             self.in_width,
@@ -616,6 +619,7 @@ impl RtpVideoBuilder {
             VideoDataDumpType::Rtp(self.addr),
             output,
             context,
-        ).map(|dump| (dump, sdp))
+        )
+        .map(|dump| (dump, sdp))
     }
 }

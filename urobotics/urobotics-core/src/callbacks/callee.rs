@@ -5,12 +5,10 @@ use tokio::sync::Notify;
 
 use super::caller::drop_this_callback;
 
-
 enum Queue<T> {
     Bounded(ArrayQueue<T>),
     Unbounded(SegQueue<T>),
 }
-
 
 impl<T> Queue<T> {
     #[inline]
@@ -42,9 +40,7 @@ impl<T> Queue<T> {
             Self::Unbounded(queue) => queue.pop(),
         }
     }
-
 }
-
 
 struct SubscriberInner<T> {
     queue: Queue<T>,

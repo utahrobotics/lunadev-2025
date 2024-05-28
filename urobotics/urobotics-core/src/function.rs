@@ -1,5 +1,3 @@
-
-
 use std::future::Future;
 
 use serde::de::DeserializeOwned;
@@ -18,14 +16,17 @@ pub trait FunctionConfig: DeserializeOwned {
     }
 
     fn run(self, context: &RuntimeContext) -> Self::Output;
-    fn spawn(self, context: RuntimeContext) where Self: Send + 'static {
+    fn spawn(self, context: RuntimeContext)
+    where
+        Self: Send + 'static,
+    {
         if Self::PERSISTENT {
             context.clone().spawn_persistent_sync(move || {
-                self.run(&context).log();
+                self.run(&context).log(Self::NAME);
             });
         } else {
             std::thread::spawn(move || {
-                self.run(&context).log();
+                self.run(&context).log(Self::NAME);
             });
         }
     }
@@ -43,42 +44,46 @@ pub trait AsyncFunctionConfig: DeserializeOwned {
     fn run(self, context: &RuntimeContext) -> impl Future<Output = Self::Output>;
 }
 
-
 pub trait SendAsyncFunctionConfig: AsyncFunctionConfig {
     const PERSISTENT: bool;
 
     fn run_send(self, context: &RuntimeContext) -> impl Future<Output = Self::Output> + Send;
-    fn spawn(self, context: RuntimeContext) -> AbortHandle where Self: Send + 'static {
+    fn spawn(self, context: RuntimeContext) -> AbortHandle
+    where
+        Self: Send + 'static,
+    {
         if Self::PERSISTENT {
             context.clone().spawn_persistent_async(async move {
-                self.run_send(&context).await.log();
+                self.run_send(&context).await.log(Self::NAME);
             })
         } else {
-            context.clone().spawn_async(async move {
-                self.run_send(&context).await.log();
-            }).abort_handle()
+            context
+                .clone()
+                .spawn_async(async move {
+                    self.run_send(&context).await.log(Self::NAME);
+                })
+                .abort_handle()
         }
     }
 }
 
 pub trait Loggable {
-    fn log(self);
+    fn log(self, target: &str);
 }
 
-
 impl Loggable for () {
-    fn log(self) {}
+    fn log(self, _target: &str) {}
 }
 
 impl Loggable for ! {
-    fn log(self) {}
+    fn log(self, _target: &str) {}
 }
 
 impl<T: Loggable, E: std::error::Error> Loggable for Result<T, E> {
-    fn log(self) {
+    fn log(self, target: &str) {
         match self {
-            Ok(t) => t.log(),
-            Err(e) => log::error!("{}", e),
+            Ok(t) => t.log(target),
+            Err(e) => log::error!(target: target, "{}", e),
         }
     }
 }

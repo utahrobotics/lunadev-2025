@@ -22,7 +22,10 @@ pub fn was_callback_dropped() -> bool {
 }
 
 pub mod prelude {
-    pub use super::{drop_this_callback, retain_this_callback, was_callback_dropped, SharedCallbacksRef, CallbacksRef};
+    pub use super::{
+        drop_this_callback, retain_this_callback, was_callback_dropped, CallbacksRef,
+        SharedCallbacksRef,
+    };
 }
 
 #[macro_export]
@@ -338,9 +341,7 @@ pub struct CallbacksRef<'a, T: ?Sized> {
 
 impl<'a, T: ?Sized> From<&'a mut Vec<Box<T>>> for CallbacksRef<'a, T> {
     fn from(storage: &'a mut Vec<Box<T>>) -> Self {
-        Self {
-            storage
-        }
+        Self { storage }
     }
 }
 

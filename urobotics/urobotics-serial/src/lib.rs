@@ -2,15 +2,25 @@
 //! This crate offers several ways to interface with serial ports under
 //! the Unros framwork.
 
-use std::{borrow::Cow, sync::{Arc, Exclusive, OnceLock}};
+use std::{
+    borrow::Cow,
+    sync::{Arc, Exclusive, OnceLock},
+};
 
 pub use bytes::Bytes;
 use bytes::BytesMut;
 use crossbeam::utils::Backoff;
 use serde::Deserialize;
 use tokio_serial::{SerialPort, SerialPortBuilderExt, SerialStream};
-use urobotics_core::{define_shared_callbacks, function::{AsyncFunctionConfig, SendAsyncFunctionConfig}, runtime::RuntimeContext, tokio::{self, io::{AsyncReadExt, WriteHalf}}};
-
+use urobotics_core::{
+    define_shared_callbacks,
+    function::{AsyncFunctionConfig, SendAsyncFunctionConfig},
+    runtime::RuntimeContext,
+    tokio::{
+        self,
+        io::{AsyncReadExt, WriteHalf},
+    },
+};
 
 define_shared_callbacks!(BytesCallbacks => FnMut(bytes: &[u8]) + Send + Sync);
 
@@ -28,7 +38,7 @@ pub struct SerialConnection {
     #[serde(skip)]
     serial_input: Arc<OnceLock<Exclusive<WriteHalf<SerialStream>>>>,
     #[serde(default)]
-    standalone: bool
+    standalone: bool,
 }
 
 fn default_baud_rate() -> u32 {
@@ -52,7 +62,7 @@ impl SerialConnection {
             serial_input: Arc::default(),
             path: path.into(),
             buffer_size: default_buffer_size(),
-            standalone: false
+            standalone: false,
         }
     }
 
@@ -65,13 +75,16 @@ impl SerialConnection {
     }
 }
 
-
 pub struct PendingWriter(Arc<OnceLock<Exclusive<WriteHalf<SerialStream>>>>);
 
 impl PendingWriter {
     pub fn try_unwrap(self) -> Result<WriteHalf<SerialStream>, Self> {
         if Arc::strong_count(&self.0) == 1 && self.0.get().is_some() {
-            Ok(Arc::try_unwrap(self.0).unwrap().into_inner().unwrap().into_inner())
+            Ok(Arc::try_unwrap(self.0)
+                .unwrap()
+                .into_inner()
+                .unwrap()
+                .into_inner())
         } else {
             Err(self)
         }
@@ -127,7 +140,9 @@ impl AsyncFunctionConfig for SerialConnection {
                 let mut builder = tokio::runtime::Builder::new_current_thread();
                 builder.enable_all();
                 builder.build().unwrap().block_on(async {
-                    tokio::io::copy(&mut tokio::io::stdin(), &mut writer).await.expect("Failed to copy stdin to serial port");
+                    tokio::io::copy(&mut tokio::io::stdin(), &mut writer)
+                        .await
+                        .expect("Failed to copy stdin to serial port");
                 });
             });
             loop {
@@ -147,11 +162,10 @@ impl AsyncFunctionConfig for SerialConnection {
             }
         }
     }
-    
-    const NAME: &'static str = "serial";
-    const DESCRIPTION: &'static str = "Connects to a serial port and reads data from it.";
-}
 
+    const NAME: &'static str = "serial";
+    const DESCRIPTION: &'static str = "Connects to a serial port and reads data from it";
+}
 
 impl SendAsyncFunctionConfig for SerialConnection {
     const PERSISTENT: bool = true;

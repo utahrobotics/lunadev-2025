@@ -123,9 +123,12 @@ impl RuntimeBuilder {
             let mut components = Components::new_with_refreshed_list();
 
             let mut tasks = FuturesUnordered::new();
-            
+
             for component in &mut components {
-                if self.ignore_component_temperature.contains(component.label()) {
+                if self
+                    .ignore_component_temperature
+                    .contains(component.label())
+                {
                     continue;
                 }
                 tasks.push(async {
@@ -284,7 +287,7 @@ pub struct RuntimeContext {
 
 impl Drop for RuntimeContext {
     fn drop(&mut self) {
-        if Arc::strong_count(&self.inner) - 1 == Arc::strong_count(&self.inner.waiting_for_exit) {
+        if Arc::strong_count(&self.inner) == Arc::strong_count(&self.inner.waiting_for_exit) {
             self.inner.end_pub.call(EndCondition::AllContextDropped);
         }
     }
@@ -306,7 +309,10 @@ impl RuntimeContext {
         self.inner.persistent_backtraces.push(weak_backtrace);
     }
 
-    pub fn spawn_persistent_async(&self, f: impl Future<Output = ()> + Send + 'static) -> AbortHandle {
+    pub fn spawn_persistent_async(
+        &self,
+        f: impl Future<Output = ()> + Send + 'static,
+    ) -> AbortHandle {
         let backtrace = Arc::new(Backtrace::force_capture());
         let weak_backtrace = Arc::downgrade(&backtrace);
 
@@ -343,20 +349,20 @@ impl RuntimeContext {
 
     pub async fn wait_for_exit(&self) {
         let _waiting = self.inner.waiting_for_exit.clone();
-        if Arc::strong_count(&self.inner) - 1 == Arc::strong_count(&self.inner.waiting_for_exit) {
+        if Arc::strong_count(&self.inner) == Arc::strong_count(&self.inner.waiting_for_exit) {
             self.inner.end_pub.call(EndCondition::AllContextDropped);
         }
         let _ = self.inner.exiting.clone().changed().await;
     }
 }
 
-
 #[derive(Clone, Copy)]
 enum EndCondition {
     CtrlC,
     AllContextDropped,
     RuntimeDropped,
-    EndRequested
+    EndRequested,
 }
 
-static CTRL_C_PUB: OnceLock<SharedCallbacksRef<dyn Fn(EndCondition) + Send + Sync>> = OnceLock::new();
+static CTRL_C_PUB: OnceLock<SharedCallbacksRef<dyn Fn(EndCondition) + Send + Sync>> =
+    OnceLock::new();
