@@ -13,7 +13,7 @@ use std::{
 use fern::colors::{Color, ColoredLevelConfig};
 use log::set_boxed_logger;
 
-use crate::{callbacks::caller::CallbacksRef, define_shared_callbacks, runtime::RuntimeContext};
+use crate::{callbacks::caller::SharedCallbacksRef, define_shared_callbacks, runtime::RuntimeContext};
 
 pub mod rate;
 
@@ -24,10 +24,10 @@ pub fn get_program_time() -> Duration {
 }
 
 define_shared_callbacks!(pub LogCallbacks => Fn(record: &log::Record) + Send + Sync);
-static LOG_PUB: OnceLock<CallbacksRef<dyn Fn(&log::Record) + Send + Sync>> = OnceLock::new();
+static LOG_PUB: OnceLock<SharedCallbacksRef<dyn Fn(&log::Record) + Send + Sync>> = OnceLock::new();
 
 #[inline(always)]
-fn get_log_pub() -> &'static CallbacksRef<dyn Fn(&log::Record) + Send + Sync> {
+fn get_log_pub() -> &'static SharedCallbacksRef<dyn Fn(&log::Record) + Send + Sync> {
     LOG_PUB.get_or_init(|| {
         let log_pub = LogPub::default();
         let log_pub_ref = log_pub.callbacks.get_ref();
@@ -64,6 +64,13 @@ impl log::Log for LogPub {
 }
 
 pub fn init_panic_hook() {
+    let _ = rayon::ThreadPoolBuilder::default()
+        .panic_handler(|_| {
+            // Panics in rayon still get logged, but this prevents
+            // the thread pool from aborting the entire process
+        })
+        .build_global();
+
     let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default().into_hooks();
     let panic_hook = panic_hook.into_panic_hook();
     eyre_hook.install().expect("Failed to install eyre hook");

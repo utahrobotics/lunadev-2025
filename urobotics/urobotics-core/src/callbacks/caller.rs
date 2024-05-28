@@ -22,7 +22,7 @@ pub fn was_callback_dropped() -> bool {
 }
 
 pub mod prelude {
-    pub use super::{drop_this_callback, retain_this_callback, was_callback_dropped, CallbacksRef};
+    pub use super::{drop_this_callback, retain_this_callback, was_callback_dropped, SharedCallbacksRef, CallbacksRef};
 }
 
 #[macro_export]
@@ -86,6 +86,12 @@ macro_rules! define_callbacks {
             $vis fn is_empty(&self) -> bool {
                 self.storage.is_empty()
             }
+
+            /// Gets a reference that can be used to add callbacks.
+            #[allow(dead_code)]
+            $vis fn get_ref(&mut self) -> CallbacksRef<dyn Fn($($arg),*)$($extra)*> {
+                (&mut self.storage).into()
+            }
         }
     };
     ($vis: vis $name: ident => FnMut($($param: ident : $arg: ty),*)$($extra: tt)*) => {
@@ -135,6 +141,12 @@ macro_rules! define_callbacks {
             #[allow(dead_code)]
             $vis fn is_empty(&self) -> bool {
                 self.storage.is_empty()
+            }
+
+            /// Gets a reference that can be used to add callbacks.
+            #[allow(dead_code)]
+            $vis fn get_ref(&mut self) -> CallbacksRef<dyn FnMut($($arg),*)$($extra)*> {
+                (&mut self.storage).into()
             }
         }
     };
@@ -203,7 +215,7 @@ macro_rules! define_shared_callbacks {
 
             /// Gets a weak reference that can be used to add callbacks.
             #[allow(dead_code)]
-            $vis fn get_ref(&self) -> CallbacksRef<dyn Fn($($arg),*)$($extra)*> {
+            $vis fn get_ref(&self) -> SharedCallbacksRef<dyn Fn($($arg),*)$($extra)*> {
                 (&self.storage).into()
             }
 
@@ -254,7 +266,7 @@ macro_rules! define_shared_callbacks {
 
             /// Gets a weak reference that can be used to add callbacks.
             #[allow(dead_code)]
-            $vis fn get_ref(&self) -> CallbacksRef<dyn FnMut($($arg),*)$($extra)*> {
+            $vis fn get_ref(&self) -> SharedCallbacksRef<dyn FnMut($($arg),*)$($extra)*> {
                 (&self.storage).into()
             }
 
@@ -273,11 +285,11 @@ macro_rules! define_shared_callbacks {
     };
 }
 
-pub struct CallbacksRef<T: ?Sized> {
+pub struct SharedCallbacksRef<T: ?Sized> {
     storage: Weak<RwLock<Vec<Box<T>>>>,
 }
 
-impl<T: ?Sized> From<&Arc<RwLock<Vec<Box<T>>>>> for CallbacksRef<T> {
+impl<T: ?Sized> From<&Arc<RwLock<Vec<Box<T>>>>> for SharedCallbacksRef<T> {
     fn from(storage: &Arc<RwLock<Vec<Box<T>>>>) -> Self {
         Self {
             storage: Arc::downgrade(&storage),
@@ -285,7 +297,7 @@ impl<T: ?Sized> From<&Arc<RwLock<Vec<Box<T>>>>> for CallbacksRef<T> {
     }
 }
 
-impl<T: ?Sized> Clone for CallbacksRef<T> {
+impl<T: ?Sized> Clone for SharedCallbacksRef<T> {
     fn clone(&self) -> Self {
         Self {
             storage: self.storage.clone(),
@@ -293,7 +305,7 @@ impl<T: ?Sized> Clone for CallbacksRef<T> {
     }
 }
 
-impl<C: ?Sized> CallbacksRef<C> {
+impl<C: ?Sized> SharedCallbacksRef<C> {
     /// Adds a callback.
     pub fn add_callback(&self, callback: Box<C>) {
         if let Some(storage) = self.storage.upgrade() {
@@ -317,6 +329,38 @@ impl<C: ?Sized> CallbacksRef<C> {
         } else {
             true
         }
+    }
+}
+
+pub struct CallbacksRef<'a, T: ?Sized> {
+    storage: &'a mut Vec<Box<T>>,
+}
+
+impl<'a, T: ?Sized> From<&'a mut Vec<Box<T>>> for CallbacksRef<'a, T> {
+    fn from(storage: &'a mut Vec<Box<T>>) -> Self {
+        Self {
+            storage
+        }
+    }
+}
+
+impl<'a, C: ?Sized> CallbacksRef<'a, C> {
+    /// Adds a callback.
+    #[inline]
+    pub fn add_callback(&mut self, callback: Box<C>) {
+        self.storage.push(callback.into());
+    }
+
+    /// Get the number of callbacks.
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.storage.len()
+    }
+
+    /// Returns true iff there are no callbacks.
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.storage.is_empty()
     }
 }
 

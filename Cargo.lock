@@ -1694,15 +1694,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ordered-float"
-version = "4.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a76df7075c7d4d01fdcb46c912dd17fba5b60c78ea480b475f2b6ab6f666584e"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
 name = "owo-colors"
 version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2475,23 +2466,16 @@ dependencies = [
 name = "urobotics-core"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "chrono",
  "color-eyre",
  "crossbeam",
  "ctrlc",
  "fern",
- "ffmpeg-sidecar",
- "image",
+ "futures",
  "log",
- "minifb",
- "nalgebra",
- "ordered-float",
  "parking_lot",
- "rand",
  "rayon",
  "serde",
- "simba",
  "static_assertions",
  "sysinfo",
  "tokio",

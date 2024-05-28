@@ -11,7 +11,8 @@ use std::{
 
 use chrono::{DateTime, Datelike, Local, Timelike};
 use crossbeam::queue::SegQueue;
-use sysinfo::Pid;
+use futures::{stream::FuturesUnordered, StreamExt};
+use sysinfo::{Components, Pid};
 use tokio::{
     runtime::{Builder as TokioBuilder, Handle},
     sync::watch,
@@ -19,7 +20,7 @@ use tokio::{
 };
 
 use crate::{
-    callbacks::{callee::Subscriber, caller::CallbacksRef},
+    callbacks::{callee::Subscriber, caller::SharedCallbacksRef},
     define_shared_callbacks,
     logging::create_default_logger,
 };
@@ -66,21 +67,19 @@ impl RuntimeBuilder {
     ) -> Option<T> {
         let pid = std::process::id();
 
-        let _ = rayon::ThreadPoolBuilder::default()
-            .panic_handler(|_| {
-                // Panics in rayon still get logged, but this prevents
-                // the thread pool from aborting the entire process
-            })
-            .build_global();
-
         let ctrl_c_ref = CTRL_C_PUB.get_or_init(|| {
             let publisher = EndCallbacks::default();
             let publisher_ref = publisher.get_ref();
 
-            ctrlc::set_handler(move || {
+            match ctrlc::try_set_handler(move || {
                 publisher.call(EndCondition::CtrlC);
-            })
-            .expect("Failed to initialize Ctrl-C handler");
+            }) {
+                Ok(_) => {}
+                Err(ctrlc::Error::MultipleHandlers) => {}
+                Err(e) => {
+                    log::error!("Failed to set Ctrl-C handler: {e:?}");
+                }
+            }
 
             publisher_ref
         });
@@ -114,17 +113,43 @@ impl RuntimeBuilder {
 
         let _ = create_default_logger(&main_run_ctx).apply();
 
-        let cpu_fut = async {
+        let temp_fut = async {
+            let mut components = Components::new_with_refreshed_list();
+
+            let mut tasks = FuturesUnordered::new();
+            
+            for component in &mut components {
+                tasks.push(async {
+                    let mut last_temp_check = Instant::now();
+                    loop {
+                        tokio::time::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL).await;
+                        if last_temp_check.elapsed().as_secs() < 3 {
+                            continue;
+                        }
+                        component.refresh();
+                        let temp = component.temperature();
+                        if temp >= self.cpu_usage_warning_threshold {
+                            log::warn!("{} at {temp:.1}%", component.label());
+                            last_temp_check = Instant::now();
+                        }
+                    }
+                });
+            }
+
+            tasks.next().await;
+        };
+
+        let cpu_usage_fut = async {
             let mut sys = sysinfo::System::new();
             let mut last_cpu_check = Instant::now();
             let pid = Pid::from_u32(pid);
             loop {
                 tokio::time::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL).await;
-                sys.refresh_cpu();
-                sys.refresh_process(pid);
                 if last_cpu_check.elapsed().as_secs() < 3 {
                     continue;
                 }
+                sys.refresh_cpu();
+                sys.refresh_process(pid);
                 let cpus = sys.cpus();
                 let usage =
                     cpus.iter().map(sysinfo::Cpu::cpu_usage).sum::<f32>() / cpus.len() as f32;
@@ -149,12 +174,14 @@ impl RuntimeBuilder {
                     log::warn!("Exiting from main");
                     res.ok()
                 }
-                _ = cpu_fut => unreachable!(),
+                _ = cpu_usage_fut => unreachable!(),
+                _ = temp_fut => unreachable!(),
                 end = end_sub.recv_or_never() => {
                     match end {
                         EndCondition::CtrlC => log::warn!("Ctrl-C received. Exiting..."),
                         EndCondition::AllContextDropped => log::warn!("All RuntimeContexts dropped. Exiting..."),
                         EndCondition::RuntimeDropped => unreachable!(),
+                        EndCondition::EndRequested => log::warn!("End requested. Exiting..."),
                     }
                     None
                 }
@@ -254,11 +281,11 @@ impl Drop for RuntimeContext {
     }
 }
 
-impl RuntimeContextInner {
-    fn spawn_persistent_sync(&self, f: impl FnOnce() + Send + 'static) {
+impl RuntimeContext {
+    pub fn spawn_persistent_sync(&self, f: impl FnOnce() + Send + 'static) {
         let backtrace = Arc::new(Backtrace::force_capture());
         let weak_backtrace = Arc::downgrade(&backtrace);
-        let handle = self.runtime_handle.clone();
+        let handle = self.inner.runtime_handle.clone();
 
         let join_handle = std::thread::spawn(move || {
             let _guard = handle.enter();
@@ -266,11 +293,11 @@ impl RuntimeContextInner {
             f();
         });
 
-        self.sync_persistent_threads.push(join_handle);
-        self.persistent_backtraces.push(weak_backtrace);
+        self.inner.sync_persistent_threads.push(join_handle);
+        self.inner.persistent_backtraces.push(weak_backtrace);
     }
 
-    fn spawn_persistent_async(&self, f: impl Future<Output = ()> + Send + 'static) -> AbortHandle {
+    pub fn spawn_persistent_async(&self, f: impl Future<Output = ()> + Send + 'static) -> AbortHandle {
         let backtrace = Arc::new(Backtrace::force_capture());
         let weak_backtrace = Arc::downgrade(&backtrace);
 
@@ -280,66 +307,39 @@ impl RuntimeContextInner {
         });
         let abort = join_handle.abort_handle();
 
-        self.async_persistent_threads.push(join_handle);
-        self.persistent_backtraces.push(weak_backtrace);
+        self.inner.async_persistent_threads.push(join_handle);
+        self.inner.persistent_backtraces.push(weak_backtrace);
 
         abort
     }
 
-    fn is_runtime_exiting(&self) -> bool {
-        *self.exiting.clone().borrow_and_update()
-    }
-
-    fn get_dump_path(&self) -> &Path {
-        &self.dump_path
-    }
-
-    fn spawn_async<T: Send + 'static>(
-        &self,
-        f: impl Future<Output = T> + Send + 'static,
-    ) -> AsyncJoinHandle<T> {
-        self.runtime_handle.spawn(f)
-    }
-}
-
-impl RuntimeContext {
-    #[inline(always)]
-    pub fn spawn_persistent_sync(&self, f: impl FnOnce() + Send + 'static) {
-        self.inner.spawn_persistent_sync(f)
-    }
-
-    #[inline(always)]
-    pub fn spawn_persistent_async(
-        &self,
-        f: impl Future<Output = ()> + Send + 'static,
-    ) -> AbortHandle {
-        self.inner.spawn_persistent_async(f)
-    }
-
-    #[inline(always)]
     pub fn is_runtime_exiting(&self) -> bool {
-        self.inner.is_runtime_exiting()
+        *self.inner.exiting.clone().borrow_and_update()
     }
 
-    #[inline(always)]
     pub fn get_dump_path(&self) -> &Path {
-        self.inner.get_dump_path()
+        &self.inner.dump_path
     }
 
-    #[inline(always)]
     pub fn spawn_async<T: Send + 'static>(
         &self,
         f: impl Future<Output = T> + Send + 'static,
     ) -> AsyncJoinHandle<T> {
-        self.inner.spawn_async(f)
+        self.inner.runtime_handle.spawn(f)
+    }
+
+    pub fn end_runtime(&self) {
+        self.inner.end_pub.call(EndCondition::EndRequested);
     }
 }
+
 
 #[derive(Clone, Copy)]
 enum EndCondition {
     CtrlC,
     AllContextDropped,
     RuntimeDropped,
+    EndRequested
 }
 
-static CTRL_C_PUB: OnceLock<CallbacksRef<dyn Fn(EndCondition) + Send + Sync>> = OnceLock::new();
+static CTRL_C_PUB: OnceLock<SharedCallbacksRef<dyn Fn(EndCondition) + Send + Sync>> = OnceLock::new();

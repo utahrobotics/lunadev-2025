@@ -25,17 +25,23 @@ pub trait FunctionConfig: DeserializeOwned {
 
 pub trait AsyncFunctionConfig: DeserializeOwned {
     type Output;
+
+    fn run(self, context: &RuntimeContext) -> impl Future<Output = Self::Output>;
+}
+
+
+pub trait SendAsyncFunctionConfig: AsyncFunctionConfig {
     const PERSISTENT: bool;
 
-    fn run(self, context: &RuntimeContext) -> impl Future<Output=Self::Output> + Send;
+    fn run_send(self, context: &RuntimeContext) -> impl Future<Output = Self::Output> + Send;
     fn spawn(self, context: RuntimeContext) -> AbortHandle where Self: Send + 'static {
         if Self::PERSISTENT {
             context.clone().spawn_persistent_async(async move {
-                self.run(&context).await;
+                self.run_send(&context).await;
             })
         } else {
             context.clone().spawn_async(async move {
-                self.run(&context).await;
+                self.run_send(&context).await;
             }).abort_handle()
         }
     }

@@ -4,29 +4,38 @@
 
 use std::future::Future;
 
-pub trait Service<ScheduleData, TaskData = ()> {
-    type Future: Future;
-
-    fn invoke(&mut self, data: ScheduleData) -> (TaskData, Self::Future);
+pub struct Service<F: ?Sized> {
+    func: Box<F>
 }
 
-impl<ScheduleData, TaskData, Fut: Future, F: FnMut(ScheduleData) -> (TaskData, Fut)>
-    Service<ScheduleData, TaskData> for F
-{
-    type Future = Fut;
-
-    fn invoke(&mut self, data: ScheduleData) -> (TaskData, Self::Future) {
-        self(data)
-    }
+macro_rules! implementation {
+    ($($t:tt)*) => {
+        impl<ScheduleData, TaskData, Fut: Future> Service<dyn FnMut(ScheduleData) -> (TaskData, Fut)$($t)*> {
+            pub fn call_with_data(&mut self, schedule_data: ScheduleData) -> (TaskData, Fut) {
+                (self.func)(schedule_data)
+            }
+        }
+        
+        impl<ScheduleData, Fut: Future> Service<dyn FnMut(ScheduleData) -> Fut$($t)*> {
+            pub fn call(&mut self, schedule_data: ScheduleData) -> Fut {
+                (self.func)(schedule_data)
+            }
+        }
+        
+        impl<ScheduleData, F, T> From<F> for Service<dyn FnMut(ScheduleData) -> T$($t)*>
+        where
+            F: FnMut(ScheduleData) -> T + 'static$($t)*,
+        {
+            fn from(func: F) -> Self {
+                Self {
+                    func: Box::new(func)
+                }
+            }
+        }
+    };
 }
 
-#[cfg(test)]
-mod tests {
-    fn test(_record: &log::Record) -> ((), impl Future) {
-        ((), async {})
-    }
-
-    fn test2() -> impl for<'a, 'b> Service<&'a log::Record<'b>> {
-        test
-    }
-}
+implementation!();
+implementation!(+Send);
+implementation!(+Sync);
+implementation!(+Send+Sync);

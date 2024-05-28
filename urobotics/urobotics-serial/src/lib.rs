@@ -1,13 +1,15 @@
-#![feature(exclusive_wrapper)]
+#![feature(exclusive_wrapper, never_type)]
 //! This crate offers several ways to interface with serial ports under
 //! the Unros framwork.
 
 use std::{borrow::Cow, sync::{Arc, Exclusive, OnceLock}};
 
 pub use bytes::Bytes;
+use bytes::BytesMut;
+use crossbeam::utils::Backoff;
 use serde::Deserialize;
 use tokio_serial::{SerialPort, SerialPortBuilderExt, SerialStream};
-use urobotics_core::{define_shared_callbacks, function::AsyncFunctionConfig, runtime::RuntimeContext, tokio::{self, io::{AsyncReadExt, WriteHalf}}};
+use urobotics_core::{define_shared_callbacks, function::{AsyncFunctionConfig, SendAsyncFunctionConfig}, runtime::RuntimeContext, tokio::{self, io::{AsyncReadExt, WriteHalf}}};
 
 
 define_shared_callbacks!(BytesCallbacks => FnMut(bytes: &[u8]) + Send + Sync);
@@ -18,6 +20,8 @@ pub struct SerialConnection {
     pub path: Cow<'static, str>,
     #[serde(default = "default_baud_rate")]
     pub baud_rate: u32,
+    #[serde(default = "default_buffer_size")]
+    pub buffer_size: usize,
 
     #[serde(skip)]
     serial_output: BytesCallbacks,
@@ -27,6 +31,10 @@ pub struct SerialConnection {
 
 fn default_baud_rate() -> u32 {
     115200
+}
+
+fn default_buffer_size() -> usize {
+    1024
 }
 
 impl SerialConnection {
@@ -41,6 +49,7 @@ impl SerialConnection {
             serial_output: BytesCallbacks::default(),
             serial_input: Arc::default(),
             path: path.into(),
+            buffer_size: default_buffer_size()
         }
     }
 
@@ -64,11 +73,35 @@ impl PendingWriter {
             Err(self)
         }
     }
+
+    pub fn blocking_unwrap(mut self) -> WriteHalf<SerialStream> {
+        let backoff = Backoff::default();
+        loop {
+            match self.try_unwrap() {
+                Ok(writer) => break writer,
+                Err(pending) => {
+                    self = pending;
+                    backoff.snooze();
+                }
+            }
+        }
+    }
+
+    pub async fn unwrap(mut self) -> WriteHalf<SerialStream> {
+        loop {
+            match self.try_unwrap() {
+                Ok(writer) => break writer,
+                Err(pending) => {
+                    self = pending;
+                    tokio::task::yield_now().await;
+                }
+            }
+        }
+    }
 }
 
 impl AsyncFunctionConfig for SerialConnection {
-    type Output = std::io::Result<()>;
-    const PERSISTENT: bool = false;
+    type Output = std::io::Result<!>;
 
     async fn run(self, _context: &RuntimeContext) -> Self::Output {
         #[allow(unused_mut)]
@@ -80,10 +113,20 @@ impl AsyncFunctionConfig for SerialConnection {
         let _ = self.serial_input.set(Exclusive::new(writer));
         drop(self.serial_input);
 
+        let mut buf = BytesMut::with_capacity(self.buffer_size);
         loop {
-            let mut buf = [0; 1024];
-            let n = reader.read(&mut buf).await?;
+            let n = reader.read_buf(&mut buf).await?;
             self.serial_output.call(buf.split_at(n).0);
         }
+    }
+}
+
+
+impl SendAsyncFunctionConfig for SerialConnection {
+    const PERSISTENT: bool = true;
+
+    #[inline(always)]
+    async fn run_send(self, context: &RuntimeContext) -> Self::Output {
+        self.run(context).await
     }
 }
