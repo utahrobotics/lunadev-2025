@@ -2231,13 +2231,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "py-repl"
-version = "0.1.0"
-dependencies = [
- "anyhow",
-]
-
-[[package]]
 name = "qoi"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

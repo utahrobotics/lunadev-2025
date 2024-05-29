@@ -9,7 +9,6 @@ members = [
     # "unros/networking",
     # "unros/obstacles",
 
-    "misc/py-repl",
     "misc/compute-shader",
     "misc/cakap",
     "urobotics/urobotics-core", "urobotics/urobotics-smach",
@@ -65,7 +64,6 @@ camera-info = { path = "unros/camera-info" }
 networking = { path = "unros/networking" }
 obstacles = { path = "unros/obstacles" }
 compute-shader = { path = "misc/compute-shader" }
-py-repl = { path = "misc/py-repl" }
 cakap = { path = "misc/cakap" }
 urobotics-core = { path = "urobotics/urobotics-core" }
 urobotics-app = { path = "urobotics/urobotics-app" }
