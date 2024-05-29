@@ -119,18 +119,21 @@ impl RuntimeBuilder {
 
         let _ = create_default_logger(&main_run_ctx).apply();
 
-        let temp_fut = async {
+        let temp_fut = async move {
             let mut components = Components::new_with_refreshed_list();
 
             let mut tasks = FuturesUnordered::new();
 
-            for component in &mut components {
+            for component in components.list_mut() {
+                println!("{}", component.label());
                 if self
                     .ignore_component_temperature
                     .contains(component.label())
                 {
                     continue;
                 }
+                component.refresh();
+                println!("{}", component.temperature());
                 tasks.push(async {
                     let mut last_temp_check = Instant::now();
                     loop {
@@ -139,6 +142,7 @@ impl RuntimeBuilder {
                             continue;
                         }
                         component.refresh();
+                        println!("{}", component.temperature());
                         let temp = component.temperature();
                         if temp >= self.temperature_warning_threshold {
                             log::warn!("{} at {temp:.1} °C", component.label());
@@ -149,10 +153,9 @@ impl RuntimeBuilder {
             }
 
             tasks.next().await;
-            std::future::pending().await
         };
 
-        let cpu_usage_fut = async {
+        let cpu_usage_fut = async move {
             let mut sys = sysinfo::System::new();
             let mut last_cpu_check = Instant::now();
             let pid = Pid::from_u32(pid);
@@ -182,13 +185,13 @@ impl RuntimeBuilder {
 
         let result = runtime.block_on(async {
             log::info!("Runtime started with pid: {pid}");
+            tokio::spawn(cpu_usage_fut);
+            tokio::spawn(temp_fut);
             tokio::select! {
                 res = tokio::spawn(main(main_run_ctx)) => {
                     log::warn!("Exiting from main");
                     res.ok()
                 }
-                _ = cpu_usage_fut => unreachable!(),
-                _ = temp_fut => unreachable!(),
                 end = end_sub.recv_or_never() => {
                     match end {
                         EndCondition::CtrlC => log::warn!("Ctrl-C received. Exiting..."),

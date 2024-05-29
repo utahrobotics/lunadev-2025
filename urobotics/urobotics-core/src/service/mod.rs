@@ -4,38 +4,20 @@
 
 use std::future::Future;
 
-pub struct Service<F: ?Sized> {
-    func: Box<F>,
+pub trait Service: 'static {
+    type ScheduleData<'a> where Self: 'a;
+    type TaskData<'a> where Self: 'a;
+    type Output<'a> where Self: 'a;
+
+    fn call_with_data<'a>(&'a mut self, data: Self::ScheduleData<'a>) -> (Self::TaskData<'a>, impl Future<Output=Self::Output<'a>> + Send);
 }
 
-macro_rules! implementation {
-    ($($t:tt)*) => {
-        impl<ScheduleData, TaskData, Fut: Future> Service<dyn FnMut(ScheduleData) -> (TaskData, Fut)$($t)*> {
-            pub fn call_with_data(&mut self, schedule_data: ScheduleData) -> (TaskData, Fut) {
-                (self.func)(schedule_data)
-            }
-        }
 
-        impl<ScheduleData, Fut: Future> Service<dyn FnMut(ScheduleData) -> Fut$($t)*> {
-            pub fn call(&mut self, schedule_data: ScheduleData) -> Fut {
-                (self.func)(schedule_data)
-            }
-        }
-
-        impl<ScheduleData, F, T> From<F> for Service<dyn FnMut(ScheduleData) -> T$($t)*>
-        where
-            F: FnMut(ScheduleData) -> T + 'static$($t)*,
-        {
-            fn from(func: F) -> Self {
-                Self {
-                    func: Box::new(func)
-                }
-            }
-        }
-    };
+pub trait ServiceExt: for<'a> Service<TaskData<'a> = ()> {
+    fn call<'a>(&'a mut self, data: Self::ScheduleData<'a>) -> impl Future<Output=Self::Output<'a>> + Send {
+        self.call_with_data(data).1
+    }
 }
 
-implementation!();
-implementation!(+Send);
-implementation!(+Sync);
-implementation!(+Send+Sync);
+
+impl<T> ServiceExt for T where T: for<'a> Service<TaskData<'a> = ()> {}

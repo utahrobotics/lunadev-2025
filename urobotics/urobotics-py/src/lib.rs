@@ -1,0 +1,264 @@
+use std::{ffi::OsString, future::Future, io::Write, path::{Path, PathBuf}};
+
+use serde::Deserialize;
+use urobotics_core::{function::{AsyncFunctionConfig, SendAsyncFunctionConfig}, log, service::{Service, ServiceExt}, tokio::{self, io::{AsyncReadExt, AsyncWriteExt}}};
+
+#[derive(Deserialize)]
+pub struct PythonVenvBuilder {
+    #[serde(default="default_venv_path")]
+    pub venv_path: PathBuf,
+    #[serde(default="default_system_interpreter")]
+    pub system_interpreter: OsString,
+    #[serde(skip)]
+    pub standalone: bool,
+    #[serde(default)]
+    pub packages_to_install: Vec<String>,
+}
+
+fn default_venv_path() -> PathBuf {
+    "urobotics-venv".into()
+}
+
+fn default_system_interpreter() -> OsString {
+    "python".into()
+}
+
+impl Default for PythonVenvBuilder {
+    fn default() -> Self {
+        PythonVenvBuilder {
+            venv_path: default_venv_path(),
+            system_interpreter: default_system_interpreter(),
+            standalone: false,
+            packages_to_install: Vec::new(),
+        }
+    }
+}
+
+impl PythonVenvBuilder {
+    pub async fn build(&self) -> std::io::Result<PythonVenv> {
+        if !Path::new(&self.venv_path).exists() {
+            let std::process::Output {
+                status,
+                stderr,
+                ..
+            } = tokio::process::Command::new(&self.system_interpreter)
+                .args(["-m", "venv"])
+                .arg(&self.venv_path)
+                .output()
+                .await?;
+
+            if !status.success() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!(
+                        "Failed to create virtual environment: {}",
+                        String::from_utf8(stderr).expect("Invalid UTF-8 in stderr")
+                    ),
+                ));
+            }
+        }
+        let venv = PythonVenv {
+            path: Path::new(&self.venv_path).join("Scripts//python"),
+        };
+
+        for package in &self.packages_to_install {
+            venv.pip_install(package).await?;
+        }
+
+        Ok(venv)
+    }
+}
+
+pub struct PythonVenv {
+    path: PathBuf,
+}
+
+
+#[derive(Debug, Clone)]
+pub enum PythonValue {
+    Int(i64),
+    Float(f64),
+    String(String),
+    None,
+}
+
+impl std::fmt::Display for PythonValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PythonValue::Int(value) => write!(f, "{}", value),
+            PythonValue::Float(value) => write!(f, "{}", value),
+            PythonValue::String(value) => write!(f, "{}", value),
+            PythonValue::None => write!(f, "None"),
+        }
+    }
+}
+
+impl PythonVenv {
+    pub async fn pip_install(&self, package: &str) -> std::io::Result<()> {
+        let std::process::Output {
+            status,
+            stderr,
+            ..
+        } = tokio::process::Command::new(&self.path)
+            .args(["-m", "pip", "install", package])
+            .output()
+            .await?;
+        if !status.success() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!(
+                    "Failed to create virtual environment: {}",
+                    String::from_utf8(stderr).expect("Invalid UTF-8 in stderr")
+                ),
+            ));
+        }
+        Ok(())
+    }
+
+    pub async fn repl(
+        &self,
+    ) -> std::io::Result<PyRepl> {
+        let child = tokio::process::Command::new(&self.path)
+            .arg("-i")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()?;
+        let stdin = child.stdin.unwrap();
+        let stdout = child.stdout.unwrap();
+        let mut stderr = child.stderr.unwrap();
+        let mut buffer = Vec::<u8>::new();
+
+        loop {
+            stderr.read_buf(&mut buffer).await?;
+            if let Ok(msg) = std::str::from_utf8(&buffer) {
+                if msg.ends_with(">>> ") {
+                    buffer.clear();
+                    break;
+                }
+            }
+        }
+
+        Ok(
+            PyRepl {
+                stdin,
+                stdout,
+                buffer,
+                stderr,
+            }
+        )
+    }
+}
+
+pub struct PyRepl {
+    stdin: tokio::process::ChildStdin,
+    stdout: tokio::process::ChildStdout,
+    stderr: tokio::process::ChildStderr,
+    buffer: Vec<u8>,
+}
+
+
+impl Service for PyRepl {
+    type ScheduleData<'a> = &'a str;
+    type TaskData<'a> = ();
+    type Output<'a> = std::io::Result<PythonValue>;
+    
+    fn call_with_data<'a>(&'a mut self, data: Self::ScheduleData<'a>) -> (Self::TaskData<'a>, impl Future<Output=Self::Output<'a>> + Send) {
+        (
+            (),
+            async {
+                self.stdin.write_all(data.as_bytes()).await?;
+                loop {
+                    let mut stdout_buf = [0u8; 1024];
+                    let mut stderr_buf = [0u8; 1024];
+                    tokio::select! {
+                        result = self.stdout.read(&mut stdout_buf) => {
+                            self.buffer.extend_from_slice(stdout_buf.split_at(result?).0);
+                        }
+                        result = self.stderr.read(&mut stderr_buf) => {
+                            self.buffer.extend_from_slice(stderr_buf.split_at(result?).0);
+                        }
+                    }
+
+                    if let Ok(mut msg) = std::str::from_utf8(&self.buffer) {
+                        if msg.ends_with(">>> ") {
+                            msg = msg.split_at(msg.len() - 4).0;
+                            if let Ok(value) = msg.parse::<i64>() {
+                                self.buffer.clear();
+                                return Ok(PythonValue::Int(value))
+                            } else if let Ok(value) = msg.parse::<f64>() {
+                                self.buffer.clear();
+                                return Ok(PythonValue::Float(value))
+                            } else if msg.trim().is_empty() {
+                                self.buffer.clear();
+                                return Ok(PythonValue::None)
+                            } else {
+                                let msg = msg.to_string();
+                                self.buffer.clear();
+                                return Ok(PythonValue::String(msg))
+                            }
+                        }
+                    }
+                }
+            }
+        )
+    }
+}
+
+
+impl AsyncFunctionConfig for PythonVenvBuilder {
+    type Output = std::io::Result<()>;
+
+    const NAME: &'static str = "python";
+    const DESCRIPTION: &'static str = "Python virtual environment REPL";
+
+    fn standalone(mut self, value: bool) -> Self {
+        self.standalone = value;
+        self
+    }
+
+    async fn run(self, _context: &urobotics_core::runtime::RuntimeContext) -> Self::Output {
+        if !self.standalone {
+            log::warn!("Python REPL does not do anything if ran as standalone");
+            return Ok(());
+        }
+        let venv = self.build().await?;
+        let mut repl = venv.repl().await?;
+
+        let handle = std::thread::spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    let mut input = String::new();
+                    loop {
+                        print!(">>> ");
+                        std::io::stdout().flush().unwrap();
+                        std::io::stdin().read_line(&mut input).expect("Failed to read line");
+                        let result = repl.call(&input).await;
+                        input.clear();
+                        println!("{}", result.unwrap());
+                    }
+                })
+        });
+
+        loop {
+            if handle.is_finished() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+
+        Ok(())
+    }
+}
+
+
+impl SendAsyncFunctionConfig for PythonVenvBuilder {
+    const PERSISTENT: bool = false;
+
+    fn run_send(self, context: &urobotics_core::runtime::RuntimeContext) -> impl Future<Output = Self::Output> + Send {
+        self.run(context)
+    }
+}

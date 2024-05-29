@@ -4,24 +4,16 @@ logs*
 rustc-ice-*.txt
 *.las
 *.sqlite*
-smooth-diff-drive-academy/
-super_sorted.txt
 publishing/
 
-lunabotics/lunabase/camera.sdp
-lunabotics/lunabase/camera-ffmpeg.log
 *.zst
 *.pyc
 dump/
 
-neura-filter-academy/*=*
-neura-filter-academy/test
-neura-filter-academy/train
-/lunabotics/lunabase/export/
 tree.txt
 
 *-gitignore
-lunabotics/lunabase/swaps.dat
-settings.toml
+roboconfig.toml
 rtp.sdp
-music.mp3
+
+*-venv

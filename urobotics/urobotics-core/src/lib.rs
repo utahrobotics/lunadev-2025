@@ -8,3 +8,4 @@ pub mod service;
 
 pub use parking_lot;
 pub use tokio;
+pub use log;

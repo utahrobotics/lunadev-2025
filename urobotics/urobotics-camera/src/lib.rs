@@ -4,7 +4,7 @@
 //! Do note that this crate should not be expected to connect
 //! to RealSense cameras.
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use image::{imageops::FilterType, DynamicImage};
 use nokhwa::{
@@ -14,58 +14,54 @@ use nokhwa::{
         CameraFormat, CameraIndex, FrameFormat, RequestedFormat, RequestedFormatType, Resolution,
     },
 };
-use unros::{
-    anyhow::{self, Context},
-    async_trait, asyncify_run, log,
-    pubsub::{Publisher, PublisherRef},
-    setup_logging, DropCheck, Node, NodeIntrinsics, RuntimeContext,
-};
+use serde::Deserialize;
+use urobotics_core::define_shared_callbacks;
+
+define_shared_callbacks!(ImageCallbacks => FnMut(image: &Arc<DynamicImage>) + Send + Sync);
+
+#[derive(Deserialize)]
+pub enum CameraIdentifier {
+    Index(u32),
+    Name(Cow<'static, str>),
+    Path(Cow<'static, str>),
+}
 
 /// A pending connection to a camera.
 ///
 /// The connection is not created until this `Node` is ran.
+#[derive(Deserialize)]
 pub struct Camera {
+    pub identifier: CameraIdentifier,
+    #[serde(default)]
     pub fps: u32,
-    pub camera_index: u32,
-    pub res_x: u32,
-    pub res_y: u32,
-    camera_name: String,
-    image_received: Publisher<Arc<DynamicImage>>,
-    intrinsics: NodeIntrinsics<Self>,
+    #[serde(default)]
+    pub image_width: u32,
+    #[serde(default)]
+    pub image_height: u32,
+    #[serde(skip)]
+    image_received: ImageCallbacks,
 }
 
 impl Camera {
     /// Creates a pending connection to the camera with the given index.
-    pub fn new(camera_index: u32) -> anyhow::Result<Self> {
-        let tmp_camera = nokhwa::Camera::new(
-            CameraIndex::Index(camera_index),
-            RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate),
-        )
-        .context("Failed to initialize camera")?;
-        let camera_name = tmp_camera.info().human_name();
-        log::info!("Pinged {} with index {}", camera_name, camera_index);
-        Ok(Self {
+    pub fn new(identifier: CameraIdentifier) -> Self {
+        Self {
+            identifier,
             fps: 0,
-            res_x: 0,
-            res_y: 0,
-            camera_index,
-            camera_name,
-            image_received: Default::default(),
-            intrinsics: Default::default(),
-        })
-    }
-
-    pub fn get_camera_name(&self) -> &str {
-        &self.camera_name
+            image_width: 0,
+            image_height: 0,
+            image_received: ImageCallbacks::default(),
+        }
     }
 
     /// Gets a reference to the `Signal` that represents received images.
-    pub fn image_received_pub(&self) -> PublisherRef<Arc<DynamicImage>> {
+    pub fn image_received_ref(
+        &self,
+    ) -> SharedCallbacksRef<dyn FnMut(&Arc<DynamicImage>) + Send + Sync> {
         self.image_received.get_ref()
     }
 }
 
-#[async_trait]
 impl Node for Camera {
     const DEFAULT_NAME: &'static str = "camera";
 
@@ -79,25 +75,25 @@ impl Node for Camera {
         let index = CameraIndex::Index(self.camera_index);
 
         let requested = if self.fps > 0 {
-            if self.res_x > 0 && self.res_y > 0 {
+            if self.image_width > 0 && self.image_height > 0 {
                 RequestedFormat::new::<RgbFormat>(RequestedFormatType::Exact(CameraFormat::new(
-                    Resolution::new(self.res_x, self.res_y),
+                    Resolution::new(self.image_width, self.image_height),
                     FrameFormat::RAWRGB,
                     self.fps,
                 )))
             } else {
                 RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestFrameRate(self.fps))
             }
-        } else if self.res_x > 0 && self.res_y > 0 {
+        } else if self.image_width > 0 && self.image_height > 0 {
             RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestResolution(
-                Resolution::new(self.res_x, self.res_y),
+                Resolution::new(self.image_width, self.image_height),
             ))
         } else {
             RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate)
         };
 
-        let res_x = self.res_x;
-        let res_y = self.res_y;
+        let res_x = self.image_width;
+        let res_y = self.image_height;
 
         let drop_check = DropCheck::default();
         let drop_obs = drop_check.get_observing();

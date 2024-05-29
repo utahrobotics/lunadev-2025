@@ -36,8 +36,8 @@ impl Command {
         let matches = self.command.get_matches();
         let config_path: Option<&String> = matches.get_one("config");
         let mut config_path = config_path.map(String::as_str);
-        if config_path.is_none() && Path::new("config.toml").exists() {
-            config_path = Some("config.toml");
+        if config_path.is_none() && Path::new("roboconfig.toml").exists() {
+            config_path = Some("roboconfig.toml");
         }
 
         let mut table = if let Some(config_path) = config_path {
