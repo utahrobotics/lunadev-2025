@@ -2970,6 +2970,7 @@ dependencies = [
 name = "urobotics-py"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "serde",
  "urobotics-core",
 ]

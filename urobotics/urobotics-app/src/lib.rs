@@ -23,7 +23,7 @@ pub struct Command {
 
 impl From<clap::Command> for Command {
     fn from(mut command: clap::Command) -> Self {
-        command = command.arg(arg!([config] "optional path to a config file"));
+        command = command.arg(arg!([config] "optional path to a config file")).subcommand_required(true);
         Self {
             command,
             functions: FxHashMap::default(),
@@ -32,6 +32,10 @@ impl From<clap::Command> for Command {
 }
 
 impl Command {
+    pub fn subcommand_required(mut self, yes: bool) -> Self {
+        self.command = self.command.subcommand_required(yes);
+        self
+    }
     pub async fn get_matches(mut self, context: RuntimeContext) -> ArgMatches {
         let matches = self.command.get_matches();
         let config_path: Option<&String> = matches.get_one("config");

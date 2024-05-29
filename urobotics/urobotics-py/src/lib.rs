@@ -1,5 +1,6 @@
 use std::{ffi::OsString, future::Future, io::Write, path::{Path, PathBuf}};
 
+use bytes::BytesMut;
 use serde::Deserialize;
 use urobotics_core::{function::{AsyncFunctionConfig, SendAsyncFunctionConfig}, log, service::{Service, ServiceExt}, tokio::{self, io::{AsyncReadExt, AsyncWriteExt}}};
 
@@ -79,8 +80,13 @@ pub enum PythonValue {
     Int(i64),
     Float(f64),
     String(String),
+    Bytes(BytesMut),
     None,
 }
+#[cfg(unix)]
+const TERMINATOR: &'static [u8] = b">>>END=REPL<<<\n";
+#[cfg(not(unix))]
+const TERMINATOR: &'static [u8] = b">>>END=REPL<<<\r\n";
 
 impl std::fmt::Display for PythonValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -89,6 +95,7 @@ impl std::fmt::Display for PythonValue {
             PythonValue::Float(value) => write!(f, "{}", value),
             PythonValue::String(value) => write!(f, "{}", value),
             PythonValue::None => write!(f, "None"),
+            PythonValue::Bytes(value) => write!(f, "{:?}", value),
         }
     }
 }
@@ -119,32 +126,20 @@ impl PythonVenv {
         &self,
     ) -> std::io::Result<PyRepl> {
         let child = tokio::process::Command::new(&self.path)
-            .arg("-i")
+            .arg("-c")
+            .arg(include_str!("repl.py"))
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
             .spawn()?;
         let stdin = child.stdin.unwrap();
         let stdout = child.stdout.unwrap();
-        let mut stderr = child.stderr.unwrap();
-        let mut buffer = Vec::<u8>::new();
-
-        loop {
-            stderr.read_buf(&mut buffer).await?;
-            if let Ok(msg) = std::str::from_utf8(&buffer) {
-                if msg.ends_with(">>> ") {
-                    buffer.clear();
-                    break;
-                }
-            }
-        }
 
         Ok(
             PyRepl {
                 stdin,
                 stdout,
-                buffer,
-                stderr,
+                buffer: BytesMut::new(),
             }
         )
     }
@@ -153,8 +148,7 @@ impl PythonVenv {
 pub struct PyRepl {
     stdin: tokio::process::ChildStdin,
     stdout: tokio::process::ChildStdout,
-    stderr: tokio::process::ChildStderr,
-    buffer: Vec<u8>,
+    buffer: BytesMut,
 }
 
 
@@ -168,21 +162,16 @@ impl Service for PyRepl {
             (),
             async {
                 self.stdin.write_all(data.as_bytes()).await?;
+                self.stdin.write_all(b"\n__end_repl__()\n").await?;
                 loop {
-                    let mut stdout_buf = [0u8; 1024];
-                    let mut stderr_buf = [0u8; 1024];
-                    tokio::select! {
-                        result = self.stdout.read(&mut stdout_buf) => {
-                            self.buffer.extend_from_slice(stdout_buf.split_at(result?).0);
-                        }
-                        result = self.stderr.read(&mut stderr_buf) => {
-                            self.buffer.extend_from_slice(stderr_buf.split_at(result?).0);
-                        }
-                    }
+                    self.stdout.read_buf(&mut self.buffer).await?;
 
-                    if let Ok(mut msg) = std::str::from_utf8(&self.buffer) {
-                        if msg.ends_with(">>> ") {
-                            msg = msg.split_at(msg.len() - 4).0;
+                    if self.buffer.ends_with(TERMINATOR) {
+                        self.buffer.truncate(self.buffer.len() - TERMINATOR.len());
+                        if let Ok(mut msg) = std::str::from_utf8(&self.buffer) {
+                            if msg.ends_with("\r\n") {
+                                msg = msg.split_at(msg.len() - 2).0;
+                            }
                             if let Ok(value) = msg.parse::<i64>() {
                                 self.buffer.clear();
                                 return Ok(PythonValue::Int(value))
@@ -197,6 +186,10 @@ impl Service for PyRepl {
                                 self.buffer.clear();
                                 return Ok(PythonValue::String(msg))
                             }
+                        } else {
+                            let buffer = self.buffer.clone();
+                            self.buffer.clear();
+                            return Ok(PythonValue::Bytes(buffer))
                         }
                     }
                 }

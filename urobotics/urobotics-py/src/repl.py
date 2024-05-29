@@ -16,6 +16,7 @@ def main():
                 __text = ""
         except Exception as e:
             print(e)
+            __text = ""
             __end_repl__()
 
 if __name__ == '__main__':
