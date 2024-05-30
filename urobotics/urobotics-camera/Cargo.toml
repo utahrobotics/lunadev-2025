@@ -7,10 +7,13 @@ edition = "2021"
 
 [dependencies]
 urobotics-core = { workspace = true }
+urobotics-py = { workspace = true }
 urobotics-video = { workspace = true, optional = true }
 image = { workspace = true }
 nokhwa = { version = "0.10", features = ["input-native"] }
 serde = { workspace = true }
+fxhash = { workspace = true }
+unfmt = { workspace = true }
 
 [features]
 standalone = ["urobotics-video"]

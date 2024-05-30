@@ -21,9 +21,20 @@ pub struct Command {
     functions: FxHashMap<String, Box<dyn FnOnce(toml::Table, RuntimeContext) + Send>>,
 }
 
+macro_rules! panic {
+    ($($arg:tt)*) => {
+        {
+            eprintln!($($arg)*);
+            std::process::exit(1);
+        }
+    };
+}
+
 impl From<clap::Command> for Command {
     fn from(mut command: clap::Command) -> Self {
-        command = command.arg(arg!([config] "optional path to a config file")).subcommand_required(true);
+        command = command
+            .arg(arg!([config] "optional path to a config file"))
+            .subcommand_required(true);
         Self {
             command,
             functions: FxHashMap::default(),
@@ -45,12 +56,13 @@ impl Command {
         }
 
         let mut table = if let Some(config_path) = config_path {
-            let config_values: toml::Value = toml::from_str(
-                &tokio::fs::read_to_string(config_path)
-                    .await
-                    .expect("Failed to read config file"),
-            )
-            .unwrap();
+            let text = match tokio::fs::read_to_string(config_path).await {
+                Ok(x) => x,
+                Err(e) => {
+                    panic!("Failed to read config file: {}", e);
+                }
+            };
+            let config_values: toml::Value = toml::from_str(&text).unwrap();
             let toml::Value::Table(table) = config_values else {
                 panic!("Config file is not a table")
             };
@@ -108,9 +120,12 @@ impl Command {
         self.functions.insert(
             F::NAME.into(),
             Box::new(move |table, context| {
-                let mut config: F = toml::Value::Table(table)
-                    .try_into()
-                    .expect("Failed to parse config");
+                let mut config: F = match toml::Value::Table(table).try_into() {
+                    Ok(x) => x,
+                    Err(e) => {
+                        panic!("Failed to parse config: {}", e);
+                    }
+                };
                 config = config.standalone(true);
                 config.spawn(context);
             }),
@@ -127,9 +142,12 @@ impl Command {
         self.functions.insert(
             F::NAME.into(),
             Box::new(move |table, context| {
-                let mut config: F = toml::Value::Table(table)
-                    .try_into()
-                    .expect("Failed to parse config");
+                let mut config: F = match toml::Value::Table(table).try_into() {
+                    Ok(x) => x,
+                    Err(e) => {
+                        panic!("Failed to parse config: {}", e);
+                    }
+                };
                 config = config.standalone(true);
                 config.spawn(context);
             }),

@@ -315,6 +315,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d8c1fef690941d3e7788d328517591fecc684c084084702d6ff1641e993699a"
 
 [[package]]
+name = "bstr"
+version = "1.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05efc5cfd9110c8416e471df0e96702d58690178e206e61b7173706673c93706"
+dependencies = [
+ "memchr",
+ "regex-automata",
+ "serde",
+]
+
+[[package]]
 name = "built"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2888,6 +2899,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "unfmt"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d81d30206f9cbd0924ed5df20f4c6567d85a0d675d05394228b14b69675d1a2"
+dependencies = [
+ "bstr",
+ "unfmt_macros",
+]
+
+[[package]]
+name = "unfmt_macros"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "922a193ed9fdb99a970413181e572fb527953271b1907b12893941730c81309f"
+dependencies = [
+ "bstr",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.60",
+]
+
+[[package]]
 name = "unicode-ident"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2910,6 +2943,7 @@ name = "urobotics"
 version = "0.1.0"
 dependencies = [
  "urobotics-app",
+ "urobotics-camera",
  "urobotics-core",
  "urobotics-py",
  "urobotics-serial",
@@ -2932,10 +2966,13 @@ dependencies = [
 name = "urobotics-camera"
 version = "0.1.0"
 dependencies = [
+ "fxhash",
  "image 0.25.1",
  "nokhwa",
  "serde",
+ "unfmt",
  "urobotics-core",
+ "urobotics-py",
  "urobotics-video",
 ]
 

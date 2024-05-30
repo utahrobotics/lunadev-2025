@@ -1,14 +1,27 @@
-use std::{ffi::OsString, future::Future, io::Write, path::{Path, PathBuf}};
+use std::{
+    ffi::OsString,
+    future::Future,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use bytes::BytesMut;
 use serde::Deserialize;
-use urobotics_core::{function::{AsyncFunctionConfig, SendAsyncFunctionConfig}, log, service::{Service, ServiceExt}, tokio::{self, io::{AsyncReadExt, AsyncWriteExt}}};
+use urobotics_core::{
+    function::{AsyncFunctionConfig, SendAsyncFunctionConfig},
+    log,
+    service::{Service, ServiceExt},
+    tokio::{
+        self,
+        io::{AsyncReadExt, AsyncWriteExt},
+    },
+};
 
 #[derive(Deserialize)]
 pub struct PythonVenvBuilder {
-    #[serde(default="default_venv_path")]
+    #[serde(default = "default_venv_path")]
     pub venv_path: PathBuf,
-    #[serde(default="default_system_interpreter")]
+    #[serde(default = "default_system_interpreter")]
     pub system_interpreter: OsString,
     #[serde(skip)]
     pub standalone: bool,
@@ -38,15 +51,12 @@ impl Default for PythonVenvBuilder {
 impl PythonVenvBuilder {
     pub async fn build(&self) -> std::io::Result<PythonVenv> {
         if !Path::new(&self.venv_path).exists() {
-            let std::process::Output {
-                status,
-                stderr,
-                ..
-            } = tokio::process::Command::new(&self.system_interpreter)
-                .args(["-m", "venv"])
-                .arg(&self.venv_path)
-                .output()
-                .await?;
+            let std::process::Output { status, stderr, .. } =
+                tokio::process::Command::new(&self.system_interpreter)
+                    .args(["-m", "venv"])
+                    .arg(&self.venv_path)
+                    .output()
+                    .await?;
 
             if !status.success() {
                 return Err(std::io::Error::new(
@@ -73,7 +83,6 @@ impl PythonVenvBuilder {
 pub struct PythonVenv {
     path: PathBuf,
 }
-
 
 #[derive(Debug, Clone)]
 pub enum PythonValue {
@@ -102,11 +111,7 @@ impl std::fmt::Display for PythonValue {
 
 impl PythonVenv {
     pub async fn pip_install(&self, package: &str) -> std::io::Result<()> {
-        let std::process::Output {
-            status,
-            stderr,
-            ..
-        } = tokio::process::Command::new(&self.path)
+        let std::process::Output { status, stderr, .. } = tokio::process::Command::new(&self.path)
             .args(["-m", "pip", "install", package])
             .output()
             .await?;
@@ -122,9 +127,7 @@ impl PythonVenv {
         Ok(())
     }
 
-    pub async fn repl(
-        &self,
-    ) -> std::io::Result<PyRepl> {
+    pub async fn repl(&self) -> std::io::Result<PyRepl> {
         let child = tokio::process::Command::new(&self.path)
             .arg("-c")
             .arg(include_str!("repl.py"))
@@ -135,13 +138,11 @@ impl PythonVenv {
         let stdin = child.stdin.unwrap();
         let stdout = child.stdout.unwrap();
 
-        Ok(
-            PyRepl {
-                stdin,
-                stdout,
-                buffer: BytesMut::new(),
-            }
-        )
+        Ok(PyRepl {
+            stdin,
+            stdout,
+            buffer: BytesMut::new(),
+        })
     }
 }
 
@@ -151,53 +152,54 @@ pub struct PyRepl {
     buffer: BytesMut,
 }
 
-
 impl Service for PyRepl {
     type ScheduleData<'a> = &'a str;
     type TaskData<'a> = ();
     type Output<'a> = std::io::Result<PythonValue>;
-    
-    fn call_with_data<'a>(&'a mut self, data: Self::ScheduleData<'a>) -> (Self::TaskData<'a>, impl Future<Output=Self::Output<'a>> + Send) {
-        (
-            (),
-            async {
-                self.stdin.write_all(data.as_bytes()).await?;
-                self.stdin.write_all(b"\n__end_repl__()\n").await?;
-                loop {
-                    self.stdout.read_buf(&mut self.buffer).await?;
 
-                    if self.buffer.ends_with(TERMINATOR) {
-                        self.buffer.truncate(self.buffer.len() - TERMINATOR.len());
-                        if let Ok(mut msg) = std::str::from_utf8(&self.buffer) {
-                            if msg.ends_with("\r\n") {
-                                msg = msg.split_at(msg.len() - 2).0;
-                            }
-                            if let Ok(value) = msg.parse::<i64>() {
-                                self.buffer.clear();
-                                return Ok(PythonValue::Int(value))
-                            } else if let Ok(value) = msg.parse::<f64>() {
-                                self.buffer.clear();
-                                return Ok(PythonValue::Float(value))
-                            } else if msg.trim().is_empty() {
-                                self.buffer.clear();
-                                return Ok(PythonValue::None)
-                            } else {
-                                let msg = msg.to_string();
-                                self.buffer.clear();
-                                return Ok(PythonValue::String(msg))
-                            }
-                        } else {
-                            let buffer = self.buffer.clone();
-                            self.buffer.clear();
-                            return Ok(PythonValue::Bytes(buffer))
+    fn call_with_data<'a>(
+        &'a mut self,
+        data: Self::ScheduleData<'a>,
+    ) -> (
+        Self::TaskData<'a>,
+        impl Future<Output = Self::Output<'a>> + Send,
+    ) {
+        ((), async {
+            self.stdin.write_all(data.as_bytes()).await?;
+            self.stdin.write_all(b"\n__end_repl__()\n").await?;
+            loop {
+                self.stdout.read_buf(&mut self.buffer).await?;
+
+                if self.buffer.ends_with(TERMINATOR) {
+                    self.buffer.truncate(self.buffer.len() - TERMINATOR.len());
+                    if let Ok(mut msg) = std::str::from_utf8(&self.buffer) {
+                        if msg.ends_with("\r\n") {
+                            msg = msg.split_at(msg.len() - 2).0;
                         }
+                        if let Ok(value) = msg.parse::<i64>() {
+                            self.buffer.clear();
+                            return Ok(PythonValue::Int(value));
+                        } else if let Ok(value) = msg.parse::<f64>() {
+                            self.buffer.clear();
+                            return Ok(PythonValue::Float(value));
+                        } else if msg.trim().is_empty() {
+                            self.buffer.clear();
+                            return Ok(PythonValue::None);
+                        } else {
+                            let msg = msg.to_string();
+                            self.buffer.clear();
+                            return Ok(PythonValue::String(msg));
+                        }
+                    } else {
+                        let buffer = self.buffer.clone();
+                        self.buffer.clear();
+                        return Ok(PythonValue::Bytes(buffer));
                     }
                 }
             }
-        )
+        })
     }
 }
-
 
 impl AsyncFunctionConfig for PythonVenvBuilder {
     type Output = std::io::Result<()>;
@@ -228,7 +230,9 @@ impl AsyncFunctionConfig for PythonVenvBuilder {
                     loop {
                         print!(">>> ");
                         std::io::stdout().flush().unwrap();
-                        std::io::stdin().read_line(&mut input).expect("Failed to read line");
+                        std::io::stdin()
+                            .read_line(&mut input)
+                            .expect("Failed to read line");
                         let result = repl.call(&input).await;
                         input.clear();
                         println!("{}", result.unwrap());
@@ -247,11 +251,13 @@ impl AsyncFunctionConfig for PythonVenvBuilder {
     }
 }
 
-
 impl SendAsyncFunctionConfig for PythonVenvBuilder {
     const PERSISTENT: bool = false;
 
-    fn run_send(self, context: &urobotics_core::runtime::RuntimeContext) -> impl Future<Output = Self::Output> + Send {
+    fn run_send(
+        self,
+        context: &urobotics_core::runtime::RuntimeContext,
+    ) -> impl Future<Output = Self::Output> + Send {
         self.run(context)
     }
 }

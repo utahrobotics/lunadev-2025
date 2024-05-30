@@ -142,7 +142,7 @@ impl VideoDataDump {
         window_name: impl Into<Cow<'static, str>>,
         in_width: u32,
         in_height: u32,
-        context: &RuntimeContext,
+        bgr: bool,
     ) -> Result<Self, VideoDumpInitError> {
         let window_name = window_name.into();
         let queue_sender = Arc::new(AtomicCell::<Option<DynamicImage>>::new(None));
@@ -150,7 +150,7 @@ impl VideoDataDump {
 
         let backoff = Backoff::new();
 
-        context.spawn_persistent_sync(move || {
+        std::thread::spawn(move || {
             let mut window = match Window::new(
                 &window_name,
                 in_width as usize,
@@ -177,13 +177,23 @@ impl VideoDataDump {
                     continue;
                 };
                 backoff.reset();
-                buffer.extend(
-                    frame
-                        .to_rgb8()
-                        .chunks(3)
-                        .map(|x| [x[0], x[1], x[2], 0])
-                        .map(u32::from_ne_bytes),
-                );
+                if bgr {
+                    buffer.extend(
+                        frame
+                            .to_rgb8()
+                            .chunks(3)
+                            .map(|x| [x[2], x[1], x[0], 0])
+                            .map(u32::from_ne_bytes),
+                    );
+                } else {
+                    buffer.extend(
+                        frame
+                            .to_rgb8()
+                            .chunks(3)
+                            .map(|x| [x[0], x[1], x[2], 0])
+                            .map(u32::from_ne_bytes),
+                    );
+                }
 
                 if let Err(e) =
                     window.update_with_buffer(&buffer, in_width as usize, in_height as usize)
@@ -200,68 +210,6 @@ impl VideoDataDump {
             width: in_width,
             height: in_height,
         })
-    }
-
-    /// Creates a new `VideoDataDump` that streams to a client over RTP.
-    pub fn new_rtp(
-        in_width: u32,
-        in_height: u32,
-        out_width: u32,
-        out_height: u32,
-        scale_filter: ScalingFilter,
-        addr: SocketAddrV4,
-        fps: usize,
-        context: &RuntimeContext,
-    ) -> Result<Self, VideoDumpInitError> {
-        ffmpeg_sidecar::download::auto_download()
-            .map_err(|e| VideoDumpInitError::FFMPEGInstallError(e.to_string()))?;
-
-        let output = FfmpegCommand::new()
-            .hwaccel("auto")
-            .format("rawvideo")
-            .pix_fmt("rgb24")
-            .size(in_width, in_height)
-            .input("-")
-            .codec_video("libx264")
-            .pix_fmt("yuv420p")
-            .args([
-                "-crf",
-                "37",
-                "-an",
-                "-vf",
-                &format!("fps={fps},scale={out_width}:{out_height}"),
-                "-sws_flags",
-                &scale_filter.to_string(),
-            ])
-            .args([
-                "-preset",
-                "ultrafast",
-                "-tune",
-                "zerolatency",
-                "-strict",
-                "2",
-                "-avioflags",
-                "direct",
-                "-rtsp_transport",
-                "udp",
-                "-g",
-                "10",
-                "-sdp_file",
-                "rtp.sdp",
-            ])
-            // .args(["-sdp_file", "sdp.txt"])
-            .format("rtp")
-            .output(format!("rtp://{addr}"))
-            .spawn()
-            .map_err(VideoDumpInitError::IOError)?;
-
-        Self::new(
-            in_width,
-            in_height,
-            VideoDataDumpType::Rtp(addr),
-            output,
-            context,
-        )
     }
 
     pub fn new(

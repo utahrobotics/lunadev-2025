@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-urobotics = { workspace = true, features = ["serial", "app", "python"] }
+urobotics = { workspace = true, features = ["serial", "app", "python", "camera"] }
