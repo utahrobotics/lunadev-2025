@@ -65,7 +65,7 @@ pub struct CameraConnection {
     #[serde(skip)]
     camera_info: Arc<OnceLock<CameraInfo>>,
     #[cfg(feature = "standalone")]
-    #[serde(default)]
+    #[serde(skip)]
     pub standalone: bool,
 }
 
@@ -109,6 +109,7 @@ impl FunctionConfig for CameraConnection {
     const PERSISTENT: bool = false;
 
     const NAME: &'static str = "camera";
+    const DESCRIPTION: &'static str = "Displays a camera feed";
 
     #[cfg(feature = "standalone")]
     fn standalone(mut self, value: bool) -> Self {
@@ -196,6 +197,8 @@ impl FunctionConfig for CameraConnection {
                 };
                 #[cfg(feature = "standalone")]
                 let mut dump = if self.standalone {
+                    #[cfg(debug_assertions)]
+                    urobotics_core::log::warn!(target: Self::NAME, "Release mode is recommended for standalone mode");
                     Some(VideoDataDump::new_display(camera_info.camera_name, camera.camera_format().width(), camera.camera_format().height(), true).expect("Failed to initialize video data dump"))
                 } else {
                     None
