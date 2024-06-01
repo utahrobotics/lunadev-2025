@@ -146,17 +146,23 @@ impl FunctionApplication for SerialConnection {
 
     fn spawn(self, context: RuntimeContext) {
         context.clone().spawn_persistent_async(async move {
+            macro_rules! expect {
+                ($e:expr) => {
+                    match $e {
+                        Ok(x) => x,
+                        Err(e) => {
+                            urobotics_core::log::error!("{}", e);
+                            return;
+                        }
+                    }
+                };
+            }
             #[allow(unused_mut)]
-            let mut stream = tokio_serial::new(self.path, self.baud_rate)
-                .open_native_async()
-                .expect("Failed to open serial port");
+            let mut stream =
+                expect!(tokio_serial::new(self.path, self.baud_rate).open_native_async());
             #[cfg(unix)]
-            stream
-                .set_exclusive(true)
-                .expect("Failed to set exclusive mode");
-            stream
-                .clear(tokio_serial::ClearBuffer::All)
-                .expect("Failed to clear serial buffer");
+            expect!(stream.set_exclusive(true));
+            expect!(stream.clear(tokio_serial::ClearBuffer::All));
             let (mut reader, mut writer) = tokio::io::split(stream);
 
             let mut buf = BytesMut::with_capacity(self.buffer_size);
@@ -164,16 +170,11 @@ impl FunctionApplication for SerialConnection {
                 let mut builder = tokio::runtime::Builder::new_current_thread();
                 builder.enable_all();
                 builder.build().unwrap().block_on(async {
-                    tokio::io::copy(&mut tokio::io::stdin(), &mut writer)
-                        .await
-                        .expect("Failed to copy stdin to serial port");
+                    expect!(tokio::io::copy(&mut tokio::io::stdin(), &mut writer).await);
                 });
             });
             loop {
-                reader
-                    .read_buf(&mut buf)
-                    .await
-                    .expect("Failed to read from serial port");
+                expect!(reader.read_buf(&mut buf).await);
                 if let Ok(msg) = std::str::from_utf8(&buf) {
                     print!("{msg}");
                     buf.clear();

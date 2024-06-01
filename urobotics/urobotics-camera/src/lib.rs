@@ -108,7 +108,7 @@ impl SyncFunctionConfig for CameraConnection {
     const NAME: &'static str = "camera";
 
     fn run(self, context: &RuntimeContext) -> Self::Output {
-        tokio::runtime::Builder::new_current_thread()
+        let result = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .unwrap()
@@ -144,94 +144,87 @@ impl SyncFunctionConfig for CameraConnection {
                     PythonValue::None => String::new(),
                     _ => panic!("Unexpected result while enumerating cameras: {result:?}"),
                 };
+                result
+            });
 
-                let lines = result.lines();
+        let lines = result.lines();
 
-                let index = match &self.identifier {
-                    CameraIdentifier::Index(index) => CameraIndex::Index(*index),
-                    CameraIdentifier::Name(name) => 'index: {
-                        for line in lines {
-                            let Some((index, camera_name, _)) = unformat!("{};{};{}", line) else {
-                                panic!("Failed to parse line: {line}")
-                            };
-                            if camera_name == name {
-                                break 'index CameraIndex::Index(
-                                    index.parse().expect("Failed to parse camera index"),
-                                );
-                            }
-                        }
-                        return Err(nokhwa::NokhwaError::OpenDeviceError(
-                            name.to_string(),
-                            "Camera not found".into(),
-                        ));
+        let index = match &self.identifier {
+            CameraIdentifier::Index(index) => CameraIndex::Index(*index),
+            CameraIdentifier::Name(name) => 'index: {
+                for line in lines {
+                    let Some((index, camera_name, _)) = unformat!("{};{};{}", line) else {
+                        panic!("Failed to parse line: {line}")
+                    };
+                    if camera_name == name {
+                        break 'index CameraIndex::Index(
+                            index.parse().expect("Failed to parse camera index"),
+                        );
                     }
-                    CameraIdentifier::Path(path) => 'index: {
-                        for line in lines {
-                            let Some((index, _, camera_path)) = unformat!("{};{};{}", line) else {
-                                panic!("Failed to parse line: {line}")
-                            };
-                            if camera_path == path.to_string_lossy() {
-                                break 'index CameraIndex::Index(
-                                    index.parse().expect("Failed to parse camera index"),
-                                );
-                            }
-                        }
-                        return Err(nokhwa::NokhwaError::OpenDeviceError(
-                            path.to_string_lossy().to_string(),
-                            "Camera not found".into(),
-                        ));
-                    }
-                };
-
-                let requested = if self.fps > 0 {
-                    if self.image_width > 0 && self.image_height > 0 {
-                        RequestedFormat::new::<RgbFormat>(RequestedFormatType::Exact(
-                            CameraFormat::new(
-                                Resolution::new(self.image_width, self.image_height),
-                                FrameFormat::RAWRGB,
-                                self.fps,
-                            ),
-                        ))
-                    } else {
-                        RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestFrameRate(
-                            self.fps,
-                        ))
-                    }
-                } else if self.image_width > 0 && self.image_height > 0 {
-                    RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestResolution(
-                        Resolution::new(self.image_width, self.image_height),
-                    ))
-                } else {
-                    RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate)
-                };
-
-                let mut camera = nokhwa::Camera::new(index, requested)?;
-
-                let camera_info = CameraInfo {
-                    camera_name: camera.info().human_name(),
-                };
-
-                self.camera_info.set(camera_info).unwrap();
-
-                camera.open_stream()?;
-                loop {
-                    let frame = camera.frame()?;
-                    if context.is_runtime_exiting() {
-                        break Ok(());
-                    }
-                    let decoded = frame.decode_image::<RgbFormat>().unwrap();
-                    let img = DynamicImage::ImageRgb8(
-                        ImageBuffer::from_raw(
-                            decoded.width(),
-                            decoded.height(),
-                            decoded.into_raw(),
-                        )
-                        .unwrap(),
-                    );
-                    let img = Arc::new(img);
-                    self.image_received.call(&img);
                 }
-            })
+                return Err(nokhwa::NokhwaError::OpenDeviceError(
+                    name.to_string(),
+                    "Camera not found".into(),
+                ));
+            }
+            CameraIdentifier::Path(path) => 'index: {
+                for line in lines {
+                    let Some((index, _, camera_path)) = unformat!("{};{};{}", line) else {
+                        panic!("Failed to parse line: {line}")
+                    };
+                    if camera_path == path.to_string_lossy() {
+                        break 'index CameraIndex::Index(
+                            index.parse().expect("Failed to parse camera index"),
+                        );
+                    }
+                }
+                return Err(nokhwa::NokhwaError::OpenDeviceError(
+                    path.to_string_lossy().to_string(),
+                    "Camera not found".into(),
+                ));
+            }
+        };
+
+        let requested = if self.fps > 0 {
+            if self.image_width > 0 && self.image_height > 0 {
+                RequestedFormat::new::<RgbFormat>(RequestedFormatType::Exact(CameraFormat::new(
+                    Resolution::new(self.image_width, self.image_height),
+                    FrameFormat::RAWRGB,
+                    self.fps,
+                )))
+            } else {
+                RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestFrameRate(self.fps))
+            }
+        } else if self.image_width > 0 && self.image_height > 0 {
+            RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestResolution(
+                Resolution::new(self.image_width, self.image_height),
+            ))
+        } else {
+            RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate)
+        };
+
+        let mut camera = nokhwa::Camera::new(index, requested)?;
+
+        let camera_info = CameraInfo {
+            camera_name: camera.info().human_name(),
+        };
+
+        self.camera_info.set(camera_info).unwrap();
+
+        camera.open_stream()?;
+        loop {
+            let frame = camera.frame()?;
+            if context.is_runtime_exiting() {
+                break Ok(());
+            }
+            let decoded = frame.decode_image::<RgbFormat>().unwrap();
+            let img = DynamicImage::ImageRgb8(
+                ImageBuffer::from_raw(decoded.width(), decoded.height(), decoded.into_raw())
+                    .unwrap(),
+            );
+            let img = Arc::new(img);
+            self.image_received.call(&img);
+        }
     }
 }
 
