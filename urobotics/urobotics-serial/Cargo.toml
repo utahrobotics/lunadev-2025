@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 tokio-serial = "5"
 urobotics-core = { workspace = true }
+urobotics-app = { workspace = true }
 # tokio-util = { version = "0.7", features = ["codec"] }
 # futures = "0.3"
 # crossbeam = "0.8"

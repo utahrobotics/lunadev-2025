@@ -7,9 +7,9 @@ use std::{
 
 use bytes::BytesMut;
 use serde::Deserialize;
+use urobotics_app::FunctionApplication;
 use urobotics_core::{
-    function::{AsyncFunctionConfig, SendAsyncFunctionConfig},
-    log,
+    runtime::RuntimeContext,
     service::{Service, ServiceExt},
     tokio::{
         self,
@@ -23,8 +23,6 @@ pub struct PythonVenvBuilder {
     pub venv_path: PathBuf,
     #[serde(default = "default_system_interpreter")]
     pub system_interpreter: OsString,
-    #[serde(skip)]
-    pub standalone: bool,
     #[serde(default)]
     pub packages_to_install: Vec<String>,
 }
@@ -42,7 +40,6 @@ impl Default for PythonVenvBuilder {
         PythonVenvBuilder {
             venv_path: default_venv_path(),
             system_interpreter: default_system_interpreter(),
-            standalone: false,
             packages_to_install: Vec::new(),
         }
     }
@@ -201,63 +198,41 @@ impl Service for PyRepl {
     }
 }
 
-impl AsyncFunctionConfig for PythonVenvBuilder {
-    type Output = std::io::Result<()>;
-
-    const NAME: &'static str = "python";
+impl FunctionApplication for PythonVenvBuilder {
+    const APP_NAME: &'static str = "python";
     const DESCRIPTION: &'static str = "Python virtual environment REPL";
 
-    fn standalone(mut self, value: bool) -> Self {
-        self.standalone = value;
-        self
-    }
+    fn spawn(self, context: RuntimeContext) {
+        context.clone().spawn_async(async move {
+            let venv = self.build().await.expect("Failed to build Python venv");
+            let mut repl = venv.repl().await.expect("Failed to start Python REPL");
 
-    async fn run(self, _context: &urobotics_core::runtime::RuntimeContext) -> Self::Output {
-        if !self.standalone {
-            log::warn!("Python REPL does not do anything if ran as standalone");
-            return Ok(());
-        }
-        let venv = self.build().await?;
-        let mut repl = venv.repl().await?;
+            let handle = std::thread::spawn(move || {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async {
+                        let mut input = String::new();
+                        loop {
+                            print!(">>> ");
+                            std::io::stdout().flush().unwrap();
+                            std::io::stdin()
+                                .read_line(&mut input)
+                                .expect("Failed to read line");
+                            let result = repl.call(&input).await;
+                            input.clear();
+                            println!("{}", result.unwrap());
+                        }
+                    })
+            });
 
-        let handle = std::thread::spawn(move || {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap()
-                .block_on(async {
-                    let mut input = String::new();
-                    loop {
-                        print!(">>> ");
-                        std::io::stdout().flush().unwrap();
-                        std::io::stdin()
-                            .read_line(&mut input)
-                            .expect("Failed to read line");
-                        let result = repl.call(&input).await;
-                        input.clear();
-                        println!("{}", result.unwrap());
-                    }
-                })
-        });
-
-        loop {
-            if handle.is_finished() {
-                break;
+            loop {
+                if handle.is_finished() {
+                    break;
+                }
+                tokio::task::yield_now().await;
             }
-            tokio::task::yield_now().await;
-        }
-
-        Ok(())
-    }
-}
-
-impl SendAsyncFunctionConfig for PythonVenvBuilder {
-    const PERSISTENT: bool = false;
-
-    fn run_send(
-        self,
-        context: &urobotics_core::runtime::RuntimeContext,
-    ) -> impl Future<Output = Self::Output> + Send {
-        self.run(context)
+        });
     }
 }

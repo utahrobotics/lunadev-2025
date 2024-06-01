@@ -12,9 +12,10 @@ use bytes::BytesMut;
 use crossbeam::utils::Backoff;
 use serde::Deserialize;
 use tokio_serial::{SerialPort, SerialPortBuilderExt, SerialStream};
+use urobotics_app::FunctionApplication;
 use urobotics_core::{
     define_shared_callbacks,
-    function::{AsyncFunctionConfig, SendAsyncFunctionConfig},
+    function::AsyncFunctionConfig,
     runtime::RuntimeContext,
     tokio::{
         self,
@@ -37,8 +38,6 @@ pub struct SerialConnection {
     serial_output: BytesCallbacks,
     #[serde(skip)]
     serial_input: Arc<OnceLock<Exclusive<WriteHalf<SerialStream>>>>,
-    #[serde(default)]
-    standalone: bool,
 }
 
 fn default_baud_rate() -> u32 {
@@ -62,7 +61,6 @@ impl SerialConnection {
             serial_input: Arc::default(),
             path: path.into(),
             buffer_size: default_buffer_size(),
-            standalone: false,
         }
     }
 
@@ -119,23 +117,49 @@ impl PendingWriter {
 impl AsyncFunctionConfig for SerialConnection {
     type Output = std::io::Result<!>;
 
-    fn standalone(self, value: bool) -> Self {
-        Self {
-            standalone: value,
-            ..self
-        }
-    }
-
     async fn run(self, _context: &RuntimeContext) -> Self::Output {
         #[allow(unused_mut)]
         let mut stream = tokio_serial::new(self.path, self.baud_rate).open_native_async()?;
         #[cfg(unix)]
         stream.set_exclusive(true)?;
         stream.clear(tokio_serial::ClearBuffer::All)?;
-        let (mut reader, mut writer) = tokio::io::split(stream);
+        let (mut reader, writer) = tokio::io::split(stream);
 
         let mut buf = BytesMut::with_capacity(self.buffer_size);
-        if self.standalone {
+
+        let _ = self.serial_input.set(Exclusive::new(writer));
+        drop(self.serial_input);
+        loop {
+            reader.read_buf(&mut buf).await?;
+            self.serial_output.call(&buf);
+            buf.clear();
+        }
+    }
+
+    const NAME: &'static str = "serial";
+    const PERSISTENT: bool = false;
+}
+
+impl FunctionApplication for SerialConnection {
+    const APP_NAME: &'static str = <Self as AsyncFunctionConfig>::NAME;
+    const DESCRIPTION: &'static str = "Connects to a serial port and reads data from it";
+
+    fn spawn(self, context: RuntimeContext) {
+        context.clone().spawn_persistent_async(async move {
+            #[allow(unused_mut)]
+            let mut stream = tokio_serial::new(self.path, self.baud_rate)
+                .open_native_async()
+                .expect("Failed to open serial port");
+            #[cfg(unix)]
+            stream
+                .set_exclusive(true)
+                .expect("Failed to set exclusive mode");
+            stream
+                .clear(tokio_serial::ClearBuffer::All)
+                .expect("Failed to clear serial buffer");
+            let (mut reader, mut writer) = tokio::io::split(stream);
+
+            let mut buf = BytesMut::with_capacity(self.buffer_size);
             std::thread::spawn(move || {
                 let mut builder = tokio::runtime::Builder::new_current_thread();
                 builder.enable_all();
@@ -146,32 +170,15 @@ impl AsyncFunctionConfig for SerialConnection {
                 });
             });
             loop {
-                reader.read_buf(&mut buf).await?;
+                reader
+                    .read_buf(&mut buf)
+                    .await
+                    .expect("Failed to read from serial port");
                 if let Ok(msg) = std::str::from_utf8(&buf) {
                     print!("{msg}");
                     buf.clear();
                 }
             }
-        } else {
-            let _ = self.serial_input.set(Exclusive::new(writer));
-            drop(self.serial_input);
-            loop {
-                reader.read_buf(&mut buf).await?;
-                self.serial_output.call(&buf);
-                buf.clear();
-            }
-        }
-    }
-
-    const NAME: &'static str = "serial";
-    const DESCRIPTION: &'static str = "Connects to a serial port and reads data from it";
-}
-
-impl SendAsyncFunctionConfig for SerialConnection {
-    const PERSISTENT: bool = true;
-
-    #[inline(always)]
-    async fn run_send(self, context: &RuntimeContext) -> Self::Output {
-        self.run(context).await
+        });
     }
 }

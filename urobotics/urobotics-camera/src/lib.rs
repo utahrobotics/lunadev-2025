@@ -22,7 +22,8 @@ use serde::Deserialize;
 use unfmt::unformat;
 use urobotics_core::{
     define_shared_callbacks,
-    function::FunctionConfig,
+    function::SyncFunctionConfig,
+    runtime::RuntimeContext,
     service::ServiceExt,
     tokio::{
         self,
@@ -64,9 +65,6 @@ pub struct CameraConnection {
     image_received: ImageCallbacks,
     #[serde(skip)]
     camera_info: Arc<OnceLock<CameraInfo>>,
-    #[cfg(feature = "standalone")]
-    #[serde(skip)]
-    pub standalone: bool,
 }
 
 pub struct PendingCameraInfo(Arc<OnceLock<CameraInfo>>);
@@ -87,7 +85,6 @@ impl CameraConnection {
             image_height: 0,
             image_received: ImageCallbacks::default(),
             camera_info: Arc::default(),
-            standalone: false,
         }
     }
 
@@ -103,22 +100,150 @@ impl CameraConnection {
     }
 }
 
-impl FunctionConfig for CameraConnection {
+impl SyncFunctionConfig for CameraConnection {
     type Output = Result<(), nokhwa::NokhwaError>;
 
-    const PERSISTENT: bool = false;
+    const PERSISTENT: bool = true;
 
     const NAME: &'static str = "camera";
-    const DESCRIPTION: &'static str = "Displays a camera feed";
 
-    #[cfg(feature = "standalone")]
-    fn standalone(mut self, value: bool) -> Self {
-        self.standalone = value;
-        self
-    }
-
-    fn run(self, context: &urobotics_core::runtime::RuntimeContext) -> Self::Output {
+    fn run(self, context: &RuntimeContext) -> Self::Output {
         tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async move {
+                let repl = PY_REPL
+                    .get_or_init(|| async {
+                        let mut builder = PythonVenvBuilder::default();
+                        builder
+                            .packages_to_install
+                            .push("cv2_enumerate_cameras".to_string());
+                        let mut repl = builder
+                            .build()
+                            .await
+                            .expect("Failed to build Python venv")
+                            .repl()
+                            .await
+                            .expect("Failed to start Python REPL");
+                        repl.call("from cv2_enumerate_cameras import enumerate_cameras")
+                            .await
+                            .expect("Failed to import cv2_enumerate_cameras");
+                        Mutex::new(repl)
+                    })
+                    .await;
+
+                let result = repl
+                    .lock()
+                    .await
+                    .call(CODE)
+                    .await
+                    .expect("Failed to enumerate cameras");
+                let result = match result {
+                    PythonValue::String(s) => s,
+                    PythonValue::None => String::new(),
+                    _ => panic!("Unexpected result while enumerating cameras: {result:?}"),
+                };
+
+                let lines = result.lines();
+
+                let index = match &self.identifier {
+                    CameraIdentifier::Index(index) => CameraIndex::Index(*index),
+                    CameraIdentifier::Name(name) => 'index: {
+                        for line in lines {
+                            let Some((index, camera_name, _)) = unformat!("{};{};{}", line) else {
+                                panic!("Failed to parse line: {line}")
+                            };
+                            if camera_name == name {
+                                break 'index CameraIndex::Index(
+                                    index.parse().expect("Failed to parse camera index"),
+                                );
+                            }
+                        }
+                        return Err(nokhwa::NokhwaError::OpenDeviceError(
+                            name.to_string(),
+                            "Camera not found".into(),
+                        ));
+                    }
+                    CameraIdentifier::Path(path) => 'index: {
+                        for line in lines {
+                            let Some((index, _, camera_path)) = unformat!("{};{};{}", line) else {
+                                panic!("Failed to parse line: {line}")
+                            };
+                            if camera_path == path.to_string_lossy() {
+                                break 'index CameraIndex::Index(
+                                    index.parse().expect("Failed to parse camera index"),
+                                );
+                            }
+                        }
+                        return Err(nokhwa::NokhwaError::OpenDeviceError(
+                            path.to_string_lossy().to_string(),
+                            "Camera not found".into(),
+                        ));
+                    }
+                };
+
+                let requested = if self.fps > 0 {
+                    if self.image_width > 0 && self.image_height > 0 {
+                        RequestedFormat::new::<RgbFormat>(RequestedFormatType::Exact(
+                            CameraFormat::new(
+                                Resolution::new(self.image_width, self.image_height),
+                                FrameFormat::RAWRGB,
+                                self.fps,
+                            ),
+                        ))
+                    } else {
+                        RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestFrameRate(
+                            self.fps,
+                        ))
+                    }
+                } else if self.image_width > 0 && self.image_height > 0 {
+                    RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestResolution(
+                        Resolution::new(self.image_width, self.image_height),
+                    ))
+                } else {
+                    RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate)
+                };
+
+                let mut camera = nokhwa::Camera::new(index, requested)?;
+
+                let camera_info = CameraInfo {
+                    camera_name: camera.info().human_name(),
+                };
+
+                self.camera_info.set(camera_info).unwrap();
+
+                camera.open_stream()?;
+                loop {
+                    let frame = camera.frame()?;
+                    if context.is_runtime_exiting() {
+                        break Ok(());
+                    }
+                    let decoded = frame.decode_image::<RgbFormat>().unwrap();
+                    let img = DynamicImage::ImageRgb8(
+                        ImageBuffer::from_raw(
+                            decoded.width(),
+                            decoded.height(),
+                            decoded.into_raw(),
+                        )
+                        .unwrap(),
+                    );
+                    let img = Arc::new(img);
+                    self.image_received.call(&img);
+                }
+            })
+    }
+}
+
+#[cfg(feature = "standalone")]
+impl urobotics_app::FunctionApplication for CameraConnection {
+    const DESCRIPTION: &'static str = "Displays a camera feed";
+    const APP_NAME: &'static str = <Self as SyncFunctionConfig>::NAME;
+
+    fn spawn(self, context: RuntimeContext) {
+        use urobotics_core::log::error;
+        context.clone().spawn_persistent_sync(move || {
+            tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .unwrap()
@@ -131,14 +256,7 @@ impl FunctionConfig for CameraConnection {
                     Mutex::new(repl)
                 }).await;
 
-                #[cfg(target_os = "windows")]
-                let code = "for camera_info in enumerate_cameras(1400):\r\tprint(f'{camera_info.index};{camera_info.name};{camera_info.path}')";
-                #[cfg(target_os = "linux")]
-                let code = "for camera_info in enumerate_cameras(200):\r\tprint(f'{camera_info.index};{camera_info.name};{camera_info.path}')";
-                #[cfg(target_os = "macos")]
-                let code = "for camera_info in enumerate_cameras(1200):\r\tprint(f'{camera_info.index};{camera_info.name};{camera_info.path}')";
-
-                let result = repl.lock().await.call(code).await.expect("Failed to enumerate cameras");
+                let result = repl.lock().await.call(CODE).await.expect("Failed to enumerate cameras");
                 let result = match result {
                     PythonValue::String(s) => s,
                     PythonValue::None => String::new(),
@@ -156,7 +274,8 @@ impl FunctionConfig for CameraConnection {
                                 break 'index CameraIndex::Index(index.parse().expect("Failed to parse camera index"));
                             }
                         }
-                        return Err(nokhwa::NokhwaError::OpenDeviceError(name.to_string(), "Camera not found".into()))
+                        error!(target: Self::APP_NAME, "Camera not found");
+                        return;
                     },
                     CameraIdentifier::Path(path) => 'index: {
                         for line in lines {
@@ -165,7 +284,8 @@ impl FunctionConfig for CameraConnection {
                                 break 'index CameraIndex::Index(index.parse().expect("Failed to parse camera index"));
                             }
                         }
-                        return Err(nokhwa::NokhwaError::OpenDeviceError(path.to_string_lossy().to_string(), "Camera not found".into()))
+                        error!(target: Self::APP_NAME, "Camera not found");
+                        return;
                     },
                 };
 
@@ -190,25 +310,21 @@ impl FunctionConfig for CameraConnection {
                 let mut camera = nokhwa::Camera::new(
                     index,
                     requested,
-                )?;
+                ).expect("Failed to open camera");
 
                 let camera_info = CameraInfo {
                     camera_name: camera.info().human_name()
                 };
-                #[cfg(feature = "standalone")]
-                let mut dump = if self.standalone {
-                    #[cfg(debug_assertions)]
-                    urobotics_core::log::warn!(target: Self::NAME, "Release mode is recommended for standalone mode");
-                    Some(VideoDataDump::new_display(camera_info.camera_name, camera.camera_format().width(), camera.camera_format().height(), true).expect("Failed to initialize video data dump"))
-                } else {
-                    None
-                };
+                #[cfg(debug_assertions)]
+                urobotics_core::log::warn!(target: Self::APP_NAME, "Release mode is recommended when using camera as an app");
 
-                camera.open_stream()?;
+                let mut dump = VideoDataDump::new_display(camera_info.camera_name, camera.camera_format().width(), camera.camera_format().height(), true).expect("Failed to initialize video data dump");
+
+                camera.open_stream().expect("Failed to open camera stream");
                 loop {
-                    let frame = camera.frame()?;
+                    let frame = camera.frame().expect("Failed to get frame");
                     if context.is_runtime_exiting() {
-                        break Ok(());
+                        break;
                     }
                     let decoded = frame.decode_image::<RgbFormat>().unwrap();
                     let img = DynamicImage::ImageRgb8(ImageBuffer::from_raw(
@@ -216,15 +332,11 @@ impl FunctionConfig for CameraConnection {
                         decoded.height(),
                         decoded.into_raw(),
                     ).unwrap());
-                    let img = Arc::new(img);
-                    self.image_received.call(&img);
 
-                    #[cfg(feature = "standalone")]
-                    if self.standalone {
-                        dump.as_mut().unwrap().write_frame(&img).await.expect("Failed to write frame to video data dump");
-                    }
+                    dump.write_frame(&img).await.expect("Failed to write frame to video data dump");
                 }
-            })
+            });
+        });
     }
 }
 
@@ -240,3 +352,10 @@ pub fn discover_all_cameras() -> Result<impl Iterator<Item = CameraConnection>, 
             Some(CameraConnection::new(CameraIdentifier::Index(*n)))
         }))
 }
+
+#[cfg(target_os = "windows")]
+const CODE: &str = "for camera_info in enumerate_cameras(1400):\r\tprint(f'{camera_info.index};{camera_info.name};{camera_info.path}')";
+#[cfg(target_os = "linux")]
+const CODE: &str = "for camera_info in enumerate_cameras(200):\r\tprint(f'{camera_info.index};{camera_info.name};{camera_info.path}')";
+#[cfg(target_os = "macos")]
+const CODE: &str = "for camera_info in enumerate_cameras(1200):\r\tprint(f'{camera_info.index};{camera_info.name};{camera_info.path}')";

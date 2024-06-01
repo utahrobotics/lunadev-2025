@@ -14,7 +14,7 @@ members = [
     "urobotics/urobotics-core", "urobotics/urobotics-smach",
     "urobotics/urobotics-video",
     "urobotics/urobotics-serial", "urobotics/urobotics-app", "examples/urobotics-tool", "urobotics/urobotics",
-    "urobotics/urobotics-camera", "urobotics/urobotics-py",
+    "urobotics/urobotics-camera", "urobotics/urobotics-py", "urobotics/urobotics-apriltag",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]
@@ -54,17 +54,6 @@ bytes = "1.6.0"
 pollster = "0.3.0"
 unfmt = "0.2.2"
 
-camera = { path = "unros/camera" }
-apriltag = { path = "unros/apriltag" }
-localization = { path = "unros/localization" }
-serial = { path = "unros/serial" }
-navigator = { path = "unros/navigator" }
-rig = { path = "unros/rig" }
-smach = { path = "misc/smach" }
-realsense = { path = "unros/realsense" }
-camera-info = { path = "unros/camera-info" }
-networking = { path = "unros/networking" }
-obstacles = { path = "unros/obstacles" }
 compute-shader = { path = "misc/compute-shader" }
 cakap = { path = "misc/cakap" }
 urobotics-core = { path = "urobotics/urobotics-core" }

@@ -3,11 +3,16 @@ use std::path::Path;
 pub use clap;
 use clap::{arg, Arg, ArgMatches};
 use fxhash::FxHashMap;
+use serde::de::DeserializeOwned;
 use std::str::FromStr;
-use urobotics_core::{
-    function::{FunctionConfig, SendAsyncFunctionConfig},
-    runtime::RuntimeContext,
-};
+use urobotics_core::runtime::RuntimeContext;
+
+pub trait FunctionApplication: DeserializeOwned {
+    const APP_NAME: &'static str;
+    const DESCRIPTION: &'static str;
+
+    fn spawn(self, context: RuntimeContext);
+}
 
 #[macro_export]
 macro_rules! command {
@@ -111,44 +116,21 @@ impl Command {
         matches
     }
 
-    pub fn add_function<F: FunctionConfig + Send + 'static>(mut self) -> Self {
+    pub fn add_function<F: FunctionApplication>(mut self) -> Self {
         self.command = self.command.subcommand(
-            clap::Command::new(F::NAME)
+            clap::Command::new(F::APP_NAME)
                 .arg(Arg::new("parameters").num_args(..))
                 .about(F::DESCRIPTION),
         );
         self.functions.insert(
-            F::NAME.into(),
+            F::APP_NAME.into(),
             Box::new(move |table, context| {
-                let mut config: F = match toml::Value::Table(table).try_into() {
+                let config: F = match toml::Value::Table(table).try_into() {
                     Ok(x) => x,
                     Err(e) => {
                         panic!("Failed to parse config: {}", e);
                     }
                 };
-                config = config.standalone(true);
-                config.spawn(context);
-            }),
-        );
-        self
-    }
-
-    pub fn add_async_function<F: SendAsyncFunctionConfig + Send + 'static>(mut self) -> Self {
-        self.command = self.command.subcommand(
-            clap::Command::new(F::NAME)
-                .arg(Arg::new("parameters").num_args(..))
-                .about(F::DESCRIPTION),
-        );
-        self.functions.insert(
-            F::NAME.into(),
-            Box::new(move |table, context| {
-                let mut config: F = match toml::Value::Table(table).try_into() {
-                    Ok(x) => x,
-                    Err(e) => {
-                        panic!("Failed to parse config: {}", e);
-                    }
-                };
-                config = config.standalone(true);
                 config.spawn(context);
             }),
         );

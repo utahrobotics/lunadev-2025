@@ -1,0 +1,9 @@
+[package]
+name = "urobotics-apriltag"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+apriltag = "0.4.0"
+apriltag-image = "0.1.0"
+apriltag-nalgebra = "0.1.0"

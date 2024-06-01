@@ -1,29 +1,29 @@
 use std::future::Future;
 
-use serde::de::DeserializeOwned;
 use tokio::task::AbortHandle;
 
 use crate::runtime::RuntimeContext;
 
-pub trait FunctionConfig: DeserializeOwned {
+pub trait SyncFunctionConfig {
     type Output: Loggable;
-    const PERSISTENT: bool;
     const NAME: &'static str;
-    const DESCRIPTION: &'static str = "";
-
-    fn standalone(self, _value: bool) -> Self {
-        self
-    }
+    const PERSISTENT: bool = false;
 
     fn run(self, context: &RuntimeContext) -> Self::Output;
+    fn spawn_persistent(self, context: RuntimeContext)
+    where
+        Self: Sized + Send + 'static,
+    {
+        context.clone().spawn_persistent_sync(move || {
+            self.run(&context).log(Self::NAME);
+        });
+    }
     fn spawn(self, context: RuntimeContext)
     where
-        Self: Send + 'static,
+        Self: Sized + Send + 'static,
     {
         if Self::PERSISTENT {
-            context.clone().spawn_persistent_sync(move || {
-                self.run(&context).log(Self::NAME);
-            });
+            self.spawn_persistent(context);
         } else {
             std::thread::spawn(move || {
                 self.run(&context).log(Self::NAME);
@@ -32,37 +32,36 @@ pub trait FunctionConfig: DeserializeOwned {
     }
 }
 
-pub trait AsyncFunctionConfig: DeserializeOwned {
+pub trait AsyncFunctionConfig {
     type Output: Loggable;
     const NAME: &'static str;
-    const DESCRIPTION: &'static str = "";
+    const PERSISTENT: bool = false;
 
-    fn standalone(self, _value: bool) -> Self {
-        self
-    }
-
-    fn run(self, context: &RuntimeContext) -> impl Future<Output = Self::Output>;
-}
-
-pub trait SendAsyncFunctionConfig: AsyncFunctionConfig {
-    const PERSISTENT: bool;
-
-    fn run_send(self, context: &RuntimeContext) -> impl Future<Output = Self::Output> + Send;
-    fn spawn(self, context: RuntimeContext) -> AbortHandle
+    fn run(self, context: &RuntimeContext) -> impl Future<Output = Self::Output> + Send;
+    fn spawn_persistent(self, context: RuntimeContext)
     where
-        Self: Send + 'static,
+        Self: Sized + Send + 'static,
+    {
+        context.clone().spawn_persistent_async(async move {
+            self.run(&context).await.log(Self::NAME);
+        });
+    }
+    fn spawn(self, context: RuntimeContext) -> Option<AbortHandle>
+    where
+        Self: Sized + Send + 'static,
     {
         if Self::PERSISTENT {
-            context.clone().spawn_persistent_async(async move {
-                self.run_send(&context).await.log(Self::NAME);
-            })
+            self.spawn_persistent(context);
+            None
         } else {
-            context
-                .clone()
-                .spawn_async(async move {
-                    self.run_send(&context).await.log(Self::NAME);
-                })
-                .abort_handle()
+            Some(
+                context
+                    .clone()
+                    .spawn_async(async move {
+                        self.run(&context).await.log(Self::NAME);
+                    })
+                    .abort_handle(),
+            )
         }
     }
 }
