@@ -204,6 +204,7 @@ impl FunctionApplication for PythonVenvBuilder {
 
     fn spawn(self, context: RuntimeContext) {
         context.clone().spawn_async(async move {
+            let _context = context;
             let venv = self.build().await.expect("Failed to build Python venv");
             let mut repl = venv.repl().await.expect("Failed to start Python REPL");
 
