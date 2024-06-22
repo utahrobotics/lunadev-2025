@@ -6,15 +6,14 @@
 
 use std::{
     fmt::Write,
-    sync::{Arc, OnceLock},
+    sync::OnceLock,
     time::{Duration, Instant},
 };
 
 use fern::colors::{Color, ColoredLevelConfig};
 use log::set_boxed_logger;
 
-use crate::{
-    callbacks::caller::SharedCallbacksRef, define_shared_callbacks, runtime::RuntimeContext,
+use crate::{define_callbacks, fn_alias, runtime::RuntimeContext
 };
 
 pub mod rate;
@@ -25,11 +24,14 @@ pub fn get_program_time() -> Duration {
     START_TIME.get_or_init(Instant::now).elapsed()
 }
 
-define_shared_callbacks!(pub LogCallbacks => Fn(record: &log::Record) + Send + Sync);
-static LOG_PUB: OnceLock<SharedCallbacksRef<dyn Fn(&log::Record) + Send + Sync>> = OnceLock::new();
+fn_alias! {
+    type LogCallbacksRef = CallbacksRef(&log::Record) + Send + Sync
+}
+define_callbacks!(pub LogCallbacks => Fn(record: &log::Record) + Send + Sync);
+static LOG_PUB: OnceLock<LogCallbacksRef> = OnceLock::new();
 
 #[inline(always)]
-fn get_log_pub() -> &'static SharedCallbacksRef<dyn Fn(&log::Record) + Send + Sync> {
+pub fn get_logger_ref() -> &'static LogCallbacksRef {
     LOG_PUB.get_or_init(|| {
         let log_pub = LogPub::default();
         let log_pub_ref = log_pub.callbacks.get_ref();
@@ -38,14 +40,9 @@ fn get_log_pub() -> &'static SharedCallbacksRef<dyn Fn(&log::Record) + Send + Sy
     })
 }
 
-#[inline]
-pub fn add_log_callback(callback: impl Fn(&log::Record) + Send + Sync + 'static) {
-    get_log_pub().add_callback(Box::new(callback));
-}
-
 #[inline(always)]
 pub fn add_logger(logger: impl log::Log + 'static) {
-    add_log_callback(move |record| logger.log(record));
+    get_logger_ref().add_dyn_fn(Box::new(move |record| logger.log(record)));
 }
 
 #[derive(Default)]
@@ -59,7 +56,7 @@ impl log::Log for LogPub {
     }
 
     fn log(&self, record: &log::Record) {
-        self.callbacks.call(record);
+        self.callbacks.call_immut(record);
     }
 
     fn flush(&self) {}

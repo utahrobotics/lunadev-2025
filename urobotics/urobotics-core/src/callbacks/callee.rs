@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crossbeam::queue::{ArrayQueue, SegQueue};
 use tokio::sync::Notify;
 
-use super::caller::drop_this_callback;
+use super::caller::try_drop_this_callback;
 
 enum Queue<T> {
     Bounded(ArrayQueue<T>),
@@ -108,7 +108,7 @@ impl<T> Subscriber<T> {
         let inner = Arc::downgrade(&self.inner.clone());
         move |value| {
             let Some(inner) = inner.upgrade() else {
-                drop_this_callback();
+                try_drop_this_callback();
                 return;
             };
             if inner.queue.push(value).is_ok() {
@@ -124,7 +124,7 @@ impl<T> Subscriber<T> {
         let inner = Arc::downgrade(&self.inner.clone());
         move |value| {
             let Some(inner) = inner.upgrade() else {
-                drop_this_callback();
+                try_drop_this_callback();
                 return;
             };
             if inner.queue.force_push(value).is_none() {

@@ -1,4 +1,6 @@
 #![feature(never_type)]
+#![feature(unboxed_closures)]
+#![feature(tuple_trait)]
 
 pub mod callbacks;
 pub mod function;
