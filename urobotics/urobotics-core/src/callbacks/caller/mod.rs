@@ -12,11 +12,11 @@ thread_local! {
 }
 
 pub fn try_drop_this_callback() {
-    RETAIN_CALLBACK.with(|cell| cell.set(false));
+    RETAIN_CALLBACK.set(false);
 }
 
 pub fn retain_this_callback() {
-    RETAIN_CALLBACK.with(|cell| cell.set(true));
+    RETAIN_CALLBACK.set(true);
 }
 
 pub mod prelude {
