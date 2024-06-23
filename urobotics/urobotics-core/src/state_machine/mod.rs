@@ -131,14 +131,16 @@ pub trait State: Sized + Send + 'static {
                                 on_state_output = Some(f);
                                 on_state_output.as_mut().unwrap()
                             } else {
-                                token.ended.notify_waiters();
+                                token.inner.has_ended.store(true, Ordering::Relaxed);
+                                token.inner.ended.notify_waiters();
                                 break;
                             };
                             if let Some(next_state) = f(output) {
                                 next_state.enter.enter_requested.store(true, Ordering::Relaxed);
                                 next_state.enter.entering.notify_waiters();
                             } else {
-                                token.ended.notify_waiters();
+                                token.inner.has_ended.store(true, Ordering::Relaxed);
+                                token.inner.ended.notify_waiters();
                                 break;
                             }
                         },
@@ -198,7 +200,7 @@ impl<'a, T> OnStateOutput<'a, T> {
 
 #[derive(Clone)]
 pub struct StateMachineToken<'a> {
-    ended: Arc<Notify>,
+    inner: Arc<RunningStateMachineInner>,
     phantom: PhantomData<&'a ()>
 }
 
@@ -243,27 +245,38 @@ pub struct StateMachine {
 
 impl StateMachine {
     pub fn build<'a>(self, f: impl FnOnce(StateMachineToken<'a>) -> StateRef<'a>) -> RunningStateMachine {
-        let ended = Arc::new(Notify::new());
+        let inner = Arc::new(RunningStateMachineInner {
+            ended: Notify::new(),
+            has_ended: AtomicBool::new(false)
+        });
         let state = f(StateMachineToken {
-            ended: ended.clone(),
+            inner: inner.clone(),
             phantom: PhantomData
         });
         state.handle.enter.enter_requested.store(true, Ordering::Relaxed);
         state.handle.enter.entering.notify_waiters();
-        RunningStateMachine { ended }
+        RunningStateMachine { inner }
     }
 }
 
 
+struct RunningStateMachineInner {
+    ended: Notify,
+    has_ended: AtomicBool
+}
+
+
 pub struct RunningStateMachine {
-    ended: Arc<Notify>
+    inner: Arc<RunningStateMachineInner>
 }
 
 impl RunningStateMachine {
     pub async fn wait(self) {
-        self.ended.notified().await;
+        if !self.inner.has_ended.load(Ordering::Relaxed) {
+            self.inner.ended.notified().await;
+        }
         loop {
-            if Arc::strong_count(&self.ended) == 1 {
+            if Arc::strong_count(&self.inner) == 1 {
                 break;
             }
             tokio::task::yield_now().await;
