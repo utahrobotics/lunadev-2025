@@ -14,7 +14,7 @@ members = [
     "urobotics/urobotics-core", "urobotics/urobotics-smach",
     "urobotics/urobotics-video",
     "urobotics/urobotics-serial", "urobotics/urobotics-app", "examples/urobotics-tool", "urobotics/urobotics",
-    "urobotics/urobotics-camera", "urobotics/urobotics-py", "urobotics/urobotics-apriltag",
+    "urobotics/urobotics-camera", "urobotics/urobotics-py", "urobotics/urobotics-apriltag", "misc/tasker",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]

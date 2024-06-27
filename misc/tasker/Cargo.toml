@@ -1,0 +1,11 @@
+[package]
+name = "tasker"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+parking_lot = { workspace = true }
+tokio = { workspace = true }
+crossbeam = { workspace = true }
+log = { workspace = true }
+fxhash = { workspace = true }

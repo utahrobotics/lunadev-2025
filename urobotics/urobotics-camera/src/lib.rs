@@ -61,6 +61,8 @@ pub struct CameraConnection {
     pub image_width: u32,
     #[serde(default)]
     pub image_height: u32,
+    #[serde(default)]
+    pub py_venv_builder: PythonVenvBuilder,
     #[serde(skip)]
     image_received: ImageCallbacks,
     #[serde(skip)]
@@ -85,6 +87,7 @@ impl CameraConnection {
             image_height: 0,
             image_received: ImageCallbacks::default(),
             camera_info: Arc::default(),
+            py_venv_builder: PythonVenvBuilder::default(),
         }
     }
 
@@ -107,7 +110,7 @@ impl SyncFunctionConfig for CameraConnection {
 
     const NAME: &'static str = "camera";
 
-    fn run(self, context: &RuntimeContext) -> Self::Output {
+    fn run(mut self, context: &RuntimeContext) -> Self::Output {
         let result = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -115,11 +118,11 @@ impl SyncFunctionConfig for CameraConnection {
             .block_on(async move {
                 let repl = PY_REPL
                     .get_or_init(|| async {
-                        let mut builder = PythonVenvBuilder::default();
-                        builder
+                        self.py_venv_builder
                             .packages_to_install
                             .push("cv2_enumerate_cameras".to_string());
-                        let mut repl = builder
+                        let mut repl = self
+                            .py_venv_builder
                             .build()
                             .await
                             .expect("Failed to build Python venv")

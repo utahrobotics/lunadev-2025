@@ -1,5 +1,6 @@
 use std::{
-    cell::Cell, sync::{Arc, Weak}
+    cell::Cell,
+    sync::{Arc, Weak},
 };
 
 use crossbeam::queue::SegQueue;
@@ -8,7 +9,7 @@ use parking_lot::{Mutex, RwLock};
 pub mod ext;
 
 thread_local! {
-    static RETAIN_CALLBACK: Cell<bool> = Cell::new(false);
+    static RETAIN_CALLBACK: Cell<bool> = const { Cell::new(false) };
 }
 
 pub fn try_drop_this_callback() {
@@ -21,7 +22,8 @@ pub fn retain_this_callback() {
 
 pub mod prelude {
     pub use super::{
-        try_drop_this_callback, retain_this_callback, RawCallbackStorage, CallbacksStorage, CallbacksRef, Callback
+        retain_this_callback, try_drop_this_callback, Callback, CallbacksRef, CallbacksStorage,
+        RawCallbackStorage,
     };
 }
 
@@ -68,7 +70,7 @@ macro_rules! define_callbacks {
         impl CallbacksStorage for $name {
             type Immut = dyn Fn($($arg,)*)$($extra)*;
             type Mut = dyn FnMut($($arg,)*)$($extra)*;
-            
+
             fn get_storage(&self) -> &RawCallbackStorage<Self::Immut, Self::Mut> {
                 &self.storage
             }
@@ -80,12 +82,10 @@ macro_rules! define_callbacks {
     };
 }
 
-
 pub enum Callback<A: ?Sized, B: ?Sized> {
     Immut(Box<A>),
-    Mut(Mutex<Box<B>>)
+    Mut(Mutex<Box<B>>),
 }
-
 
 pub struct RawCallbackStorage<A: ?Sized, B: ?Sized> {
     incoming: Arc<SegQueue<Callback<A, B>>>,
@@ -94,19 +94,20 @@ pub struct RawCallbackStorage<A: ?Sized, B: ?Sized> {
 
 impl<A: ?Sized, B: ?Sized> Default for RawCallbackStorage<A, B> {
     fn default() -> Self {
-        Self { incoming: Default::default(), storage: Default::default() }
+        Self {
+            incoming: Default::default(),
+            storage: Default::default(),
+        }
     }
 }
 
 impl<A: ?Sized, B: ?Sized> RawCallbackStorage<A, B> {
     pub fn for_each(&mut self, mut f: impl FnMut(&mut Callback<A, B>)) {
-        self.storage
-            .get_mut()
-            .retain_mut(|callback| {
-                RETAIN_CALLBACK.with(|cell| cell.set(true));
-                f(callback);
-                RETAIN_CALLBACK.get()
-            });
+        self.storage.get_mut().retain_mut(|callback| {
+            RETAIN_CALLBACK.with(|cell| cell.set(true));
+            f(callback);
+            RETAIN_CALLBACK.get()
+        });
         while let Some(mut callback) = self.incoming.pop() {
             RETAIN_CALLBACK.with(|cell| cell.set(true));
             f(&mut callback);
@@ -118,12 +119,11 @@ impl<A: ?Sized, B: ?Sized> RawCallbackStorage<A, B> {
 
     pub fn for_each_immut(&self, mut f: impl FnMut(&Callback<A, B>)) {
         if let Some(mut storage) = self.storage.try_write() {
-            storage
-                .retain(|callback| {
-                    RETAIN_CALLBACK.with(|cell| cell.set(true));
-                    f(callback);
-                    RETAIN_CALLBACK.get()
-                });
+            storage.retain(|callback| {
+                RETAIN_CALLBACK.with(|cell| cell.set(true));
+                f(callback);
+                RETAIN_CALLBACK.get()
+            });
             while let Some(callback) = self.incoming.pop() {
                 RETAIN_CALLBACK.with(|cell| cell.set(true));
                 f(&callback);
@@ -133,8 +133,7 @@ impl<A: ?Sized, B: ?Sized> RawCallbackStorage<A, B> {
             }
         } else {
             let storage = self.storage.read();
-            storage.iter()
-                .for_each(|callback| f(callback));
+            storage.iter().for_each(|callback| f(callback));
             for _ in 0..self.incoming.len() {
                 let callback = self.incoming.pop().unwrap();
                 RETAIN_CALLBACK.with(|cell| cell.set(true));
@@ -147,29 +146,39 @@ impl<A: ?Sized, B: ?Sized> RawCallbackStorage<A, B> {
     }
 }
 
-
 pub trait CallbacksStorage {
     type Immut: ?Sized;
     type Mut: ?Sized;
 
     fn get_storage(&self) -> &RawCallbackStorage<Self::Immut, Self::Mut>;
     fn get_storage_mut(&mut self) -> &mut RawCallbackStorage<Self::Immut, Self::Mut>;
-    
-    
+
     fn add_dyn_fn(&mut self, callback: Box<Self::Immut>) {
-        self.get_storage_mut().storage.get_mut().push(Callback::Immut(callback));
+        self.get_storage_mut()
+            .storage
+            .get_mut()
+            .push(Callback::Immut(callback));
     }
-    
+
     fn add_dyn_fn_mut(&mut self, callback: Box<Self::Mut>) {
-        self.get_storage_mut().storage.get_mut().push(Callback::Mut(Mutex::new(callback)));
+        self.get_storage_mut()
+            .storage
+            .get_mut()
+            .push(Callback::Mut(Mutex::new(callback)));
     }
-    
+
     fn add_dyn_fn_immut(&self, callback: Box<Self::Immut>) {
-        self.get_storage().storage.write().push(Callback::Immut(callback));
+        self.get_storage()
+            .storage
+            .write()
+            .push(Callback::Immut(callback));
     }
-    
+
     fn add_dyn_fn_mut_immut(&self, callback: Box<Self::Mut>) {
-        self.get_storage().storage.write().push(Callback::Mut(Mutex::new(callback)));
+        self.get_storage()
+            .storage
+            .write()
+            .push(Callback::Mut(Mutex::new(callback)));
     }
 
     fn is_empty(&self) -> bool {
@@ -181,7 +190,8 @@ pub trait CallbacksStorage {
     }
 
     fn is_empty_mut(&mut self) -> bool {
-        self.get_storage_mut().storage.get_mut().is_empty() && self.get_storage().incoming.is_empty()
+        self.get_storage_mut().storage.get_mut().is_empty()
+            && self.get_storage().incoming.is_empty()
     }
 
     fn size_mut(&mut self) -> usize {
@@ -191,15 +201,15 @@ pub trait CallbacksStorage {
     /// Gets a reference that can be used to add callbacks.
     #[inline]
     fn get_ref(&self) -> CallbacksRef<Self::Immut, Self::Mut> {
-        CallbacksRef { incoming: Arc::downgrade(&self.get_storage().incoming) }
+        CallbacksRef {
+            incoming: Arc::downgrade(&self.get_storage().incoming),
+        }
     }
 }
-
 
 pub struct CallbacksRef<A: ?Sized, B: ?Sized> {
     incoming: Weak<SegQueue<Callback<A, B>>>,
 }
-
 
 impl<A: ?Sized, B: ?Sized> CallbacksRef<A, B> {
     pub fn add_dyn_fn(&self, callback: Box<A>) -> Option<Box<A>> {
@@ -210,7 +220,7 @@ impl<A: ?Sized, B: ?Sized> CallbacksRef<A, B> {
             Some(callback)
         }
     }
-    
+
     pub fn add_dyn_fn_mut(&self, callback: Box<B>) -> Option<Box<B>> {
         if let Some(incoming) = self.incoming.upgrade() {
             incoming.push(Callback::Mut(Mutex::new(callback)));
@@ -220,7 +230,6 @@ impl<A: ?Sized, B: ?Sized> CallbacksRef<A, B> {
         }
     }
 }
-
 
 macro_rules! dyn_ref_impl {
     ($($extra: tt)*) => {
@@ -232,7 +241,7 @@ macro_rules! dyn_ref_impl {
                 Some(callback)
             }
         }
-        
+
         pub fn add_fn_mut<F: FnMut(Args)$($extra)* + 'static>(&self, callback: F) -> Option<F> {
             if let Some(incoming) = self.incoming.upgrade() {
                 incoming.push(Callback::Mut(Mutex::new(Box::new(callback))));
@@ -244,26 +253,21 @@ macro_rules! dyn_ref_impl {
     }
 }
 
-
 impl<Args> CallbacksRef<dyn Fn(Args), dyn FnMut(Args)> {
     dyn_ref_impl!();
 }
-
 
 impl<Args> CallbacksRef<dyn Fn(Args) + Send, dyn FnMut(Args) + Send> {
     dyn_ref_impl!( + Send);
 }
 
-
 impl<Args> CallbacksRef<dyn Fn(Args) + Sync, dyn FnMut(Args) + Sync> {
     dyn_ref_impl!( + Sync);
 }
 
-
 impl<Args> CallbacksRef<dyn Fn(Args) + Send + Sync, dyn FnMut(Args) + Send + Sync> {
     dyn_ref_impl!( + Send + Sync);
 }
-
 
 #[macro_export]
 macro_rules! fn_alias {

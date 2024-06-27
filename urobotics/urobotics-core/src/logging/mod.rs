@@ -13,8 +13,7 @@ use std::{
 use fern::colors::{Color, ColoredLevelConfig};
 use log::set_boxed_logger;
 
-use crate::{define_callbacks, fn_alias, runtime::RuntimeContext
-};
+use crate::{define_callbacks, fn_alias, runtime::RuntimeContext};
 
 pub mod rate;
 
