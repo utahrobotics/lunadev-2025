@@ -64,6 +64,7 @@ urobotics-video = { path = "urobotics/urobotics-video" }
 urobotics = { path = "urobotics/urobotics" }
 urobotics-camera = { path = "urobotics/urobotics-camera" }
 urobotics-py = { path = "urobotics/urobotics-py" }
+tasker = { path = "misc/tasker" }
 
 # The following crates need to run at full power
 # in most contexts to be effective.

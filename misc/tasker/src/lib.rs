@@ -1,17 +1,18 @@
 // #![feature(never_type)]
 #![feature(unboxed_closures)]
 #![feature(tuple_trait)]
+#![feature(never_type)]
 // #![feature(const_option)]
 
 use std::{
-    backtrace::Backtrace, cell::RefCell, future::Future, ops::Deref, sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, LazyLock,
+    backtrace::Backtrace, cell::RefCell, future::Future, num::NonZeroUsize, ops::Deref, sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc,
     }, time::Duration
 };
 
 use crossbeam::queue::SegQueue;
-use parking_lot::{Mutex, RwLock, RwLockWriteGuard};
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tokio::{runtime::Handle, sync::Notify};
 pub use tokio;
 pub use parking_lot;
@@ -19,39 +20,44 @@ pub use parking_lot;
 pub mod callbacks;
 pub mod task;
 
+#[derive(Clone, Copy)]
 pub struct TokioRuntimeConfig {
-    pub num_threads: Option<usize>,
+    pub num_threads: Option<NonZeroUsize>,
     pub shutdown_delayed_warning: Duration,
     pub thread_delayed_warning: Duration,
 }
 
-static TOKIO_RUNTIME_CONFIG: LazyLock<Mutex<Arc<TokioRuntimeConfig>>> = LazyLock::new(|| {
-    Mutex::new(Arc::new(TokioRuntimeConfig {
-        num_threads: None,
-        shutdown_delayed_warning: Duration::from_secs(5),
-        thread_delayed_warning: Duration::from_secs(5),
-    }))
-});
-
-pub fn set_tokio_runtime_config(config: impl Into<Arc<TokioRuntimeConfig>>) {
-    *TOKIO_RUNTIME_CONFIG.lock() = config.into();
+impl Default for TokioRuntimeConfig {
+    fn default() -> Self {
+        Self {
+            num_threads: None,
+            shutdown_delayed_warning: Duration::from_secs(5),
+            thread_delayed_warning: Duration::from_secs(5),
+        }
+    }
 }
 
-pub fn get_tokio_runtime_config() -> Arc<TokioRuntimeConfig> {
-    TOKIO_RUNTIME_CONFIG.lock().clone()
+
+impl TokioRuntimeConfig {
+    pub fn build(self) {
+        with_tokio_runtime_handle(|_| {}, || self);
+    }
 }
+
 
 struct TokioRuntimeHandle {
     handle: Handle,
-    runtime_ended: Arc<NotifyFlag>,
+    // runtime_ended: Arc<NotifyFlag>,
     end_runtime: Arc<NotifyFlag>,
-    attached_threads: Arc<SegQueue<Arc<RuntimeDropGuardInner>>>,
+    attached_guards: Arc<SegQueue<Arc<RuntimeDropGuardInner>>>,
+    index: usize
 }
 
+static RUNTIME_INDEX: AtomicUsize = AtomicUsize::new(0);
 static TOKIO_RUNTIME_HANDLE: RwLock<Option<TokioRuntimeHandle>> = RwLock::new(None);
 
 
-fn with_tokio_runtime_handle<T>(f: impl FnOnce(&TokioRuntimeHandle) -> T) -> T {
+fn with_tokio_runtime_handle<T>(f: impl FnOnce(&TokioRuntimeHandle) -> T, config: impl FnOnce() -> TokioRuntimeConfig) -> T {
     {
         let reader = TOKIO_RUNTIME_HANDLE.read();
         if let Some(handle) = reader.as_ref() {
@@ -65,11 +71,11 @@ fn with_tokio_runtime_handle<T>(f: impl FnOnce(&TokioRuntimeHandle) -> T) -> T {
             .as_ref()
             .unwrap())
     } else {
-        let config = get_tokio_runtime_config();
+        let config = config();
         let mut builder = tokio::runtime::Builder::new_multi_thread();
 
         if let Some(num_threads) = config.num_threads {
-            builder.worker_threads(num_threads);
+            builder.worker_threads(num_threads.get());
         }
 
         let runtime = builder.enable_all().build().unwrap();
@@ -77,38 +83,39 @@ fn with_tokio_runtime_handle<T>(f: impl FnOnce(&TokioRuntimeHandle) -> T) -> T {
         let handle = runtime.handle().clone();
         let runtime_ended: Arc<NotifyFlag> = Arc::default();
         let end_runtime: Arc<NotifyFlag> = Arc::default();
-        let attached_threads: Arc<SegQueue<Arc<RuntimeDropGuardInner>>> = Arc::default();
+        let attached_guards: Arc<SegQueue<Arc<RuntimeDropGuardInner>>> = Arc::default();
         let tokio_runtime_handle = TokioRuntimeHandle {
             handle,
-            runtime_ended: runtime_ended.clone(),
+            // runtime_ended: runtime_ended.clone(),
             end_runtime: end_runtime.clone(),
-            attached_threads: attached_threads.clone(),
+            attached_guards: attached_guards.clone(),
+            index: RUNTIME_INDEX.fetch_add(1, Ordering::Acquire)
         };
         writer.replace(tokio_runtime_handle);
 
         std::thread::spawn(move || {
             runtime.block_on(async {
                 end_runtime.notified().await;
-                let mut attached_threads: Vec<RuntimeDropGuardInner> = Vec::with_capacity(attached_threads.len());
-                while let Some(guard) = attached_threads.pop() {
-                    attached_threads.push(guard);
+                let mut attached_guards: Vec<RuntimeDropGuardInner> = Vec::with_capacity(attached_guards.len());
+                while let Some(guard) = attached_guards.pop() {
+                    attached_guards.push(guard);
                 }
                 tokio::select! {
                     () = async {
-                        for drop_notify in &attached_threads {
+                        for drop_notify in &attached_guards {
                             drop_notify.notify.notified().await;
                         }
                     } => {}
                     () = tokio::time::sleep(config.thread_delayed_warning) => {
                         let mut backtraces = String::new();
-                        for drop_notify in &attached_threads {
+                        for drop_notify in &attached_guards {
                             backtraces.push_str(&format!("{:?}\n\n", drop_notify.backtrace));
                         }
                         log::warn!(
-                            "The following threads have not ended after {:.1} seconds\n\n{backtraces}",
+                            "The following guards have not dropped after {:.1} seconds\n\n{backtraces}",
                             config.thread_delayed_warning.as_secs_f32()
                         );
-                        for drop_notify in &attached_threads {
+                        for drop_notify in &attached_guards {
                             drop_notify.notify.notified().await;
                         }
                     }
@@ -141,18 +148,29 @@ fn with_tokio_runtime_handle<T>(f: impl FnOnce(&TokioRuntimeHandle) -> T) -> T {
 /// If one does not exist, a new tokio runtime will be created using `TokioRuntimeConfig`.
 /// See `set_tokio_runtime_config`.
 pub fn get_tokio_handle() -> Handle {
-    with_tokio_runtime_handle(|handle| handle.handle.clone())
+    with_tokio_runtime_handle(|handle| handle.handle.clone(), Default::default)
 }
 
-pub fn end_tokio_runtime() -> impl Future<Output = ()> {
-    let mut runtime_ended = None;
+pub fn end_tokio_runtime() {
     if let Some(handle) = TOKIO_RUNTIME_HANDLE.read().as_ref() {
         handle.end_runtime.notify();
-        runtime_ended = Some(handle.runtime_ended.clone());
     }
-    async move {
-        if let Some(runtime_ended) = runtime_ended {
-            runtime_ended.notified().await;
+}
+
+pub fn end_tokio_runtime_and_wait() {
+    let mut reader = TOKIO_RUNTIME_HANDLE.read();
+    if let Some(handle) = reader.as_ref() {
+        let index = handle.index;
+        handle.end_runtime.notify();
+
+        loop {
+            RwLockReadGuard::bump(&mut reader);
+            if let Some(handle) = reader.as_ref() {
+                if handle.index == index {
+                    continue;
+                }
+            }
+            break;
         }
     }
 }
@@ -171,9 +189,28 @@ pub fn is_tokio_runtime_ending() -> bool {
     }
 }
 
-pub async fn wait_for_tokio_runtime_end() {
-    if let Some(handle) = TOKIO_RUNTIME_HANDLE.read().as_ref() {
-        handle.runtime_ended.notified().await;
+// /// Asynchronously waits for the tokio runtime to end if it exists.
+// /// 
+// /// Blocking on this future using `BlockOn` is strongly discouraged as the runtime
+// /// used to poll this future will be the same runtime that is ending.
+// pub async fn await_for_tokio_runtime_end() {
+//     if let Some(handle) = TOKIO_RUNTIME_HANDLE.read().as_ref() {
+//         handle.runtime_ended.notified().await;
+//     }
+// }
+
+
+pub trait BlockOn: Future {
+    fn block_on(self) -> Self::Output;
+}
+
+
+impl<T> BlockOn for T
+where
+    T: Future,
+{
+    fn block_on(self) -> Self::Output {
+        get_tokio_handle().block_on(self)
     }
 }
 
@@ -217,6 +254,14 @@ struct RuntimeDropGuardInner {
 }
 
 
+/// A guard that prevents the Tokio Runtime from exiting.
+/// 
+/// For the guard to work, if must be instantiated *after* the runtime has been created.
+/// Creating the runtime after the guard will result in the guard not doing anything. You
+/// can enforce creation of the tokio runtime using `get_tokio_handle`.
+/// 
+/// Refer to 'attach_drop_guard' and 'detach_drop_guard' for a more convenient way to manage
+/// drop guards.
 pub struct RuntimeDropGuard(Arc<RuntimeDropGuardInner>);
 
 
@@ -224,7 +269,7 @@ impl Default for RuntimeDropGuard {
     fn default() -> Self {
         let inner = Arc::new(RuntimeDropGuardInner { backtrace: Backtrace::force_capture(), notify: Default::default() });
         if let Some(handle) = TOKIO_RUNTIME_HANDLE.read().as_ref() {
-            handle.attached_threads.push(inner.clone());
+            handle.attached_guards.push(inner.clone());
         }
         RuntimeDropGuard(inner)
     }
@@ -232,6 +277,7 @@ impl Default for RuntimeDropGuard {
 
 
 impl RuntimeDropGuard {
+    /// Returns `true` iff this guard will prevent the tokio runtime from exiting.
     pub fn is_attached(&self) -> bool {
         Arc::strong_count(&self.0) > 1
     }
@@ -250,11 +296,19 @@ thread_local! {
 }
 
 
+/// Creates a `RuntimeDropGuard` that is stored in thread local data, which eseentially
+/// prevents the tokio runtime from exiting until the current thread exits.
 pub fn attach_drop_guard() {
     DROP_NOTIFY.with_borrow_mut(|x| *x = Some(RuntimeDropGuard::default()));
 }
 
 
+/// Detaches the `RuntimeDropGuard` created by `attach_drop_guard` and returns it.
+/// 
+/// This is the recommended way to drop the guard instead of relying on the thread
+/// to drop it as there are several caveats related to a thread's ability to drop
+/// thread local data. If the thread fails to drop the guard, the runtime will never
+/// exit.
 pub fn detach_drop_guard() -> Option<RuntimeDropGuard> {
     DROP_NOTIFY.with_borrow_mut(Option::take)
 }

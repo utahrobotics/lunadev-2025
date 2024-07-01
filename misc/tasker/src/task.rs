@@ -62,6 +62,10 @@ impl Loggable for () {
     fn log(&self) {}
 }
 
+impl Loggable for ! {
+    fn log(&self) {}
+}
+
 impl<T: Loggable, E: std::error::Error> Loggable for Result<T, E> {
     fn log(&self) {
         match self {

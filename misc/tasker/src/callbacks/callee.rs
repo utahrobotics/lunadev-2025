@@ -11,6 +11,10 @@ enum Queue<T> {
 }
 
 impl<T> Queue<T> {
+    /// Pushes the given value onto the queue.
+    /// 
+    /// Returns the value if the queue is full. If the queue
+    /// is unbounded, this will never return an error.
     #[inline]
     fn push(&self, value: T) -> Result<(), T> {
         match self {
@@ -22,6 +26,10 @@ impl<T> Queue<T> {
         }
     }
 
+    /// Forcefully pushes the given value onto the queue, returning
+    /// the oldest value if the queue is full.
+    /// 
+    /// If the queue is unbounded, this will always return `None`.
     #[inline]
     fn force_push(&self, value: T) -> Option<T> {
         match self {
@@ -33,6 +41,7 @@ impl<T> Queue<T> {
         }
     }
 
+    /// Returns the oldest value in the queue.
     #[inline]
     fn pop(&self) -> Option<T> {
         match self {
@@ -41,6 +50,7 @@ impl<T> Queue<T> {
         }
     }
 }
+
 
 struct SubscriberInner<T> {
     queue: Queue<T>,
@@ -52,6 +62,7 @@ pub struct Subscriber<T> {
 }
 
 impl<T> Subscriber<T> {
+    /// Creates a new subscriber with the given maximum size.
     pub fn new(max_size: usize) -> Self {
         Self {
             inner: Arc::new(SubscriberInner {
@@ -60,6 +71,8 @@ impl<T> Subscriber<T> {
             }),
         }
     }
+
+    /// Creates a new subscriber that has no maximum size.
     pub fn new_unbounded() -> Self {
         Self {
             inner: Arc::new(SubscriberInner {
@@ -69,16 +82,20 @@ impl<T> Subscriber<T> {
         }
     }
 
+    /// Try to receive a value, returning `None` if no values are available.
     #[inline]
     pub fn try_recv(&self) -> Option<T> {
         self.inner.queue.pop()
     }
 
+    /// Returns `true` if all callbacks that were made were dropped.
     #[inline]
     pub fn is_closed(&self) -> bool {
         Arc::weak_count(&self.inner) == 0
     }
 
+    /// Receives a value, blocking until a value is available, or 
+    /// returning `None` if the subscriber is closed.
     pub async fn recv(&self) -> Option<T> {
         loop {
             if let Some(value) = self.inner.queue.pop() {
@@ -93,6 +110,8 @@ impl<T> Subscriber<T> {
         }
     }
 
+    /// Receives a value, blocking until a value is available, or
+    /// blocking forever if the subscriber is closed.
     pub async fn recv_or_never(&self) -> T {
         if let Some(value) = self.recv().await {
             value
@@ -101,6 +120,9 @@ impl<T> Subscriber<T> {
         }
     }
 
+    /// Creates a callback that will add given values to this `Subscriber`.
+    /// 
+    /// If the `Subscriber` is full, the given value is dropped immediately.
     pub fn create_conservative_callback(&self) -> impl Fn(T) + Send + Sync
     where
         T: Send,
@@ -117,6 +139,9 @@ impl<T> Subscriber<T> {
         }
     }
 
+    /// Creates a callback that will add given values to this `Subscriber`.
+    /// 
+    /// If the `Subscriber` is full, the oldest value in the `Subscriber` is dropped.
     pub fn create_callback(&self) -> impl Fn(T) + Send + Sync
     where
         T: Send,
