@@ -53,6 +53,6 @@ impl CabinetBuilder {
 #[macro_export]
 macro_rules! default_cabinet_builder {
     () => {
-        CabinetBuilder::new_with_crate_name("dump", env!("CARGO_PKG_NAME"))
+        CabinetBuilder::new_with_crate_name("cabinet", env!("CARGO_PKG_NAME"))
     };
 }
