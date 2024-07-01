@@ -2,6 +2,7 @@
 name = "urobotics-tool"
 version = "0.1.0"
 edition = "2021"
+description = "Tool for urobotics"
 
 [dependencies]
 urobotics = { workspace = true, features = ["serial", "app", "python", "camera"] }

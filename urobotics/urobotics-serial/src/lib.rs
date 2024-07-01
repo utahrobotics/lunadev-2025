@@ -12,18 +12,15 @@ use bytes::BytesMut;
 use crossbeam::utils::Backoff;
 use serde::Deserialize;
 use tokio_serial::{SerialPort, SerialPortBuilderExt, SerialStream};
-use urobotics_app::FunctionApplication;
+use urobotics_app::Application;
 use urobotics_core::{
-    define_shared_callbacks,
-    function::AsyncFunctionConfig,
-    runtime::RuntimeContext,
-    tokio::{
+    define_callbacks, task::AsyncTask, tokio::{
         self,
         io::{AsyncReadExt, WriteHalf},
-    },
+    }, BlockOn
 };
 
-define_shared_callbacks!(BytesCallbacks => FnMut(bytes: &[u8]) + Send + Sync);
+define_callbacks!(BytesCallbacks => Fn(bytes: &[u8]) + Send + Sync);
 
 /// A single duplex connection to a serial port
 #[derive(Deserialize)]
@@ -114,10 +111,10 @@ impl PendingWriter {
     }
 }
 
-impl AsyncFunctionConfig for SerialConnection {
+impl AsyncTask for SerialConnection {
     type Output = std::io::Result<!>;
 
-    async fn run(self, _context: &RuntimeContext) -> Self::Output {
+    async fn run(mut self) -> Self::Output {
         #[allow(unused_mut)]
         let mut stream = tokio_serial::new(self.path, self.baud_rate).open_native_async()?;
         #[cfg(unix)]
@@ -135,17 +132,14 @@ impl AsyncFunctionConfig for SerialConnection {
             buf.clear();
         }
     }
-
-    const NAME: &'static str = "serial";
-    const PERSISTENT: bool = false;
 }
 
-impl FunctionApplication for SerialConnection {
-    const APP_NAME: &'static str = <Self as AsyncFunctionConfig>::NAME;
+impl Application for SerialConnection {
+    const APP_NAME: &'static str = "serial";
     const DESCRIPTION: &'static str = "Connects to a serial port and reads data from it";
 
-    fn spawn(self, context: RuntimeContext) {
-        context.clone().spawn_persistent_async(async move {
+    fn run(self) {
+        let fut = async move {
             macro_rules! expect {
                 ($e:expr) => {
                     match $e {
@@ -180,6 +174,7 @@ impl FunctionApplication for SerialConnection {
                     buf.clear();
                 }
             }
-        });
+        };
+        fut.block_on();
     }
 }

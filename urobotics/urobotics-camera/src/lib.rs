@@ -21,19 +21,18 @@ use nokhwa::{
 use serde::Deserialize;
 use unfmt::unformat;
 use urobotics_core::{
-    define_shared_callbacks,
-    function::SyncFunctionConfig,
-    runtime::RuntimeContext,
-    service::ServiceExt,
-    tokio::{
+    define_callbacks, fn_alias, service::ServiceExt, task::BlockingAsyncTask, tokio::{
         self,
         sync::{Mutex, OnceCell},
-    },
+    }
 };
 use urobotics_py::{PyRepl, PythonValue, PythonVenvBuilder};
 use urobotics_video::VideoDataDump;
 
-define_shared_callbacks!(ImageCallbacks => FnMut(image: &Arc<DynamicImage>) + Send + Sync);
+fn_alias! {
+    pub type ImageCallbacksRef = CallbacksRef(&Arc<DynamicImage>) + Send + Sync
+}
+define_callbacks!(ImageCallbacks => Fn(image: &Arc<DynamicImage>) + Send + Sync);
 
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum CameraIdentifier {
@@ -98,57 +97,46 @@ impl CameraConnection {
     /// Gets a reference to the `Signal` that represents received images.
     pub fn image_received_ref(
         &self,
-    ) -> SharedCallbacksRef<dyn FnMut(&Arc<DynamicImage>) + Send + Sync> {
+    ) -> ImageCallbacksRef {
         self.image_received.get_ref()
     }
 }
 
-impl SyncFunctionConfig for CameraConnection {
+impl BlockingAsyncTask for CameraConnection {
     type Output = Result<(), nokhwa::NokhwaError>;
 
-    const PERSISTENT: bool = true;
-
-    const NAME: &'static str = "camera";
-
-    fn run(mut self, context: &RuntimeContext) -> Self::Output {
-        let result = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(async move {
-                let repl = PY_REPL
-                    .get_or_init(|| async {
-                        self.py_venv_builder
-                            .packages_to_install
-                            .push("cv2_enumerate_cameras".to_string());
-                        let mut repl = self
-                            .py_venv_builder
-                            .build()
-                            .await
-                            .expect("Failed to build Python venv")
-                            .repl()
-                            .await
-                            .expect("Failed to start Python REPL");
-                        repl.call("from cv2_enumerate_cameras import enumerate_cameras")
-                            .await
-                            .expect("Failed to import cv2_enumerate_cameras");
-                        Mutex::new(repl)
-                    })
-                    .await;
-
-                let result = repl
-                    .lock()
+    async fn run(mut self) -> Self::Output {
+        let repl = PY_REPL
+            .get_or_init(|| async {
+                self.py_venv_builder
+                    .packages_to_install
+                    .push("cv2_enumerate_cameras".to_string());
+                let mut repl = self
+                    .py_venv_builder
+                    .build()
                     .await
-                    .call(CODE)
+                    .expect("Failed to build Python venv")
+                    .repl()
                     .await
-                    .expect("Failed to enumerate cameras");
-                let result = match result {
-                    PythonValue::String(s) => s,
-                    PythonValue::None => String::new(),
-                    _ => panic!("Unexpected result while enumerating cameras: {result:?}"),
-                };
-                result
-            });
+                    .expect("Failed to start Python REPL");
+                repl.call("from cv2_enumerate_cameras import enumerate_cameras")
+                    .await
+                    .expect("Failed to import cv2_enumerate_cameras");
+                Mutex::new(repl)
+            })
+            .await;
+
+        let result = repl
+            .lock()
+            .await
+            .call(CODE)
+            .await
+            .expect("Failed to enumerate cameras");
+        let result = match result {
+            PythonValue::String(s) => s,
+            PythonValue::None => String::new(),
+            _ => panic!("Unexpected result while enumerating cameras: {result:?}"),
+        };
 
         let lines = result.lines();
 
@@ -217,9 +205,9 @@ impl SyncFunctionConfig for CameraConnection {
         camera.open_stream()?;
         loop {
             let frame = camera.frame()?;
-            if context.is_runtime_exiting() {
-                break Ok(());
-            }
+            // if context.is_runtime_exiting() {
+            //     break Ok(());
+            // }
             let decoded = frame.decode_image::<RgbFormat>().unwrap();
             let img = DynamicImage::ImageRgb8(
                 ImageBuffer::from_raw(decoded.width(), decoded.height(), decoded.into_raw())
@@ -232,14 +220,13 @@ impl SyncFunctionConfig for CameraConnection {
 }
 
 #[cfg(feature = "standalone")]
-impl urobotics_app::FunctionApplication for CameraConnection {
+impl urobotics_app::Application for CameraConnection {
     const DESCRIPTION: &'static str = "Displays a camera feed";
-    const APP_NAME: &'static str = <Self as SyncFunctionConfig>::NAME;
+    const APP_NAME: &'static str = "camera";
 
-    fn spawn(self, context: RuntimeContext) {
+    fn run(self) {
         use urobotics_core::log::error;
-        context.clone().spawn_persistent_sync(move || {
-            tokio::runtime::Builder::new_current_thread()
+        tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .unwrap()
@@ -319,9 +306,9 @@ impl urobotics_app::FunctionApplication for CameraConnection {
                 camera.open_stream().expect("Failed to open camera stream");
                 loop {
                     let frame = camera.frame().expect("Failed to get frame");
-                    if context.is_runtime_exiting() {
-                        break;
-                    }
+                    // if context.is_runtime_exiting() {
+                    //     break;
+                    // }
                     let decoded = frame.decode_image::<RgbFormat>().unwrap();
                     let img = DynamicImage::ImageRgb8(ImageBuffer::from_raw(
                         decoded.width(),
@@ -332,7 +319,6 @@ impl urobotics_app::FunctionApplication for CameraConnection {
                     dump.write_frame(&img).await.expect("Failed to write frame to video data dump");
                 }
             });
-        });
     }
 }
 

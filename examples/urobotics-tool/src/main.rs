@@ -1,13 +1,9 @@
-use urobotics::{app::command, camera, python, runtime::RuntimeBuilder, serial};
+use urobotics::{app::application, camera, python, serial};
 
 fn main() {
-    RuntimeBuilder::default().start(|context| async move {
-        command!()
-            .add_function::<serial::SerialConnection>()
-            .add_function::<python::PythonVenvBuilder>()
-            .add_function::<camera::CameraConnection>()
-            .get_matches(context.clone())
-            .await;
-        context.wait_for_exit().await;
-    });
+    application!()
+        .add_app::<serial::SerialConnection>()
+        .add_app::<python::PythonVenvBuilder>()
+        .add_app::<camera::CameraConnection>()
+        .run();
 }

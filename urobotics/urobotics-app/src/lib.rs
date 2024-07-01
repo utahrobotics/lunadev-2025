@@ -1,138 +1,142 @@
-use std::path::Path;
+use std::path::PathBuf;
 
-pub use clap;
-use clap::{arg, Arg, ArgMatches};
 use fxhash::FxHashMap;
 use serde::de::DeserializeOwned;
-use std::str::FromStr;
-use urobotics_core::runtime::RuntimeContext;
+use unfmt::unformat;
+use urobotics_core::{cabinet::CabinetBuilder, end_tokio_runtime_and_wait, log::{log_panics, log_to_console, log_to_file, metrics::{CpuUsage, Temperature}}, task::AsyncTask};
 
-pub trait FunctionApplication: DeserializeOwned {
+pub trait Application: DeserializeOwned {
     const APP_NAME: &'static str;
     const DESCRIPTION: &'static str;
 
-    fn spawn(self, context: RuntimeContext);
+    fn run(self);
 }
+
+
+struct BoxedApp {
+    description: &'static str,
+    func: Box<dyn FnOnce(String)>,
+}
+
+
+pub struct Applications {
+    pub name: &'static str,
+    pub description: &'static str,
+    pub config_path: PathBuf,
+    pub log_path: PathBuf,
+    pub cabinet_root_path: PathBuf,
+    pub cpu_usage: Option<CpuUsage>,
+    pub temperature: Option<Temperature>,
+    functions: FxHashMap<&'static str, BoxedApp>,
+}
+
+
+impl Default for Applications {
+    fn default() -> Self {
+        Self {
+            name: "unnamed",
+            description: "Lorem ipsum",
+            config_path: PathBuf::from("app_config.toml"),
+            log_path: PathBuf::from(".log"),
+            cabinet_root_path: PathBuf::from("cabinet"),
+            functions: FxHashMap::default(),
+            cpu_usage: Some(CpuUsage { cpu_usage_warning_threshold: 80.0 }),
+            temperature: Some(Temperature {
+                temperature_warning_threshold: 80.0,
+                ignore_component_temperature: Default::default(),
+            })
+        }
+    }
+}
+
 
 #[macro_export]
-macro_rules! command {
-    () => {
-        $crate::Command::from($crate::clap::command!())
-    };
+macro_rules! application {
+    () => {{
+        let mut app = $crate::Applications::default();
+        app.name = env!("CARGO_PKG_NAME");
+        app.description = env!("CARGO_PKG_DESCRIPTION");
+        app
+    }}
 }
 
-pub struct Command {
-    pub command: clap::Command,
-    functions: FxHashMap<String, Box<dyn FnOnce(toml::Table, RuntimeContext) + Send>>,
-}
 
-macro_rules! panic {
-    ($($arg:tt)*) => {
-        {
-            eprintln!($($arg)*);
-            std::process::exit(1);
-        }
-    };
-}
-
-impl From<clap::Command> for Command {
-    fn from(mut command: clap::Command) -> Self {
-        command = command
-            .arg(arg!([config] "optional path to a config file"))
-            .subcommand_required(true);
-        Self {
-            command,
-            functions: FxHashMap::default(),
-        }
-    }
-}
-
-impl Command {
-    pub fn subcommand_required(mut self, yes: bool) -> Self {
-        self.command = self.command.subcommand_required(yes);
-        self
-    }
-    pub async fn get_matches(mut self, context: RuntimeContext) -> ArgMatches {
-        let matches = self.command.get_matches();
-        let config_path: Option<&String> = matches.get_one("config");
-        let mut config_path = config_path.map(String::as_str);
-        if config_path.is_none() && Path::new("roboconfig.toml").exists() {
-            config_path = Some("roboconfig.toml");
-        }
-
-        let mut table = if let Some(config_path) = config_path {
-            let text = match tokio::fs::read_to_string(config_path).await {
-                Ok(x) => x,
-                Err(e) => {
-                    panic!("Failed to read config file: {}", e);
-                }
-            };
-            let config_values: toml::Value = toml::from_str(&text).unwrap();
-            let toml::Value::Table(table) = config_values else {
-                panic!("Config file is not a table")
-            };
-            table
-        } else {
-            toml::Table::new()
+impl Applications {
+    pub fn run(&mut self) {
+        let mut args = std::env::args();
+        let _exe = args.next().expect("No executable name");
+        let Some(cmd) = args.next() else {
+            eprintln!("No command given");
+            return;
         };
-
-        let Some((sub_cmd, sub_matches)) = matches.subcommand() else {
-            return matches;
-        };
-
-        let sub_cmd_table = table
-            .remove(sub_cmd)
-            .unwrap_or(toml::Value::Table(toml::Table::new()));
-        let toml::Value::Table(mut table) = sub_cmd_table else {
-            panic!(
-                "Subcommand config in {} is not a table",
-                config_path.unwrap()
-            )
-        };
-
-        if let Some(params) = sub_matches.get_many::<String>("parameters") {
-            for param in params {
-                let Some(index) = param.find('=') else {
-                    panic!("{param} is not a key value association")
-                };
-                let (key, mut value_str) = param.split_at(index);
-                value_str = value_str.split_at(1).1;
-                if let Ok(value) = bool::from_str(value_str) {
-                    table.insert(key.into(), toml::Value::Boolean(value));
-                } else if let Ok(number) = i64::from_str(value_str) {
-                    table.insert(key.into(), toml::Value::Integer(number));
-                } else if let Ok(number) = f64::from_str(value_str) {
-                    table.insert(key.into(), toml::Value::Float(number));
-                } else {
-                    table.insert(key.into(), value_str.into());
-                }
+        if cmd == "help" {
+            println!("{}\t-\t{}", self.name, self.description);
+            for (name, app) in self.functions.iter() {
+                eprintln!("{}\t-\t{}", name, app.description);
             }
+            return;
+        }
+        let Some(app) = self.functions.remove(cmd.as_str()) else {
+            eprintln!("Unknown command. Use one of the following:");
+            for (name, app) in self.functions.iter() {
+                eprintln!("{}\t-\t{}", name, app.description);
+            }
+            return;
+        };
+        CabinetBuilder::new_with_crate_name(&self.cabinet_root_path, self.name)
+            .add_file_to_copy(&self.config_path)
+            .build()
+            .expect("Failed to create cabinet");
+        log_panics();
+        log_to_file(&self.log_path).expect("Failed to open log file");
+        log_to_console();
+
+        if let Some(cpu_usage) = self.cpu_usage.clone() {
+            cpu_usage.spawn();
+        }
+        if let Some(temperature) = self.temperature.clone() {
+            temperature.spawn();
         }
 
-        if let Some(func) = self.functions.remove(sub_cmd) {
-            func(table, context);
+        let config_raw = std::fs::read_to_string(&self.config_path).expect("Failed to read config file");
+        let mut config_parsed = String::new();
+        let mut copying = false;
+
+        for mut line in config_raw.lines() {
+            line = line.trim();
+            if line.starts_with('#') {
+                config_parsed.push_str(line);
+                config_parsed.push_str("\n");
+                continue;
+            }
+            if let Some(app_name) = unformat!("[{}]", line) {
+                copying = app_name == &cmd;
+            } else if copying {
+                config_parsed.push_str(line);
+            }
+            config_parsed.push_str("\n");
         }
 
-        matches
+        (app.func)(config_parsed);
     }
 
-    pub fn add_function<F: FunctionApplication>(mut self) -> Self {
-        self.command = self.command.subcommand(
-            clap::Command::new(F::APP_NAME)
-                .arg(Arg::new("parameters").num_args(..))
-                .about(F::DESCRIPTION),
-        );
+    pub fn add_app<T: Application>(&mut self) -> &mut Self {
         self.functions.insert(
-            F::APP_NAME.into(),
-            Box::new(move |table, context| {
-                let config: F = match toml::Value::Table(table).try_into() {
-                    Ok(x) => x,
-                    Err(e) => {
-                        panic!("Failed to parse config: {}", e);
+            T::APP_NAME,
+            BoxedApp {
+                description: T::DESCRIPTION,
+                func: Box::new(move |config: String| {
+                    match toml::from_str::<T>(&config) {
+                        Ok(config) => {
+                            config.run();
+                            end_tokio_runtime_and_wait();
+                        }
+                        Err(e) => {
+                            eprintln!("{e}");
+                        }
                     }
-                };
-                config.spawn(context);
-            }),
+                }),
+            },
         );
         self
     }

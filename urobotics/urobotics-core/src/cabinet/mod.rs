@@ -34,6 +34,11 @@ impl CabinetBuilder {
         Self::new(path)
     }
 
+    pub fn add_file_to_copy(&mut self, file: impl Into<PathBuf>) -> &mut Self {
+        self.files_to_copy.push(file.into());
+        self
+    }
+
     pub fn build(&self) -> std::io::Result<()> {
         std::fs::create_dir_all(&self.path)?;
         for file in &self.files_to_copy {

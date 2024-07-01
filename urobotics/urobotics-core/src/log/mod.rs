@@ -160,6 +160,7 @@ pub fn log_to_file(path: impl AsRef<Path>) -> std::io::Result<LogFilter> {
     let file = File::create(path)?;
     let file = Mutex::new(file);
     let filter = LogFilter::new();
+    filter.set(LevelFilter::Debug);
     let filter2 = filter.clone();
 
     get_log_callbacks().add_dyn_fn(Box::new(move |record| {

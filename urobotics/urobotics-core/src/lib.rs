@@ -5,6 +5,7 @@
 
 pub mod log;
 pub mod cabinet;
+pub mod service;
 
 pub use tokio;
 pub use tasker::*;

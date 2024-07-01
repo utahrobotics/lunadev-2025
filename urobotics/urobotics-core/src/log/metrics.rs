@@ -5,6 +5,7 @@ use fxhash::FxHashSet;
 use sysinfo::{Components, Pid};
 use tasker::task::AsyncTask;
 
+#[derive(Clone)]
 pub struct Temperature {
     pub temperature_warning_threshold: f32,
     pub ignore_component_temperature: FxHashSet<String>,
@@ -58,6 +59,7 @@ impl AsyncTask for Temperature {
     
 }
 
+#[derive(Clone, Copy)]
 pub struct CpuUsage {
     pub cpu_usage_warning_threshold: f32,
 }

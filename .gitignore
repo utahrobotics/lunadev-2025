@@ -8,12 +8,12 @@ publishing/
 
 *.zst
 *.pyc
-dump/
+cabinet/
 
 tree.txt
 
 *-gitignore
-roboconfig.toml
+app_config.toml
 rtp.sdp
 
 *-venv

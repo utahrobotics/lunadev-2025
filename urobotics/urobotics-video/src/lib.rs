@@ -23,7 +23,7 @@ use image::{DynamicImage, EncodableLayout};
 use log::{error, info, warn};
 use minifb::{Window, WindowOptions};
 use tokio::{io::AsyncWriteExt, process::ChildStdin};
-use urobotics_core::runtime::RuntimeContext;
+use urobotics_core::RuntimeDropGuard;
 
 /// An error faced while writing video frames.
 #[derive(Debug)]
@@ -217,7 +217,6 @@ impl VideoDataDump {
         in_height: u32,
         dump_type: VideoDataDumpType,
         mut output: FfmpegChild,
-        context: &RuntimeContext,
     ) -> Result<Self, VideoDumpInitError> {
         let events = output
             .iter()
@@ -225,7 +224,8 @@ impl VideoDataDump {
 
         let dump_type2 = dump_type.clone();
 
-        context.spawn_persistent_sync(move || {
+        std::thread::spawn(move || {
+            let _drop = RuntimeDropGuard::default();
             events.for_each(|event| {
                 if let FfmpegEvent::Log(level, msg) = event {
                     match level {
@@ -337,14 +337,9 @@ impl<P> VideoFileBuilder<P> {
 }
 
 impl<P: AsRef<Path>> VideoFileBuilder<P> {
-    pub fn build(&self, context: &RuntimeContext) -> Result<VideoDataDump, VideoDumpInitError> {
+    pub fn build(&self) -> Result<VideoDataDump, VideoDumpInitError> {
         ffmpeg_sidecar::download::auto_download()
             .map_err(|e| VideoDumpInitError::FFMPEGInstallError(e.to_string()))?;
-        let pathbuf: PathBuf = if self.path.as_ref().is_absolute() {
-            self.path.as_ref().into()
-        } else {
-            PathBuf::from(context.get_dump_path()).join(self.path.as_ref())
-        };
 
         let output = FfmpegCommand::new()
             .hwaccel("auto")
@@ -362,16 +357,15 @@ impl<P: AsRef<Path>> VideoFileBuilder<P> {
                 &self.scale_filter.to_string(),
             ])
             .codec_video(&self.codec)
-            .args(["-y".as_ref(), pathbuf.as_os_str()])
+            .args(["-y".as_ref(), self.path.as_ref().as_os_str()])
             .spawn()
             .map_err(VideoDumpInitError::IOError)?;
 
         VideoDataDump::new(
             self.in_width,
             self.in_height,
-            VideoDataDumpType::File(pathbuf),
+            VideoDataDumpType::File(self.path.as_ref().into()),
             output,
-            context,
         )
     }
 }
@@ -495,7 +489,6 @@ impl RtpVideoBuilder {
 impl RtpVideoBuilder {
     pub async fn build(
         &self,
-        context: &RuntimeContext,
     ) -> Result<(VideoDataDump, String), VideoDumpInitError> {
         ffmpeg_sidecar::download::auto_download()
             .map_err(|e| VideoDumpInitError::FFMPEGInstallError(e.to_string()))?;
@@ -566,7 +559,6 @@ impl RtpVideoBuilder {
             self.in_height,
             VideoDataDumpType::Rtp(self.addr),
             output,
-            context,
         )
         .map(|dump| (dump, sdp))
     }

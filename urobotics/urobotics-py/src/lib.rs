@@ -7,14 +7,13 @@ use std::{
 
 use bytes::BytesMut;
 use serde::Deserialize;
-use urobotics_app::FunctionApplication;
+use urobotics_app::Application;
 use urobotics_core::{
-    runtime::RuntimeContext,
     service::{Service, ServiceExt},
     tokio::{
         self,
         io::{AsyncReadExt, AsyncWriteExt},
-    },
+    }, BlockOn,
 };
 
 #[derive(Deserialize)]
@@ -198,42 +197,32 @@ impl Service for PyRepl {
     }
 }
 
-impl FunctionApplication for PythonVenvBuilder {
+impl Application for PythonVenvBuilder {
     const APP_NAME: &'static str = "python";
     const DESCRIPTION: &'static str = "Python virtual environment REPL";
 
-    fn spawn(self, context: RuntimeContext) {
-        context.clone().spawn_async(async move {
-            let _context = context;
-            let venv = self.build().await.expect("Failed to build Python venv");
-            let mut repl = venv.repl().await.expect("Failed to start Python REPL");
+    fn run(self) {
+        let venv = self.build().block_on().expect("Failed to build Python venv");
+        let mut repl = venv.repl().block_on().expect("Failed to start Python REPL");
 
-            let handle = std::thread::spawn(move || {
-                tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .unwrap()
-                    .block_on(async {
-                        let mut input = String::new();
-                        loop {
-                            print!(">>> ");
-                            std::io::stdout().flush().unwrap();
-                            std::io::stdin()
-                                .read_line(&mut input)
-                                .expect("Failed to read line");
-                            let result = repl.call(&input).await;
-                            input.clear();
-                            println!("{}", result.unwrap());
-                        }
-                    })
-            });
-
-            loop {
-                if handle.is_finished() {
-                    break;
-                }
-                tokio::task::yield_now().await;
-            }
-        });
+        let _ = std::thread::spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    let mut input = String::new();
+                    loop {
+                        print!(">>> ");
+                        std::io::stdout().flush().unwrap();
+                        std::io::stdin()
+                            .read_line(&mut input)
+                            .expect("Failed to read line");
+                        let result = repl.call(&input).await;
+                        input.clear();
+                        println!("{}", result.unwrap());
+                    }
+                })
+        }).join();
     }
 }
