@@ -12,7 +12,7 @@ enum Queue<T> {
 
 impl<T> Queue<T> {
     /// Pushes the given value onto the queue.
-    /// 
+    ///
     /// Returns the value if the queue is full. If the queue
     /// is unbounded, this will never return an error.
     #[inline]
@@ -28,7 +28,7 @@ impl<T> Queue<T> {
 
     /// Forcefully pushes the given value onto the queue, returning
     /// the oldest value if the queue is full.
-    /// 
+    ///
     /// If the queue is unbounded, this will always return `None`.
     #[inline]
     fn force_push(&self, value: T) -> Option<T> {
@@ -50,7 +50,6 @@ impl<T> Queue<T> {
         }
     }
 }
-
 
 struct SubscriberInner<T> {
     queue: Queue<T>,
@@ -94,7 +93,7 @@ impl<T> Subscriber<T> {
         Arc::weak_count(&self.inner) == 0
     }
 
-    /// Receives a value, blocking until a value is available, or 
+    /// Receives a value, blocking until a value is available, or
     /// returning `None` if the subscriber is closed.
     pub async fn recv(&self) -> Option<T> {
         loop {
@@ -121,7 +120,7 @@ impl<T> Subscriber<T> {
     }
 
     /// Creates a callback that will add given values to this `Subscriber`.
-    /// 
+    ///
     /// If the `Subscriber` is full, the given value is dropped immediately.
     pub fn create_conservative_callback(&self) -> impl Fn(T) + Send + Sync
     where
@@ -140,7 +139,7 @@ impl<T> Subscriber<T> {
     }
 
     /// Creates a callback that will add given values to this `Subscriber`.
-    /// 
+    ///
     /// If the `Subscriber` is full, the oldest value in the `Subscriber` is dropped.
     pub fn create_callback(&self) -> impl Fn(T) + Send + Sync
     where

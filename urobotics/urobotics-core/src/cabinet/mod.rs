@@ -7,7 +7,6 @@ pub struct CabinetBuilder {
     pub files_to_copy: Vec<PathBuf>,
 }
 
-
 impl CabinetBuilder {
     pub fn new(path: impl Into<PathBuf>) -> Self {
         Self {
@@ -30,7 +29,7 @@ impl CabinetBuilder {
             datetime.second(),
         );
         path.push(log_folder_name);
-        
+
         Self::new(path)
     }
 
@@ -50,7 +49,6 @@ impl CabinetBuilder {
         std::env::set_current_dir(&self.path)
     }
 }
-
 
 #[macro_export]
 macro_rules! default_cabinet_builder {

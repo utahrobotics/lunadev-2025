@@ -5,19 +5,23 @@
 //! the goal of Unros, and this module provides that.
 
 use std::{
-    fs::File, panic::PanicHookInfo, path::Path, sync::{Arc, LazyLock, OnceLock}, time::{Duration, Instant}
+    fs::File,
+    panic::PanicHookInfo,
+    path::Path,
+    sync::{Arc, LazyLock, OnceLock},
+    time::{Duration, Instant},
 };
 
 use color_eyre::owo_colors::OwoColorize;
 use crossbeam::atomic::AtomicCell;
 use log::set_logger;
-pub use log::{Level, LevelFilter, Record, warn, info, debug, error, trace, Log};
+pub use log::{debug, error, info, trace, warn, Level, LevelFilter, Log, Record};
 use parking_lot::Mutex;
 
 use crate::{define_callbacks, fn_alias};
 
-pub mod rate;
 pub mod metrics;
+pub mod rate;
 
 pub static START_TIME: OnceLock<Instant> = OnceLock::new();
 
@@ -47,11 +51,11 @@ static PANIC_CALLBACKS: LazyLock<PanicCallbacksRef> = LazyLock::new(|| {
             // the thread pool from aborting the entire process
         })
         .build_global();
-    
+
     let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default().into_hooks();
     let panic_hook = panic_hook.into_panic_hook();
     eyre_hook.install().expect("Failed to install eyre hook");
-    
+
     let panic_pub = PanicCallbacks::default();
     let panic_pub_ref = panic_pub.get_ref();
     std::panic::set_hook(Box::new(move |panic_info| {
@@ -61,15 +65,13 @@ static PANIC_CALLBACKS: LazyLock<PanicCallbacksRef> = LazyLock::new(|| {
     panic_pub_ref
 });
 
-
 #[inline(always)]
 pub fn get_log_callbacks() -> &'static LogCallbacksRef {
     &LOG_CALLBACKS
 }
 
-
 /// Appends the given logger to the list of loggers.
-/// 
+///
 /// The given logger will *never* be flushed, and it is
 /// not guaranteed to be dropped.
 #[inline(always)]
@@ -77,12 +79,10 @@ pub fn add_logger(logger: impl log::Log + 'static) {
     LOG_CALLBACKS.add_dyn_fn(Box::new(move |record| logger.log(record)));
 }
 
-
 #[inline(always)]
 pub fn get_panic_hook_callbacks() -> &'static PanicCallbacksRef {
     &PANIC_CALLBACKS
 }
-
 
 pub fn init_panic_hook() {
     LazyLock::force(&PANIC_CALLBACKS);
@@ -135,10 +135,8 @@ pub fn log_panics() {
     }));
 }
 
-
 #[derive(Clone)]
 pub struct LogFilter(Arc<AtomicCell<LevelFilter>>);
-
 
 impl LogFilter {
     fn new() -> Self {
@@ -153,7 +151,6 @@ impl LogFilter {
         self.0.load()
     }
 }
-
 
 pub fn log_to_file(path: impl AsRef<Path>) -> std::io::Result<LogFilter> {
     use std::io::Write;
@@ -176,12 +173,12 @@ pub fn log_to_file(path: impl AsRef<Path>) -> std::io::Result<LogFilter> {
             record.level(),
             record.target(),
             record.args()
-        ).expect("Failed to write to log file");
+        )
+        .expect("Failed to write to log file");
     }));
 
     Ok(filter2)
 }
-
 
 pub fn log_to_console() -> LogFilter {
     let filter = LogFilter::new();
@@ -211,13 +208,7 @@ pub fn log_to_console() -> LogFilter {
                 record.target(),
                 msg.yellow()
             ),
-            _ => println!(
-                "[{:0>2}:{:.2} {}] {}",
-                mins,
-                secs,
-                record.target(),
-                msg
-            )
+            _ => println!("[{:0>2}:{:.2} {}] {}", mins, secs, record.target(), msg),
         }
     }));
 

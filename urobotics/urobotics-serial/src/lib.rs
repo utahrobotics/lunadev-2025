@@ -14,10 +14,13 @@ use serde::Deserialize;
 use tokio_serial::{SerialPort, SerialPortBuilderExt, SerialStream};
 use urobotics_app::Application;
 use urobotics_core::{
-    define_callbacks, task::AsyncTask, tokio::{
+    define_callbacks,
+    task::AsyncTask,
+    tokio::{
         self,
         io::{AsyncReadExt, WriteHalf},
-    }, BlockOn
+    },
+    BlockOn,
 };
 
 define_callbacks!(BytesCallbacks => Fn(bytes: &[u8]) + Send + Sync);

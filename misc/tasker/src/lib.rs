@@ -5,17 +5,23 @@
 // #![feature(const_option)]
 
 use std::{
-    backtrace::Backtrace, cell::RefCell, future::Future, num::NonZeroUsize, ops::Deref, sync::{
+    backtrace::Backtrace,
+    cell::RefCell,
+    future::Future,
+    num::NonZeroUsize,
+    ops::Deref,
+    sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
-    }, time::Duration
+    },
+    time::Duration,
 };
 
 use crossbeam::queue::SegQueue;
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use tokio::{runtime::Handle, sync::Notify};
-pub use tokio;
 pub use parking_lot;
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+pub use tokio;
+use tokio::{runtime::Handle, sync::Notify};
 
 pub mod callbacks;
 pub mod task;
@@ -37,27 +43,27 @@ impl Default for TokioRuntimeConfig {
     }
 }
 
-
 impl TokioRuntimeConfig {
     pub fn build(self) {
         with_tokio_runtime_handle(|_| {}, || self);
     }
 }
 
-
 struct TokioRuntimeHandle {
     handle: Handle,
     // runtime_ended: Arc<NotifyFlag>,
     end_runtime: Arc<NotifyFlag>,
     attached_guards: Arc<SegQueue<Arc<RuntimeDropGuardInner>>>,
-    index: usize
+    index: usize,
 }
 
 static RUNTIME_INDEX: AtomicUsize = AtomicUsize::new(0);
 static TOKIO_RUNTIME_HANDLE: RwLock<Option<TokioRuntimeHandle>> = RwLock::new(None);
 
-
-fn with_tokio_runtime_handle<T>(f: impl FnOnce(&TokioRuntimeHandle) -> T, config: impl FnOnce() -> TokioRuntimeConfig) -> T {
+fn with_tokio_runtime_handle<T>(
+    f: impl FnOnce(&TokioRuntimeHandle) -> T,
+    config: impl FnOnce() -> TokioRuntimeConfig,
+) -> T {
     {
         let reader = TOKIO_RUNTIME_HANDLE.read();
         if let Some(handle) = reader.as_ref() {
@@ -89,7 +95,7 @@ fn with_tokio_runtime_handle<T>(f: impl FnOnce(&TokioRuntimeHandle) -> T, config
             // runtime_ended: runtime_ended.clone(),
             end_runtime: end_runtime.clone(),
             attached_guards: attached_guards.clone(),
-            index: RUNTIME_INDEX.fetch_add(1, Ordering::Acquire)
+            index: RUNTIME_INDEX.fetch_add(1, Ordering::Acquire),
         };
         writer.replace(tokio_runtime_handle);
 
@@ -144,7 +150,7 @@ fn with_tokio_runtime_handle<T>(f: impl FnOnce(&TokioRuntimeHandle) -> T, config
 }
 
 /// Gets a `Handle` to the active tokio runtime.
-/// 
+///
 /// If one does not exist, a new tokio runtime will be created using `TokioRuntimeConfig`.
 /// See `set_tokio_runtime_config`.
 pub fn get_tokio_handle() -> Handle {
@@ -190,7 +196,7 @@ pub fn is_tokio_runtime_ending() -> bool {
 }
 
 // /// Asynchronously waits for the tokio runtime to end if it exists.
-// /// 
+// ///
 // /// Blocking on this future using `BlockOn` is strongly discouraged as the runtime
 // /// used to poll this future will be the same runtime that is ending.
 // pub async fn await_for_tokio_runtime_end() {
@@ -199,11 +205,9 @@ pub fn is_tokio_runtime_ending() -> bool {
 //     }
 // }
 
-
 pub trait BlockOn: Future {
     fn block_on(self) -> Self::Output;
 }
-
 
 impl<T> BlockOn for T
 where
@@ -213,7 +217,6 @@ where
         get_tokio_handle().block_on(self)
     }
 }
-
 
 #[derive(Default)]
 struct NotifyFlag {
@@ -247,34 +250,33 @@ impl NotifyFlag {
     }
 }
 
-
 struct RuntimeDropGuardInner {
     backtrace: Backtrace,
-    notify: NotifyFlag
+    notify: NotifyFlag,
 }
 
-
 /// A guard that prevents the Tokio Runtime from exiting.
-/// 
+///
 /// For the guard to work, if must be instantiated *after* the runtime has been created.
 /// Creating the runtime after the guard will result in the guard not doing anything. You
 /// can enforce creation of the tokio runtime using `get_tokio_handle`.
-/// 
+///
 /// Refer to 'attach_drop_guard' and 'detach_drop_guard' for a more convenient way to manage
 /// drop guards.
 pub struct RuntimeDropGuard(Arc<RuntimeDropGuardInner>);
 
-
 impl Default for RuntimeDropGuard {
     fn default() -> Self {
-        let inner = Arc::new(RuntimeDropGuardInner { backtrace: Backtrace::force_capture(), notify: Default::default() });
+        let inner = Arc::new(RuntimeDropGuardInner {
+            backtrace: Backtrace::force_capture(),
+            notify: Default::default(),
+        });
         if let Some(handle) = TOKIO_RUNTIME_HANDLE.read().as_ref() {
             handle.attached_guards.push(inner.clone());
         }
         RuntimeDropGuard(inner)
     }
 }
-
 
 impl RuntimeDropGuard {
     /// Returns `true` iff this guard will prevent the tokio runtime from exiting.
@@ -283,18 +285,15 @@ impl RuntimeDropGuard {
     }
 }
 
-
 impl Drop for RuntimeDropGuard {
     fn drop(&mut self) {
         self.0.notify.notify();
     }
 }
 
-
 thread_local! {
     static DROP_NOTIFY: RefCell<Option<RuntimeDropGuard>> = const { RefCell::new(None) };
 }
-
 
 /// Creates a `RuntimeDropGuard` that is stored in thread local data, which eseentially
 /// prevents the tokio runtime from exiting until the current thread exits.
@@ -302,9 +301,8 @@ pub fn attach_drop_guard() {
     DROP_NOTIFY.with_borrow_mut(|x| *x = Some(RuntimeDropGuard::default()));
 }
 
-
 /// Detaches the `RuntimeDropGuard` created by `attach_drop_guard` and returns it.
-/// 
+///
 /// This is the recommended way to drop the guard instead of relying on the thread
 /// to drop it as there are several caveats related to a thread's ability to drop
 /// thread local data. If the thread fails to drop the guard, the runtime will never

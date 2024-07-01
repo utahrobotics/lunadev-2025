@@ -13,7 +13,8 @@ use urobotics_core::{
     tokio::{
         self,
         io::{AsyncReadExt, AsyncWriteExt},
-    }, BlockOn,
+    },
+    BlockOn,
 };
 
 #[derive(Deserialize)]
@@ -202,7 +203,10 @@ impl Application for PythonVenvBuilder {
     const DESCRIPTION: &'static str = "Python virtual environment REPL";
 
     fn run(self) {
-        let venv = self.build().block_on().expect("Failed to build Python venv");
+        let venv = self
+            .build()
+            .block_on()
+            .expect("Failed to build Python venv");
         let mut repl = venv.repl().block_on().expect("Failed to start Python REPL");
 
         let _ = std::thread::spawn(move || {
@@ -223,6 +227,7 @@ impl Application for PythonVenvBuilder {
                         println!("{}", result.unwrap());
                     }
                 })
-        }).join();
+        })
+        .join();
     }
 }

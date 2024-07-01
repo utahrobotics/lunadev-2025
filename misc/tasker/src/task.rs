@@ -48,9 +48,7 @@ impl<T: BlockingAsyncTask> SyncTask for T {
         };
 
         let runtime = builder.enable_all().build().unwrap();
-        runtime.block_on(async move {
-            BlockingAsyncTask::run(self).await
-        })
+        runtime.block_on(async move { BlockingAsyncTask::run(self).await })
     }
 }
 

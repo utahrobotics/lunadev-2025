@@ -11,10 +11,9 @@ pub struct Temperature {
     pub ignore_component_temperature: FxHashSet<String>,
 }
 
-
 impl AsyncTask for Temperature {
     type Output = !;
-    
+
     async fn run(self) -> Self::Output {
         let mut components = Components::new_with_refreshed_list();
         let mut tasks = FuturesUnordered::new();
@@ -55,8 +54,6 @@ impl AsyncTask for Temperature {
             Some(x) => x,
         }
     }
-    
-    
 }
 
 #[derive(Clone, Copy)]
@@ -80,8 +77,7 @@ impl AsyncTask for CpuUsage {
             sys.refresh_cpu();
             sys.refresh_process(pid);
             let cpus = sys.cpus();
-            let usage =
-                cpus.iter().map(sysinfo::Cpu::cpu_usage).sum::<f32>() / cpus.len() as f32;
+            let usage = cpus.iter().map(sysinfo::Cpu::cpu_usage).sum::<f32>() / cpus.len() as f32;
             if usage >= self.cpu_usage_warning_threshold {
                 if let Some(proc) = sys.process(pid) {
                     log::warn!(

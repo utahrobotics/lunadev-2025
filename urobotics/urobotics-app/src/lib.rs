@@ -3,7 +3,15 @@ use std::path::PathBuf;
 use fxhash::FxHashMap;
 use serde::de::DeserializeOwned;
 use unfmt::unformat;
-use urobotics_core::{cabinet::CabinetBuilder, end_tokio_runtime_and_wait, log::{log_panics, log_to_console, log_to_file, metrics::{CpuUsage, Temperature}}, task::AsyncTask};
+use urobotics_core::{
+    cabinet::CabinetBuilder,
+    end_tokio_runtime_and_wait,
+    log::{
+        log_panics, log_to_console, log_to_file,
+        metrics::{CpuUsage, Temperature},
+    },
+    task::AsyncTask,
+};
 
 pub trait Application: DeserializeOwned {
     const APP_NAME: &'static str;
@@ -12,12 +20,10 @@ pub trait Application: DeserializeOwned {
     fn run(self);
 }
 
-
 struct BoxedApp {
     description: &'static str,
     func: Box<dyn FnOnce(String)>,
 }
-
 
 pub struct Applications {
     pub name: &'static str,
@@ -30,7 +36,6 @@ pub struct Applications {
     functions: FxHashMap<&'static str, BoxedApp>,
 }
 
-
 impl Default for Applications {
     fn default() -> Self {
         Self {
@@ -40,15 +45,16 @@ impl Default for Applications {
             log_path: PathBuf::from(".log"),
             cabinet_root_path: PathBuf::from("cabinet"),
             functions: FxHashMap::default(),
-            cpu_usage: Some(CpuUsage { cpu_usage_warning_threshold: 80.0 }),
+            cpu_usage: Some(CpuUsage {
+                cpu_usage_warning_threshold: 80.0,
+            }),
             temperature: Some(Temperature {
                 temperature_warning_threshold: 80.0,
                 ignore_component_temperature: Default::default(),
-            })
+            }),
         }
     }
 }
-
 
 #[macro_export]
 macro_rules! application {
@@ -57,9 +63,8 @@ macro_rules! application {
         app.name = env!("CARGO_PKG_NAME");
         app.description = env!("CARGO_PKG_DESCRIPTION");
         app
-    }}
+    }};
 }
-
 
 impl Applications {
     pub fn run(&mut self) {
@@ -98,7 +103,8 @@ impl Applications {
             temperature.spawn();
         }
 
-        let config_raw = std::fs::read_to_string(&self.config_path).expect("Failed to read config file");
+        let config_raw =
+            std::fs::read_to_string(&self.config_path).expect("Failed to read config file");
         let mut config_parsed = String::new();
         let mut copying = false;
 
@@ -125,15 +131,13 @@ impl Applications {
             T::APP_NAME,
             BoxedApp {
                 description: T::DESCRIPTION,
-                func: Box::new(move |config: String| {
-                    match toml::from_str::<T>(&config) {
-                        Ok(config) => {
-                            config.run();
-                            end_tokio_runtime_and_wait();
-                        }
-                        Err(e) => {
-                            eprintln!("{e}");
-                        }
+                func: Box::new(move |config: String| match toml::from_str::<T>(&config) {
+                    Ok(config) => {
+                        config.run();
+                        end_tokio_runtime_and_wait();
+                    }
+                    Err(e) => {
+                        eprintln!("{e}");
                     }
                 }),
             },

@@ -487,9 +487,7 @@ impl RtpVideoBuilder {
 }
 
 impl RtpVideoBuilder {
-    pub async fn build(
-        &self,
-    ) -> Result<(VideoDataDump, String), VideoDumpInitError> {
+    pub async fn build(&self) -> Result<(VideoDataDump, String), VideoDumpInitError> {
         ffmpeg_sidecar::download::auto_download()
             .map_err(|e| VideoDumpInitError::FFMPEGInstallError(e.to_string()))?;
 

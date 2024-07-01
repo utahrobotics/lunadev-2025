@@ -21,10 +21,13 @@ use nokhwa::{
 use serde::Deserialize;
 use unfmt::unformat;
 use urobotics_core::{
-    define_callbacks, fn_alias, service::ServiceExt, task::BlockingAsyncTask, tokio::{
+    define_callbacks, fn_alias,
+    service::ServiceExt,
+    task::BlockingAsyncTask,
+    tokio::{
         self,
         sync::{Mutex, OnceCell},
-    }
+    },
 };
 use urobotics_py::{PyRepl, PythonValue, PythonVenvBuilder};
 use urobotics_video::VideoDataDump;
@@ -95,9 +98,7 @@ impl CameraConnection {
     }
 
     /// Gets a reference to the `Signal` that represents received images.
-    pub fn image_received_ref(
-        &self,
-    ) -> ImageCallbacksRef {
+    pub fn image_received_ref(&self) -> ImageCallbacksRef {
         self.image_received.get_ref()
     }
 }
