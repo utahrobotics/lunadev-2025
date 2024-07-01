@@ -9,6 +9,7 @@ use urobotics_core::{
     log::{
         log_panics, log_to_console, log_to_file,
         metrics::{CpuUsage, Temperature},
+        OwoColorize,
     },
     task::AsyncTask,
 };
@@ -71,7 +72,7 @@ impl Applications {
         let mut args = std::env::args();
         let _exe = args.next().expect("No executable name");
         let Some(cmd) = args.next() else {
-            eprintln!("No command given");
+            eprintln!("{}", "No command given".yellow());
             return;
         };
         if cmd == "help" {
@@ -82,18 +83,24 @@ impl Applications {
             return;
         }
         let Some(app) = self.functions.remove(cmd.as_str()) else {
-            eprintln!("Unknown command. Use one of the following:");
+            eprintln!("{}", "Unknown command. Use one of the following:".yellow());
             for (name, app) in self.functions.iter() {
-                eprintln!("{}\t-\t{}", name, app.description);
+                eprintln!("{}", format!("{}\t-\t{}", name, app.description).yellow());
             }
             return;
         };
-        CabinetBuilder::new_with_crate_name(&self.cabinet_root_path, self.name)
+        if let Err(e) = CabinetBuilder::new_with_crate_name(&self.cabinet_root_path, self.name)
             .add_file_to_copy(&self.config_path)
             .build()
-            .expect("Failed to create cabinet");
+        {
+            eprintln!("{}", format!("Failed to create cabinet: {}", e).red());
+            return;
+        }
         log_panics();
-        log_to_file(&self.log_path).expect("Failed to open log file");
+        if let Err(e) = log_to_file(&self.log_path) {
+            eprintln!("{}", format!("Failed to open log file: {}", e).red());
+            return;
+        }
         log_to_console();
 
         if let Some(cpu_usage) = self.cpu_usage.clone() {
@@ -103,8 +110,13 @@ impl Applications {
             temperature.spawn();
         }
 
-        let config_raw =
-            std::fs::read_to_string(&self.config_path).expect("Failed to read config file");
+        let config_raw = match std::fs::read_to_string(&self.config_path) {
+            Ok(x) => x,
+            Err(e) => {
+                eprintln!("{}", format!("Failed to read config file: {}", e).red());
+                return;
+            }
+        };
         let mut config_parsed = String::new();
         let mut copying = false;
 
@@ -137,7 +149,7 @@ impl Applications {
                         end_tokio_runtime_and_wait();
                     }
                     Err(e) => {
-                        eprintln!("{e}");
+                        eprint!("{}", e.red());
                     }
                 }),
             },

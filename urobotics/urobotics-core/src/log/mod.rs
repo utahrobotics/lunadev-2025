@@ -12,7 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use color_eyre::owo_colors::OwoColorize;
+pub use color_eyre::owo_colors::OwoColorize;
 use crossbeam::atomic::AtomicCell;
 use log::set_logger;
 pub use log::{debug, error, info, trace, warn, Level, LevelFilter, Log, Record};
