@@ -49,7 +49,7 @@ interprocess = { git = "https://github.com/kotauskas/interprocess", default-feat
 dst-init = "0.4.0"
 rayon = "1.10.0"
 bitvec = "1.0.1"
-parking_lot = "0.12.2"
+parking_lot = "0.12.3"
 bytes = "1.6.0"
 pollster = "0.3.0"
 unfmt = "0.2.2"
