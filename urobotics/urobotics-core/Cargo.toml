@@ -19,3 +19,5 @@ parking_lot = { workspace = true }
 static_assertions = { workspace = true }
 futures = { workspace = true }
 tasker = { workspace = true }
+serde = { workspace = true }
+bincode = "1.3.3"

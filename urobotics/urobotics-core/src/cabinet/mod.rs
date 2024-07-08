@@ -1,6 +1,7 @@
-use std::path::PathBuf;
+use std::{fs::File, io::{BufWriter, Write}, path::{Path, PathBuf}, sync::mpsc::{Receiver, Sender}, time::{Duration, Instant}};
 
 use chrono::{Datelike, Local, Timelike};
+use tasker::{attach_drop_guard, callbacks::caller::try_drop_this_callback, detach_drop_guard, task::SyncTask};
 
 pub struct CabinetBuilder {
     pub path: PathBuf,
@@ -55,4 +56,107 @@ macro_rules! default_cabinet_builder {
     () => {
         CabinetBuilder::new_with_crate_name("cabinet", env!("CARGO_PKG_NAME"))
     };
+}
+
+
+pub struct DataDump<T, F> {
+    receiver: Receiver<T>,
+    sender: Sender<T>,
+    writer: F,
+}
+
+
+impl<T: Send + 'static, F: FnMut(T) + Send + 'static> SyncTask for DataDump<T, F> {
+    type Output = std::io::Result<()>;
+
+    fn run(mut self) -> std::io::Result<()> {
+        attach_drop_guard();
+        drop(self.sender);
+        loop {
+            let Ok(data) = self.receiver.recv() else { break; };
+            (self.writer)(data);
+        }
+        detach_drop_guard();
+        Ok(())
+    }
+}
+
+
+impl<T, F: FnMut(T)> DataDump<T, F> {
+    pub fn new_with_func(f: F) -> Self {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        Self {
+            receiver,
+            sender,
+            writer: f,
+        }
+    }
+
+    pub fn get_write_callback(&self) -> impl Fn(T) {
+        let sender = self.sender.clone();
+        move |data| {
+            if sender.send(data).is_err() {
+                try_drop_this_callback();
+            }
+        }
+    }
+    
+    pub fn new_with_bincode_writer(mut writer: impl Write) -> DataDump<T, impl FnMut(T)>
+        where 
+            T: serde::Serialize,
+    {
+        DataDump::new_with_func(
+            move |data| bincode::serialize_into(&mut writer, &data).expect("Failed to serialize into writer"),
+        )
+    }
+
+    pub fn new_from_bincode_file(path: impl AsRef<Path>) -> std::io::Result<DataDump<T, impl FnMut(T)>>
+    where 
+        T: serde::Serialize,
+    {
+        let file = File::create(path)?;
+        Ok(Self::new_with_bincode_writer(BufWriter::new(file)))
+    }
+    
+    pub fn new_with_text_writer(mut to_string: impl FnMut(T) -> String, mut writer: impl Write) -> DataDump<T, impl FnMut(T)> {
+        DataDump::new_with_func(
+            move |data| writer.write_all(to_string(data).as_bytes()).expect("Failed to serialize into writer"),
+        )
+    }
+
+    pub fn new_from_text_file(to_string: impl FnMut(T) -> String, path: impl AsRef<Path>) -> std::io::Result<DataDump<T, impl FnMut(T)>>
+    {
+        let file = File::create(path)?;
+        Ok(Self::new_with_text_writer(to_string, BufWriter::new(file)))
+    }
+}
+
+
+pub struct Recorder<T, F> {
+    dump: DataDump<(Duration, T), F>,
+}
+
+
+impl<T, F: FnMut((Duration, T))> Recorder<T, F> {
+    pub fn new_with_dump(dump: DataDump<(Duration, T), F>) -> Self {
+        Self {
+            dump
+        }
+    }
+
+    pub fn get_write_callback(&self, instant: Instant) -> impl Fn(T) {
+        let inner = self.dump.get_write_callback();
+        move |data| {
+            inner((instant.elapsed(), data));
+        }
+    }
+}
+
+
+impl<T: Send + 'static, F: FnMut((Duration, T)) + Send + 'static> SyncTask for Recorder<T, F> {
+    type Output = std::io::Result<()>;
+
+    fn run(self) -> std::io::Result<()> {
+        self.dump.run()
+    }
 }

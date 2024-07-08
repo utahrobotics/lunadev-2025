@@ -1,14 +1,5 @@
 [workspace]
 members = [
-    # "unros/apriltag",
-    # "unros/localization",
-    # "unros/navigator",
-    # "unros/rig",
-    # "unros/realsense",
-    # "unros/camera-info",
-    # "unros/networking",
-    # "unros/obstacles",
-
     "misc/compute-shader",
     "misc/cakap",
     "urobotics/urobotics-core", "urobotics/urobotics-smach",

@@ -153,6 +153,7 @@ fn with_tokio_runtime_handle<T>(
 ///
 /// If one does not exist, a new tokio runtime will be created using `TokioRuntimeConfig`.
 /// See `set_tokio_runtime_config`.
+#[inline(always)]
 pub fn get_tokio_handle() -> Handle {
     with_tokio_runtime_handle(|handle| handle.handle.clone(), Default::default)
 }
@@ -213,6 +214,7 @@ impl<T> BlockOn for T
 where
     T: Future,
 {
+    #[inline(always)]
     fn block_on(self) -> Self::Output {
         get_tokio_handle().block_on(self)
     }

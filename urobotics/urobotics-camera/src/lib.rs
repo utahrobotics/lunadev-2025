@@ -21,13 +21,9 @@ use nokhwa::{
 use serde::Deserialize;
 use unfmt::unformat;
 use urobotics_core::{
-    define_callbacks, fn_alias,
-    service::ServiceExt,
-    task::BlockingAsyncTask,
-    tokio::{
-        self,
-        sync::{Mutex, OnceCell},
-    },
+    define_callbacks, fn_alias, service::ServiceExt, task::{AsyncTask, Loggable}, tokio::{
+        sync::{Mutex, OnceCell}, task::block_in_place,
+    }, BlockOn
 };
 use urobotics_py::{PyRepl, PythonValue, PythonVenvBuilder};
 use urobotics_video::VideoDataDump;
@@ -103,16 +99,14 @@ impl CameraConnection {
     }
 }
 
-impl BlockingAsyncTask for CameraConnection {
-    type Output = Result<(), nokhwa::NokhwaError>;
-
-    async fn run(mut self) -> Self::Output {
+macro_rules! cam_impl {
+    ($self: ident) => {{
         let repl = PY_REPL
             .get_or_init(|| async {
-                self.py_venv_builder
+                $self.py_venv_builder
                     .packages_to_install
                     .push("cv2_enumerate_cameras".to_string());
-                let mut repl = self
+                let mut repl = $self
                     .py_venv_builder
                     .build()
                     .await
@@ -141,7 +135,7 @@ impl BlockingAsyncTask for CameraConnection {
 
         let lines = result.lines();
 
-        let index = match &self.identifier {
+        let index = match &$self.identifier {
             CameraIdentifier::Index(index) => CameraIndex::Index(*index),
             CameraIdentifier::Name(name) => 'index: {
                 for line in lines {
@@ -177,46 +171,58 @@ impl BlockingAsyncTask for CameraConnection {
             }
         };
 
-        let requested = if self.fps > 0 {
-            if self.image_width > 0 && self.image_height > 0 {
+        let requested = if $self.fps > 0 {
+            if $self.image_width > 0 && $self.image_height > 0 {
                 RequestedFormat::new::<RgbFormat>(RequestedFormatType::Exact(CameraFormat::new(
-                    Resolution::new(self.image_width, self.image_height),
+                    Resolution::new($self.image_width, $self.image_height),
                     FrameFormat::RAWRGB,
-                    self.fps,
+                    $self.fps,
                 )))
             } else {
-                RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestFrameRate(self.fps))
+                RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestFrameRate($self.fps))
             }
-        } else if self.image_width > 0 && self.image_height > 0 {
+        } else if $self.image_width > 0 && $self.image_height > 0 {
             RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestResolution(
-                Resolution::new(self.image_width, self.image_height),
+                Resolution::new($self.image_width, $self.image_height),
             ))
         } else {
             RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate)
         };
 
-        let mut camera = nokhwa::Camera::new(index, requested)?;
+        (index, requested)
+    }}
+}
 
-        let camera_info = CameraInfo {
-            camera_name: camera.info().human_name(),
-        };
+impl AsyncTask for CameraConnection {
+    type Output = Result<(), nokhwa::NokhwaError>;
 
-        self.camera_info.set(camera_info).unwrap();
+    async fn run(mut self) -> Self::Output {
+        let (index, requested) = cam_impl!(self);
 
-        camera.open_stream()?;
-        loop {
-            let frame = camera.frame()?;
-            // if context.is_runtime_exiting() {
-            //     break Ok(());
-            // }
-            let decoded = frame.decode_image::<RgbFormat>().unwrap();
-            let img = DynamicImage::ImageRgb8(
-                ImageBuffer::from_raw(decoded.width(), decoded.height(), decoded.into_raw())
-                    .unwrap(),
-            );
-            let img = Arc::new(img);
-            self.image_received.call(&img);
-        }
+        block_in_place(|| {
+            let mut camera = nokhwa::Camera::new(index, requested)?;
+
+            let camera_info = CameraInfo {
+                camera_name: camera.info().human_name(),
+            };
+    
+            self.camera_info.set(camera_info).unwrap();
+    
+            camera.open_stream()?;
+            loop {
+                let frame = camera.frame()?;
+                // if context.is_runtime_exiting() {
+                //     break Ok(());
+                // }
+                let decoded = frame.decode_image::<RgbFormat>().unwrap();
+                let img = DynamicImage::ImageRgb8(
+                    ImageBuffer::from_raw(decoded.width(), decoded.height(), decoded.into_raw())
+                        .unwrap(),
+                );
+                let img = Arc::new(img);
+                self.image_received.call(&img);
+            }
+        })
     }
 }
 
@@ -225,71 +231,9 @@ impl urobotics_app::Application for CameraConnection {
     const DESCRIPTION: &'static str = "Displays a camera feed";
     const APP_NAME: &'static str = "camera";
 
-    fn run(self) {
-        use urobotics_core::log::error;
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(async move {
-                let repl = PY_REPL.get_or_init(|| async {
-                    let mut builder = PythonVenvBuilder::default();
-                    builder.packages_to_install.push("cv2_enumerate_cameras".to_string());
-                    let mut repl = builder.build().await.expect("Failed to build Python venv").repl().await.expect("Failed to start Python REPL");
-                    repl.call("from cv2_enumerate_cameras import enumerate_cameras").await.expect("Failed to import cv2_enumerate_cameras");
-                    Mutex::new(repl)
-                }).await;
-
-                let result = repl.lock().await.call(CODE).await.expect("Failed to enumerate cameras");
-                let result = match result {
-                    PythonValue::String(s) => s,
-                    PythonValue::None => String::new(),
-                    _ => panic!("Unexpected result while enumerating cameras: {result:?}")
-                };
-
-                let lines = result.lines();
-
-                let index = match &self.identifier {
-                    CameraIdentifier::Index(index) => CameraIndex::Index(*index),
-                    CameraIdentifier::Name(name) => 'index: {
-                        for line in lines {
-                            let Some((index, camera_name, _)) = unformat!("{};{};{}", line) else { panic!("Failed to parse line: {line}") };
-                            if camera_name == name {
-                                break 'index CameraIndex::Index(index.parse().expect("Failed to parse camera index"));
-                            }
-                        }
-                        error!(target: Self::APP_NAME, "Camera not found");
-                        return;
-                    },
-                    CameraIdentifier::Path(path) => 'index: {
-                        for line in lines {
-                            let Some((index, _, camera_path)) = unformat!("{};{};{}", line) else { panic!("Failed to parse line: {line}") };
-                            if camera_path == path.to_string_lossy() {
-                                break 'index CameraIndex::Index(index.parse().expect("Failed to parse camera index"));
-                            }
-                        }
-                        error!(target: Self::APP_NAME, "Camera not found");
-                        return;
-                    },
-                };
-
-                let requested = if self.fps > 0 {
-                    if self.image_width > 0 && self.image_height > 0 {
-                        RequestedFormat::new::<RgbFormat>(RequestedFormatType::Exact(CameraFormat::new(
-                            Resolution::new(self.image_width, self.image_height),
-                            FrameFormat::RAWRGB,
-                            self.fps,
-                        )))
-                    } else {
-                        RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestFrameRate(self.fps))
-                    }
-                } else if self.image_width > 0 && self.image_height > 0 {
-                    RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestResolution(
-                        Resolution::new(self.image_width, self.image_height),
-                    ))
-                } else {
-                    RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate)
-                };
+    fn run(mut self) {
+        (async move {
+                let (index, requested) = cam_impl!(self);
 
                 let mut camera = nokhwa::Camera::new(
                     index,
@@ -319,7 +263,10 @@ impl urobotics_app::Application for CameraConnection {
 
                     dump.write_frame(&img).await.expect("Failed to write frame to video data dump");
                 }
-            });
+                // For type inference
+                #[allow(unreachable_code)]
+                Ok(())
+            }).block_on().log();
     }
 }
 
