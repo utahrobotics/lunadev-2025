@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "misc/compute-shader",
-    "misc/cakap",
     "urobotics/urobotics-core", "urobotics/urobotics-smach",
     "urobotics/urobotics-video",
     "urobotics/urobotics-serial", "urobotics/urobotics-app", "examples/urobotics-tool", "urobotics/urobotics",
@@ -24,8 +23,7 @@ anyhow = "1"
 crossbeam = "0.8"
 quaternion-core = "0.4"
 tokio = { version = "1", features = ["full"] }
-clap = { version = "4", features = ["derive"] }
-fast_image_resize = "2"
+# fast_image_resize = "2"
 spin_sleep = "1"
 rand = { version = "0.8", features = ["small_rng"] }
 futures = "0.3.30"
@@ -33,20 +31,16 @@ serde-big-array = "0.5"
 rand_distr = "0.4"
 bytemuck = { version = "1", features = [ "derive" ] }
 log = "0.4"
-simba = "0.8"
 # eigenvalues = { git = "https://github.com/Masterchef365/eigenvalues.git" }
 ffmpeg-sidecar = "1.0"
 interprocess = { git = "https://github.com/kotauskas/interprocess", default-features = false, branch = "main", features = ["tokio"] }
-dst-init = "0.4.0"
 rayon = "1.10.0"
 bitvec = "1.0.1"
 parking_lot = "0.12.2"
 bytes = "1.6.0"
-pollster = "0.3.0"
 unfmt = "0.2.2"
 
 compute-shader = { path = "misc/compute-shader" }
-cakap = { path = "misc/cakap" }
 urobotics-core = { path = "urobotics/urobotics-core" }
 urobotics-app = { path = "urobotics/urobotics-app" }
 urobotics-serial = { path = "urobotics/urobotics-serial" }

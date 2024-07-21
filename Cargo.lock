@@ -327,27 +327,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc827186963e592360843fb5ba4b973e145841266c1357f7180c43526f2e5b61"
 
 [[package]]
-name = "bitcode"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48bc1c27654127a24c476d40198746860ef56475f41a601bfa5c4d0f832968f0"
-dependencies = [
- "bitcode_derive",
- "bytemuck",
-]
-
-[[package]]
-name = "bitcode_derive"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2966755a19aad59ee2aae91e2d48842c667a99d818ec72168efdab07200701cc"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.60",
-]
-
-[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -431,25 +410,6 @@ name = "bytes"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "514de17de45fdb8dc022b1a7975556c53c86f9f0aa5f534b98977b171857c2c9"
-
-[[package]]
-name = "cakap"
-version = "0.1.0"
-dependencies = [
- "bitcode",
- "bytemuck",
- "bytes",
- "crossbeam",
- "fxhash",
- "indexmap",
- "libc",
- "parking_lot",
- "rand",
- "reed-solomon",
- "reed-solomon-erasure",
- "tokio",
- "windows-sys 0.52.0",
-]
 
 [[package]]
 name = "cc"
@@ -2448,21 +2408,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "469052894dcb553421e483e4209ee581a45100d31b4018de03e5a7ad86374a7e"
 dependencies = [
  "bitflags 2.5.0",
-]
-
-[[package]]
-name = "reed-solomon"
-version = "0.2.1"
-
-[[package]]
-name = "reed-solomon-erasure"
-version = "4.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a415a013dd7c5d4221382329a5a3482566da675737494935cbbbcdec04662f9d"
-dependencies = [
- "cc",
- "libc",
- "smallvec",
 ]
 
 [[package]]
