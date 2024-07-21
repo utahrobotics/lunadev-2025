@@ -31,7 +31,7 @@ pub struct Applications {
     pub description: &'static str,
     pub config_path: PathBuf,
     pub log_path: PathBuf,
-    pub cabinet_root_path: PathBuf,
+    pub cabinet_builder: CabinetBuilder,
     pub cpu_usage: Option<CpuUsage>,
     pub temperature: Option<Temperature>,
     functions: FxHashMap<&'static str, BoxedApp>,
@@ -44,7 +44,6 @@ impl Default for Applications {
             description: "Lorem ipsum",
             config_path: PathBuf::from("app_config.toml"),
             log_path: PathBuf::from(".log"),
-            cabinet_root_path: PathBuf::from("cabinet"),
             functions: FxHashMap::default(),
             cpu_usage: Some(CpuUsage {
                 cpu_usage_warning_threshold: 80.0,
@@ -53,6 +52,7 @@ impl Default for Applications {
                 temperature_warning_threshold: 80.0,
                 ignore_component_temperature: Default::default(),
             }),
+            cabinet_builder: CabinetBuilder::new_with_crate_name("cabinet", "unnamed"),
         }
     }
 }
@@ -63,6 +63,7 @@ macro_rules! application {
         let mut app = $crate::Applications::default();
         app.name = env!("CARGO_PKG_NAME");
         app.description = env!("CARGO_PKG_DESCRIPTION");
+        app.cabinet_builder.set_cabinet_path_with_name("cabinet", app.name);
         app
     }};
 }
@@ -89,7 +90,7 @@ impl Applications {
             }
             return;
         };
-        if let Err(e) = CabinetBuilder::new_with_crate_name(&self.cabinet_root_path, self.name)
+        if let Err(e) = self.cabinet_builder
             .add_file_to_copy(&self.config_path)
             .build()
         {
