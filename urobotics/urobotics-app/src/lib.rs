@@ -63,7 +63,8 @@ macro_rules! application {
         let mut app = $crate::Applications::default();
         app.name = env!("CARGO_PKG_NAME");
         app.description = env!("CARGO_PKG_DESCRIPTION");
-        app.cabinet_builder.set_cabinet_path_with_name("cabinet", app.name);
+        app.cabinet_builder
+            .set_cabinet_path_with_name("cabinet", app.name);
         app
     }};
 }
@@ -90,7 +91,8 @@ impl Applications {
             }
             return;
         };
-        if let Err(e) = self.cabinet_builder
+        if let Err(e) = self
+            .cabinet_builder
             .add_file_to_copy(&self.config_path)
             .build()
         {

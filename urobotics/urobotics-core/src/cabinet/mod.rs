@@ -1,8 +1,16 @@
-use std::{fs::File, io::{BufWriter, Write}, path::{Path, PathBuf}, sync::mpsc::{Receiver, Sender}, time::{Duration, Instant}};
+use std::{
+    fs::File,
+    io::{BufWriter, Write},
+    path::{Path, PathBuf},
+    sync::mpsc::{Receiver, Sender},
+    time::{Duration, Instant},
+};
 
 use chrono::{Datelike, Local, Timelike};
 use fxhash::FxHashSet;
-use tasker::{attach_drop_guard, callbacks::caller::try_drop_this_callback, detach_drop_guard, task::SyncTask};
+use tasker::{
+    attach_drop_guard, callbacks::caller::try_drop_this_callback, detach_drop_guard, task::SyncTask,
+};
 
 pub struct CabinetBuilder {
     pub path: PathBuf,
@@ -30,7 +38,11 @@ impl CabinetBuilder {
         self
     }
 
-    pub fn set_cabinet_path_with_name(&mut self, root_path: impl Into<PathBuf>, crate_name: &str) -> &mut Self {
+    pub fn set_cabinet_path_with_name(
+        &mut self,
+        root_path: impl Into<PathBuf>,
+        crate_name: &str,
+    ) -> &mut Self {
         let mut path = root_path.into();
         path.push(crate_name);
         let datetime = Local::now();
@@ -103,13 +115,11 @@ macro_rules! default_cabinet_builder {
     };
 }
 
-
 pub struct DataDump<T, F> {
     receiver: Receiver<T>,
     sender: Sender<T>,
     writer: F,
 }
-
 
 impl<T: Send + 'static, F: FnMut(T) + Send + 'static> SyncTask for DataDump<T, F> {
     type Output = std::io::Result<()>;
@@ -118,14 +128,15 @@ impl<T: Send + 'static, F: FnMut(T) + Send + 'static> SyncTask for DataDump<T, F
         attach_drop_guard();
         drop(self.sender);
         loop {
-            let Ok(data) = self.receiver.recv() else { break; };
+            let Ok(data) = self.receiver.recv() else {
+                break;
+            };
             (self.writer)(data);
         }
         detach_drop_guard();
         Ok(())
     }
 }
-
 
 impl<T, F: FnMut(T)> DataDump<T, F> {
     pub fn new_with_func(f: F) -> Self {
@@ -145,48 +156,53 @@ impl<T, F: FnMut(T)> DataDump<T, F> {
             }
         }
     }
-    
+
     pub fn new_with_bincode_writer(mut writer: impl Write) -> DataDump<T, impl FnMut(T)>
-        where 
-            T: serde::Serialize,
+    where
+        T: serde::Serialize,
     {
-        DataDump::new_with_func(
-            move |data| bincode::serialize_into(&mut writer, &data).expect("Failed to serialize into writer"),
-        )
+        DataDump::new_with_func(move |data| {
+            bincode::serialize_into(&mut writer, &data).expect("Failed to serialize into writer")
+        })
     }
 
-    pub fn new_from_bincode_file(path: impl AsRef<Path>) -> std::io::Result<DataDump<T, impl FnMut(T)>>
-    where 
+    pub fn new_from_bincode_file(
+        path: impl AsRef<Path>,
+    ) -> std::io::Result<DataDump<T, impl FnMut(T)>>
+    where
         T: serde::Serialize,
     {
         let file = File::create(path)?;
         Ok(Self::new_with_bincode_writer(BufWriter::new(file)))
     }
-    
-    pub fn new_with_text_writer(mut to_string: impl FnMut(T) -> String, mut writer: impl Write) -> DataDump<T, impl FnMut(T)> {
-        DataDump::new_with_func(
-            move |data| writer.write_all(to_string(data).as_bytes()).expect("Failed to serialize into writer"),
-        )
+
+    pub fn new_with_text_writer(
+        mut to_string: impl FnMut(T) -> String,
+        mut writer: impl Write,
+    ) -> DataDump<T, impl FnMut(T)> {
+        DataDump::new_with_func(move |data| {
+            writer
+                .write_all(to_string(data).as_bytes())
+                .expect("Failed to serialize into writer")
+        })
     }
 
-    pub fn new_from_text_file(to_string: impl FnMut(T) -> String, path: impl AsRef<Path>) -> std::io::Result<DataDump<T, impl FnMut(T)>>
-    {
+    pub fn new_from_text_file(
+        to_string: impl FnMut(T) -> String,
+        path: impl AsRef<Path>,
+    ) -> std::io::Result<DataDump<T, impl FnMut(T)>> {
         let file = File::create(path)?;
         Ok(Self::new_with_text_writer(to_string, BufWriter::new(file)))
     }
 }
 
-
 pub struct Recorder<T, F> {
     dump: DataDump<(Duration, T), F>,
 }
 
-
 impl<T, F: FnMut((Duration, T))> Recorder<T, F> {
     pub fn new_with_dump(dump: DataDump<(Duration, T), F>) -> Self {
-        Self {
-            dump
-        }
+        Self { dump }
     }
 
     pub fn get_write_callback(&self, instant: Instant) -> impl Fn(T) {
@@ -196,7 +212,6 @@ impl<T, F: FnMut((Duration, T))> Recorder<T, F> {
         }
     }
 }
-
 
 impl<T: Send + 'static, F: FnMut((Duration, T)) + Send + 'static> SyncTask for Recorder<T, F> {
     type Output = std::io::Result<()>;

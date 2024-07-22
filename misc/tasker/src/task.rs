@@ -49,7 +49,6 @@ pub trait AsyncTask: Sized {
 //     }
 // }
 
-
 pub trait Loggable {
     fn log(&self);
 }
@@ -71,7 +70,6 @@ impl<T: Loggable, E: std::error::Error> Loggable for Result<T, E> {
     }
 }
 
-
 impl<T: Loggable, F: FnOnce() -> T + Send + 'static> SyncTask for F {
     type Output = T;
 
@@ -80,10 +78,9 @@ impl<T: Loggable, F: FnOnce() -> T + Send + 'static> SyncTask for F {
     }
 }
 
-
 impl<F: FnOnce() -> Fut, Fut: Future<Output: Loggable> + Send + 'static> AsyncTask for F {
     type Output = Fut::Output;
-    
+
     fn run(self) -> impl Future<Output = Self::Output> + Send + 'static {
         self()
     }

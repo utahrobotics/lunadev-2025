@@ -4,7 +4,7 @@ members = [
     "urobotics/urobotics-core", "urobotics/urobotics-smach",
     "urobotics/urobotics-video",
     "urobotics/urobotics-serial", "urobotics/urobotics-app", "examples/urobotics-tool", "urobotics/urobotics",
-    "urobotics/urobotics-camera", "urobotics/urobotics-py", "urobotics/urobotics-apriltag", "misc/tasker",
+    "urobotics/urobotics-camera", "urobotics/urobotics-py", "urobotics/urobotics-apriltag", "misc/tasker", "lunabotics/cakap",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]
@@ -15,6 +15,7 @@ fxhash = "0.2"
 chrono = "0.4"
 static_assertions = "1"
 image = "0.25"
+bitcode = "0.6.3"
 ordered-float = "4"
 nalgebra = { version = "0.32", features = ["serde-serialize"] }
 toml = "0.8"
@@ -22,6 +23,7 @@ serde = { version = "1", features = ["derive", "rc"] }
 anyhow = "1"
 crossbeam = "0.8"
 quaternion-core = "0.4"
+# tokio-stream = "0.1.15"
 tokio = { version = "1", features = ["full"] }
 # fast_image_resize = "2"
 spin_sleep = "1"
@@ -39,6 +41,7 @@ bitvec = "1.0.1"
 parking_lot = "0.12.2"
 bytes = "1.6.0"
 unfmt = "0.2.2"
+k = "0.31.0"
 
 compute-shader = { path = "misc/compute-shader" }
 urobotics-core = { path = "urobotics/urobotics-core" }

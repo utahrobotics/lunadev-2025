@@ -21,9 +21,14 @@ use nokhwa::{
 use serde::Deserialize;
 use unfmt::unformat;
 use urobotics_core::{
-    define_callbacks, fn_alias, service::ServiceExt, task::{AsyncTask, Loggable}, tokio::{
-        sync::{Mutex, OnceCell}, task::block_in_place,
-    }, BlockOn
+    define_callbacks, fn_alias,
+    service::ServiceExt,
+    task::{AsyncTask, Loggable},
+    tokio::{
+        sync::{Mutex, OnceCell},
+        task::block_in_place,
+    },
+    BlockOn,
 };
 use urobotics_py::{PyRepl, PythonValue, PythonVenvBuilder};
 use urobotics_video::VideoDataDump;
@@ -103,7 +108,8 @@ macro_rules! cam_impl {
     ($self: ident) => {{
         let repl = PY_REPL
             .get_or_init(|| async {
-                $self.py_venv_builder
+                $self
+                    .py_venv_builder
                     .packages_to_install
                     .push("cv2_enumerate_cameras".to_string());
                 let mut repl = $self
@@ -190,7 +196,7 @@ macro_rules! cam_impl {
         };
 
         (index, requested)
-    }}
+    }};
 }
 
 impl AsyncTask for CameraConnection {
@@ -205,9 +211,9 @@ impl AsyncTask for CameraConnection {
             let camera_info = CameraInfo {
                 camera_name: camera.info().human_name(),
             };
-    
+
             self.camera_info.set(camera_info).unwrap();
-    
+
             camera.open_stream()?;
             loop {
                 let frame = camera.frame()?;
