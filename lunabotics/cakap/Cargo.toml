@@ -1,0 +1,16 @@
+[package]
+name = "cakap"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitcode = { workspace = true }
+# futures = { workspace = true }
+# tokio-stream = { workspace = true }
+tokio = { workspace = true }
+# urobotics = { workspace = true }
+webrtc-sctp = "0.10.0"
+bytes = { workspace = true }
+anyhow = { workspace = true }
+crossbeam = { workspace = true }
+webrtc-util = "0.9.0"
