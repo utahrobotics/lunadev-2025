@@ -8,7 +8,10 @@ use bonsai_bt::{Behavior::*, Event, Status, UpdateArgs, BT};
 use serde::{Deserialize, Serialize};
 use spin_sleep::SpinSleeper;
 use urobotics::{
-    app::{application, Application}, camera, log::error, python, serial
+    app::{application, Application},
+    camera,
+    log::error,
+    python, serial,
 };
 
 mod blackboard;
@@ -49,10 +52,7 @@ impl Application for LunabotApp {
             vec![If(
                 Box::new(Action(HighLevelActions::SoftStop)),
                 Box::new(run.clone()),
-                Box::new(Sequence(vec![
-                    Action(HighLevelActions::Setup),
-                    run,
-                ])),
+                Box::new(Sequence(vec![Action(HighLevelActions::Setup), run])),
             )],
         );
 
@@ -87,7 +87,9 @@ impl Application for LunabotApp {
             let (status, _) = bt.tick(&e, &mut |args, bb| {
                 let first_time = last_action != *args.action;
                 let result = match args.action {
-                    HighLevelActions::SoftStop => soft_stop::soft_stop(bb.get_db(), args.dt, first_time),
+                    HighLevelActions::SoftStop => {
+                        soft_stop::soft_stop(bb.get_db(), args.dt, first_time)
+                    }
                     HighLevelActions::Setup => setup::setup(bb.get_db(), args.dt, first_time),
                     HighLevelActions::Run => run::run(bb.get_db(), args.dt, first_time),
                 };

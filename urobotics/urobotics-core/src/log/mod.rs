@@ -197,23 +197,11 @@ pub fn log_to_console() -> LogFilter {
         match record.level() {
             Level::Error => println!(
                 "{}",
-                format!(
-                    "[{:0>2}:{:.2} {}] {}",
-                    mins,
-                    secs,
-                    record.target(),
-                    msg
-                ).red()
+                format!("[{:0>2}:{:.2} {}] {}", mins, secs, record.target(), msg).red()
             ),
             Level::Warn => println!(
                 "{}",
-                format!(
-                    "[{:0>2}:{:.2} {}] {}",
-                    mins,
-                    secs,
-                    record.target(),
-                    msg
-                ).yellow()
+                format!("[{:0>2}:{:.2} {}] {}", mins, secs, record.target(), msg).yellow()
             ),
             _ => println!("[{:0>2}:{:.2} {}] {}", mins, secs, record.target(), msg),
         }
