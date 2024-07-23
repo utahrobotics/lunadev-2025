@@ -1,12 +1,20 @@
 use std::{
-    collections::HashMap, marker::PhantomData, net::{Ipv4Addr, SocketAddrV4}, pin::Pin, sync::Arc, task::{Context, Poll}
+    collections::HashMap,
+    marker::PhantomData,
+    net::{Ipv4Addr, SocketAddrV4},
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
 };
 
 use bitcode::{decode, encode, DecodeOwned, Encode};
 pub use bytes;
 use bytes::{Bytes, BytesMut};
 use crossbeam::queue::SegQueue;
-use tokio::{io::{AsyncRead, AsyncWrite, ReadBuf}, net::UdpSocket};
+use tokio::{
+    io::{AsyncRead, AsyncWrite, ReadBuf},
+    net::UdpSocket,
+};
 use webrtc_sctp::{
     association::{Association, Config},
     chunk::chunk_payload_data::PayloadProtocolIdentifier,
@@ -40,7 +48,7 @@ impl Connection {
     pub async fn connect(
         client_addr: SocketAddrV4,
         local_socket: u16,
-        max_packet_size: u32
+        max_packet_size: u32,
     ) -> std::io::Result<Self> {
         let sctp_udp =
             UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, local_socket)).await?;
@@ -127,10 +135,7 @@ impl Connection {
         })
     }
 
-    pub async fn open_byte_stream(
-        &self,
-        id: u16,
-    ) -> std::io::Result<RWStream> {
+    pub async fn open_byte_stream(&self, id: u16) -> std::io::Result<RWStream> {
         let stream = self
             .association
             .open_stream(id, PayloadProtocolIdentifier::Binary)
@@ -148,7 +153,8 @@ impl Connection {
             if stream.stream_identifier() == id {
                 break Some(stream);
             } else {
-                self.unmatched_streams.insert(stream.stream_identifier(), stream);
+                self.unmatched_streams
+                    .insert(stream.stream_identifier(), stream);
             }
         }
     }
@@ -163,15 +169,11 @@ impl Connection {
         })
     }
 
-    pub async fn accept_rw_stream(
-        &mut self,
-        id: u16,
-    ) -> Option<RWStream> {
+    pub async fn accept_rw_stream(&mut self, id: u16) -> Option<RWStream> {
         let stream = self.accept_sctp_stream(id).await?;
         Some(RWStream(PollStream::new(stream)))
     }
 }
-
 
 pub struct CakapStream<T: ?Sized> {
     stream: Arc<Stream>,
@@ -223,9 +225,7 @@ impl CakapStream<[u8]> {
     }
 }
 
-
 pub struct RWStream(PollStream);
-
 
 impl AsyncRead for RWStream {
     fn poll_read(
@@ -246,11 +246,17 @@ impl AsyncWrite for RWStream {
         Pin::new(&mut self.0).poll_write(cx, buf)
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), std::io::Error>> {
+    fn poll_flush(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), std::io::Error>> {
         Pin::new(&mut self.0).poll_flush(cx)
     }
 
-    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), std::io::Error>> {
+    fn poll_shutdown(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), std::io::Error>> {
         Pin::new(&mut self.0).poll_shutdown(cx)
     }
 }

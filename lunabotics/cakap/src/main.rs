@@ -9,7 +9,10 @@ async fn main() {
         let conn = Connection::connect(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 54200), 0, 2048)
             .await
             .unwrap();
-        let stream = conn.open_unordered_unreliable_stream::<[u8]>(0).await.unwrap();
+        let stream = conn
+            .open_unordered_unreliable_stream::<[u8]>(0)
+            .await
+            .unwrap();
         stream.send(b"hello").await.unwrap();
         let mut bytes = BytesMut::new();
         stream.recv(&mut bytes).await.unwrap();

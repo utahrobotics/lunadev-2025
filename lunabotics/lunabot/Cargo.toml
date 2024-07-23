@@ -1,0 +1,11 @@
+[package]
+name = "lunabot"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+urobotics = { workspace = true }
+bonsai-bt = "0.6.3"
+bincode = { workspace = true }
+bitcode = { workspace = true }
+serde = { workspace = true }
