@@ -14,9 +14,11 @@ async fn main() {
             .await
             .unwrap();
         stream.send(b"hello").await.unwrap();
-        let mut bytes = BytesMut::new();
-        stream.recv(&mut bytes).await.unwrap();
-        println!("client: {}", std::str::from_utf8(&bytes).unwrap());
+        drop(conn);
+        drop(stream);
+        // let mut bytes = BytesMut::new();
+        // stream.recv(&mut bytes).await.unwrap();
+        // println!("client: {}", std::str::from_utf8(&bytes).unwrap());
     });
     let mut conn = Connection::bind(54200, 2048).await.unwrap();
     let stream = conn.accept_stream::<[u8]>(0).await.unwrap();

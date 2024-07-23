@@ -36,6 +36,7 @@ define_callbacks!(pub LogCallbacks => Fn(record: &log::Record) + Send + Sync);
 static LOG_CALLBACKS: LazyLock<LogCallbacksRef> = LazyLock::new(|| {
     let log_pub = LogPub::default();
     let log_pub_ref = log_pub.callbacks.get_ref();
+    log::set_max_level(LevelFilter::Trace);
     let _ = set_logger(Box::leak(Box::new(log_pub)));
     log_pub_ref
 });
@@ -195,18 +196,24 @@ pub fn log_to_console() -> LogFilter {
 
         match record.level() {
             Level::Error => println!(
-                "[{:0>2}:{:.2} {}] {}",
-                mins,
-                secs,
-                record.target(),
-                msg.red()
+                "{}",
+                format!(
+                    "[{:0>2}:{:.2} {}] {}",
+                    mins,
+                    secs,
+                    record.target(),
+                    msg
+                ).red()
             ),
             Level::Warn => println!(
-                "[{:0>2}:{:.2} {}] {}",
-                mins,
-                secs,
-                record.target(),
-                msg.yellow()
+                "{}",
+                format!(
+                    "[{:0>2}:{:.2} {}] {}",
+                    mins,
+                    secs,
+                    record.target(),
+                    msg
+                ).yellow()
             ),
             _ => println!("[{:0>2}:{:.2} {}] {}", mins, secs, record.target(), msg),
         }

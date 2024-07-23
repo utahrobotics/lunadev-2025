@@ -1692,10 +1692,10 @@ dependencies = [
 name = "lunabot"
 version = "0.1.0"
 dependencies = [
- "bincode",
  "bitcode",
  "bonsai-bt",
  "serde",
+ "spin_sleep",
  "urobotics",
 ]
 
