@@ -10,7 +10,7 @@ use spin_sleep::SpinSleeper;
 use urobotics::{
     app::{application, Application},
     camera,
-    log::error,
+    log::{error, warn},
     python, serial,
 };
 
@@ -19,7 +19,7 @@ mod run;
 mod setup;
 mod soft_stop;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum HighLevelActions {
     SoftStop,
     Setup,
@@ -57,6 +57,9 @@ impl Application for LunabotApp {
         );
 
         let mut bt: BT<HighLevelActions, Option<Blackboard>> = BT::new(top_level_behavior, None);
+        if let Err(e) = std::fs::write("bt.txt", bt.get_graphviz()) {
+            warn!("Failed to generate graphviz of behavior tree: {e}");
+        }
         let sleeper = SpinSleeper::default();
         let mut start_time = Instant::now();
         let target_delta = Duration::from_secs_f64(self.delta);
@@ -99,6 +102,7 @@ impl Application for LunabotApp {
 
             if status != Status::Running {
                 error!("Faced unexpected status while ticking: {status:?}");
+                bt.reset_bt();
             }
         }
     }
