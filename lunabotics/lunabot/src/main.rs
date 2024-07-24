@@ -63,26 +63,10 @@ impl Application for LunabotApp {
         let sleeper = SpinSleeper::default();
         let mut start_time = Instant::now();
         let target_delta = Duration::from_secs_f64(self.delta);
-        let mut elapsed = Duration::ZERO;
+        let mut elapsed = target_delta;
         let mut last_action = HighLevelActions::SoftStop;
 
         loop {
-            start_time += elapsed;
-            let mut remaining_delta = target_delta.saturating_sub(elapsed);
-
-            if let Some(bb) = bt.get_blackboard().get_db() {
-                if let Some(special_instant) = bb.peek_special_instant() {
-                    let duration_since = special_instant.duration_since(start_time);
-                    if duration_since < remaining_delta {
-                        bb.pop_special_instant();
-                        remaining_delta = duration_since;
-                    }
-                }
-            }
-
-            sleeper.sleep(remaining_delta);
-            elapsed = start_time.elapsed();
-
             let e: Event = UpdateArgs {
                 dt: elapsed.as_secs_f64(),
             }
@@ -99,11 +83,26 @@ impl Application for LunabotApp {
                 last_action = *args.action;
                 result
             });
-
             if status != Status::Running {
                 error!("Faced unexpected status while ticking: {status:?}");
                 bt.reset_bt();
             }
+            elapsed = start_time.elapsed();
+            let mut remaining_delta = target_delta.saturating_sub(elapsed);
+
+            if let Some(bb) = bt.get_blackboard().get_db() {
+                if let Some(special_instant) = bb.peek_special_instant() {
+                    let duration_since = special_instant.duration_since(start_time);
+                    if duration_since < remaining_delta {
+                        bb.pop_special_instant();
+                        remaining_delta = duration_since;
+                    }
+                }
+            }
+
+            sleeper.sleep(remaining_delta);
+            elapsed = start_time.elapsed();
+            start_time += elapsed;
         }
     }
 }
