@@ -3,7 +3,7 @@ use std::{
     future::Future,
     hash::{DefaultHasher, Hash, Hasher},
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-    sync::{Arc, OnceLock},
+    sync::{atomic::{AtomicUsize, Ordering}, Arc, OnceLock},
     time::Duration,
 };
 
@@ -23,11 +23,11 @@ struct CakapSocketShared {
     noreply_socket: UdpSocket,
     reliable_packet_sub: Subscriber<ReliablePacket>,
     send_to_addr: AtomicCell<Option<SocketAddr>>,
+    max_packet_size: AtomicUsize
 }
 
 pub struct CakapSocket {
     reply_socket: UdpSocket,
-    pub max_packet_size: usize,
     pub retransmission_duration: Duration,
     pub recycled_byte_vec_size: usize,
     bytes_callbacks: BytesCallbacks,
@@ -46,7 +46,6 @@ impl CakapSocket {
             UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, noreply_port)).await?;
         Ok(Self {
             reply_socket,
-            max_packet_size: 1496,
             retransmission_duration: Duration::from_millis(50),
             recycled_byte_vec_size: 0,
             bytes_callbacks: BytesCallbacks::default(),
@@ -57,6 +56,7 @@ impl CakapSocket {
                 noreply_socket,
                 reliable_packet_sub: Subscriber::new_unbounded(),
                 send_to_addr: AtomicCell::new(None),
+                max_packet_size: AtomicUsize::new(1400),
             }),
         })
     }
@@ -86,14 +86,19 @@ impl CakapSocket {
             shared.send_to_addr.store(Some(addr));
         }
     }
+
+    pub fn set_max_packet_size(&self, size: usize) {
+        self.shared.max_packet_size.store(size, Ordering::Relaxed);
+    }
 }
 
 impl AsyncTask for CakapSocket {
     type Output = Result<(), (Self, std::io::Error)>;
 
     async fn run(mut self) -> Self::Output {
-        let mut reply_buf = vec![0u8; self.max_packet_size];
-        let mut noreply_buf = vec![0u8; self.max_packet_size];
+        let max_packet_size = self.shared.max_packet_size.load(Ordering::Relaxed);
+        let mut reply_buf = vec![0u8; max_packet_size];
+        let mut noreply_buf = vec![0u8; max_packet_size];
         let mut retransmit_acks: FxHashSet<[u8; 8]> = FxHashSet::default();
         let mut retransmission_queue: BinaryHeap<PacketToRetransmit> = BinaryHeap::new();
         let get_send_to_addr = || self.shared.send_to_addr.load();
@@ -109,7 +114,13 @@ impl AsyncTask for CakapSocket {
                     if len == 8 && retransmit_acks.remove(&reply_buf[..8]) {
                         continue;
                     }
-                    self.bytes_callbacks.call(&reply_buf[..len]);
+                    let payload = &reply_buf[..len];
+                    self.bytes_callbacks.call(payload);
+                    
+                    let ack = ReliablePacket::create_ack(payload);
+                    if let Err(e) = self.reply_socket.send_to(&ack, addr).await {
+                        break Err((self, e));
+                    }
                 }
                 result = self.shared.noreply_socket.recv_from(&mut noreply_buf) => {
                     let (len, addr) = match result {
@@ -306,8 +317,14 @@ impl CakapStream {
         async {
             let Some(mut addr) = self.shared.send_to_addr.load() else {
                 error!("No address to send to");
+                std::mem::forget(guard);
                 return;
             };
+            if payload.len() > self.shared.max_packet_size.load(Ordering::Relaxed) {
+                error!("Payload too large to send");
+                std::mem::forget(guard);
+                return;
+            }
             let new_port = addr.port().wrapping_add(1);
             if new_port == 0 {
                 addr.set_port(MIN_PORT);
@@ -335,11 +352,17 @@ impl CakapStream {
         async {
             let Some(mut addr) = self.shared.send_to_addr.load() else {
                 error!("No address to send to");
+                std::mem::forget(guard);
                 return;
             };
             let SendUnreliable::Vec { vec, .. } = &guard else {
                 unreachable!()
             };
+            if vec.len() > self.shared.max_packet_size.load(Ordering::Relaxed) {
+                error!("Payload too large to send");
+                std::mem::forget(guard);
+                return;
+            }
 
             let new_port = addr.port().wrapping_add(1);
             if new_port == 0 {
@@ -358,6 +381,10 @@ impl CakapStream {
     }
 
     pub fn send_reliable(&self, payload: Vec<u8>) {
+        if payload.len() > self.shared.max_packet_size.load(Ordering::Relaxed) {
+            error!("Payload too large to send");
+            return;
+        }
         self.shared
             .reliable_packet_sub
             .put(ReliablePacket::new(payload));
@@ -365,7 +392,7 @@ impl CakapStream {
 
     pub fn create_eventual_reliability_stream(&self) -> EventualReliabilityStream {
         EventualReliabilityStream {
-            reliable_packet_sub: &self.shared.reliable_packet_sub,
+            stream: &self,
             old_ack: None,
         }
     }
@@ -420,21 +447,25 @@ impl<'a, 'b> Drop for SendUnreliable<'a, 'b> {
 }
 
 pub struct EventualReliabilityStream<'a> {
-    reliable_packet_sub: &'a Subscriber<ReliablePacket>,
+    stream: &'a CakapStream,
     old_ack: Option<[u8; 8]>,
 }
 
 impl<'a> EventualReliabilityStream<'a> {
     pub fn send(&mut self, payload: Vec<u8>) {
+        if payload.len() > self.stream.shared.max_packet_size.load(Ordering::Relaxed) {
+            error!("Payload too large to send");
+            return;
+        }
         let new_ack;
         if let Some(old_ack) = self.old_ack {
             let packet = ReliablePacket::replace(payload, old_ack);
             new_ack = packet.get_ack();
-            self.reliable_packet_sub.put(packet);
+            self.stream.shared.reliable_packet_sub.put(packet);
         } else {
             let packet = ReliablePacket::new(payload);
             new_ack = packet.get_ack();
-            self.reliable_packet_sub.put(packet);
+            self.stream.shared.reliable_packet_sub.put(packet);
         }
         self.old_ack = Some(new_ack);
     }
