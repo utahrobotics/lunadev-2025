@@ -1,27 +1,44 @@
 use std::future::Future;
 
+use tokio::runtime::Handle;
+
 use crate::get_tokio_handle;
 
 pub trait SyncTask: Send + Sized + 'static {
-    type Output: Loggable;
+    type Output;
 
     fn run(self) -> Self::Output;
-    fn spawn(self) {
+    fn spawn(self)
+    where
+        Self::Output: Loggable,
+    {
+        self.spawn_with(|x| x.log())
+    }
+    fn spawn_with(self, f: impl FnOnce(Self::Output) + Send + 'static) {
         std::thread::spawn(move || {
-            self.run().log();
+            f(self.run());
         });
     }
 }
 
 pub trait AsyncTask: Sized {
-    type Output: Loggable;
+    type Output;
 
     fn run(self) -> impl Future<Output = Self::Output> + Send + 'static;
-    fn spawn(self) {
+    fn spawn(self)
+    where
+        Self::Output: Loggable,
+    {
+        self.spawn_with(|x| x.log())
+    }
+    fn spawn_with(self, f: impl FnOnce(Self::Output) + Send + 'static) {
         let fut = self.run();
-        get_tokio_handle().spawn(async move {
-            fut.await.log();
-        });
+        Handle::try_current()
+            .unwrap_or_else(|_| get_tokio_handle())
+            .spawn(async move {
+                let output = fut.await;
+                f(output);
+            });
     }
 }
 

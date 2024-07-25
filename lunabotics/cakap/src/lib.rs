@@ -1,262 +1,384 @@
+#![feature(impl_trait_in_fn_trait_return)]
+
 use std::{
-    collections::HashMap,
-    marker::PhantomData,
-    net::{Ipv4Addr, SocketAddrV4},
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
+    collections::BinaryHeap, future::Future, hash::{DefaultHasher, Hash, Hasher}, net::{Ipv4Addr, SocketAddr, SocketAddrV4}, sync::{Arc, OnceLock}, time::Duration
 };
 
-use bitcode::{decode, encode, DecodeOwned, Encode};
-pub use bytes;
-use bytes::{Bytes, BytesMut};
-use crossbeam::queue::SegQueue;
+use crossbeam::queue::ArrayQueue;
+use fxhash::FxHashSet;
+use tasker::{callbacks::callee::Subscriber, define_callbacks, task::AsyncTask};
 use tokio::{
-    io::{AsyncRead, AsyncWrite, ReadBuf},
     net::UdpSocket,
+    time::{sleep_until, Instant},
 };
-use webrtc_sctp::{
-    association::{Association, Config},
-    chunk::chunk_payload_data::PayloadProtocolIdentifier,
-    stream::{PollStream, ReliabilityType, Stream},
-};
-use webrtc_util::conn::conn_disconnected_packet::DisconnectedPacketConn;
 
-pub struct Connection {
-    association: Association,
-    unmatched_streams: HashMap<u16, Arc<Stream>>,
+const MIN_PORT: u16 = 10000;
+define_callbacks!(pub BytesCallbacks => Fn(record: &[u8]) + Send + Sync);
+
+pub struct CakapSocket {
+    reply_socket: Arc<UdpSocket>,
+    noreply_socket: Arc<UdpSocket>,
+    pub max_packet_size: usize,
+    pub retransmission_duration: Duration,
+    pub recycled_byte_vec_size: usize,
+    bytes_callbacks: BytesCallbacks,
+    recycled_byte_vecs: RecycledByteVecs,
+    reliable_packet_sub: Arc<Subscriber<ReliablePacket>>,
 }
 
-impl Connection {
-    pub async fn bind(local_socket: u16, max_packet_size: u32) -> std::io::Result<Self> {
-        let sctp_udp =
-            UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, local_socket)).await?;
-        let sctp = Association::server(Config {
-            net_conn: Arc::new(DisconnectedPacketConn::new(Arc::new(sctp_udp))),
-            max_receive_buffer_size: max_packet_size,
-            max_message_size: max_packet_size,
-            name: "server".into(),
-        })
-        .await?;
-
-        Ok(Self {
-            association: sctp,
-            unmatched_streams: HashMap::new(),
-        })
-    }
-
-    pub async fn connect(
-        client_addr: SocketAddrV4,
-        local_socket: u16,
-        max_packet_size: u32,
-    ) -> std::io::Result<Self> {
-        let sctp_udp =
-            UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, local_socket)).await?;
-        sctp_udp.connect(client_addr).await?;
-        let sctp = Association::client(Config {
-            net_conn: Arc::new(sctp_udp),
-            max_receive_buffer_size: max_packet_size,
-            max_message_size: max_packet_size,
-            name: client_addr.to_string(),
-        })
-        .await?;
-
-        Ok(Self {
-            association: sctp,
-            unmatched_streams: HashMap::new(),
-        })
-    }
-
-    pub async fn open_unordered_unreliable_stream<T: ?Sized>(
-        &self,
-        id: u16,
-    ) -> std::io::Result<CakapStream<T>> {
-        let stream = self
-            .association
-            .open_stream(id, PayloadProtocolIdentifier::Binary)
-            .await?;
-        stream.set_reliability_params(true, ReliabilityType::Rexmit, 0);
-        Ok(CakapStream {
-            stream,
-            max_packet_size: self.association.max_message_size() as usize,
-            buffer_queue: SegQueue::default(),
-            _phantom: PhantomData,
-        })
-    }
-
-    pub async fn open_ordered_unreliable_stream<T: ?Sized>(
-        &self,
-        id: u16,
-    ) -> std::io::Result<CakapStream<T>> {
-        let stream = self
-            .association
-            .open_stream(id, PayloadProtocolIdentifier::Binary)
-            .await?;
-        stream.set_reliability_params(false, ReliabilityType::Rexmit, 0);
-        Ok(CakapStream {
-            stream,
-            max_packet_size: self.association.max_message_size() as usize,
-            buffer_queue: SegQueue::default(),
-            _phantom: PhantomData,
-        })
-    }
-
-    pub async fn open_unordered_reliable_stream<T: ?Sized>(
-        &self,
-        id: u16,
-    ) -> std::io::Result<CakapStream<T>> {
-        let stream = self
-            .association
-            .open_stream(id, PayloadProtocolIdentifier::Binary)
-            .await?;
-        stream.set_reliability_params(true, ReliabilityType::Reliable, 0);
-        Ok(CakapStream {
-            stream,
-            max_packet_size: self.association.max_message_size() as usize,
-            buffer_queue: SegQueue::default(),
-            _phantom: PhantomData,
-        })
-    }
-
-    pub async fn open_ordered_reliable_stream<T: ?Sized>(
-        &self,
-        id: u16,
-    ) -> std::io::Result<CakapStream<T>> {
-        let stream = self
-            .association
-            .open_stream(id, PayloadProtocolIdentifier::Binary)
-            .await?;
-        stream.set_reliability_params(false, ReliabilityType::Reliable, 0);
-        Ok(CakapStream {
-            stream,
-            max_packet_size: self.association.max_message_size() as usize,
-            buffer_queue: SegQueue::default(),
-            _phantom: PhantomData,
-        })
-    }
-
-    pub async fn open_byte_stream(&self, id: u16) -> std::io::Result<RWStream> {
-        let stream = self
-            .association
-            .open_stream(id, PayloadProtocolIdentifier::Binary)
-            .await?;
-        stream.set_reliability_params(false, ReliabilityType::Reliable, 0);
-        Ok(RWStream(PollStream::new(stream)))
-    }
-
-    async fn accept_sctp_stream(&mut self, id: u16) -> Option<Arc<Stream>> {
-        if let Some(stream) = self.unmatched_streams.remove(&id) {
-            return Some(stream);
+impl CakapSocket {
+    pub async fn bind(port: u16) -> std::io::Result<Self> {
+        let reply_socket = Arc::new(UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port)).await?);
+        let mut noreply_port = reply_socket.local_addr()?.port().wrapping_add(1);
+        if noreply_port == 0 {
+            noreply_port = MIN_PORT;
         }
-        loop {
-            let stream = self.association.accept_stream().await?;
-            if stream.stream_identifier() == id {
-                break Some(stream);
-            } else {
-                self.unmatched_streams
-                    .insert(stream.stream_identifier(), stream);
+        let noreply_socket = Arc::new(UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, noreply_port)).await?);
+        Ok(Self {
+            reply_socket,
+            noreply_socket,
+            max_packet_size: 1496,
+            retransmission_duration: Duration::from_millis(50),
+            recycled_byte_vec_size: 0,
+            bytes_callbacks: BytesCallbacks::default(),
+            recycled_byte_vecs: RecycledByteVecs {
+                queue: Arc::new(OnceLock::new()),
+            },
+            reliable_packet_sub: Arc::new(Subscriber::new_unbounded()),
+        })
+    }
+
+    pub fn get_recycled_byte_vecs(&self) -> RecycledByteVecs {
+        self.recycled_byte_vecs.clone()
+    }
+
+    pub fn spawn_looping(self) {
+        self.spawn_with(|result| {
+            let (socket, e) = result.unwrap_err();
+            log::error!("Error in CakapSocket: {}", e);
+            socket.spawn_looping();
+        });
+    }
+
+    pub fn get_stream(&self) -> CakapStream {
+        CakapStream {
+            noreply_socket: self.noreply_socket.clone(),
+            recycled_byte_vecs: self.get_recycled_byte_vecs(),
+            reliable_packet_pub: Arc::new(self.reliable_packet_sub.create_callback()),
+        }
+    }
+
+    pub fn get_connect_callback(&self) -> impl Fn(SocketAddr) -> impl Future<Output=std::io::Result<()>> {
+        let reply_socket = self.reply_socket.clone();
+        let noreply_socket = self.noreply_socket.clone();
+
+        move |mut addr| {
+            let reply_socket = reply_socket.clone();
+            let noreply_socket = noreply_socket.clone();
+            async move {
+                let _ = reply_socket.connect(addr).await?;
+                let mut noreply_port = addr.port().wrapping_add(1);
+                if noreply_port == 0 {
+                    noreply_port = MIN_PORT;
+                }
+                addr.set_port(noreply_port);
+                noreply_socket.connect(addr).await
             }
         }
     }
+}
 
-    pub async fn accept_stream<T: ?Sized>(&mut self, id: u16) -> Option<CakapStream<T>> {
-        let stream = self.accept_sctp_stream(id).await?;
-        Some(CakapStream {
-            stream,
-            max_packet_size: self.association.max_message_size() as usize,
-            buffer_queue: SegQueue::default(),
-            _phantom: PhantomData,
+impl AsyncTask for CakapSocket {
+    type Output = Result<(), (Self, std::io::Error)>;
+
+    async fn run(mut self) -> Self::Output {
+        let mut reply_buf = vec![0u8; self.max_packet_size];
+        let mut noreply_buf = vec![0u8; self.max_packet_size];
+        let mut retransmit_acks: FxHashSet<[u8; 8]> = FxHashSet::default();
+        let mut retransmission_queue: BinaryHeap<PacketToRetransmit> = BinaryHeap::new();
+        
+        loop {
+            tokio::select! {
+                result = self.reply_socket.recv(&mut reply_buf) => {
+                    let len = match result {
+                        Ok(x) => x,
+                        Err(e) => break Err((self, e)),
+                    };
+                    if len == 8 && retransmit_acks.remove(&reply_buf[..8]) {
+                        continue;
+                    }
+                    self.bytes_callbacks.call(&reply_buf[..len]);
+                }
+                result = self.noreply_socket.recv(&mut noreply_buf) => {
+                    let len = match result {
+                        Ok(x) => x,
+                        Err(e) => break Err((self, e)),
+                    };
+                    self.bytes_callbacks.call(&noreply_buf[..len]);
+                }
+                e = async {
+                    loop {
+                        if let Some(retransmit) = retransmission_queue.peek() {
+                            if retransmit_acks.contains(&retransmit.ack) {
+                                sleep_until(retransmit.instant).await;
+
+                                if let Err(e) = self.reply_socket.send(&retransmit.payload).await {
+                                    break e;
+                                }
+                            } else {
+                                let PacketToRetransmit { payload, .. } = retransmission_queue.pop().unwrap();
+                                self.recycled_byte_vecs.recycle_vec(payload);
+                            }
+                        } else {
+                            std::future::pending().await
+                        }
+                    }
+                } => break Err((self, e)),
+                packet = async {
+                    loop {
+                        if let Some(packet) = self.reliable_packet_sub.recv().await {
+                            break packet;
+                        } else {
+                            tokio::time::sleep(self.retransmission_duration).await;
+                        }
+                    }
+                } => {
+                    match packet {
+                        ReliablePacket::New { payload, ack } => {
+                            retransmit_acks.insert(ack);
+                            if let Err(e) = self.reply_socket.send(&payload).await {
+                                break Err((self, e));
+                            }
+                            retransmission_queue.push(PacketToRetransmit {
+                                instant: Instant::now() + self.retransmission_duration,
+                                payload,
+                                ack
+                            });
+                        }
+                        ReliablePacket::Replace { payload, new_ack, old_ack } => {
+                            retransmit_acks.remove(&old_ack);
+                            retransmit_acks.insert(new_ack);
+                            if let Err(e) = self.reply_socket.send(&payload).await {
+                                break Err((self, e));
+                            }
+                            retransmission_queue.push(PacketToRetransmit {
+                                instant: Instant::now() + self.retransmission_duration,
+                                payload,
+                                ack: new_ack
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct RecycledByteVecs {
+    queue: Arc<OnceLock<ArrayQueue<Vec<u8>>>>,
+}
+
+impl RecycledByteVecs {
+    pub fn get_vec(&self) -> Vec<u8> {
+        self.queue
+            .get()
+            .map(|queue| queue.pop().unwrap_or_default())
+            .unwrap_or_default()
+    }
+
+    pub fn recycle_vec(&self, mut vec: Vec<u8>) {
+        vec.clear();
+        self.queue.get().map(|queue| queue.push(vec));
+    }
+}
+
+struct PacketToRetransmit {
+    instant: Instant,
+    payload: Vec<u8>,
+    ack: [u8; 8],
+}
+
+impl Ord for PacketToRetransmit {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.instant.cmp(&self.instant)
+    }
+}
+
+impl PartialOrd for PacketToRetransmit {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for PacketToRetransmit {
+    fn eq(&self, other: &Self) -> bool {
+        self.instant == other.instant
+    }
+}
+
+impl Eq for PacketToRetransmit {}
+
+enum ReliablePacket {
+    New {
+        payload: Vec<u8>,
+        ack: [u8; 8],
+    },
+    Replace {
+        payload: Vec<u8>,
+        new_ack: [u8; 8],
+        old_ack: [u8; 8],
+    },
+}
+
+impl ReliablePacket {
+    fn create_ack(data: &[u8]) -> [u8; 8] {
+        if data.len() <= 8 {
+            let mut ack = [0u8; 8];
+            ack[..data.len()].copy_from_slice(data);
+            return ack;
+        }
+        let mut hasher = DefaultHasher::default();
+        data.hash(&mut hasher);
+        hasher.finish().to_ne_bytes()
+    }
+
+    fn new(payload: Vec<u8>) -> Self {
+        Self::New {
+            ack: Self::create_ack(&payload),
+            payload,
+        }
+    }
+
+    fn replace(payload: Vec<u8>, old_ack: [u8; 8]) -> Self {
+        Self::Replace {
+            new_ack: Self::create_ack(&payload),
+            payload,
+            old_ack,
+        }
+    }
+
+    fn get_ack(&self) -> [u8; 8] {
+        match self {
+            Self::New { ack, .. } => *ack,
+            Self::Replace { new_ack, .. } => *new_ack,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct CakapStream {
+    noreply_socket: Arc<UdpSocket>,
+    recycled_byte_vecs: RecycledByteVecs,
+    reliable_packet_pub: Arc<dyn Fn(ReliablePacket) + Send + Sync>,
+}
+
+impl CakapStream {
+    /// Send a payload with no guarantees of delivery and ordering.
+    /// 
+    /// The returned future may be awaited on to efficiently send the payload using the current
+    /// async runtime. If the future is dropped, the payload will be send to a separate task
+    /// to be sent. This involves copying the payload and may incur a heap allocation if there is
+    /// not a recycled byte vec available.
+    /// 
+    /// This function does not need to be called from within an async context. One will be made
+    /// if necessary.
+    pub fn send_unreliable<'a>(&'a self, payload: &'a [u8]) -> impl Future<Output = ()> + 'a {
+        let guard = SendUnreliable::Slice {
+            stream: self,
+            slice: &payload,
+        };
+        async {
+            let _ = self.noreply_socket.send(payload).await;
+            std::mem::forget(guard);
+        }
+    }
+
+    /// Send a payload with no guarantees of delivery and ordering.
+    /// 
+    /// The returned future may be awaited on to efficiently send the payload using the current
+    /// async runtime. If the future is dropped, the payload will be send to a separate task
+    /// to be sent.
+    /// 
+    /// This function does not need to be called from within an async context. One will be made
+    /// if necessary.
+    pub fn send_unreliable_vec<'a>(&'a self, payload: Vec<u8>) -> impl Future<Output = ()> + 'a {
+        let guard = SendUnreliable::Vec {
+            stream: self,
+            vec: payload,
+        };
+        async {
+            let SendUnreliable::Vec { vec, .. } = &guard else { unreachable!() };
+            let _ = self.noreply_socket.send(vec).await;
+            std::mem::forget(guard);
+        }
+    }
+
+    pub fn get_recycled_byte_vecs(&self) -> RecycledByteVecs {
+        self.recycled_byte_vecs.clone()
+    }
+
+    pub fn send_reliable(&self, payload: Vec<u8>) {
+        (self.reliable_packet_pub)(ReliablePacket::new(payload));
+    }
+
+    pub fn create_eventual_reliability_stream(&self) -> EventualReliabilityStream {
+        EventualReliabilityStream {
+            reliable_packet_pub: &*self.reliable_packet_pub,
+            old_ack: None
+        }
+    }
+}
+
+enum SendUnreliable<'a, 'b> {
+    Slice {
+        stream: &'a CakapStream,
+        slice: &'b [u8],
+    },
+    Vec {
+        stream: &'a CakapStream,
+        vec: Vec<u8>,
+    }
+}
+
+impl<'a, 'b> Drop for SendUnreliable<'a, 'b> {
+    fn drop(&mut self) {
+        let (recycled_byte_vecs, stream, payload) = match self {
+            SendUnreliable::Slice { stream, slice } => {
+                let recycled_byte_vecs = stream.get_recycled_byte_vecs();
+                let mut vec = recycled_byte_vecs.get_vec();
+                vec.extend_from_slice(slice);
+                (recycled_byte_vecs, *stream, vec)
+            }
+            SendUnreliable::Vec { stream, vec } => (stream.get_recycled_byte_vecs(), *stream, std::mem::take(vec)),
+        };
+
+        let udp = stream.noreply_socket.clone();
+        (|| async move {
+            let _ = udp.send(&payload).await;
+            recycled_byte_vecs.recycle_vec(payload);
         })
-    }
-
-    pub async fn accept_rw_stream(&mut self, id: u16) -> Option<RWStream> {
-        let stream = self.accept_sctp_stream(id).await?;
-        Some(RWStream(PollStream::new(stream)))
+        .spawn();
     }
 }
 
-pub struct CakapStream<T: ?Sized> {
-    stream: Arc<Stream>,
-    max_packet_size: usize,
-    buffer_queue: SegQueue<Box<[u8]>>,
-    _phantom: PhantomData<T>,
+pub struct EventualReliabilityStream<'a> {
+    reliable_packet_pub: &'a (dyn Fn(ReliablePacket) + Send + Sync),
+    old_ack: Option<[u8; 8]>
 }
 
-impl<T: Encode + DecodeOwned> CakapStream<T> {
-    pub async fn send(&self, message: &T) -> anyhow::Result<()> {
-        let payload = encode(message);
-        if payload.len() > self.max_packet_size {
-            return Err(anyhow::anyhow!("Payload too large"));
+impl<'a> EventualReliabilityStream<'a> {
+    pub fn send(&mut self, payload: Vec<u8>) {
+        let new_ack;
+        if let Some(old_ack) = self.old_ack {
+            let packet = ReliablePacket::replace(payload, old_ack);
+            new_ack = packet.get_ack();
+            (self.reliable_packet_pub)(packet);
+        } else {
+            let packet = ReliablePacket::new(payload);
+            new_ack = packet.get_ack();
+            (self.reliable_packet_pub)(packet);
         }
-        self.stream.write(&Bytes::from(payload)).await?;
-        Ok(())
-    }
-
-    pub async fn recv(&self) -> anyhow::Result<T> {
-        let mut buf = self
-            .buffer_queue
-            .pop()
-            .unwrap_or_else(|| vec![0; self.max_packet_size].into_boxed_slice());
-        let n = self.stream.read(&mut buf).await?;
-        let res = decode(&buf[..n]).map_err(Into::into);
-        self.buffer_queue.push(buf);
-        res
-    }
-}
-
-impl CakapStream<[u8]> {
-    pub async fn send(&self, message: &[u8]) -> anyhow::Result<()> {
-        if message.len() > self.max_packet_size {
-            return Err(anyhow::anyhow!("Payload too large"));
-        }
-        self.stream.write(&Bytes::copy_from_slice(message)).await?;
-        Ok(())
-    }
-
-    pub async fn recv(&self, bytes: &mut BytesMut) -> anyhow::Result<usize> {
-        let mut buf = self
-            .buffer_queue
-            .pop()
-            .unwrap_or_else(|| vec![0; self.max_packet_size].into_boxed_slice());
-        let n = self.stream.read(&mut buf).await?;
-        bytes.extend_from_slice(&buf[..n]);
-        self.buffer_queue.push(buf);
-        Ok(n)
-    }
-}
-
-pub struct RWStream(PollStream);
-
-impl AsyncRead for RWStream {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context,
-        buf: &mut ReadBuf,
-    ) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.0).poll_read(cx, buf)
-    }
-}
-
-impl AsyncWrite for RWStream {
-    fn poll_write(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<Result<usize, std::io::Error>> {
-        Pin::new(&mut self.0).poll_write(cx, buf)
-    }
-
-    fn poll_flush(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), std::io::Error>> {
-        Pin::new(&mut self.0).poll_flush(cx)
-    }
-
-    fn poll_shutdown(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), std::io::Error>> {
-        Pin::new(&mut self.0).poll_shutdown(cx)
+        self.old_ack = Some(new_ack);
     }
 }

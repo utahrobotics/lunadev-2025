@@ -111,6 +111,10 @@ impl<T> Subscriber<T> {
 
     /// Receives a value, blocking until a value is available, or
     /// blocking forever if the subscriber is closed.
+    ///
+    /// # Note
+    /// This will still await forever even if during awaiting, a callback
+    /// is made.
     pub async fn recv_or_never(&self) -> T {
         if let Some(value) = self.recv().await {
             value
