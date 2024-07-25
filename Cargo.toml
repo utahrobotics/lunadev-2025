@@ -4,7 +4,7 @@ members = [
     "urobotics/urobotics-core", "urobotics/urobotics-smach",
     "urobotics/urobotics-video",
     "urobotics/urobotics-serial", "urobotics/urobotics-app", "examples/urobotics-tool", "urobotics/urobotics",
-    "urobotics/urobotics-camera", "urobotics/urobotics-py", "urobotics/urobotics-apriltag", "misc/tasker", "lunabotics/cakap", "lunabotics/lunabot",
+    "urobotics/urobotics-camera", "urobotics/urobotics-py", "urobotics/urobotics-apriltag", "misc/tasker", "lunabotics/cakap", "lunabotics/lunabot", "lunabotics/common",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]
@@ -54,6 +54,7 @@ urobotics = { path = "urobotics/urobotics" }
 urobotics-camera = { path = "urobotics/urobotics-camera" }
 urobotics-py = { path = "urobotics/urobotics-py" }
 tasker = { path = "misc/tasker" }
+cakap = { path = "lunabotics/cakap" }
 
 # The following crates need to run at full power
 # in most contexts to be effective.

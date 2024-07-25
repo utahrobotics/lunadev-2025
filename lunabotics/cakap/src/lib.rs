@@ -3,27 +3,32 @@ use std::{
     future::Future,
     hash::{DefaultHasher, Hash, Hasher},
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-    sync::{atomic::{AtomicUsize, Ordering}, Arc, OnceLock},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, OnceLock,
+    },
     time::Duration,
 };
 
 use crossbeam::{atomic::AtomicCell, queue::ArrayQueue};
 use fxhash::FxHashSet;
 use log::error;
-use tasker::{callbacks::callee::Subscriber, define_callbacks, task::AsyncTask};
+use tasker::{callbacks::callee::Subscriber, define_callbacks, fn_alias, task::AsyncTask};
 use tokio::{
     net::UdpSocket,
+    sync::mpsc,
     time::{sleep_until, Instant},
 };
 
 const MIN_PORT: u16 = 10000;
 define_callbacks!(pub BytesCallbacks => Fn(record: &[u8]) + Send + Sync);
+fn_alias!(pub type BytesCallbacksRef = CallbacksRef(&[u8]) + Send + Sync);
 
 struct CakapSocketShared {
     noreply_socket: UdpSocket,
     reliable_packet_sub: Subscriber<ReliablePacket>,
     send_to_addr: AtomicCell<Option<SocketAddr>>,
-    max_packet_size: AtomicUsize
+    max_packet_size: AtomicUsize,
 }
 
 pub struct CakapSocket {
@@ -33,6 +38,8 @@ pub struct CakapSocket {
     bytes_callbacks: BytesCallbacks,
     recycled_byte_vecs: RecycledByteVecs,
     shared: Arc<CakapSocketShared>,
+    existing_stream_tx: mpsc::Sender<()>,
+    existing_stream_rx: mpsc::Receiver<()>,
 }
 
 impl CakapSocket {
@@ -44,6 +51,7 @@ impl CakapSocket {
         }
         let noreply_socket =
             UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, noreply_port)).await?;
+        let (existing_stream_tx, existing_stream_rx) = mpsc::channel(1);
         Ok(Self {
             reply_socket,
             retransmission_duration: Duration::from_millis(50),
@@ -58,6 +66,8 @@ impl CakapSocket {
                 send_to_addr: AtomicCell::new(None),
                 max_packet_size: AtomicUsize::new(1400),
             }),
+            existing_stream_tx,
+            existing_stream_rx,
         })
     }
 
@@ -73,22 +83,31 @@ impl CakapSocket {
         });
     }
 
-    pub fn get_stream(&self) -> CakapStream {
-        CakapStream {
+    pub fn get_stream(&self) -> CakapSender {
+        CakapSender {
             shared: self.shared.clone(),
             recycled_byte_vecs: self.get_recycled_byte_vecs(),
+            _existing_stream_tx: self.existing_stream_tx.clone(),
         }
     }
 
-    pub fn send_addr_setter(&self) -> impl Fn(SocketAddr) + Send + Sync {
-        let shared = self.shared.clone();
-        move |addr| {
-            shared.send_to_addr.store(Some(addr));
-        }
+    pub fn get_bytes_callback_ref(&self) -> BytesCallbacksRef {
+        self.bytes_callbacks.get_ref()
     }
+
+    // pub fn send_addr_setter(&self) -> impl Fn(SocketAddr) + Send + Sync {
+    //     let shared = self.shared.clone();
+    //     move |addr| {
+    //         shared.send_to_addr.store(Some(addr));
+    //     }
+    // }
 
     pub fn set_max_packet_size(&self, size: usize) {
         self.shared.max_packet_size.store(size, Ordering::Relaxed);
+    }
+
+    pub fn local_addr(&self) -> std::io::Result<SocketAddr> {
+        self.reply_socket.local_addr()
     }
 }
 
@@ -116,7 +135,7 @@ impl AsyncTask for CakapSocket {
                     }
                     let payload = &reply_buf[..len];
                     self.bytes_callbacks.call(payload);
-                    
+
                     let ack = ReliablePacket::create_ack(payload);
                     if let Err(e) = self.reply_socket.send_to(&ack, addr).await {
                         break Err((self, e));
@@ -129,6 +148,10 @@ impl AsyncTask for CakapSocket {
                     };
                     self.shared.send_to_addr.store(Some(addr));
                     self.bytes_callbacks.call(&noreply_buf[..len]);
+                }
+                res = self.existing_stream_rx.recv() => {
+                    debug_assert!(res.is_none());
+                    break Ok(());
                 }
                 e = async {
                     loop {
@@ -294,12 +317,23 @@ impl ReliablePacket {
 }
 
 #[derive(Clone)]
-pub struct CakapStream {
+pub struct CakapSender {
     shared: Arc<CakapSocketShared>,
     recycled_byte_vecs: RecycledByteVecs,
+    _existing_stream_tx: mpsc::Sender<()>,
 }
 
-impl CakapStream {
+impl std::fmt::Debug for CakapSender {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CakapSender")
+            .field("max_packet_size", &self.shared.max_packet_size.load(Ordering::Relaxed))
+            .field("send_to_addr", &self.shared.send_to_addr.load())
+            .field("recycled_byte_vecs", &self.recycled_byte_vecs.queue.get().map(|x| x.len()))
+            .finish()
+    }
+}
+
+impl CakapSender {
     /// Send a payload with no guarantees of delivery and ordering.
     ///
     /// The returned future may be awaited on to efficiently send the payload using the current
@@ -396,15 +430,20 @@ impl CakapStream {
             old_ack: None,
         }
     }
+
+    /// Sets the address to send to for *all* CakapStreams created from the same CakapSocket.
+    pub fn set_send_addr(&self, addr: SocketAddr) {
+        self.shared.send_to_addr.store(Some(addr));
+    }
 }
 
 enum SendUnreliable<'a, 'b> {
     Slice {
-        stream: &'a CakapStream,
+        stream: &'a CakapSender,
         slice: &'b [u8],
     },
     Vec {
-        stream: &'a CakapStream,
+        stream: &'a CakapSender,
         vec: Vec<u8>,
     },
 }
@@ -447,7 +486,7 @@ impl<'a, 'b> Drop for SendUnreliable<'a, 'b> {
 }
 
 pub struct EventualReliabilityStream<'a> {
-    stream: &'a CakapStream,
+    stream: &'a CakapSender,
     old_ack: Option<[u8; 8]>,
 }
 

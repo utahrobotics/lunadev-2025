@@ -1,11 +1,10 @@
 use std::{
-    path::Path,
-    time::{Duration, Instant},
+    net::SocketAddrV4, path::Path, time::{Duration, Instant}
 };
 
-use blackboard::Blackboard;
 use bonsai_bt::{Behavior::*, Event, Status, UpdateArgs, BT};
 use serde::{Deserialize, Serialize};
+use setup::Blackboard;
 use spin_sleep::SpinSleeper;
 use urobotics::{
     app::{application, Application},
@@ -14,7 +13,6 @@ use urobotics::{
     python, serial,
 };
 
-mod blackboard;
 mod run;
 mod setup;
 mod soft_stop;
@@ -29,7 +27,8 @@ enum HighLevelActions {
 #[derive(Serialize, Deserialize)]
 struct LunabotApp {
     #[serde(default = "default_delta")]
-    delta: f64,
+    target_delta: f64,
+    lunabase_address: SocketAddrV4
 }
 
 fn default_delta() -> f64 {
@@ -62,7 +61,7 @@ impl Application for LunabotApp {
         }
         let sleeper = SpinSleeper::default();
         let mut start_time = Instant::now();
-        let target_delta = Duration::from_secs_f64(self.delta);
+        let target_delta = Duration::from_secs_f64(self.target_delta);
         let mut elapsed = target_delta;
         let mut last_action = HighLevelActions::SoftStop;
 
@@ -75,10 +74,10 @@ impl Application for LunabotApp {
                 let first_time = last_action != *args.action;
                 let result = match args.action {
                     HighLevelActions::SoftStop => {
-                        soft_stop::soft_stop(bb.get_db(), args.dt, first_time)
+                        soft_stop::soft_stop(bb.get_db(), args.dt, first_time, &self)
                     }
-                    HighLevelActions::Setup => setup::setup(bb.get_db(), args.dt, first_time),
-                    HighLevelActions::Run => run::run(bb.get_db(), args.dt, first_time),
+                    HighLevelActions::Setup => setup::setup(bb.get_db(), args.dt, first_time, &self),
+                    HighLevelActions::Run => run::run(bb.get_db(), args.dt, first_time, &self),
                 };
                 last_action = *args.action;
                 result
@@ -104,6 +103,12 @@ impl Application for LunabotApp {
             elapsed = start_time.elapsed();
             start_time += elapsed;
         }
+    }
+}
+
+impl LunabotApp {
+    pub fn get_target_delta(&self) -> Duration {
+        Duration::from_secs_f64(self.target_delta)
     }
 }
 

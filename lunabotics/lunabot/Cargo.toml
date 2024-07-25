@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 urobotics = { workspace = true, features = ["serial", "camera", "python", "app"]}
 bonsai-bt = "0.6.3"
-bitcode = { workspace = true }
 serde = { workspace = true }
 spin_sleep = { workspace = true }
+cakap = { workspace = true }
+anyhow = { workspace = true }
+common = { path = "../common" }

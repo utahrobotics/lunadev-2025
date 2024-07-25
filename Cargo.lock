@@ -651,6 +651,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "bitcode",
+]
+
+[[package]]
 name = "compute-shader"
 version = "0.1.0"
 dependencies = [
@@ -1653,8 +1660,10 @@ dependencies = [
 name = "lunabot"
 version = "0.1.0"
 dependencies = [
- "bitcode",
+ "anyhow",
  "bonsai-bt",
+ "cakap",
+ "common",
  "serde",
  "spin_sleep",
  "urobotics",
