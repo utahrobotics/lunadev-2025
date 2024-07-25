@@ -1,8 +1,14 @@
+#![feature(result_flattening, deadline_api)]
+
 use std::{
-    net::SocketAddrV4, path::Path, time::{Duration, Instant}
+    fs::File,
+    net::SocketAddrV4,
+    path::Path,
+    time::{Duration, Instant},
 };
 
 use bonsai_bt::{Behavior::*, Event, Status, UpdateArgs, BT};
+use common::{FromLunabase, FromLunabot};
 use serde::{Deserialize, Serialize};
 use setup::Blackboard;
 use spin_sleep::SpinSleeper;
@@ -28,7 +34,7 @@ enum HighLevelActions {
 struct LunabotApp {
     #[serde(default = "default_delta")]
     target_delta: f64,
-    lunabase_address: SocketAddrV4
+    lunabase_address: SocketAddrV4,
 }
 
 fn default_delta() -> f64 {
@@ -41,6 +47,18 @@ impl Application for LunabotApp {
     const DESCRIPTION: &'static str = "The lunabot application";
 
     fn run(self) {
+        if let Err(e) = File::create("from_lunabase.txt")
+            .map(|f| FromLunabase::write_code_sheet(f))
+            .flatten()
+        {
+            error!("Failed to write code sheet for FromLunabase: {e}");
+        }
+        if let Err(e) = File::create("from_lunabot.txt")
+            .map(|f| FromLunabot::write_code_sheet(f))
+            .flatten()
+        {
+            error!("Failed to write code sheet for FromLunabot: {e}");
+        }
         // Whether or not Run succeeds or fails is ignored as it should
         // never terminate anyway. If it does terminate, that indicates
         // an event that requires user intervention. The event could
@@ -76,7 +94,9 @@ impl Application for LunabotApp {
                     HighLevelActions::SoftStop => {
                         soft_stop::soft_stop(bb.get_db(), args.dt, first_time, &self)
                     }
-                    HighLevelActions::Setup => setup::setup(bb.get_db(), args.dt, first_time, &self),
+                    HighLevelActions::Setup => {
+                        setup::setup(bb.get_db(), args.dt, first_time, &self)
+                    }
                     HighLevelActions::Run => run::run(bb.get_db(), args.dt, first_time, &self),
                 };
                 last_action = *args.action;

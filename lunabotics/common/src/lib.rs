@@ -1,18 +1,16 @@
-use std::cell::RefCell;
+use std::{cell::RefCell, io::Write};
 
 use bitcode::{Buffer, Decode, Encode};
-
 
 thread_local! {
     static BITCODE_BUFFER: RefCell<Buffer> = RefCell::new(Buffer::default());
 }
 
-
 #[derive(Debug, Encode, Decode)]
 pub enum FromLunabase {
     Ping,
     ContinueMission,
-    TriggerSetup
+    TriggerSetup,
 }
 
 impl TryFrom<&[u8]> for FromLunabase {
@@ -23,17 +21,32 @@ impl TryFrom<&[u8]> for FromLunabase {
     }
 }
 
-
 impl FromLunabase {
-    pub fn encode(&self, f: impl FnOnce(&[u8])) {
-        BITCODE_BUFFER.with_borrow_mut(|buf| f(buf.encode(self)));
+    pub fn encode<T>(&self, f: impl FnOnce(&[u8]) -> T) -> T {
+        BITCODE_BUFFER.with_borrow_mut(|buf| f(buf.encode(self)))
+    }
+
+    fn write_code(&self, mut w: impl Write) -> std::io::Result<()> {
+        self.encode(|bytes| {
+            write!(w, "{self:?} = 0x")?;
+            for b in bytes {
+                write!(w, "{b:x}")?;
+            }
+            writeln!(w, "")
+        })
+    }
+
+    pub fn write_code_sheet(mut w: impl Write) -> std::io::Result<()> {
+        FromLunabase::Ping.write_code(&mut w)?;
+        FromLunabase::ContinueMission.write_code(&mut w)?;
+        FromLunabase::TriggerSetup.write_code(&mut w)?;
+        Ok(())
     }
 }
 
-
 #[derive(Debug, Encode, Decode)]
 pub enum FromLunabot {
-    Pong
+    Pong,
 }
 
 impl TryFrom<&[u8]> for FromLunabot {
@@ -45,7 +58,22 @@ impl TryFrom<&[u8]> for FromLunabot {
 }
 
 impl FromLunabot {
-    pub fn encode(&self, f: impl FnOnce(&[u8])) {
-        BITCODE_BUFFER.with_borrow_mut(|buf| f(buf.encode(self)));
+    pub fn encode<T>(&self, f: impl FnOnce(&[u8]) -> T) -> T {
+        BITCODE_BUFFER.with_borrow_mut(|buf| f(buf.encode(self)))
+    }
+
+    fn write_code(&self, mut w: impl Write) -> std::io::Result<()> {
+        self.encode(|bytes| {
+            write!(w, "{self:?} = 0x")?;
+            for b in bytes {
+                write!(w, "{b:x}")?;
+            }
+            writeln!(w, "")
+        })
+    }
+
+    pub fn write_code_sheet(mut w: impl Write) -> std::io::Result<()> {
+        FromLunabot::Pong.write_code(&mut w)?;
+        Ok(())
     }
 }

@@ -1,14 +1,30 @@
 use bonsai_bt::Status;
 use common::FromLunabase;
-use urobotics::{callbacks::caller::try_drop_this_callback, log::{error, info}, BlockOn};
+use urobotics::{
+    callbacks::caller::try_drop_this_callback,
+    log::{error, info},
+    BlockOn,
+};
 
-use std::{cmp::Reverse, collections::BinaryHeap, net::SocketAddr, sync::mpsc::{self, RecvTimeoutError}, time::{Duration, Instant}};
+use std::{
+    cmp::Reverse,
+    collections::BinaryHeap,
+    net::SocketAddr,
+    ops::ControlFlow,
+    sync::mpsc,
+    time::{Duration, Instant},
+};
 
-use cakap::{CakapSocket, CakapSender};
+use cakap::{CakapSender, CakapSocket};
 
 use crate::LunabotApp;
 
-pub(super) fn setup(bb: &mut Option<Blackboard>, dt: f64, first_time: bool, lunabot_app: &LunabotApp) -> (Status, f64) {
+pub(super) fn setup(
+    bb: &mut Option<Blackboard>,
+    dt: f64,
+    first_time: bool,
+    lunabot_app: &LunabotApp,
+) -> (Status, f64) {
     if first_time {
         info!("Entered Setup");
     }
@@ -34,7 +50,6 @@ pub struct Blackboard {
     special_instants: BinaryHeap<Reverse<Instant>>,
     lunabase_conn: CakapSender,
     from_lunabase: mpsc::Receiver<FromLunabase>,
-
 }
 
 impl Blackboard {
@@ -47,18 +62,20 @@ impl Blackboard {
             Err(e) => error!("Failed to get local address: {e}"),
         }
         let (from_lunabase_tx, from_lunabase) = mpsc::channel();
-        socket.get_bytes_callback_ref().add_dyn_fn(Box::new(move |bytes| {
-            let msg: FromLunabase = match TryFrom::try_from(bytes) {
-                Ok(x) => x,
-                Err(e) => {
-                    error!("Failed to parse message from lunabase: {e}");
-                    return;
+        socket
+            .get_bytes_callback_ref()
+            .add_dyn_fn(Box::new(move |bytes| {
+                let msg: FromLunabase = match TryFrom::try_from(bytes) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        error!("Failed to parse message from lunabase: {e}");
+                        return;
+                    }
+                };
+                if from_lunabase_tx.send(msg).is_err() {
+                    try_drop_this_callback();
                 }
-            };
-            if from_lunabase_tx.send(msg).is_err() {
-                try_drop_this_callback();
-            }
-        }));
+            }));
         socket.spawn_looping();
 
         Ok(Self {
@@ -90,7 +107,20 @@ impl Blackboard {
         &self.lunabase_conn
     }
 
-    pub fn try_get_msg_from_lunabase(&self, duration: Duration) -> Result<FromLunabase, RecvTimeoutError> {
-        self.from_lunabase.recv_timeout(duration)
+    pub fn on_get_msg_from_lunabase<T>(
+        &self,
+        duration: Duration,
+        mut f: impl FnMut(FromLunabase) -> ControlFlow<T>,
+    ) -> Option<T> {
+        let deadline = Instant::now() + duration;
+        loop {
+            let Ok(msg) = self.from_lunabase.recv_deadline(deadline) else {
+                break None;
+            };
+            match f(msg) {
+                ControlFlow::Continue(()) => (),
+                ControlFlow::Break(val) => break Some(val),
+            }
+        }
     }
 }

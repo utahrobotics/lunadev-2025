@@ -1,10 +1,17 @@
+use std::ops::ControlFlow;
+
 use bonsai_bt::Status;
 use common::FromLunabase;
-use urobotics::log::info;
+use urobotics::log::{info, warn};
 
 use crate::{setup::Blackboard, LunabotApp};
 
-pub(super) fn soft_stop(bb: &mut Option<Blackboard>, dt: f64, first_time: bool, lunabot_app: &LunabotApp) -> (Status, f64) {
+pub(super) fn soft_stop(
+    bb: &mut Option<Blackboard>,
+    dt: f64,
+    first_time: bool,
+    lunabot_app: &LunabotApp,
+) -> (Status, f64) {
     if first_time {
         info!("Entered SoftStop")
     }
@@ -16,20 +23,21 @@ pub(super) fn soft_stop(bb: &mut Option<Blackboard>, dt: f64, first_time: bool, 
         // Operator may request Failure to trigger setup again
         // or Success to trigger run
 
-        if let Ok(msg) = bb.try_get_msg_from_lunabase(lunabot_app.get_target_delta()) {
+        bb.on_get_msg_from_lunabase(lunabot_app.get_target_delta(), |msg| {
             match msg {
                 FromLunabase::Ping => info!("Pinged"),
                 FromLunabase::ContinueMission => {
-                    info!("Continuing mission");
-                    return (Status::Success, 0.0);
+                    warn!("Continuing mission");
+                    return ControlFlow::Break((Status::Success, 0.0));
                 }
                 FromLunabase::TriggerSetup => {
-                    return (Status::Failure, 0.0);
+                    warn!("Triggering setup");
+                    return ControlFlow::Break((Status::Failure, 0.0));
                 }
             }
-        }
-
-        (Status::Running, 0.0)
+            ControlFlow::Continue(())
+        })
+        .unwrap_or((Status::Running, 0.0))
     } else {
         if first_time {
             info!("No blackboard, so must trigger setup");

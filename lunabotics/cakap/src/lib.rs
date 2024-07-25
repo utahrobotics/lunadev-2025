@@ -326,9 +326,15 @@ pub struct CakapSender {
 impl std::fmt::Debug for CakapSender {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CakapSender")
-            .field("max_packet_size", &self.shared.max_packet_size.load(Ordering::Relaxed))
+            .field(
+                "max_packet_size",
+                &self.shared.max_packet_size.load(Ordering::Relaxed),
+            )
             .field("send_to_addr", &self.shared.send_to_addr.load())
-            .field("recycled_byte_vecs", &self.recycled_byte_vecs.queue.get().map(|x| x.len()))
+            .field(
+                "recycled_byte_vecs",
+                &self.recycled_byte_vecs.queue.get().map(|x| x.len()),
+            )
             .finish()
     }
 }
