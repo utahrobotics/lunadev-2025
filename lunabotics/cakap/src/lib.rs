@@ -1,11 +1,15 @@
-#![feature(impl_trait_in_fn_trait_return)]
-
 use std::{
-    collections::BinaryHeap, future::Future, hash::{DefaultHasher, Hash, Hasher}, net::{Ipv4Addr, SocketAddr, SocketAddrV4}, sync::{Arc, OnceLock}, time::Duration
+    collections::BinaryHeap,
+    future::Future,
+    hash::{DefaultHasher, Hash, Hasher},
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    sync::{Arc, OnceLock},
+    time::Duration,
 };
 
-use crossbeam::queue::ArrayQueue;
+use crossbeam::{atomic::AtomicCell, queue::ArrayQueue};
 use fxhash::FxHashSet;
+use log::error;
 use tasker::{callbacks::callee::Subscriber, define_callbacks, task::AsyncTask};
 use tokio::{
     net::UdpSocket,
@@ -15,28 +19,33 @@ use tokio::{
 const MIN_PORT: u16 = 10000;
 define_callbacks!(pub BytesCallbacks => Fn(record: &[u8]) + Send + Sync);
 
+struct CakapSocketShared {
+    noreply_socket: UdpSocket,
+    reliable_packet_sub: Subscriber<ReliablePacket>,
+    send_to_addr: AtomicCell<Option<SocketAddr>>,
+}
+
 pub struct CakapSocket {
-    reply_socket: Arc<UdpSocket>,
-    noreply_socket: Arc<UdpSocket>,
+    reply_socket: UdpSocket,
     pub max_packet_size: usize,
     pub retransmission_duration: Duration,
     pub recycled_byte_vec_size: usize,
     bytes_callbacks: BytesCallbacks,
     recycled_byte_vecs: RecycledByteVecs,
-    reliable_packet_sub: Arc<Subscriber<ReliablePacket>>,
+    shared: Arc<CakapSocketShared>,
 }
 
 impl CakapSocket {
     pub async fn bind(port: u16) -> std::io::Result<Self> {
-        let reply_socket = Arc::new(UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port)).await?);
+        let reply_socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port)).await?;
         let mut noreply_port = reply_socket.local_addr()?.port().wrapping_add(1);
         if noreply_port == 0 {
             noreply_port = MIN_PORT;
         }
-        let noreply_socket = Arc::new(UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, noreply_port)).await?);
+        let noreply_socket =
+            UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, noreply_port)).await?;
         Ok(Self {
             reply_socket,
-            noreply_socket,
             max_packet_size: 1496,
             retransmission_duration: Duration::from_millis(50),
             recycled_byte_vec_size: 0,
@@ -44,7 +53,11 @@ impl CakapSocket {
             recycled_byte_vecs: RecycledByteVecs {
                 queue: Arc::new(OnceLock::new()),
             },
-            reliable_packet_sub: Arc::new(Subscriber::new_unbounded()),
+            shared: Arc::new(CakapSocketShared {
+                noreply_socket,
+                reliable_packet_sub: Subscriber::new_unbounded(),
+                send_to_addr: AtomicCell::new(None),
+            }),
         })
     }
 
@@ -62,28 +75,15 @@ impl CakapSocket {
 
     pub fn get_stream(&self) -> CakapStream {
         CakapStream {
-            noreply_socket: self.noreply_socket.clone(),
+            shared: self.shared.clone(),
             recycled_byte_vecs: self.get_recycled_byte_vecs(),
-            reliable_packet_pub: Arc::new(self.reliable_packet_sub.create_callback()),
         }
     }
 
-    pub fn get_connect_callback(&self) -> impl Fn(SocketAddr) -> impl Future<Output=std::io::Result<()>> {
-        let reply_socket = self.reply_socket.clone();
-        let noreply_socket = self.noreply_socket.clone();
-
-        move |mut addr| {
-            let reply_socket = reply_socket.clone();
-            let noreply_socket = noreply_socket.clone();
-            async move {
-                let _ = reply_socket.connect(addr).await?;
-                let mut noreply_port = addr.port().wrapping_add(1);
-                if noreply_port == 0 {
-                    noreply_port = MIN_PORT;
-                }
-                addr.set_port(noreply_port);
-                noreply_socket.connect(addr).await
-            }
+    pub fn send_addr_setter(&self) -> impl Fn(SocketAddr) + Send + Sync {
+        let shared = self.shared.clone();
+        move |addr| {
+            shared.send_to_addr.store(Some(addr));
         }
     }
 }
@@ -96,24 +96,27 @@ impl AsyncTask for CakapSocket {
         let mut noreply_buf = vec![0u8; self.max_packet_size];
         let mut retransmit_acks: FxHashSet<[u8; 8]> = FxHashSet::default();
         let mut retransmission_queue: BinaryHeap<PacketToRetransmit> = BinaryHeap::new();
-        
+        let get_send_to_addr = || self.shared.send_to_addr.load();
+
         loop {
             tokio::select! {
-                result = self.reply_socket.recv(&mut reply_buf) => {
-                    let len = match result {
+                result = self.reply_socket.recv_from(&mut reply_buf) => {
+                    let (len, addr) = match result {
                         Ok(x) => x,
                         Err(e) => break Err((self, e)),
                     };
+                    self.shared.send_to_addr.store(Some(addr));
                     if len == 8 && retransmit_acks.remove(&reply_buf[..8]) {
                         continue;
                     }
                     self.bytes_callbacks.call(&reply_buf[..len]);
                 }
-                result = self.noreply_socket.recv(&mut noreply_buf) => {
-                    let len = match result {
+                result = self.shared.noreply_socket.recv_from(&mut noreply_buf) => {
+                    let (len, addr) = match result {
                         Ok(x) => x,
                         Err(e) => break Err((self, e)),
                     };
+                    self.shared.send_to_addr.store(Some(addr));
                     self.bytes_callbacks.call(&noreply_buf[..len]);
                 }
                 e = async {
@@ -121,8 +124,12 @@ impl AsyncTask for CakapSocket {
                         if let Some(retransmit) = retransmission_queue.peek() {
                             if retransmit_acks.contains(&retransmit.ack) {
                                 sleep_until(retransmit.instant).await;
+                                let Some(addr) = get_send_to_addr() else {
+                                    error!("No address to send to");
+                                    continue;
+                                };
 
-                                if let Err(e) = self.reply_socket.send(&retransmit.payload).await {
+                                if let Err(e) = self.reply_socket.send_to(&retransmit.payload, addr).await {
                                     break e;
                                 }
                             } else {
@@ -136,7 +143,7 @@ impl AsyncTask for CakapSocket {
                 } => break Err((self, e)),
                 packet = async {
                     loop {
-                        if let Some(packet) = self.reliable_packet_sub.recv().await {
+                        if let Some(packet) = self.shared.reliable_packet_sub.recv().await {
                             break packet;
                         } else {
                             tokio::time::sleep(self.retransmission_duration).await;
@@ -146,7 +153,12 @@ impl AsyncTask for CakapSocket {
                     match packet {
                         ReliablePacket::New { payload, ack } => {
                             retransmit_acks.insert(ack);
-                            if let Err(e) = self.reply_socket.send(&payload).await {
+                            let Some(addr) = get_send_to_addr() else {
+                                error!("No address to send to");
+                                continue;
+                            };
+
+                            if let Err(e) = self.reply_socket.send_to(&payload, addr).await {
                                 break Err((self, e));
                             }
                             retransmission_queue.push(PacketToRetransmit {
@@ -158,7 +170,11 @@ impl AsyncTask for CakapSocket {
                         ReliablePacket::Replace { payload, new_ack, old_ack } => {
                             retransmit_acks.remove(&old_ack);
                             retransmit_acks.insert(new_ack);
-                            if let Err(e) = self.reply_socket.send(&payload).await {
+                            let Some(addr) = get_send_to_addr() else {
+                                error!("No address to send to");
+                                continue;
+                            };
+                            if let Err(e) = self.reply_socket.send_to(&payload, addr).await {
                                 break Err((self, e));
                             }
                             retransmission_queue.push(PacketToRetransmit {
@@ -268,19 +284,18 @@ impl ReliablePacket {
 
 #[derive(Clone)]
 pub struct CakapStream {
-    noreply_socket: Arc<UdpSocket>,
+    shared: Arc<CakapSocketShared>,
     recycled_byte_vecs: RecycledByteVecs,
-    reliable_packet_pub: Arc<dyn Fn(ReliablePacket) + Send + Sync>,
 }
 
 impl CakapStream {
     /// Send a payload with no guarantees of delivery and ordering.
-    /// 
+    ///
     /// The returned future may be awaited on to efficiently send the payload using the current
     /// async runtime. If the future is dropped, the payload will be send to a separate task
     /// to be sent. This involves copying the payload and may incur a heap allocation if there is
     /// not a recycled byte vec available.
-    /// 
+    ///
     /// This function does not need to be called from within an async context. One will be made
     /// if necessary.
     pub fn send_unreliable<'a>(&'a self, payload: &'a [u8]) -> impl Future<Output = ()> + 'a {
@@ -289,17 +304,27 @@ impl CakapStream {
             slice: &payload,
         };
         async {
-            let _ = self.noreply_socket.send(payload).await;
+            let Some(mut addr) = self.shared.send_to_addr.load() else {
+                error!("No address to send to");
+                return;
+            };
+            let new_port = addr.port().wrapping_add(1);
+            if new_port == 0 {
+                addr.set_port(MIN_PORT);
+            } else {
+                addr.set_port(new_port);
+            }
+            let _ = self.shared.noreply_socket.send_to(payload, addr).await;
             std::mem::forget(guard);
         }
     }
 
     /// Send a payload with no guarantees of delivery and ordering.
-    /// 
+    ///
     /// The returned future may be awaited on to efficiently send the payload using the current
     /// async runtime. If the future is dropped, the payload will be send to a separate task
     /// to be sent.
-    /// 
+    ///
     /// This function does not need to be called from within an async context. One will be made
     /// if necessary.
     pub fn send_unreliable_vec<'a>(&'a self, payload: Vec<u8>) -> impl Future<Output = ()> + 'a {
@@ -308,8 +333,22 @@ impl CakapStream {
             vec: payload,
         };
         async {
-            let SendUnreliable::Vec { vec, .. } = &guard else { unreachable!() };
-            let _ = self.noreply_socket.send(vec).await;
+            let Some(mut addr) = self.shared.send_to_addr.load() else {
+                error!("No address to send to");
+                return;
+            };
+            let SendUnreliable::Vec { vec, .. } = &guard else {
+                unreachable!()
+            };
+
+            let new_port = addr.port().wrapping_add(1);
+            if new_port == 0 {
+                addr.set_port(MIN_PORT);
+            } else {
+                addr.set_port(new_port);
+            }
+
+            let _ = self.shared.noreply_socket.send_to(vec, addr).await;
             std::mem::forget(guard);
         }
     }
@@ -319,13 +358,15 @@ impl CakapStream {
     }
 
     pub fn send_reliable(&self, payload: Vec<u8>) {
-        (self.reliable_packet_pub)(ReliablePacket::new(payload));
+        self.shared
+            .reliable_packet_sub
+            .put(ReliablePacket::new(payload));
     }
 
     pub fn create_eventual_reliability_stream(&self) -> EventualReliabilityStream {
         EventualReliabilityStream {
-            reliable_packet_pub: &*self.reliable_packet_pub,
-            old_ack: None
+            reliable_packet_sub: &self.shared.reliable_packet_sub,
+            old_ack: None,
         }
     }
 }
@@ -338,7 +379,7 @@ enum SendUnreliable<'a, 'b> {
     Vec {
         stream: &'a CakapStream,
         vec: Vec<u8>,
-    }
+    },
 }
 
 impl<'a, 'b> Drop for SendUnreliable<'a, 'b> {
@@ -350,12 +391,28 @@ impl<'a, 'b> Drop for SendUnreliable<'a, 'b> {
                 vec.extend_from_slice(slice);
                 (recycled_byte_vecs, *stream, vec)
             }
-            SendUnreliable::Vec { stream, vec } => (stream.get_recycled_byte_vecs(), *stream, std::mem::take(vec)),
+            SendUnreliable::Vec { stream, vec } => (
+                stream.get_recycled_byte_vecs(),
+                *stream,
+                std::mem::take(vec),
+            ),
         };
 
-        let udp = stream.noreply_socket.clone();
+        let shared = stream.shared.clone();
         (|| async move {
-            let _ = udp.send(&payload).await;
+            let Some(mut addr) = shared.send_to_addr.load() else {
+                error!("No address to send to");
+                return;
+            };
+
+            let new_port = addr.port().wrapping_add(1);
+            if new_port == 0 {
+                addr.set_port(MIN_PORT);
+            } else {
+                addr.set_port(new_port);
+            }
+
+            let _ = shared.noreply_socket.send_to(&payload, addr).await;
             recycled_byte_vecs.recycle_vec(payload);
         })
         .spawn();
@@ -363,8 +420,8 @@ impl<'a, 'b> Drop for SendUnreliable<'a, 'b> {
 }
 
 pub struct EventualReliabilityStream<'a> {
-    reliable_packet_pub: &'a (dyn Fn(ReliablePacket) + Send + Sync),
-    old_ack: Option<[u8; 8]>
+    reliable_packet_sub: &'a Subscriber<ReliablePacket>,
+    old_ack: Option<[u8; 8]>,
 }
 
 impl<'a> EventualReliabilityStream<'a> {
@@ -373,11 +430,11 @@ impl<'a> EventualReliabilityStream<'a> {
         if let Some(old_ack) = self.old_ack {
             let packet = ReliablePacket::replace(payload, old_ack);
             new_ack = packet.get_ack();
-            (self.reliable_packet_pub)(packet);
+            self.reliable_packet_sub.put(packet);
         } else {
             let packet = ReliablePacket::new(payload);
             new_ack = packet.get_ack();
-            (self.reliable_packet_pub)(packet);
+            self.reliable_packet_sub.put(packet);
         }
         self.old_ack = Some(new_ack);
     }

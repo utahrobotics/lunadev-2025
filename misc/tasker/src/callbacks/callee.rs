@@ -123,6 +123,18 @@ impl<T> Subscriber<T> {
         }
     }
 
+    pub fn put(&self, value: T) {
+        if self.inner.queue.force_push(value).is_none() {
+            self.inner.notify.notify_one();
+        }
+    }
+
+    pub fn put_conservative(&self, value: T) {
+        if self.inner.queue.push(value).is_ok() {
+            self.inner.notify.notify_one();
+        }
+    }
+
     /// Creates a callback that will add given values to this `Subscriber`.
     ///
     /// If the `Subscriber` is full, the given value is dropped immediately.
