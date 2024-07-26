@@ -21,7 +21,7 @@ use tokio::{
 };
 
 const MIN_PORT: u16 = 10000;
-define_callbacks!(pub BytesCallbacks => Fn(record: &[u8]) + Send + Sync);
+define_callbacks!(pub BytesCallbacks => Fn(bytes: &[u8]) + Send + Sync);
 fn_alias!(pub type BytesCallbacksRef = CallbacksRef(&[u8]) + Send + Sync);
 
 struct CakapSocketShared {
@@ -33,6 +33,7 @@ struct CakapSocketShared {
 
 pub struct CakapSocket {
     reply_socket: UdpSocket,
+    ack_socket: UdpSocket,
     pub retransmission_duration: Duration,
     pub recycled_byte_vec_size: usize,
     bytes_callbacks: BytesCallbacks,
@@ -45,15 +46,21 @@ pub struct CakapSocket {
 impl CakapSocket {
     pub async fn bind(port: u16) -> std::io::Result<Self> {
         let reply_socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port)).await?;
-        let mut noreply_port = reply_socket.local_addr()?.port().wrapping_add(1);
-        if noreply_port == 0 {
-            noreply_port = MIN_PORT;
+        let mut next_port = reply_socket.local_addr()?.port().wrapping_add(1);
+        if next_port == 0 {
+            next_port = MIN_PORT;
         }
         let noreply_socket =
-            UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, noreply_port)).await?;
+            UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, next_port)).await?;
+        next_port = next_port.wrapping_add(1);
+        if next_port == 0 {
+            next_port = MIN_PORT;
+        }
+        let ack_socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, next_port)).await?;
         let (existing_stream_tx, existing_stream_rx) = mpsc::channel(1);
         Ok(Self {
             reply_socket,
+            ack_socket,
             retransmission_duration: Duration::from_millis(50),
             recycled_byte_vec_size: 0,
             bytes_callbacks: BytesCallbacks::default(),
@@ -95,13 +102,6 @@ impl CakapSocket {
         self.bytes_callbacks.get_ref()
     }
 
-    // pub fn send_addr_setter(&self) -> impl Fn(SocketAddr) + Send + Sync {
-    //     let shared = self.shared.clone();
-    //     move |addr| {
-    //         shared.send_to_addr.store(Some(addr));
-    //     }
-    // }
-
     pub fn set_max_packet_size(&self, size: usize) {
         self.shared.max_packet_size.store(size, Ordering::Relaxed);
     }
@@ -118,6 +118,7 @@ impl AsyncTask for CakapSocket {
         let max_packet_size = self.shared.max_packet_size.load(Ordering::Relaxed);
         let mut reply_buf = vec![0u8; max_packet_size];
         let mut noreply_buf = vec![0u8; max_packet_size];
+        let mut ack_buf = [0u8; 8];
         let mut retransmit_acks: FxHashSet<[u8; 8]> = FxHashSet::default();
         let mut retransmission_queue: BinaryHeap<PacketToRetransmit> = BinaryHeap::new();
         let get_send_to_addr = || self.shared.send_to_addr.load();
@@ -130,9 +131,6 @@ impl AsyncTask for CakapSocket {
                         Err(e) => break Err((self, e)),
                     };
                     self.shared.send_to_addr.store(Some(addr));
-                    if len == 8 && retransmit_acks.remove(&reply_buf[..8]) {
-                        continue;
-                    }
                     let payload = &reply_buf[..len];
                     self.bytes_callbacks.call(payload);
 
@@ -140,6 +138,18 @@ impl AsyncTask for CakapSocket {
                     if let Err(e) = self.reply_socket.send_to(&ack, addr).await {
                         break Err((self, e));
                     }
+                }
+                result = self.ack_socket.recv_from(&mut ack_buf) => {
+                    let (len, addr) = match result {
+                        Ok(x) => x,
+                        Err(e) => break Err((self, e)),
+                    };
+                    self.shared.send_to_addr.store(Some(addr));
+                    if len != 8 {
+                        error!("Received ack of invalid len: {len}");
+                        continue;
+                    }
+                    retransmit_acks.remove(&reply_buf[..8]);
                 }
                 result = self.shared.noreply_socket.recv_from(&mut noreply_buf) => {
                     let (len, addr) = match result {
