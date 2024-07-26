@@ -16,7 +16,7 @@ chrono = "0.4"
 static_assertions = "1"
 image = "0.25"
 bitcode = "0.6.3"
-ordered-float = "4"
+ordered-float = "4.2.1"
 nalgebra = { version = "0.32", features = ["serde-serialize"] }
 toml = "0.8"
 serde = { version = "1", features = ["derive", "rc"] }
@@ -35,12 +35,14 @@ bytemuck = { version = "1", features = [ "derive" ] }
 log = "0.4"
 # eigenvalues = { git = "https://github.com/Masterchef365/eigenvalues.git" }
 ffmpeg-sidecar = "1.0"
-interprocess = { git = "https://github.com/kotauskas/interprocess", default-features = false, branch = "main", features = ["tokio"] }
+# interprocess = { git = "https://github.com/kotauskas/interprocess", default-features = false, branch = "main", features = ["tokio"] }
 rayon = "1.10.0"
 bitvec = "1.0.1"
 parking_lot = "0.12.2"
 bytes = "1.6.0"
 unfmt = "0.2.2"
+heapless = "0.8.0"
+
 k = "0.31.0"
 bincode = "1.3.3"
 

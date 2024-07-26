@@ -22,6 +22,7 @@ use urobotics::{
 mod run;
 mod setup;
 mod soft_stop;
+mod pathfinding;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum HighLevelActions {
