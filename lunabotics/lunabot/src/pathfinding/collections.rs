@@ -1,10 +1,15 @@
-use std::hash::{BuildHasher, Hash, Hasher, RandomState};
+use std::{cell::Cell, hash::{BuildHasher, Hash, Hasher, RandomState}};
 
 use fxhash::FxBuildHasher;
 use num_prime::nt_funcs::next_prime;
 
 const SET_LAMBDA: f64 = 0.5;
 const FIRST_PRIME: usize = 19;
+
+
+thread_local! {
+    static PRIORITY_MODIFIED_COUNT: Cell<usize> = Cell::new(0);
+}
 
 #[derive(Debug)]
 struct HeapElement<T, P> {
@@ -209,6 +214,7 @@ impl<T: Hash + Eq, P: Ord, S: BuildHasher> PriorityHeapSet<T, P, S> {
             if new_priority <= old_element.priority {
                 return false;
             }
+            PRIORITY_MODIFIED_COUNT.set(PRIORITY_MODIFIED_COUNT.get() + 1);
             old_element.element = element;
             old_element.priority = new_priority;
             heap_index = self.percolate_up(heap_index);
@@ -258,6 +264,14 @@ struct OnCollisionArgs<T, P> {
 }
 
 pub(super) type FxPriorityHeapSet<T, P> = PriorityHeapSet<T, P, FxBuildHasher>;
+
+pub fn get_priority_modified_count() -> usize {
+    PRIORITY_MODIFIED_COUNT.get()
+}
+
+pub fn reset_priority_modified_count() {
+    PRIORITY_MODIFIED_COUNT.set(0);
+}
 
 #[cfg(test)]
 mod tests {
