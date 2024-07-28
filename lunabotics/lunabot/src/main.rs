@@ -22,7 +22,7 @@ use urobotics::{
 };
 use video::VideoTestApp;
 
-mod pathfinding;
+// mod pathfinding;
 mod run;
 mod setup;
 mod soft_stop;

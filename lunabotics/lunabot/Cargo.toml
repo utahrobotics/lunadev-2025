@@ -11,9 +11,8 @@ spin_sleep = { workspace = true }
 cakap = { workspace = true }
 anyhow = { workspace = true }
 common = { path = "../common" }
+pathfinding = { path = "../pathfinding" }
 nalgebra = { workspace = true }
 k = { workspace = true }
 # indexmap = "2.2.6"
 fxhash = { workspace = true }
-heapless = { workspace = true }
-num-prime = "0.4.4"

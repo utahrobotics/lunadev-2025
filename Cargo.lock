@@ -1731,10 +1731,9 @@ dependencies = [
  "cakap",
  "common",
  "fxhash",
- "heapless",
  "k",
  "nalgebra 0.32.5",
- "num-prime",
+ "pathfinding",
  "serde",
  "spin_sleep",
  "urobotics",
@@ -2363,6 +2362,16 @@ name = "paste"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de3145af08024dea9fa9914f381a17b8fc6034dfb00f3a84013f7ff43f29ed4c"
+
+[[package]]
+name = "pathfinding"
+version = "0.1.0"
+dependencies = [
+ "fxhash",
+ "heapless",
+ "nalgebra 0.32.5",
+ "num-prime",
+]
 
 [[package]]
 name = "peeking_take_while"
