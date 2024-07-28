@@ -1,5 +1,5 @@
-use bonsai_bt::Status;
-use urobotics::log::{error, get_program_time, info};
+use bonsai_bt::{Behavior::*, Event, Status, UpdateArgs, BT};
+use urobotics::log::{error, info};
 
 use crate::{setup::Blackboard, LunabotApp};
 
@@ -17,17 +17,62 @@ pub(super) fn run(
         return (Status::Failure, dt);
     };
     if first_time {
-        bb.add_special_instant(
-            std::time::Instant::now() + std::time::Duration::from_secs_f64(1.12),
-        );
-        bb.add_special_instant(std::time::Instant::now() + std::time::Duration::from_secs_f64(3.0));
-        let _ = bb.get_lunabase_conn().send_unreliable(b"hello");
+        bb.run_state.behavior_tree.reset_bt();
     }
-    info!("{:.2}s", get_program_time().as_secs_f64());
-    if get_program_time().as_secs_f64() > 3.0 {
-        error!("Encountered scheduled error");
-        (Status::Failure, 0.0)
-    } else {
-        (Status::Running, 0.0)
+    bb.run_state
+        .behavior_tree
+        .tick(&Event::from(UpdateArgs { dt }), &mut |args, bb| {
+            let result = match args.action {
+                RunActions::TraverseObstacles => todo!(),
+                RunActions::Dig => todo!(),
+                RunActions::Dump => todo!(),
+                RunActions::ManualControl => todo!(),
+            };
+            result
+        })
+}
+
+#[derive(Debug, Clone, Copy)]
+enum RunActions {
+    TraverseObstacles,
+    Dig,
+    Dump,
+    ManualControl,
+}
+
+#[derive(Debug)]
+struct RunBlackboard {}
+
+#[derive(Debug)]
+pub(crate) struct RunState {
+    behavior_tree: BT<RunActions, RunBlackboard>,
+}
+
+impl RunState {
+    pub fn new(_lunabot_app: &LunabotApp) -> anyhow::Result<Self> {
+        let blackboard = RunBlackboard {};
+        let behavior = While(
+            Box::new(WaitForever),
+            vec![
+                Action(RunActions::ManualControl),
+                If(
+                    Box::new(Action(RunActions::TraverseObstacles)),
+                    Box::new(While(
+                        Box::new(WaitForever),
+                        vec![
+                            While(
+                                Box::new(WaitForever),
+                                vec![Action(RunActions::Dig), Action(RunActions::Dump)],
+                            ),
+                            Action(RunActions::ManualControl),
+                        ],
+                    )),
+                    Box::new(Wait(0.0)),
+                ),
+            ],
+        );
+        Ok(Self {
+            behavior_tree: BT::new(behavior, blackboard),
+        })
     }
 }

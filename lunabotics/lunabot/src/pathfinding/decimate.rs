@@ -6,7 +6,11 @@ thread_local! {
     static DECIMATE_BUFFER: RefCell<Vec<Vector2<f64>>> = RefCell::new(Vec::new());
 }
 
-pub fn decimate(path: &mut Vec<Vector2<f64>>, step_size: f64, mut is_safe: impl FnMut(Vector2<f64>) -> bool) {
+pub fn decimate(
+    path: &mut Vec<Vector2<f64>>,
+    step_size: f64,
+    mut is_safe: impl FnMut(Vector2<f64>) -> bool,
+) {
     if path.len() < 3 {
         return;
     }
@@ -19,7 +23,7 @@ pub fn decimate(path: &mut Vec<Vector2<f64>>, step_size: f64, mut is_safe: impl 
             let mut to_index = path.len() - 1;
             buffer.push(from);
             let mut to;
-    
+
             loop {
                 to = path[to_index];
                 if path[to_index - 1] == from {
@@ -28,7 +32,7 @@ pub fn decimate(path: &mut Vec<Vector2<f64>>, step_size: f64, mut is_safe: impl 
                 let mut travel = to - from;
                 let distance = travel.magnitude();
                 travel.unscale_mut(distance);
-    
+
                 let mut safe = true;
                 for i in 1..(distance / step_size).floor() as usize {
                     let point = from + travel * (i as f64 * step_size);

@@ -26,7 +26,10 @@ pub fn astar(
     if start.y < 0.0 {
         start.y = 0.0;
     }
-    let mut start = Vector2::new((start.x / step_size).round() as u32, (start.y / step_size).round() as u32);
+    let mut start = Vector2::new(
+        (start.x / step_size).round() as u32,
+        (start.y / step_size).round() as u32,
+    );
     if start.x >= max_index.x {
         start.x = max_index.x;
     }
@@ -40,19 +43,28 @@ pub fn astar(
     if goal.y < 0.0 {
         goal.y = 0.0;
     }
-    let mut goal = Vector2::new((goal.x / step_size).round() as u32, (goal.y / step_size).round() as u32);
+    let mut goal = Vector2::new(
+        (goal.x / step_size).round() as u32,
+        (goal.y / step_size).round() as u32,
+    );
     if goal.x >= max_index.x {
         goal.x = max_index.x;
     }
     if goal.y >= max_index.y {
         goal.y = max_index.y;
     }
-    let heuristic = |node: Vector2<u32>| ((goal.cast::<f64>() - node.cast()).magnitude() * 10.0).round() as usize;
+    let heuristic = |node: Vector2<u32>| {
+        ((goal.cast::<f64>() - node.cast()).magnitude() * 10.0).round() as usize
+    };
 
     let mut parents: FxHashMap<Vector2<u32>, Parent> = FxHashMap::default();
     parents.insert(start, Parent::Start);
     let mut to_see: FxPriorityHeapSet<Vector2<u32>, Cost> = FxPriorityHeapSet::default();
-    let mut best_cost_so_far = Cost { estimated_cost: usize::MAX, cost: 0, length: 1 };
+    let mut best_cost_so_far = Cost {
+        estimated_cost: usize::MAX,
+        cost: 0,
+        length: 1,
+    };
     to_see.push_if_higher(start, best_cost_so_far);
     let mut best_so_far = start;
 
@@ -93,11 +105,19 @@ pub fn astar(
             }
 
             if *node_parent != Parent::NegXPosY && node.x > 0 && node.y < max_index.y {
-                try_add(node + Vector2::new(0, 1) - Vector2::new(1, 0), Parent::PosXNegY, 14);
+                try_add(
+                    node + Vector2::new(0, 1) - Vector2::new(1, 0),
+                    Parent::PosXNegY,
+                    14,
+                );
             }
 
             if *node_parent != Parent::PosXNegY && node.x < max_index.x && node.y > 0 {
-                try_add(node + Vector2::new(1, 0) - Vector2::new(0, 1), Parent::NegXPosY, 14);
+                try_add(
+                    node + Vector2::new(1, 0) - Vector2::new(0, 1),
+                    Parent::NegXPosY,
+                    14,
+                );
             }
 
             if *node_parent != Parent::PosXPosY && node.x < max_index.x && node.y < max_index.y {
@@ -137,7 +157,7 @@ pub fn astar(
             }
         }
     }
-    
+
     let mut path = vec![goalf; best_cost_so_far.length];
 
     for i in (1..best_cost_so_far.length - 1).rev() {
@@ -154,7 +174,7 @@ pub fn astar(
                     Parent::PosXPosY => best_so_far + Vector2::new(1, 1),
                     Parent::Start => unreachable!(),
                 };
-            }
+            };
         }
         traverse!();
         path[i] = step_size * best_so_far.cast();
@@ -182,15 +202,14 @@ enum Parent {
     NegXPosY,
     PosXNegY,
     PosXPosY,
-    Start
+    Start,
 }
-
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct Cost {
     estimated_cost: usize,
     cost: usize,
-    length: usize
+    length: usize,
 }
 
 impl PartialOrd for Cost {
@@ -201,48 +220,52 @@ impl PartialOrd for Cost {
 
 impl Ord for Cost {
     fn cmp(&self, other: &Self) -> Ordering {
-        other.estimated_cost.cmp(&self.estimated_cost).then_with(|| self.cost.cmp(&other.cost)).then_with(|| other.length.cmp(&self.length))
+        other
+            .estimated_cost
+            .cmp(&self.estimated_cost)
+            .then_with(|| self.cost.cmp(&other.cost))
+            .then_with(|| other.length.cmp(&self.length))
     }
 }
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_connected_astar() {
-        let path = astar(
-            Vector2::new(0.0, 0.0),
-            Vector2::new(5.0, 0.0),
-            1.0,
-            |_| true,
+        let path = astar(Vector2::new(0.0, 0.0), Vector2::new(5.0, 0.0), 1.0, |_| {
+            true
+        });
+        assert_eq!(
+            path,
+            vec![
+                Vector2::new(0.0, 0.0),
+                Vector2::new(1.0, 0.0),
+                Vector2::new(2.0, 0.0),
+                Vector2::new(3.0, 0.0),
+                Vector2::new(4.0, 0.0),
+                Vector2::new(5.0, 0.0)
+            ]
         );
-        assert_eq!(path, vec![Vector2::new(0.0, 0.0), Vector2::new(1.0, 0.0), Vector2::new(2.0, 0.0), Vector2::new(3.0, 0.0), Vector2::new(4.0, 0.0), Vector2::new(5.0, 0.0)]);
     }
-    
+
     #[test]
     fn test_disconnected_astar() {
-        let path = astar(
-            Vector2::new(0.0, 0.0),
-            Vector2::new(2.0, 0.0),
-            1.0,
-            |_| false,
-        );
+        let path = astar(Vector2::new(0.0, 0.0), Vector2::new(2.0, 0.0), 1.0, |_| {
+            false
+        });
         assert_eq!(path, [Vector2::new(0.0, 0.0)]);
     }
-    
+
     #[test]
     fn test_diagonal_astar() {
-        let path = astar(
-            Vector2::new(0.0, 0.0),
-            Vector2::new(1.0, 1.0),
-            1.0,
-            |_| true,
-        );
+        let path = astar(Vector2::new(0.0, 0.0), Vector2::new(1.0, 1.0), 1.0, |_| {
+            true
+        });
         assert_eq!(path, [Vector2::new(0.0, 0.0), Vector2::new(1.0, 1.0)]);
     }
-    
+
     #[test]
     fn test_centered_astar() {
         let path = astar(
@@ -251,6 +274,15 @@ mod tests {
             1.0,
             |_| true,
         );
-        assert_eq!(path, [Vector2::new(5.0, 5.0), Vector2::new(4.0, 4.0), Vector2::new(3.0, 3.0), Vector2::new(2.0, 2.0), Vector2::new(1.12, 0.83)]);
+        assert_eq!(
+            path,
+            [
+                Vector2::new(5.0, 5.0),
+                Vector2::new(4.0, 4.0),
+                Vector2::new(3.0, 3.0),
+                Vector2::new(2.0, 2.0),
+                Vector2::new(1.12, 0.83)
+            ]
+        );
     }
 }

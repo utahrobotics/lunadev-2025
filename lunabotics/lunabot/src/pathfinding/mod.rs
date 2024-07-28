@@ -15,33 +15,26 @@ pub fn pathfind(
     path
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_connected_pathfind() {
-        let path = pathfind(
-            Vector2::new(0.0, 0.0),
-            Vector2::new(10.0, 0.0),
-            1.0,
-            |_| true,
-        );
+        let path = pathfind(Vector2::new(0.0, 0.0), Vector2::new(10.0, 0.0), 1.0, |_| {
+            true
+        });
         assert_eq!(path, vec![Vector2::new(0.0, 0.0), Vector2::new(10.0, 0.0)]);
     }
-    
+
     #[test]
     fn test_disconnected_pathfind() {
-        let path = pathfind(
-            Vector2::new(0.0, 0.0),
-            Vector2::new(2.0, 0.0),
-            1.0,
-            |_| false,
-        );
+        let path = pathfind(Vector2::new(0.0, 0.0), Vector2::new(2.0, 0.0), 1.0, |_| {
+            false
+        });
         assert_eq!(path, [Vector2::new(0.0, 0.0)]);
     }
-    
+
     #[test]
     fn test_diagonal_pathfind() {
         let path = pathfind(
@@ -52,7 +45,7 @@ mod tests {
         );
         assert_eq!(path, [Vector2::new(0.0, 0.0), Vector2::new(10.0, 10.0)]);
     }
-    
+
     #[test]
     fn test_centered_pathfind() {
         let path = pathfind(

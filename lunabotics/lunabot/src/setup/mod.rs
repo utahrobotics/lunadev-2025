@@ -17,7 +17,7 @@ use std::{
 
 use cakap::{CakapSender, CakapSocket};
 
-use crate::LunabotApp;
+use crate::{run::RunState, LunabotApp};
 
 pub(super) fn setup(
     bb: &mut Option<Blackboard>,
@@ -50,6 +50,7 @@ pub struct Blackboard {
     special_instants: BinaryHeap<Reverse<Instant>>,
     lunabase_conn: CakapSender,
     from_lunabase: mpsc::Receiver<FromLunabase>,
+    pub(crate) run_state: RunState,
 }
 
 impl Blackboard {
@@ -82,6 +83,7 @@ impl Blackboard {
             special_instants: BinaryHeap::new(),
             lunabase_conn,
             from_lunabase,
+            run_state: RunState::new(lunabot_app)?,
         })
     }
     /// A special instant is an instant that the behavior tree will attempt

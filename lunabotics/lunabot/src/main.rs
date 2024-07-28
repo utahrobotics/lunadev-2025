@@ -16,14 +16,16 @@ use urobotics::{
     app::{adhoc_app, application, Application},
     camera,
     log::{error, warn},
-    python, serial, video::list_media_input, BlockOn,
+    python, serial,
+    video::list_media_input,
+    BlockOn,
 };
 use video::VideoTestApp;
 
+mod pathfinding;
 mod run;
 mod setup;
 mod soft_stop;
-mod pathfinding;
 mod video;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

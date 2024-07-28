@@ -56,7 +56,8 @@ impl CakapSocket {
         if next_port == 0 {
             next_port = MIN_PORT;
         }
-        let ack_socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, next_port)).await?;
+        let ack_socket =
+            UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, next_port)).await?;
         let (existing_stream_tx, existing_stream_rx) = mpsc::channel(1);
         Ok(Self {
             reply_socket,

@@ -1,11 +1,13 @@
-use std::{cell::Cell, hash::{BuildHasher, Hash, Hasher, RandomState}};
+use std::{
+    cell::Cell,
+    hash::{BuildHasher, Hash, Hasher, RandomState},
+};
 
 use fxhash::FxBuildHasher;
 use num_prime::nt_funcs::next_prime;
 
 const SET_LAMBDA: f64 = 0.5;
 const FIRST_PRIME: usize = 19;
-
 
 thread_local! {
     static PRIORITY_MODIFIED_COUNT: Cell<usize> = Cell::new(0);
@@ -15,9 +17,8 @@ thread_local! {
 struct HeapElement<T, P> {
     element: T,
     priority: P,
-    set_index: usize
+    set_index: usize,
 }
-
 
 impl<T, P: Ord> Ord for HeapElement<T, P> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
@@ -43,16 +44,15 @@ impl<T, P: Eq> Eq for HeapElement<T, P> {}
 enum SetElement {
     Existing(usize),
     Empty,
-    Deleted
+    Deleted,
 }
 
 #[derive(Clone, Copy)]
 struct HashIndexIter {
     hash: usize,
     i: u32,
-    set_length: usize
+    set_length: usize,
 }
-
 
 impl HashIndexIter {
     fn new<T: Hash, S: BuildHasher>(element: &T, build_hasher: &S, set_length: usize) -> Self {
@@ -64,11 +64,10 @@ impl HashIndexIter {
         Self {
             hash,
             i: 0,
-            set_length
+            set_length,
         }
     }
 }
-
 
 impl Iterator for HashIndexIter {
     type Item = usize;
@@ -80,14 +79,12 @@ impl Iterator for HashIndexIter {
     }
 }
 
-
 pub(super) struct PriorityHeapSet<T, P, S = RandomState> {
     heap: Vec<HeapElement<T, P>>,
     set: Box<[SetElement]>,
     build_hasher: S,
-    deleted_slots: usize
+    deleted_slots: usize,
 }
-
 
 impl<T, P, S> PriorityHeapSet<T, P, S> {
     pub fn new_with_hasher(build_hasher: S) -> Self {
@@ -95,22 +92,26 @@ impl<T, P, S> PriorityHeapSet<T, P, S> {
             heap: Vec::with_capacity((FIRST_PRIME as f64 * SET_LAMBDA) as usize),
             set: vec![SetElement::Empty; FIRST_PRIME].into_boxed_slice(),
             build_hasher,
-            deleted_slots: 0
+            deleted_slots: 0,
         }
     }
 }
-
 
 impl<T: Hash + Eq, P: Ord, S: BuildHasher> PriorityHeapSet<T, P, S> {
     fn push_inner(&mut self, element: T, priority: P) -> Option<OnCollisionArgs<T, P>> {
         if self.set.len() as f64 * SET_LAMBDA < (self.heap.len() + 1 + self.deleted_slots) as f64 {
             self.deleted_slots = 0;
-            let next_prime = next_prime(&((self.set.len() as f64 / SET_LAMBDA) as usize), None).expect("Overflow while finding prime");
+            let next_prime = next_prime(&((self.set.len() as f64 / SET_LAMBDA) as usize), None)
+                .expect("Overflow while finding prime");
             self.set = vec![SetElement::Empty; next_prime].into_boxed_slice();
 
             for heap_index in 0..self.heap.len() {
                 let new_set_index = 'main: {
-                    for set_index in HashIndexIter::new(&self.heap[heap_index].element, &self.build_hasher, self.set.len()) {
+                    for set_index in HashIndexIter::new(
+                        &self.heap[heap_index].element,
+                        &self.build_hasher,
+                        self.set.len(),
+                    ) {
                         if self.set[set_index] == SetElement::Empty {
                             break 'main set_index;
                         }
@@ -126,7 +127,12 @@ impl<T: Hash + Eq, P: Ord, S: BuildHasher> PriorityHeapSet<T, P, S> {
             match self.set[set_index] {
                 SetElement::Existing(heap_index) => {
                     if self.heap[heap_index].element == element {
-                        return Some(OnCollisionArgs { set_index, heap_index, element, new_priority: priority });
+                        return Some(OnCollisionArgs {
+                            set_index,
+                            heap_index,
+                            element,
+                            new_priority: priority,
+                        });
                     }
                 }
                 SetElement::Deleted => {
@@ -135,7 +141,11 @@ impl<T: Hash + Eq, P: Ord, S: BuildHasher> PriorityHeapSet<T, P, S> {
                 }
                 SetElement::Empty => {
                     let mut heap_index = self.heap.len();
-                    self.heap.push(HeapElement { element, priority, set_index });
+                    self.heap.push(HeapElement {
+                        element,
+                        priority,
+                        set_index,
+                    });
                     heap_index = self.percolate_up(heap_index);
                     self.set[set_index] = SetElement::Existing(heap_index);
                     break;
@@ -150,7 +160,7 @@ impl<T: Hash + Eq, P: Ord, S: BuildHasher> PriorityHeapSet<T, P, S> {
             let element = &self.heap[heap_index];
             let parent_index = (heap_index - 1) / 2;
             let parent_element = &self.heap[parent_index];
-            
+
             if element > parent_element {
                 self.set[parent_element.set_index] = SetElement::Existing(heap_index);
                 self.heap.swap(parent_index, heap_index);
@@ -176,7 +186,8 @@ impl<T: Hash + Eq, P: Ord, S: BuildHasher> PriorityHeapSet<T, P, S> {
             } else if right_child_index >= self.heap.len() {
                 // Only left child
                 if self.heap[left_child_index] > *current {
-                    self.set[self.heap[left_child_index].set_index] = SetElement::Existing(heap_index);
+                    self.set[self.heap[left_child_index].set_index] =
+                        SetElement::Existing(heap_index);
                     self.heap.swap(left_child_index, heap_index);
                     heap_index = left_child_index;
                 } else {
@@ -189,14 +200,16 @@ impl<T: Hash + Eq, P: Ord, S: BuildHasher> PriorityHeapSet<T, P, S> {
 
                 if left_child > right_child {
                     if left_child > current {
-                        self.set[self.heap[left_child_index].set_index] = SetElement::Existing(heap_index);
+                        self.set[self.heap[left_child_index].set_index] =
+                            SetElement::Existing(heap_index);
                         self.heap.swap(left_child_index, heap_index);
                         heap_index = left_child_index;
                     } else {
                         break;
                     }
                 } else if right_child > current {
-                    self.set[self.heap[right_child_index].set_index] = SetElement::Existing(heap_index);
+                    self.set[self.heap[right_child_index].set_index] =
+                        SetElement::Existing(heap_index);
                     self.heap.swap(right_child_index, heap_index);
                     heap_index = right_child_index;
                 } else {
@@ -209,7 +222,13 @@ impl<T: Hash + Eq, P: Ord, S: BuildHasher> PriorityHeapSet<T, P, S> {
     }
 
     pub fn push_if_higher(&mut self, element: T, new_priority: P) -> bool {
-        if let Some(OnCollisionArgs { set_index, mut heap_index, element, new_priority }) = self.push_inner(element, new_priority) {
+        if let Some(OnCollisionArgs {
+            set_index,
+            mut heap_index,
+            element,
+            new_priority,
+        }) = self.push_inner(element, new_priority)
+        {
             let old_element = &mut self.heap[heap_index];
             if new_priority <= old_element.priority {
                 return false;
@@ -228,7 +247,11 @@ impl<T: Hash + Eq, P: Ord, S: BuildHasher> PriorityHeapSet<T, P, S> {
             return None;
         }
 
-        let HeapElement { element, priority, set_index } = self.heap.swap_remove(0);
+        let HeapElement {
+            element,
+            priority,
+            set_index,
+        } = self.heap.swap_remove(0);
         self.set[set_index] = SetElement::Deleted;
         self.deleted_slots += 1;
 
@@ -248,19 +271,17 @@ impl<T: Hash + Eq, P: Ord, S: BuildHasher> PriorityHeapSet<T, P, S> {
     }
 }
 
-
 impl<T, P, S: Default> Default for PriorityHeapSet<T, P, S> {
     fn default() -> Self {
         Self::new_with_hasher(S::default())
     }
 }
 
-
 struct OnCollisionArgs<T, P> {
     set_index: usize,
     heap_index: usize,
     element: T,
-    new_priority: P
+    new_priority: P,
 }
 
 pub(super) type FxPriorityHeapSet<T, P> = PriorityHeapSet<T, P, FxBuildHasher>;
