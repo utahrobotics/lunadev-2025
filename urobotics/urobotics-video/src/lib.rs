@@ -424,6 +424,17 @@ pub struct RtpVideoBuilder {
     pub pixel_format: Cow<'static, str>,
     pub quality: RtpQuality,
     pub max_bitrate: Option<usize>,
+    pub audio_sample_rate: usize,
+    pub audio: RtpAudio,
+    pub audio_format: Cow<'static, str>,
+    pub audio_source: Cow<'static, str>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RtpAudio {
+    None,
+    Mono,
+    Stereo,
 }
 
 impl RtpVideoBuilder {
@@ -444,6 +455,10 @@ impl RtpVideoBuilder {
             pixel_format: "yuv420p".into(),
             quality: RtpQuality::Low,
             max_bitrate: None,
+            audio_sample_rate: 48000,
+            audio: RtpAudio::None,
+            audio_format: "s16le".into(),
+            audio_source: "".into(),
         }
     }
     pub fn new(in_width: u32, in_height: u32, addr: SocketAddrV4) -> Self {
@@ -463,6 +478,10 @@ impl RtpVideoBuilder {
             pixel_format: "yuv420p".into(),
             quality: RtpQuality::Average,
             max_bitrate: None,
+            audio_sample_rate: 48000,
+            audio: RtpAudio::None,
+            audio_format: "s16le".into(),
+            audio_source: "".into(),
         }
     }
     pub fn new_reliable(in_width: u32, in_height: u32, addr: SocketAddrV4) -> Self {
@@ -482,6 +501,10 @@ impl RtpVideoBuilder {
             pixel_format: "yuv420p".into(),
             quality: RtpQuality::High,
             max_bitrate: Some(1000),
+            audio_sample_rate: 48000,
+            audio: RtpAudio::None,
+            audio_format: "s16le".into(),
+            audio_source: "".into(),
         }
     }
 }
@@ -524,6 +547,23 @@ impl RtpVideoBuilder {
                 "-bufsize",
                 &format!("{}K", max_bitrate * 2),
             ]);
+        }
+
+        match self.audio {
+            RtpAudio::None => {}
+            RtpAudio::Stereo | RtpAudio::Mono => {
+                let channels = if self.audio == RtpAudio::Stereo { 2 } else { 1 };
+                cmd.args([
+                    "-ar",
+                    &self.audio_sample_rate.to_string(),
+                    "-ac",
+                    &channels.to_string(),
+                    "-f",
+                    self.audio_format.as_ref(),
+                    "-i",
+                    self.audio_source.as_ref(),
+                ]);
+            }
         }
 
         let output = cmd
