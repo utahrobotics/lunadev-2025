@@ -17,7 +17,7 @@ use urobotics::{
     camera,
     log::{error, warn},
     python, serial,
-    video::list_media_input,
+    video::info::list_media_input,
     BlockOn,
 };
 use video::VideoTestApp;

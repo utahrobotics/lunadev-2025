@@ -1,7 +1,7 @@
 use nalgebra::Vector2;
 
 mod astar;
-mod collections;
+pub mod collections;
 mod decimate;
 
 pub fn pathfind(

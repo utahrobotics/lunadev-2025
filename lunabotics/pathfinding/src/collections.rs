@@ -262,13 +262,13 @@ impl<T: Hash + Eq, P: Ord, S: BuildHasher> PriorityHeapSet<T, P, S> {
         Some((element, priority))
     }
 
-    pub fn len(&self) -> usize {
-        self.heap.len()
-    }
+    // pub fn len(&self) -> usize {
+    //     self.heap.len()
+    // }
 
-    pub fn is_empty(&self) -> bool {
-        self.heap.is_empty()
-    }
+    // pub fn is_empty(&self) -> bool {
+    //     self.heap.is_empty()
+    // }
 }
 
 impl<T, P, S: Default> Default for PriorityHeapSet<T, P, S> {
@@ -286,11 +286,13 @@ struct OnCollisionArgs<T, P> {
 
 pub(super) type FxPriorityHeapSet<T, P> = PriorityHeapSet<T, P, FxBuildHasher>;
 
-pub fn get_priority_modified_count() -> usize {
+#[allow(dead_code)]
+pub(super) fn get_priority_modified_count() -> usize {
     PRIORITY_MODIFIED_COUNT.get()
 }
 
-pub fn reset_priority_modified_count() {
+#[allow(dead_code)]
+pub(super) fn reset_priority_modified_count() {
     PRIORITY_MODIFIED_COUNT.set(0);
 }
 
