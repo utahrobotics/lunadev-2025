@@ -11,3 +11,4 @@ urobotics-core = { workspace = true }
 crossbeam = { workspace = true }
 log = { workspace = true }
 tokio = { workspace = true }
+unfmt = { workspace = true }

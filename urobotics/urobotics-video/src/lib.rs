@@ -22,7 +22,8 @@ use ffmpeg_sidecar::{child::FfmpegChild, command::FfmpegCommand, event::FfmpegEv
 use image::{DynamicImage, EncodableLayout};
 use log::{error, info, warn};
 use minifb::{Window, WindowOptions};
-use tokio::{io::AsyncWriteExt, process::ChildStdin};
+use tokio::{io::AsyncWriteExt, process::{ChildStdin, Command}};
+use unfmt::unformat;
 use urobotics_core::RuntimeDropGuard;
 
 /// An error faced while writing video frames.
@@ -600,4 +601,35 @@ impl RtpVideoBuilder {
         )
         .map(|dump| (dump, sdp))
     }
+}
+
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MediaInputInfo {
+    pub name: String,
+    pub media_type: String,
+}
+
+
+pub async fn list_media_input() -> std::io::Result<Vec<MediaInputInfo>> {
+    let output = Command::new("ffmpeg")
+        .arg("-list_devices")
+        .arg("true")
+        .arg("-f")
+        .arg("dshow")
+        .arg("-i")
+        .arg("dummy")
+        .output()
+        .await?;
+
+    let mut inputs = Vec::new();
+    let stdout = String::from_utf8_lossy(&output.stderr);
+    for line in stdout.lines() {
+        let Some((_, name, media_type)) = unformat!(r#"[dshow @ {}] "{}" ({})"#, line) else { continue; };
+        inputs.push(MediaInputInfo {
+            name: name.to_string(),
+            media_type: media_type.to_string(),
+        });
+    }
+    Ok(inputs)
 }

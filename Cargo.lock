@@ -3377,6 +3377,7 @@ dependencies = [
  "log",
  "minifb",
  "tokio",
+ "unfmt",
  "urobotics-core",
 ]
 

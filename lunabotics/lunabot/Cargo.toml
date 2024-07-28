@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-urobotics = { workspace = true, features = ["serial", "camera", "python", "app"]}
+urobotics = { workspace = true, features = ["serial", "camera", "python", "app", "video"]}
 bonsai-bt = "0.6.3"
 serde = { workspace = true }
 spin_sleep = { workspace = true }

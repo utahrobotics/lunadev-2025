@@ -13,16 +13,18 @@ use serde::{Deserialize, Serialize};
 use setup::Blackboard;
 use spin_sleep::SpinSleeper;
 use urobotics::{
-    app::{application, Application},
+    app::{adhoc_app, application, Application},
     camera,
     log::{error, warn},
-    python, serial,
+    python, serial, video::list_media_input, BlockOn,
 };
+use video::VideoTestApp;
 
 mod run;
 mod setup;
 mod soft_stop;
 mod pathfinding;
+mod video;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum HighLevelActions {
@@ -133,6 +135,25 @@ impl LunabotApp {
     }
 }
 
+fn info_app() {
+    match list_media_input().block_on() {
+        Ok(list) => {
+            if list.is_empty() {
+                println!("No media input found");
+            } else {
+                println!("Media inputs:");
+                for info in list {
+                    println!("\t{} ({})", info.name, info.media_type);
+                }
+            }
+        }
+        Err(e) => eprintln!("Failed to list media input: {e}"),
+    }
+    println!();
+}
+
+adhoc_app!(InfoApp, "info", "Print diagnostics", info_app);
+
 fn main() {
     let mut app = application!();
     if Path::new("urobotics-venv").exists() {
@@ -142,5 +163,7 @@ fn main() {
         .add_app::<python::PythonVenvBuilder>()
         .add_app::<camera::CameraConnection>()
         .add_app::<LunabotApp>()
+        .add_app::<VideoTestApp>()
+        .add_app::<InfoApp>()
         .run();
 }
