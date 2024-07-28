@@ -44,7 +44,7 @@ static LOG_CALLBACKS: LazyLock<LogCallbacksRef> = LazyLock::new(|| {
 fn_alias! {
     pub type PanicCallbacksRef = CallbacksRef(&PanicHookInfo) + Send + Sync
 }
-define_callbacks!(pub PanicCallbacks => Fn(panic_info: &PanicHookInfo) + Send + Sync);
+define_callbacks!(PanicCallbacks => Fn(panic_info: &PanicHookInfo) + Send + Sync);
 static PANIC_CALLBACKS: LazyLock<PanicCallbacksRef> = LazyLock::new(|| {
     let _ = rayon::ThreadPoolBuilder::default()
         .panic_handler(|_| {

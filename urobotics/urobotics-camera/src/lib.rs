@@ -34,9 +34,9 @@ use urobotics_py::{PyRepl, PythonValue, PythonVenvBuilder};
 use urobotics_video::VideoDataDump;
 
 fn_alias! {
-    pub type ImageCallbacksRef = CallbacksRef(&Arc<DynamicImage>) + Send + Sync
+    pub type ImageCallbacksRef = CallbacksRef(&Arc<DynamicImage>) + Send
 }
-define_callbacks!(ImageCallbacks => Fn(image: &Arc<DynamicImage>) + Send + Sync);
+define_callbacks!(ImageCallbacks => Fn(image: &Arc<DynamicImage>) + Send);
 
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum CameraIdentifier {

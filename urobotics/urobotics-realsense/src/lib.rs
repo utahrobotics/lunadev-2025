@@ -3,10 +3,15 @@
 #![feature(never_type, once_cell_try)]
 
 use std::{
-    ffi::OsString, ops::Deref, path::{Path, PathBuf}, sync::{Arc, Mutex, OnceLock}, time::{Duration, Instant}
+    ffi::OsString,
+    ops::Deref,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock},
+    time::{Duration, Instant},
 };
 
 use image::{DynamicImage, ImageBuffer, Luma, Rgb};
+pub use realsense_rust;
 use realsense_rust::{
     config::{Config, ConfigurationError},
     context::{Context, ContextConstructionError},
@@ -15,29 +20,31 @@ use realsense_rust::{
     kind::{Rs2CameraInfo, Rs2Format, Rs2ProductLine, Rs2StreamKind},
     pipeline::{ActivePipeline, FrameWaitError, InactivePipeline},
 };
-pub use realsense_rust;
-use urobotics_core::{define_callbacks, fn_alias, log::{error, warn}, task::SyncTask};
+use urobotics_core::{
+    define_callbacks, fn_alias,
+    log::{error, warn},
+    task::SyncTask,
+};
 
-define_callbacks!(pub ColorCallbacks => Fn(color_img: &Arc<DynamicImage>) + Send + Sync);
-define_callbacks!(pub DepthCallbacks => Fn(depth_img: &Arc<DynamicImage>) + Send + Sync);
+define_callbacks!(ColorCallbacks => Fn(color_img: &Arc<DynamicImage>) + Send);
+define_callbacks!(DepthCallbacks => Fn(depth_img: &Arc<DynamicImage>) + Send);
 fn_alias! {
-    pub type ColorCallbacksRef = CallbacksRef(&Arc<DynamicImage>) + Send + Sync
+    pub type ColorCallbacksRef = CallbacksRef(&Arc<DynamicImage>) + Send
 }
 fn_alias! {
-    pub type DepthCallbacksRef = CallbacksRef(&Arc<DynamicImage>) + Send + Sync
+    pub type DepthCallbacksRef = CallbacksRef(&Arc<DynamicImage>) + Send
 }
 
 static CONTEXT: OnceLock<Mutex<Context>> = OnceLock::new();
 
 enum CameraSource {
     Path(PathBuf),
-    Device(Device)
+    Device(Device),
 }
 
 fn get_context() -> Result<&'static Mutex<Context>, ContextConstructionError> {
     CONTEXT.get_or_try_init(|| Context::new().map(Mutex::new))
 }
-
 
 pub struct RealSenseCameraBuilder {
     source: CameraSource,
@@ -78,12 +85,13 @@ impl RealSenseCameraBuilder {
     pub fn build(self) -> Result<RealSenseCamera, RealSenseBuildError> {
         let mut context = get_context()?.lock().unwrap();
         let device = match self.source {
-            CameraSource::Path(path) => {
-                context.add_device(path).map_err(|e| RealSenseBuildError::DeviceError(e.into()))?
-            }
+            CameraSource::Path(path) => context
+                .add_device(path)
+                .map_err(|e| RealSenseBuildError::DeviceError(e.into()))?,
             CameraSource::Device(device) => device,
         };
-        let pipeline = InactivePipeline::try_from(context.deref()).map_err(|e| RealSenseBuildError::PipelineError(e.into()))?;
+        let pipeline = InactivePipeline::try_from(context.deref())
+            .map_err(|e| RealSenseBuildError::PipelineError(e.into()))?;
         let mut config = Config::new();
 
         let usb_cstr = device.info(Rs2CameraInfo::UsbTypeDescriptor).unwrap();
@@ -92,7 +100,14 @@ impl RealSenseCameraBuilder {
             config
                 .enable_device_from_serial(device.info(Rs2CameraInfo::SerialNumber).unwrap())?
                 .disable_all_streams()?
-                .enable_stream(Rs2StreamKind::Depth, None, self.depth_image_width as usize, self.depth_image_width as usize, Rs2Format::Z16, self.depth_fps)?
+                .enable_stream(
+                    Rs2StreamKind::Depth,
+                    None,
+                    self.depth_image_width as usize,
+                    self.depth_image_width as usize,
+                    Rs2Format::Z16,
+                    self.depth_fps,
+                )?
                 .enable_stream(
                     Rs2StreamKind::Color,
                     None,
@@ -106,26 +121,32 @@ impl RealSenseCameraBuilder {
             config
                 .enable_device_from_serial(device.info(Rs2CameraInfo::SerialNumber).unwrap())?
                 .disable_all_streams()?
-                .enable_stream(Rs2StreamKind::Depth, None, self.depth_image_width as usize, self.depth_image_width as usize, Rs2Format::Z16, self.depth_fps)?;
+                .enable_stream(
+                    Rs2StreamKind::Depth,
+                    None,
+                    self.depth_image_width as usize,
+                    self.depth_image_width as usize,
+                    Rs2Format::Z16,
+                    self.depth_fps,
+                )?;
         }
 
-        let pipeline = pipeline.start(Some(config)).map_err(|e| RealSenseBuildError::PipelineError(e.into()))?;
-        Ok(
-            RealSenseCamera {
-                color_img_callbacks: self.color_img_callbacks,
-                depth_img_callbacks: self.depth_img_callbacks,
-                pipeline,
-            }
-        )
+        let pipeline = pipeline
+            .start(Some(config))
+            .map_err(|e| RealSenseBuildError::PipelineError(e.into()))?;
+        Ok(RealSenseCamera {
+            color_img_callbacks: self.color_img_callbacks,
+            depth_img_callbacks: self.depth_img_callbacks,
+            pipeline,
+        })
     }
 }
-
 
 pub enum RealSenseBuildError {
     ConfigurationError(ConfigurationError),
     ContextConstructionError(ContextConstructionError),
     PipelineError(Box<dyn std::error::Error + Send + Sync>),
-    DeviceError(Box<dyn std::error::Error + Send + Sync>)
+    DeviceError(Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl From<ConfigurationError> for RealSenseBuildError {
@@ -139,7 +160,6 @@ impl From<ContextConstructionError> for RealSenseBuildError {
         RealSenseBuildError::ContextConstructionError(e)
     }
 }
-
 
 pub struct RealSenseCamera {
     color_img_callbacks: ColorCallbacks,
@@ -195,7 +215,7 @@ impl RealSenseCamera {
 
         Ok(())
     }
-    
+
     pub fn poll_until(&mut self, deadline: Instant) -> Result<(), FrameWaitError> {
         let now = Instant::now();
         loop {
@@ -258,19 +278,23 @@ impl SyncTask for RealSenseCamera {
 }
 
 /// Returns an iterator over all the RealSense cameras that were identified.
-pub fn discover_all_realsense(product_mask: impl IntoIterator<Item=Rs2ProductLine>) -> Result<impl Iterator<Item = RealSenseCameraBuilder>, RealSenseBuildError> {
+pub fn discover_all_realsense(
+    product_mask: impl IntoIterator<Item = Rs2ProductLine>,
+) -> Result<impl Iterator<Item = RealSenseCameraBuilder>, RealSenseBuildError> {
     let context = get_context()?.lock().unwrap();
     let devices = context.query_devices(product_mask.into_iter().collect());
 
-    Ok(devices.into_iter().map(move |device| RealSenseCameraBuilder {
-        source: CameraSource::Device(device),
-        color_img_callbacks: ColorCallbacks::default(),
-        depth_img_callbacks: DepthCallbacks::default(),
-        color_image_width: 0,
-        color_image_height: 0,
-        color_fps: 0,
-        depth_image_width: 0,
-        depth_image_height: 0,
-        depth_fps: 0,
-    }))
+    Ok(devices
+        .into_iter()
+        .map(move |device| RealSenseCameraBuilder {
+            source: CameraSource::Device(device),
+            color_img_callbacks: ColorCallbacks::default(),
+            depth_img_callbacks: DepthCallbacks::default(),
+            color_image_width: 0,
+            color_image_height: 0,
+            color_fps: 0,
+            depth_image_width: 0,
+            depth_image_height: 0,
+            depth_fps: 0,
+        }))
 }

@@ -3393,6 +3393,9 @@ dependencies = [
  "apriltag",
  "apriltag-image",
  "apriltag-nalgebra",
+ "fxhash",
+ "nalgebra 0.32.5",
+ "urobotics-core",
 ]
 
 [[package]]
