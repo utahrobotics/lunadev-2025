@@ -11,3 +11,5 @@ pub use urobotics_serial as serial;
 pub use urobotics_smach as smach;
 #[cfg(feature = "video")]
 pub use urobotics_video as video;
+#[cfg(feature = "realsense")]
+pub use urobotics_realsense as realsense;

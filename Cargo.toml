@@ -55,6 +55,7 @@ urobotics-video = { path = "urobotics/urobotics-video" }
 urobotics = { path = "urobotics/urobotics" }
 urobotics-camera = { path = "urobotics/urobotics-camera" }
 urobotics-py = { path = "urobotics/urobotics-py" }
+urobotics-realsense = { path = "urobotics/urobotics-realsense" }
 tasker = { path = "misc/tasker" }
 cakap = { path = "lunabotics/cakap" }
 
