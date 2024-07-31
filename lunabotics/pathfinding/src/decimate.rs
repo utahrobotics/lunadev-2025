@@ -7,7 +7,7 @@ thread_local! {
 }
 
 /// Simplifies the given path by taking safe shortcuts.
-/// 
+///
 /// The capacity of the given vector may change.
 pub fn decimate(
     path: &mut Vec<Vector2<f64>>,

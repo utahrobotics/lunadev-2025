@@ -1,4 +1,7 @@
-use bonsai_bt::{Behavior::*, Event, Status, UpdateArgs, BT};
+use std::ops::ControlFlow;
+
+use bonsai_bt::{Behavior::*, Event, Status, UpdateArgs, BT, RUNNING};
+use common::FromLunabase;
 use urobotics::log::{error, info};
 
 use crate::{setup::Blackboard, LunabotApp};
@@ -7,7 +10,7 @@ pub(super) fn run(
     bb: &mut Option<Blackboard>,
     dt: f64,
     first_time: bool,
-    _lunabot_app: &LunabotApp,
+    lunabot_app: &LunabotApp,
 ) -> (Status, f64) {
     if first_time {
         info!("Entered Run");
@@ -16,20 +19,52 @@ pub(super) fn run(
         error!("Blackboard is null");
         return (Status::Failure, dt);
     };
+    let Some(mut run_state) = bb.run_state.take() else {
+        error!("RunState is null");
+        return (Status::Failure, dt);
+    };
     if first_time {
-        bb.run_state.behavior_tree.reset_bt();
+        run_state.behavior_tree.reset_bt();
     }
-    bb.run_state
+    let result = run_state
         .behavior_tree
-        .tick(&Event::from(UpdateArgs { dt }), &mut |args, bb| {
+        .tick(&Event::from(UpdateArgs { dt }), &mut |args, _run_bb| {
             let result = match args.action {
                 RunActions::TraverseObstacles => todo!(),
                 RunActions::Dig => todo!(),
                 RunActions::Dump => todo!(),
-                RunActions::ManualControl => todo!(),
+                RunActions::ManualControl => {
+                    bb.on_get_msg_from_lunabase(lunabot_app.get_target_delta(), |msg| {
+                        match msg {
+                            FromLunabase::Ping => {
+                                bb.respond_pong();
+                            }
+                            FromLunabase::Steering(steering) => {
+                                let (drive, steering) = steering.get_drive_and_steering();
+                                info!("Received steering command: drive: {drive}, steering: {steering}");
+                            }
+                            FromLunabase::TraverseObstacles => {
+                                info!("Commencing obstacle zone traversal");
+                                return ControlFlow::Break((Status::Success, 0.0));
+                            }
+                            FromLunabase::SoftStop => {
+                                return ControlFlow::Break((Status::Failure, 0.0));
+                            }
+                            FromLunabase::ContinueMission => {}
+                            _ => {
+                                error!("Unexpected msg: {msg:?}");
+                            }
+                        }
+                        ControlFlow::Continue(())
+                    }).unwrap_or(RUNNING)
+                }
             };
+            #[allow(unreachable_code)]
             result
-        })
+        });
+
+    bb.run_state = Some(run_state);
+    result
 }
 
 #[derive(Debug, Clone, Copy)]

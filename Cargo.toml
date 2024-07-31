@@ -59,29 +59,8 @@ urobotics-realsense = { path = "urobotics/urobotics-realsense" }
 tasker = { path = "misc/tasker" }
 cakap = { path = "lunabotics/cakap" }
 
-# The following crates need to run at full power
-# in most contexts to be effective.
-[profile.dev.package.realsense]
-opt-level = 3
-
-[profile.dev.package.apriltag]
-opt-level = 3
-
-[profile.dev.package.localization]
-opt-level = 3
-
-[profile.dev.package.camera]
-opt-level = 3
-
 [profile.dev.package.lunabot]
 opt-level = 3
 
 [profile.release.package.lunabot]
-debug = true
-# lto = "thin"
-
-[profile.release.package.lunabase-lib]
-debug = true
-
-[profile.release.package.lunasimbot]
 debug = true

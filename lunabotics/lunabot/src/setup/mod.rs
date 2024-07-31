@@ -1,5 +1,5 @@
 use bonsai_bt::Status;
-use common::FromLunabase;
+use common::{FromLunabase, FromLunabot};
 use urobotics::{
     callbacks::caller::try_drop_this_callback,
     log::{error, info},
@@ -50,7 +50,7 @@ pub struct Blackboard {
     special_instants: BinaryHeap<Reverse<Instant>>,
     lunabase_conn: CakapSender,
     from_lunabase: mpsc::Receiver<FromLunabase>,
-    pub(crate) run_state: RunState,
+    pub(crate) run_state: Option<RunState>,
 }
 
 impl Blackboard {
@@ -83,7 +83,7 @@ impl Blackboard {
             special_instants: BinaryHeap::new(),
             lunabase_conn,
             from_lunabase,
-            run_state: RunState::new(lunabot_app)?,
+            run_state: Some(RunState::new(lunabot_app)?),
         })
     }
     /// A special instant is an instant that the behavior tree will attempt
@@ -107,6 +107,12 @@ impl Blackboard {
 
     pub fn get_lunabase_conn(&self) -> &CakapSender {
         &self.lunabase_conn
+    }
+
+    pub fn respond_pong(&self) {
+        FromLunabot::Pong.encode(|bytes| {
+            let _ = self.get_lunabase_conn().send_unreliable(bytes);
+        })
     }
 
     pub fn on_get_msg_from_lunabase<T>(
