@@ -57,4 +57,19 @@ mod tests {
         );
         assert_eq!(path, [Vector2::new(5.0, 5.0), Vector2::new(1.12, 0.83)]);
     }
+
+    #[test]
+    fn test_1_obstacle_pathfind() {
+        let path = pathfind(Vector2::new(0.0, 0.0), Vector2::new(5.0, 0.0), 1.0, |p| {
+            p.x != 2.0 || p.y != 0.0
+        });
+        assert_eq!(
+            path,
+            vec![
+                Vector2::new(0.0, 0.0),
+                Vector2::new(4.0, 1.0),
+                Vector2::new(5.0, 0.0)
+            ]
+        );
+    }
 }

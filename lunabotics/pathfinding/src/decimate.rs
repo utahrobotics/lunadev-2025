@@ -6,6 +6,9 @@ thread_local! {
     static DECIMATE_BUFFER: RefCell<Vec<Vector2<f64>>> = RefCell::new(Vec::new());
 }
 
+/// Simplifies the given path by taking safe shortcuts.
+/// 
+/// The capacity of the given vector may change.
 pub fn decimate(
     path: &mut Vec<Vector2<f64>>,
     step_size: f64,
