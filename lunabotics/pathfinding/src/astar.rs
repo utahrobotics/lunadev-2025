@@ -1,11 +1,34 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::BinaryHeap};
 
 use fxhash::FxHashMap;
 use nalgebra::Vector2;
 
-use super::collections::FxPriorityHeapSet;
-
 const MAP_DIMENSION: Vector2<u32> = Vector2::new(10, 10);
+
+struct HeapElement {
+    node: Vector2<u32>,
+    cost: Cost,
+}
+
+impl PartialEq for HeapElement {
+    fn eq(&self, other: &Self) -> bool {
+        self.node == other.node
+    }
+}
+
+impl Eq for HeapElement {}
+
+impl PartialOrd for HeapElement {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for HeapElement {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.cost.cmp(&other.cost)
+    }
+}
 
 pub fn astar(
     mut start: Vector2<f64>,
@@ -59,21 +82,27 @@ pub fn astar(
 
     let mut parents: FxHashMap<Vector2<u32>, Parent> = FxHashMap::default();
     parents.insert(start, Parent::Start);
-    let mut to_see: FxPriorityHeapSet<Vector2<u32>, Cost> = FxPriorityHeapSet::default();
+    let mut to_see: BinaryHeap<HeapElement> = BinaryHeap::default();
     let mut best_cost_so_far = Cost {
-        estimated_cost: usize::MAX,
+        heuristic: usize::MAX,
         cost: 0,
         length: 1,
     };
-    to_see.push_if_higher(start, best_cost_so_far);
+    to_see.push(HeapElement {
+        node: start,
+        cost: best_cost_so_far,
+    });
     let mut best_so_far = start;
 
-    while let Some((node, cost)) = to_see.pop() {
+    while let Some(HeapElement { node, cost }) = to_see.pop() {
         let successors = {
             if node == goal {
-                debug_assert_eq!(node, best_so_far);
-                debug_assert_eq!(cost, best_cost_so_far);
+                best_cost_so_far = cost;
+                best_so_far = node;
                 break;
+            } else if cost.heuristic < best_cost_so_far.heuristic {
+                best_cost_so_far = cost;
+                best_so_far = node;
             }
 
             let node_parent = parents.get(&node).unwrap();
@@ -106,7 +135,7 @@ pub fn astar(
 
             if *node_parent != Parent::NegXPosY && node.x > 0 && node.y < max_index.y {
                 try_add(
-                    node + Vector2::new(0, 1) - Vector2::new(1, 0),
+                    node - Vector2::new(1, 0) + Vector2::new(0, 1),
                     Parent::PosXNegY,
                     14,
                 );
@@ -130,31 +159,16 @@ pub fn astar(
         for (successor, parent, added_cost) in successors {
             let new_cost = cost.cost + added_cost;
             let successor_cost = Cost {
-                estimated_cost: new_cost + heuristic(successor),
+                heuristic: heuristic(successor),
                 cost: new_cost,
                 length: cost.length + 1,
             };
-            if successor_cost > best_cost_so_far {
-                best_cost_so_far = successor_cost;
-                best_so_far = successor;
-            }
-            // match estimated_cost.cmp(&best_cost_so_far.estimated_cost) {
-            //     Ordering::Less => {
-            //         best_cost_so_far = successor_cost;
-            //         best_so_far = successor;
-            //     }
-            //     Ordering::Equal => {
-            //         if new_cost > best_cost_so_far.cost {
-            //             best_cost_so_far = successor_cost;
-            //             best_so_far = successor;
-            //         }
-            //     }
-            //     _ => {}
-            // }
 
-            if to_see.push_if_higher(successor, successor_cost) {
-                parents.insert(successor, parent);
-            }
+            to_see.push(HeapElement {
+                node: successor,
+                cost: successor_cost,
+            });
+            let _ = parents.try_insert(successor, parent);
         }
     }
 
@@ -182,8 +196,14 @@ pub fn astar(
         #[cfg(debug_assertions)]
         {
             if i == 1 {
+                let pre = best_so_far;
                 traverse!();
-                assert_eq!(best_so_far, start);
+                assert_eq!(
+                    best_so_far,
+                    start,
+                    "pre: {pre:?} {:?}",
+                    parents.get(&pre).unwrap()
+                );
             }
         }
     }
@@ -207,9 +227,15 @@ enum Parent {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct Cost {
-    estimated_cost: usize,
+    heuristic: usize,
     cost: usize,
     length: usize,
+}
+
+impl Cost {
+    fn estimated_cost(&self) -> usize {
+        self.cost + self.heuristic
+    }
 }
 
 impl PartialOrd for Cost {
@@ -221,9 +247,9 @@ impl PartialOrd for Cost {
 impl Ord for Cost {
     fn cmp(&self, other: &Self) -> Ordering {
         other
-            .estimated_cost
-            .cmp(&self.estimated_cost)
-            .then_with(|| self.cost.cmp(&other.cost))
+            .estimated_cost()
+            .cmp(&self.estimated_cost())
+            .then_with(|| other.cost.cmp(&self.cost))
             .then_with(|| other.length.cmp(&self.length))
     }
 }
@@ -282,6 +308,24 @@ mod tests {
                 Vector2::new(3.0, 3.0),
                 Vector2::new(2.0, 2.0),
                 Vector2::new(1.12, 0.83)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_1_obstacle_astar() {
+        let path = astar(Vector2::new(0.0, 0.0), Vector2::new(5.0, 0.0), 1.0, |p| {
+            p.x != 2.0 || p.y != 0.0
+        });
+        assert_eq!(
+            path,
+            vec![
+                Vector2::new(0.0, 0.0),
+                Vector2::new(1.0, 0.0),
+                Vector2::new(2.0, 1.0),
+                Vector2::new(3.0, 1.0),
+                Vector2::new(4.0, 1.0),
+                Vector2::new(5.0, 0.0)
             ]
         );
     }

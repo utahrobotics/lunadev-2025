@@ -6,5 +6,4 @@ edition = "2021"
 [dependencies]
 nalgebra = { workspace = true }
 fxhash = { workspace = true }
-num-prime = "0.4.4"
 heapless = { workspace = true }

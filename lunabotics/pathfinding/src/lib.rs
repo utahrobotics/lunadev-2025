@@ -1,7 +1,8 @@
+#![feature(map_try_insert)]
+
 use nalgebra::Vector2;
 
 mod astar;
-pub mod collections;
 mod decimate;
 
 pub fn pathfind(
