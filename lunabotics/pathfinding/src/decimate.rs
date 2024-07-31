@@ -20,11 +20,11 @@ pub fn decimate(
     DECIMATE_BUFFER.with_borrow_mut(|buffer| {
         buffer.clear();
         let mut from = path[0];
+        buffer.push(from);
 
         loop {
             let mut shortened = false;
             let mut to_index = path.len() - 1;
-            buffer.push(from);
             let mut to;
 
             loop {
