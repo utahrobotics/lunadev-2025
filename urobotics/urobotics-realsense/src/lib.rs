@@ -6,11 +6,11 @@ use std::{
     ffi::OsString,
     ops::Deref,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, OnceLock},
+    sync::{Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
-use image::{DynamicImage, ImageBuffer, Luma, Rgb};
+use image::{ImageBuffer, Luma, Rgb};
 pub use realsense_rust;
 use realsense_rust::{
     config::{Config, ConfigurationError},
@@ -26,13 +26,13 @@ use urobotics_core::{
     task::SyncTask,
 };
 
-define_callbacks!(ColorCallbacks => Fn(color_img: &Arc<DynamicImage>) + Send);
-define_callbacks!(DepthCallbacks => Fn(depth_img: &Arc<DynamicImage>) + Send);
+define_callbacks!(ColorCallbacks => CloneFn(color_img: ImageBuffer<Rgb<u8>, &[u8]>) + Send);
+define_callbacks!(DepthCallbacks => CloneFn(depth_img: ImageBuffer<Luma<u16>, &[u16]>) + Send);
 fn_alias! {
-    pub type ColorCallbacksRef = CallbacksRef(&Arc<DynamicImage>) + Send
+    pub type ColorCallbacksRef = CallbacksRef(ImageBuffer<Rgb<u8>, &[u8]>) + Send
 }
 fn_alias! {
-    pub type DepthCallbacksRef = CallbacksRef(&Arc<DynamicImage>) + Send
+    pub type DepthCallbacksRef = CallbacksRef(ImageBuffer<Luma<u16>, &[u16]>) + Send
 }
 
 static CONTEXT: OnceLock<Mutex<Context>> = OnceLock::new();
@@ -172,45 +172,73 @@ impl RealSenseCamera {
         let frames = self.pipeline.wait(max_duration)?;
 
         for frame in frames.frames_of_type::<ColorFrame>() {
-            let Some(img) = ImageBuffer::<Rgb<u8>, _>::from_raw(
-                frame.width() as u32,
-                frame.height() as u32,
-                frame
-                    .iter()
-                    .flat_map(|px| {
-                        let PixelKind::Bgr8 { r, g, b } = px else {
-                            unreachable!()
-                        };
-                        [*r, *g, *b]
-                    })
-                    .collect(),
-            ) else {
-                error!("Failed to copy realsense color image");
-                continue;
+            let rgb_buf: Vec<_>;
+            let img = match frame.get(0, 0) {
+                Some(PixelKind::Rgb8 { .. }) => unsafe {
+                    debug_assert_eq!(frame.bits_per_pixel(), 24);
+
+                    let data: *const _ = frame.get_data();
+                    let slice = std::slice::from_raw_parts(
+                        data.cast::<u8>(),
+                        frame.get_data_size(),
+                    );
+                    
+                    ImageBuffer::<Rgb<u8>, _>::from_raw(
+                        frame.width() as u32,
+                        frame.height() as u32,
+                        slice,
+                    ).unwrap()
+                }
+                Some(PixelKind::Bgr8 { .. }) => {
+                    rgb_buf = frame
+                        .iter()
+                        .flat_map(|px| {
+                            let PixelKind::Bgr8 { r, g, b } = px else {
+                                unreachable!()
+                            };
+                            [*r, *g, *b]
+                        })
+                        .collect();
+                    ImageBuffer::<Rgb<u8>, _>::from_raw(
+                        frame.width() as u32,
+                        frame.height() as u32,
+                        rgb_buf.as_slice(),
+                    ).unwrap()
+                }
+                Some(px) => {
+                    error!("Unexpected color pixel kind: {px:?}");
+                    continue;
+                }
+                None => continue,
             };
-            let img = Arc::new(DynamicImage::from(img));
-            self.color_img_callbacks.call(&img);
+            self.color_img_callbacks.call(img);
         }
 
         for frame in frames.frames_of_type::<DepthFrame>() {
-            let Some(img) = ImageBuffer::<Luma<u16>, _>::from_raw(
-                frame.width() as u32,
-                frame.height() as u32,
-                frame
-                    .iter()
-                    .flat_map(|px| {
-                        let PixelKind::Z16 { depth } = px else {
-                            unreachable!("Unexpected pixel kind: {px:?}")
-                        };
-                        [*depth]
-                    })
-                    .collect(),
-            ) else {
-                error!("Failed to copy realsense depth image");
-                continue;
+            let img = match frame.get(0, 0) {
+                Some(PixelKind::Z16 { .. }) => unsafe {
+                    debug_assert_eq!(frame.bits_per_pixel(), 16);
+                    debug_assert_eq!(frame.width() * frame.height() * 2, frame.get_data_size());
+
+                    let data: *const _ = frame.get_data();
+                    let slice = std::slice::from_raw_parts(
+                        data.cast::<u16>(),
+                        frame.width() * frame.height(),
+                    );
+                    
+                    ImageBuffer::<Luma<u16>, _>::from_raw(
+                        frame.width() as u32,
+                        frame.height() as u32,
+                        slice,
+                    ).unwrap()
+                }
+                Some(px) => {
+                    error!("Unexpected depth pixel kind: {px:?}");
+                    continue;
+                }
+                None => continue,
             };
-            let img = Arc::new(DynamicImage::from(img));
-            self.depth_img_callbacks.call(&img);
+            self.depth_img_callbacks.call(img);
         }
 
         Ok(())

@@ -80,6 +80,57 @@ macro_rules! define_callbacks {
             }
         }
     };
+    ($vis: vis $name: ident => CloneFn($($param: ident : $arg: ty),*)$($extra: tt)*) => {
+        #[allow(dead_code)]
+        use $crate::callbacks::caller::prelude::*;
+
+        #[derive(Default)]
+        $vis struct $name {
+            storage: RawCallbackStorage<dyn Fn($($arg,)*)$($extra)*, dyn FnMut($($arg,)*)$($extra)*>,
+        }
+
+        impl $name {
+            /// Calls all callbacks.
+            ///
+            /// This *does not* drop any callbacks that return `true` from `was_callback_dropped` and is thus
+            /// faster than `call`.
+            #[allow(dead_code)]
+            $vis fn call_immut(&self, $($param : $arg),*) {
+                self.storage.for_each_immut(|callback| {
+                    match callback {
+                        Callback::Immut(func) => func($($param.clone()),*),
+                        Callback::Mut(func) => (func.lock())($($param.clone()),*),
+                    }
+                });
+            }
+
+            /// Calls all callbacks.
+            ///
+            /// This drops any callbacks that return `true` from `was_callback_dropped`, unlike `call_immut`.
+            #[allow(dead_code)]
+            $vis fn call(&mut self, $($param : $arg),*) {
+                self.storage.for_each(|callback| {
+                    match callback {
+                        Callback::Immut(func) => func($($param.clone()),*),
+                        Callback::Mut(func) => (func.get_mut())($($param.clone()),*),
+                    }
+                });
+            }
+        }
+
+        impl CallbacksStorage for $name {
+            type Immut = dyn Fn($($arg,)*)$($extra)*;
+            type Mut = dyn FnMut($($arg,)*)$($extra)*;
+
+            fn get_storage(&self) -> &RawCallbackStorage<Self::Immut, Self::Mut> {
+                &self.storage
+            }
+
+            fn get_storage_mut(&mut self) -> &mut RawCallbackStorage<Self::Immut, Self::Mut> {
+                &mut self.storage
+            }
+        }
+    };
 }
 
 pub enum Callback<A: ?Sized, B: ?Sized> {
