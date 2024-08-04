@@ -10,6 +10,6 @@ fn main() {
     app.add_app::<serial::SerialConnection>()
         .add_app::<python::PythonVenvBuilder>()
         .add_app::<camera::CameraConnection>()
-        .add_app::<urobotics_learning::solutions::MultiplesOfTwoSolution>()
+        .add_app::<urobotics_learning::multiples_of_two::solution::MultiplesOfTwoSolution>()
         .run();
 }

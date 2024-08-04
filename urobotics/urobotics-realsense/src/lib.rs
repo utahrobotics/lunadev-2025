@@ -178,17 +178,16 @@ impl RealSenseCamera {
                     debug_assert_eq!(frame.bits_per_pixel(), 24);
 
                     let data: *const _ = frame.get_data();
-                    let slice = std::slice::from_raw_parts(
-                        data.cast::<u8>(),
-                        frame.get_data_size(),
-                    );
-                    
+                    let slice =
+                        std::slice::from_raw_parts(data.cast::<u8>(), frame.get_data_size());
+
                     ImageBuffer::<Rgb<u8>, _>::from_raw(
                         frame.width() as u32,
                         frame.height() as u32,
                         slice,
-                    ).unwrap()
-                }
+                    )
+                    .unwrap()
+                },
                 Some(PixelKind::Bgr8 { .. }) => {
                     rgb_buf = frame
                         .iter()
@@ -203,7 +202,8 @@ impl RealSenseCamera {
                         frame.width() as u32,
                         frame.height() as u32,
                         rgb_buf.as_slice(),
-                    ).unwrap()
+                    )
+                    .unwrap()
                 }
                 Some(px) => {
                     error!("Unexpected color pixel kind: {px:?}");
@@ -225,13 +225,14 @@ impl RealSenseCamera {
                         data.cast::<u16>(),
                         frame.width() * frame.height(),
                     );
-                    
+
                     ImageBuffer::<Luma<u16>, _>::from_raw(
                         frame.width() as u32,
                         frame.height() as u32,
                         slice,
-                    ).unwrap()
-                }
+                    )
+                    .unwrap()
+                },
                 Some(px) => {
                     error!("Unexpected depth pixel kind: {px:?}");
                     continue;

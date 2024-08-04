@@ -8,3 +8,10 @@ urobotics = { workspace = true, features = ["app"]}
 serde = { workspace = true }
 # tasker = { workspace = true }
 rand = { workspace = true }
+crossbeam = { workspace = true }
+nalgebra = { workspace = true }
+spin_sleep = { workspace = true }
+image = { workspace = true }
+indexmap = { workspace = true }
+fxhash = { workspace = true }
+heapless = { workspace = true }

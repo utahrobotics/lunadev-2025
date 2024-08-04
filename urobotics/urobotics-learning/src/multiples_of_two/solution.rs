@@ -3,7 +3,6 @@ use urobotics::{app::Application, task::SyncTask};
 
 use crate::multiples_of_two::MultiplesOfTwo;
 
-
 #[derive(Deserialize)]
 pub struct MultiplesOfTwoSolution {}
 

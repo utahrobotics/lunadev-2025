@@ -14,7 +14,10 @@ pub trait SyncTask: Send + Sized + 'static {
     {
         self.spawn_with(|x| x.log())
     }
-    fn spawn_with(self, f: impl FnOnce(Self::Output) + Send + 'static) -> std::thread::JoinHandle<()> {
+    fn spawn_with(
+        self,
+        f: impl FnOnce(Self::Output) + Send + 'static,
+    ) -> std::thread::JoinHandle<()> {
         std::thread::spawn(move || {
             f(self.run());
         })
@@ -31,7 +34,10 @@ pub trait AsyncTask: Sized {
     {
         self.spawn_with(|x| x.log())
     }
-    fn spawn_with(self, f: impl FnOnce(Self::Output) + Send + 'static) -> tokio::task::JoinHandle<()> {
+    fn spawn_with(
+        self,
+        f: impl FnOnce(Self::Output) + Send + 'static,
+    ) -> tokio::task::JoinHandle<()> {
         let fut = self.run();
         Handle::try_current()
             .unwrap_or_else(|_| get_tokio_handle())

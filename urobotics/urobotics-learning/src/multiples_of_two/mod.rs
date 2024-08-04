@@ -1,11 +1,12 @@
 use rand::{thread_rng, Rng};
 use urobotics::{define_callbacks, fn_alias, log::OwoColorize, task::SyncTask};
 
+pub mod solution;
+
 define_callbacks!(pub RandIntCallbacks => Fn(num: isize) + Send);
 fn_alias! {
     pub type RandIntCallbacksRef = CallbacksRef(isize) + Send
 }
-
 
 pub struct MultiplesOfTwo {
     random_input_callbacks: RandIntCallbacks,
@@ -23,7 +24,6 @@ impl Default for MultiplesOfTwo {
         }
     }
 }
-
 
 impl MultiplesOfTwo {
     pub fn random_input_callbacks_ref(&self) -> RandIntCallbacksRef {
@@ -46,16 +46,33 @@ impl SyncTask for MultiplesOfTwo {
         for _ in 0..10 {
             let n = thread_rng().gen_range(-100..100);
             self.random_input_callbacks.call(n);
-            let ans = self.answer_rx.recv_timeout(std::time::Duration::from_secs(1)).map_err(|e| match e {
-                std::sync::mpsc::RecvTimeoutError::Timeout =>  "Your program took longer than 1 second".to_string(),
-                std::sync::mpsc::RecvTimeoutError::Disconnected => "Your program ended prematurely, or it never used `get_answer_fn".to_string(),
-            })?;
+            let ans = self
+                .answer_rx
+                .recv_timeout(std::time::Duration::from_secs(1))
+                .map_err(|e| match e {
+                    std::sync::mpsc::RecvTimeoutError::Timeout => {
+                        "Your program took longer than 1 second".to_string()
+                    }
+                    std::sync::mpsc::RecvTimeoutError::Disconnected => {
+                        "Your program ended prematurely, or it never used `get_answer_fn"
+                            .to_string()
+                    }
+                })?;
             if ans != n * 2 {
-                return Err(format!("Your program returned an incorrect answer for input {}. Expected {}, got {}", n, n * 2, ans));
+                return Err(format!(
+                    "Your program returned an incorrect answer for input {}. Expected {}, got {}",
+                    n,
+                    n * 2,
+                    ans
+                ));
             }
         }
 
-        if self.answer_rx.recv_timeout(std::time::Duration::from_secs(1)).is_ok() {
+        if self
+            .answer_rx
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .is_ok()
+        {
             return Err("Your program did not terminate after 10 tests".to_string());
         }
 

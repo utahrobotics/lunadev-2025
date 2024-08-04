@@ -3,7 +3,7 @@
 // use urobotics::log::error;
 
 pub mod multiples_of_two;
-pub mod solutions;
+pub mod simbot;
 
 // thread_local! {
 //     static EXTENSION: Cell<Option<Box<dyn FnOnce()>>> = Cell::new(None);

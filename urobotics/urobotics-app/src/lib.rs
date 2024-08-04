@@ -84,17 +84,17 @@ impl Applications {
                 worked = Some(false);
                 return;
             }
-    
+
             log_panics();
-            
+
             if let Err(e) = log_to_file(&self.log_path) {
                 eprintln!("{}", format!("Failed to open log file: {}", e).red());
                 worked = Some(false);
                 return;
             }
-    
+
             log_to_console();
-    
+
             if let Some(cpu_usage) = self.cpu_usage.clone() {
                 cpu_usage.spawn();
             }
@@ -107,12 +107,12 @@ impl Applications {
 
         worked
     }
-    
+
     /// Runs the pre-application setup, which involves the following:
     /// - Creating a cabinet (changing working directory, copying files over, and making symlinks)
     /// - Setting up logging to file and console (panics are logged as well)
     /// - Setting up CPU usage and temperature monitoring
-    /// 
+    ///
     /// Returns `Some(true)` if setup executed successfully, `Some(false)` if there was an error (it will be printed to stderr), or `None` if the setup has already been run.
     #[inline]
     pub fn pre_run(mut self) -> Option<bool> {
@@ -120,7 +120,7 @@ impl Applications {
     }
 
     /// Runs the application specified through the command line arguments.
-    /// 
+    ///
     /// This will execute the pre-application setup if it hasn't been run yet.
     pub fn run(mut self) {
         let mut args = std::env::args();
@@ -143,7 +143,7 @@ impl Applications {
             }
             return;
         };
-        
+
         if self.pre_run_inner() == Some(false) {
             return;
         }
