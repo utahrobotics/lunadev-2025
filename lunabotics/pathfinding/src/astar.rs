@@ -32,6 +32,7 @@ pub(crate) fn astar(
     mut start: Vector2<f64>,
     mut goal: Vector2<f64>,
     map_dimension: Vector2<f64>,
+    offset: Vector2<f64>,
     step_size: f64,
     mut is_safe: impl FnMut(Vector2<f64>) -> bool,
 ) -> Vec<Vector2<f64>> {
@@ -42,6 +43,7 @@ pub(crate) fn astar(
         (map_dimension.y as f64 / step_size).round() as u32,
     );
 
+    start -= offset;
     if start.x < 0.0 {
         start.x = 0.0;
     }
@@ -59,6 +61,7 @@ pub(crate) fn astar(
         start.y = max_index.y;
     }
 
+    goal -= offset;
     if goal.x < 0.0 {
         goal.x = 0.0;
     }
@@ -107,7 +110,7 @@ pub(crate) fn astar(
             let node_parent = parents.get(&node).unwrap();
             let mut successors = heapless::Vec::<_, 8>::new();
             let mut try_add = |node: Vector2<u32>, successor_parent: Parent, cost: usize| {
-                if is_safe(step_size * node.cast()) {
+                if is_safe(step_size * node.cast() + offset) {
                     successors.push((node, successor_parent, cost)).unwrap();
                 }
             };
@@ -190,7 +193,7 @@ pub(crate) fn astar(
             };
         }
         traverse!();
-        path[i] = step_size * best_so_far.cast();
+        path[i] = step_size * best_so_far.cast() + offset;
 
         #[cfg(debug_assertions)]
         {

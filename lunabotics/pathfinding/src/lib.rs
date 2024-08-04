@@ -6,9 +6,19 @@ mod astar;
 mod decimate;
 
 
+#[derive(Clone, Copy, Debug)]
 pub struct Pathfinder<F=()> {
+    /// All points used during pathfinding are bounded to within the map dimensions, after being offset.
     pub map_dimension: Vector2<f64>,
+    /// The offset is subtracted from all points used during pathfinding before being bounded by the map dimensions.
+    /// 
+    /// By default, this is `(0.0, 0.0)`.
+    pub offset: Vector2<f64>,
+    /// The distance between points in the path.
     pub step_size: f64,
+    /// A closure that returns whether a point is safe to traverse.
+    /// 
+    /// If this is `()`, a function must be provided when calling `pathfind`.
     pub is_safe: F,
 }
 
@@ -16,6 +26,7 @@ impl<F: FnMut(Vector2<f64>) -> bool> Pathfinder<F> {
     pub fn new(map_dimension: Vector2<f64>, step_size: f64, is_safe: F) -> Self {
         Self {
             map_dimension,
+            offset: Vector2::new(0.0, 0.0),
             step_size,
             is_safe,
         }
@@ -26,6 +37,7 @@ impl<F: FnMut(Vector2<f64>) -> bool> Pathfinder<F> {
             start,
             goal,
             self.map_dimension,
+            self.offset,
             self.step_size,
             &mut self.is_safe,
         );
@@ -38,6 +50,7 @@ impl Pathfinder<()> {
     pub fn new(map_dimension: Vector2<f64>, step_size: f64) -> Self {
         Self {
             map_dimension,
+            offset: Vector2::new(0.0, 0.0),
             step_size,
             is_safe: (),
         }
@@ -49,7 +62,7 @@ impl Pathfinder<()> {
         goal: Vector2<f64>,
         mut is_safe: impl FnMut(Vector2<f64>) -> bool,
     ) -> Vec<Vector2<f64>> {
-        let mut path = astar::astar(start, goal, self.map_dimension, self.step_size, &mut is_safe);
+        let mut path = astar::astar(start, goal, self.map_dimension, self.offset, self.step_size, &mut is_safe);
         decimate::decimate(&mut path, self.step_size, &mut is_safe);
         path
     }
