@@ -155,6 +155,8 @@ impl LogFilter {
 
 pub fn log_to_file(path: impl AsRef<Path>) -> std::io::Result<LogFilter> {
     use std::io::Write;
+    get_program_time();
+
     let file = File::create(path)?;
     let file = Mutex::new(file);
     let filter = LogFilter::new();
@@ -182,6 +184,7 @@ pub fn log_to_file(path: impl AsRef<Path>) -> std::io::Result<LogFilter> {
 }
 
 pub fn log_to_console() -> LogFilter {
+    get_program_time();
     let filter = LogFilter::new();
     let filter2 = filter.clone();
 

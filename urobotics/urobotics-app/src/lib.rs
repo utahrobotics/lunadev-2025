@@ -2,7 +2,6 @@ use std::{path::PathBuf, sync::Once};
 
 use fxhash::FxHashMap;
 use serde::de::DeserializeOwned;
-pub use serde::Deserialize;
 use unfmt::unformat;
 use urobotics_core::{
     cabinet::CabinetBuilder,
@@ -200,7 +199,7 @@ impl Applications {
 #[macro_export]
 macro_rules! adhoc_app {
     ($vis:vis $type_name:ident, $cmd_name: literal, $description:literal, $func:ident) => {
-        #[derive($crate::Deserialize)]
+        #[derive(serde::Deserialize)]
         $vis struct $type_name {}
         impl $crate::Application for $type_name {
             const APP_NAME: &'static str = $cmd_name;

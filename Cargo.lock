@@ -3368,6 +3368,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "urobotics-learning"
+version = "0.1.0"
+dependencies = [
+ "rand",
+ "serde",
+ "urobotics",
+]
+
+[[package]]
 name = "urobotics-py"
 version = "0.1.0"
 dependencies = [
@@ -3412,6 +3421,7 @@ name = "urobotics-tool"
 version = "0.1.0"
 dependencies = [
  "urobotics",
+ "urobotics-learning",
 ]
 
 [[package]]

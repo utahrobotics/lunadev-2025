@@ -8,16 +8,16 @@ pub trait SyncTask: Send + Sized + 'static {
     type Output;
 
     fn run(self) -> Self::Output;
-    fn spawn(self)
+    fn spawn(self) -> std::thread::JoinHandle<()>
     where
         Self::Output: Loggable,
     {
         self.spawn_with(|x| x.log())
     }
-    fn spawn_with(self, f: impl FnOnce(Self::Output) + Send + 'static) {
+    fn spawn_with(self, f: impl FnOnce(Self::Output) + Send + 'static) -> std::thread::JoinHandle<()> {
         std::thread::spawn(move || {
             f(self.run());
-        });
+        })
     }
 }
 
@@ -25,20 +25,20 @@ pub trait AsyncTask: Sized {
     type Output;
 
     fn run(self) -> impl Future<Output = Self::Output> + Send + 'static;
-    fn spawn(self)
+    fn spawn(self) -> tokio::task::JoinHandle<()>
     where
         Self::Output: Loggable,
     {
         self.spawn_with(|x| x.log())
     }
-    fn spawn_with(self, f: impl FnOnce(Self::Output) + Send + 'static) {
+    fn spawn_with(self, f: impl FnOnce(Self::Output) + Send + 'static) -> tokio::task::JoinHandle<()> {
         let fut = self.run();
         Handle::try_current()
             .unwrap_or_else(|_| get_tokio_handle())
             .spawn(async move {
                 let output = fut.await;
                 f(output);
-            });
+            })
     }
 }
 
@@ -78,11 +78,23 @@ impl Loggable for ! {
     fn log(&self) {}
 }
 
-impl<T: Loggable, E: std::error::Error> Loggable for Result<T, E> {
+impl Loggable for String {
+    fn log(&self) {
+        log::info!("{self}");
+    }
+}
+
+impl Loggable for &'static str {
+    fn log(&self) {
+        log::info!("{self}");
+    }
+}
+
+impl<T: Loggable, E: std::fmt::Display> Loggable for Result<T, E> {
     fn log(&self) {
         match self {
             Ok(t) => t.log(),
-            Err(e) => log::error!("{}", e),
+            Err(e) => log::error!("{e}"),
         }
     }
 }
