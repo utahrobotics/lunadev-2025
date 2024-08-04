@@ -55,7 +55,7 @@ impl SyncTask for MultiplesOfTwo {
             }
         }
 
-        if self.answer_rx.recv_timeout(std::time::Duration::from_secs(1)) != Err(std::sync::mpsc::RecvTimeoutError::Timeout) {
+        if self.answer_rx.recv_timeout(std::time::Duration::from_secs(1)).is_ok() {
             return Err("Your program did not terminate after 10 tests".to_string());
         }
 
