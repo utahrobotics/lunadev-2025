@@ -98,8 +98,8 @@ macro_rules! define_callbacks {
             $vis fn call_immut(&self, $($param : $arg),*) {
                 self.storage.for_each_immut(|callback| {
                     match callback {
-                        Callback::Immut(func) => func($($param.clone()),*),
-                        Callback::Mut(func) => (func.lock())($($param.clone()),*),
+                        Callback::Immut(func) => func($(Clone::clone(&$param)),*),
+                        Callback::Mut(func) => (func.lock())($(Clone::clone(&$param)),*),
                     }
                 });
             }
@@ -111,8 +111,8 @@ macro_rules! define_callbacks {
             $vis fn call(&mut self, $($param : $arg),*) {
                 self.storage.for_each(|callback| {
                     match callback {
-                        Callback::Immut(func) => func($($param.clone()),*),
-                        Callback::Mut(func) => (func.get_mut())($($param.clone()),*),
+                        Callback::Immut(func) => func($(Clone::clone(&$param)),*),
+                        Callback::Mut(func) => (func.get_mut())($(Clone::clone(&$param)),*),
                     }
                 });
             }

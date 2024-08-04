@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Once};
 
 use fxhash::FxHashMap;
 use serde::de::DeserializeOwned;
@@ -58,6 +58,8 @@ impl Default for Applications {
     }
 }
 
+static APPLICATION_CONSUMED: Once = Once::new();
+
 #[macro_export]
 macro_rules! application {
     () => {{
@@ -71,7 +73,57 @@ macro_rules! application {
 }
 
 impl Applications {
-    pub fn run(&mut self) {
+    fn pre_run_inner(&mut self) -> Option<bool> {
+        let mut worked = None;
+        APPLICATION_CONSUMED.call_once(|| {
+            if let Err(e) = self
+                .cabinet_builder
+                .add_file_to_copy(&self.config_path)
+                .build()
+            {
+                eprintln!("{}", format!("Failed to create cabinet: {}", e).red());
+                worked = Some(false);
+                return;
+            }
+    
+            log_panics();
+            
+            if let Err(e) = log_to_file(&self.log_path) {
+                eprintln!("{}", format!("Failed to open log file: {}", e).red());
+                worked = Some(false);
+                return;
+            }
+    
+            log_to_console();
+    
+            if let Some(cpu_usage) = self.cpu_usage.clone() {
+                cpu_usage.spawn();
+            }
+            if let Some(temperature) = self.temperature.clone() {
+                temperature.spawn();
+            }
+
+            worked = Some(true);
+        });
+
+        worked
+    }
+    
+    /// Runs the pre-application setup, which involves the following:
+    /// - Creating a cabinet (changing working directory, copying files over, and making symlinks)
+    /// - Setting up logging to file and console (panics are logged as well)
+    /// - Setting up CPU usage and temperature monitoring
+    /// 
+    /// Returns `Some(true)` if setup executed successfully, `Some(false)` if there was an error (it will be printed to stderr), or `None` if the setup has already been run.
+    #[inline]
+    pub fn pre_run(mut self) -> Option<bool> {
+        self.pre_run_inner()
+    }
+
+    /// Runs the application specified through the command line arguments.
+    /// 
+    /// This will execute the pre-application setup if it hasn't been run yet.
+    pub fn run(mut self) {
         let mut args = std::env::args();
         let _exe = args.next().expect("No executable name");
         let Some(cmd) = args.next() else {
@@ -92,26 +144,9 @@ impl Applications {
             }
             return;
         };
-        if let Err(e) = self
-            .cabinet_builder
-            .add_file_to_copy(&self.config_path)
-            .build()
-        {
-            eprintln!("{}", format!("Failed to create cabinet: {}", e).red());
+        
+        if self.pre_run_inner() == Some(false) {
             return;
-        }
-        log_panics();
-        if let Err(e) = log_to_file(&self.log_path) {
-            eprintln!("{}", format!("Failed to open log file: {}", e).red());
-            return;
-        }
-        log_to_console();
-
-        if let Some(cpu_usage) = self.cpu_usage.clone() {
-            cpu_usage.spawn();
-        }
-        if let Some(temperature) = self.temperature.clone() {
-            temperature.spawn();
         }
 
         let config_raw = match std::fs::read_to_string(&self.config_path) {
@@ -142,7 +177,7 @@ impl Applications {
         (app.func)(config_parsed);
     }
 
-    pub fn add_app<T: Application>(&mut self) -> &mut Self {
+    pub fn add_app<T: Application>(mut self) -> Self {
         self.functions.insert(
             T::APP_NAME,
             BoxedApp {
