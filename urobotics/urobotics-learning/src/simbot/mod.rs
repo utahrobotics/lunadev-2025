@@ -1,4 +1,7 @@
-use std::{sync::atomic::{AtomicBool, Ordering}, time::Duration};
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 
 use crossbeam::{atomic::AtomicCell, queue::SegQueue};
 use nalgebra::{Rotation2, Vector2};
@@ -10,11 +13,13 @@ pub mod linear_maze;
 const REFRESH_RATE: Duration = Duration::from_millis(20);
 static SIMBOT_ORIGIN: AtomicCell<Vector2<f64>> = AtomicCell::new(Vector2::new(0.0, 0.0));
 static SIMBOT_DIRECTION: AtomicCell<f64> = AtomicCell::new(0.0);
-static OBSTACLES: RwLock<Obstacles> = RwLock::new(Obstacles { vertices: Vec::new(), edges: Vec::new() });
+static OBSTACLES: RwLock<Obstacles> = RwLock::new(Obstacles {
+    vertices: Vec::new(),
+    edges: Vec::new(),
+});
 static COLLIDED: AtomicBool = AtomicBool::new(false);
 static END_POINT: AtomicCell<Vector2<f64>> = AtomicCell::new(Vector2::new(0.0, 0.0));
 static DRIVE_HISTORY: SegQueue<Vector2<f64>> = SegQueue::new();
-
 
 pub struct Drive {
     origin: Vector2<f64>,
@@ -52,7 +57,9 @@ impl Drive {
     pub fn drive(&mut self, mut distance: f64) {
         if COLLIDED.load(Ordering::Relaxed) {
             return;
-        } else if let Some(raycast_distance) = OBSTACLES.read().raycast::<f64>(self.origin, self.direction) {
+        } else if let Some(raycast_distance) =
+            OBSTACLES.read().raycast::<f64>(self.origin, self.direction)
+        {
             if raycast_distance <= distance {
                 COLLIDED.store(true, Ordering::Relaxed);
                 distance = raycast_distance;
@@ -65,7 +72,6 @@ impl Drive {
     }
 }
 
-
 trait RaycastMetric {
     fn from(raycast_origin: Vector2<f64>, distance: f64, rotation_matrix: Rotation2<f64>) -> Self;
 }
@@ -77,14 +83,21 @@ impl RaycastMetric for Vector2<f64> {
 }
 
 impl RaycastMetric for f64 {
-    fn from(_raycast_origin: Vector2<f64>, distance: f64, _rotation_matrix: Rotation2<f64>) -> Self {
+    fn from(
+        _raycast_origin: Vector2<f64>,
+        distance: f64,
+        _rotation_matrix: Rotation2<f64>,
+    ) -> Self {
         distance
     }
 }
 
 impl RaycastMetric for (Vector2<f64>, f64) {
     fn from(raycast_origin: Vector2<f64>, distance: f64, rotation_matrix: Rotation2<f64>) -> Self {
-        (RaycastMetric::from(raycast_origin, distance, rotation_matrix), distance)
+        (
+            RaycastMetric::from(raycast_origin, distance, rotation_matrix),
+            distance,
+        )
     }
 }
 
@@ -95,7 +108,11 @@ struct Obstacles {
 }
 
 impl Obstacles {
-    fn raycast<T: RaycastMetric>(&self, raycast_origin: Vector2<f64>, raycast_direction: f64) -> Option<T> {
+    fn raycast<T: RaycastMetric>(
+        &self,
+        raycast_origin: Vector2<f64>,
+        raycast_direction: f64,
+    ) -> Option<T> {
         let raycast_rot = Rotation2::new(raycast_direction);
         let inv_raycast_rot = Rotation2::new(-raycast_direction);
 
@@ -117,8 +134,12 @@ impl Obstacles {
                             if from_vector.y == 0.0 {
                                 // The edge is on the raycast
                                 Some((
-                                    T::from(raycast_origin, from_vector.x.min(to_vector.x), raycast_rot),
-                                    from_vector.x.min(to_vector.x)
+                                    T::from(
+                                        raycast_origin,
+                                        from_vector.x.min(to_vector.x),
+                                        raycast_rot,
+                                    ),
+                                    from_vector.x.min(to_vector.x),
                                 ))
                             } else {
                                 // The edge is not on the raycast
@@ -128,23 +149,23 @@ impl Obstacles {
                             // The edge is not parallel to the raycast
                             None
                         }
-
                     } else if from_vector.x == to_vector.x {
                         // The edge is perpendicular to the raycast, but both vertices are on opposite sides of the raycast
                         Some((
                             T::from(raycast_origin, from_vector.x, raycast_rot),
-                            from_vector.x
+                            from_vector.x,
                         ))
                     } else {
                         // The edge is at an angle to the raycast, but both vertices are on opposite sides of the raycast
-                        let gradient = (to_vector.y - from_vector.y) / (to_vector.x - from_vector.x);
+                        let gradient =
+                            (to_vector.y - from_vector.y) / (to_vector.x - from_vector.x);
                         let x_intercept = from_vector.x - from_vector.y / gradient;
                         if x_intercept < 0.0 {
                             None
                         } else {
                             Some((
                                 T::from(raycast_origin, x_intercept, raycast_rot),
-                                x_intercept
+                                x_intercept,
                             ))
                         }
                     }
