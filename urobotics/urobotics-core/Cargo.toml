@@ -11,7 +11,7 @@ log = { workspace = true }
 tokio = { workspace = true }
 crossbeam = { workspace = true }
 # serde = { workspace = true }
-sysinfo = "0.30"
+sysinfo = "0.31"
 color-eyre = { version = "0.6", default-features = false }
 ctrlc = "3.4.2"
 rayon = { workspace = true }
