@@ -3380,6 +3380,7 @@ dependencies = [
  "rand",
  "serde",
  "spin_sleep",
+ "toml",
  "urobotics",
 ]
 

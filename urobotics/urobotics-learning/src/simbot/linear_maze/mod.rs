@@ -1,7 +1,7 @@
-use std::{f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, FRAC_PI_4, PI}, sync::atomic::Ordering};
+use std::{f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, FRAC_PI_4, PI}, io::Write, sync::atomic::Ordering};
 
 use fxhash::FxBuildHasher;
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexSet;
 use nalgebra::{Rotation2, Vector2};
 use rand::{thread_rng, Rng};
 use spin_sleep::SpinSleeper;
@@ -9,7 +9,7 @@ use urobotics::{define_callbacks, fn_alias, log::OwoColorize, parking_lot::RwLoc
 
 use crate::simbot::END_POINT;
 
-use super::{Obstacles, COLLIDED, OBSTACLES, REFRESH_RATE, SIMBOT_DIRECTION, SIMBOT_ORIGIN};
+use super::{COLLIDED, OBSTACLES, REFRESH_RATE, SIMBOT_DIRECTION, SIMBOT_ORIGIN};
 
 pub mod solution;
 
@@ -66,8 +66,8 @@ impl SyncTask for LinearMazeSensor {
 
             macro_rules! add_wall {
                 ($from:expr, $to:expr) => {
-                    let from = $from * 0.5;
-                    let to = $to * 0.5;
+                    let from = $from / 0.5;
+                    let to = $to / 0.5;
                     let from = Vector2::new(from.x.round() as isize, from.y.round() as isize);
                     let to = Vector2::new(to.x.round() as isize, to.y.round() as isize);
     
@@ -75,11 +75,11 @@ impl SyncTask for LinearMazeSensor {
                     let (to_index, to_is_new) = vertices.insert_full(to);
     
                     if from_is_new {
-                        obstacles.vertices.push(from.cast::<f64>() * 2.0);
+                        obstacles.vertices.push(from.cast::<f64>() * 0.5);
                     }
     
                     if to_is_new {
-                        obstacles.vertices.push(to.cast::<f64>() * 2.0);
+                        obstacles.vertices.push(to.cast::<f64>() * 0.5);
                     }
     
                     obstacles.edges.push((from_index, to_index));
@@ -94,9 +94,28 @@ impl SyncTask for LinearMazeSensor {
                 }
             }
 
-            direction += PI;
+            macro_rules! make_line_of_walls {
+                ($distance:expr) => {
+                    let distance = $distance;
+                    if distance > 1 {
+                        let left_corner = Rotation2::new(direction + FRAC_PI_4) * Vector2::new(FRAC_1_SQRT_2, 0.0);
+                        let right_corner = Rotation2::new(direction - FRAC_PI_4) * Vector2::new(FRAC_1_SQRT_2, 0.0);
+                        let travel = Rotation2::new(direction) * Vector2::new(distance as f64 - 1.0, 0.0);
+                        add_wall!(origin + left_corner, origin + travel + left_corner);
+                        add_wall!(origin + right_corner, origin + travel + right_corner);
+                    }
+                    origin += Rotation2::new(direction) * Vector2::new(distance as f64, 0.0);
+                }
+            }
+
+            direction += FRAC_PI_2;
             make_wall_front!();
-            direction -= PI;
+            direction += FRAC_PI_2;
+            make_wall_front!();
+            direction += FRAC_PI_2;
+            make_wall_front!();
+            direction -= FRAC_PI_2 * 3.0;
+            make_line_of_walls!(rng.gen_range(1..=5));
 
             'main: for _ in 0..rng.gen_range(7..=13) {
                 let mut turn_options = heapless::Vec::<_, 2>::from_slice(&[TurnType::Left, TurnType::Right]).unwrap();
@@ -110,17 +129,20 @@ impl SyncTask for LinearMazeSensor {
                         TurnType::Right => direction -= FRAC_PI_2,
                     }
 
-                    let distancei = rng.gen_range(1..=5);
-                    let distance = distancei as f64;
+                    let distance = rng.gen_range(1..=5);
 
                     if let Some(raycast_distance) = obstacles.raycast::<f64>(origin, direction) {
                         if raycast_distance < 1.5 {
+                            match turn_type {
+                                TurnType::Left => direction -= FRAC_PI_2,
+                                TurnType::Right => direction += FRAC_PI_2,
+                            }
                             turn_options.swap_remove(rand_turn_index);
                             if turn_options.is_empty() {
                                 break 'main;
                             }
                             continue;
-                        } else if raycast_distance < distance + 0.5 {
+                        } else if raycast_distance < distance as f64 + 0.5 {
                             continue;
                         }
                     }
@@ -142,20 +164,41 @@ impl SyncTask for LinearMazeSensor {
                         }
                     }
 
-                    if distancei > 1 {
-                        let left_corner = Rotation2::new(direction + FRAC_PI_4) * Vector2::new(FRAC_1_SQRT_2, 0.0);
-                        let right_corner = Rotation2::new(direction - FRAC_PI_4) * Vector2::new(FRAC_1_SQRT_2, 0.0);
-                        let travel = Rotation2::new(direction) * Vector2::new(distance - 1.0, 0.0);
-                        add_wall!(origin + left_corner, origin + travel + left_corner);
-                        add_wall!(origin + right_corner, origin + travel + right_corner);
-                    }
-
-                    origin += Rotation2::new(direction) * Vector2::new(distance, 0.0);
+                    make_line_of_walls!(distance);
+                    break;
                 }
             }
 
+            direction += FRAC_PI_2;
+            make_wall_front!();
+            direction -= FRAC_PI_2;
+            make_wall_front!();
+            direction -= FRAC_PI_2;
+            make_wall_front!();
             END_POINT.store(origin);
             end_point = origin;
+            let mut obstacles_obj = std::io::BufWriter::new(std::fs::File::create("obstacles.obj").expect("Failed to create obstacles.obj"));
+
+            for &vertex in &obstacles.vertices {
+                writeln!(obstacles_obj, "v {} {} 0.0", vertex.x, vertex.y).expect("Failed to write to obstacles.obj");
+            }
+
+            for &vertex in &obstacles.vertices {
+                writeln!(obstacles_obj, "v {} {} 0.3", vertex.x, vertex.y).expect("Failed to write to obstacles.obj");
+            }
+
+            let offset = obstacles.vertices.len();
+            for &(mut from, mut to) in &obstacles.edges {
+                from += 1;
+                to += 1;
+                writeln!(obstacles_obj, "f {to} {from} {} {}", from + offset, to + offset).expect("Failed to write to obstacles.obj");
+                // writeln!(obstacles_obj, "f {to} {from} {to}").expect("Failed to write to obstacles.obj");
+            }
+            
+            // std::fs::write("obstacles.toml", toml::to_string(&*obstacles).unwrap()).expect("Failed to create end_point.toml");
+            std::fs::write("end_point.txt", format!("{end_point:?}")).expect("Failed to create end_point.toml");
+
+            obstacles_obj.flush().expect("Failed to write to obstacles.obj");
         } else {
             end_point = END_POINT.load();
         }

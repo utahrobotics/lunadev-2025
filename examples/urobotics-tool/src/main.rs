@@ -11,5 +11,6 @@ fn main() {
         .add_app::<python::PythonVenvBuilder>()
         .add_app::<camera::CameraConnection>()
         .add_app::<urobotics_learning::multiples_of_two::solution::MultiplesOfTwoSolution>()
+        .add_app::<urobotics_learning::simbot::linear_maze::solution::LinearMazeSolution>()
         .run();
 }
