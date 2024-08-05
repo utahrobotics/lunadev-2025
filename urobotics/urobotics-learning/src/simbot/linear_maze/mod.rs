@@ -20,7 +20,7 @@ use super::{COLLIDED, DRIVE_HISTORY, OBSTACLES, REFRESH_RATE, SIMBOT_DIRECTION, 
 
 pub mod solution;
 
-define_callbacks!(pub RaycastCallbacks => Fn(metric: (Vector2<f64>, f64)) + Send);
+define_callbacks!(RaycastCallbacks => Fn(metric: (Vector2<f64>, f64)) + Send);
 fn_alias! {
     pub type RaycastCallbacksRef = CallbacksRef((Vector2<f64>, f64)) + Send
 }

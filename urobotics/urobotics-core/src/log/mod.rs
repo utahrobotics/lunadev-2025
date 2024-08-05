@@ -32,7 +32,7 @@ pub fn get_program_time() -> Duration {
 fn_alias! {
     pub type LogCallbacksRef = CallbacksRef(&log::Record) + Send + Sync
 }
-define_callbacks!(pub LogCallbacks => Fn(record: &log::Record) + Send + Sync);
+define_callbacks!(LogCallbacks => Fn(record: &log::Record) + Send + Sync);
 static LOG_CALLBACKS: LazyLock<LogCallbacksRef> = LazyLock::new(|| {
     let log_pub = LogPub::default();
     let log_pub_ref = log_pub.callbacks.get_ref();
