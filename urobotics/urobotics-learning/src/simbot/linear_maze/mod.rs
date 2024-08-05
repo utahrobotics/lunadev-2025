@@ -1,4 +1,4 @@
-use std::{f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, FRAC_PI_4, PI}, io::Write, sync::atomic::Ordering};
+use std::{f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, FRAC_PI_4, PI}, io::Write, sync::atomic::Ordering, time::Instant};
 
 use fxhash::FxBuildHasher;
 use indexmap::IndexSet;
@@ -9,13 +9,13 @@ use urobotics::{define_callbacks, fn_alias, log::OwoColorize, parking_lot::RwLoc
 
 use crate::simbot::END_POINT;
 
-use super::{COLLIDED, OBSTACLES, REFRESH_RATE, SIMBOT_DIRECTION, SIMBOT_ORIGIN};
+use super::{COLLIDED, DRIVE_HISTORY, OBSTACLES, REFRESH_RATE, SIMBOT_DIRECTION, SIMBOT_ORIGIN};
 
 pub mod solution;
 
-define_callbacks!(pub RaycastCallbacks => Fn(metric: Option<(Vector2<f64>, f64)>) + Send);
+define_callbacks!(pub RaycastCallbacks => Fn(metric: (Vector2<f64>, f64)) + Send);
 fn_alias! {
-    pub type RaycastCallbacksRef = CallbacksRef(Option<(Vector2<f64>, f64)>) + Send
+    pub type RaycastCallbacksRef = CallbacksRef((Vector2<f64>, f64)) + Send
 }
 
 #[derive(Default)]
@@ -35,22 +35,6 @@ enum TurnType {
     Right
 }
 
-// struct Point(Vector2<f64>);
-
-// impl PartialEq for Point {
-//     fn eq(&self, other: &Self) -> bool {
-//         self.0 == other.0
-//     }
-// }
-
-// impl Eq for Point {}
-
-// impl std::hash::Hash for Point {
-//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-//         self.0.hash(state);
-//     }
-// }
-
 impl SyncTask for LinearMazeSensor {
     type Output = Result<String, String>;
 
@@ -58,6 +42,7 @@ impl SyncTask for LinearMazeSensor {
         let mut rng = thread_rng();
         let mut obstacles = OBSTACLES.write();
         let end_point;
+        let mut obstacles_obj = std::io::BufWriter::new(std::fs::File::create("maze.obj").expect("Failed to create maze.obj"));
 
         if obstacles.vertices.is_empty() {
             let mut origin = SIMBOT_ORIGIN.load();
@@ -177,45 +162,65 @@ impl SyncTask for LinearMazeSensor {
             make_wall_front!();
             END_POINT.store(origin);
             end_point = origin;
-            let mut obstacles_obj = std::io::BufWriter::new(std::fs::File::create("obstacles.obj").expect("Failed to create obstacles.obj"));
-
-            for &vertex in &obstacles.vertices {
-                writeln!(obstacles_obj, "v {} {} 0.0", vertex.x, vertex.y).expect("Failed to write to obstacles.obj");
-            }
-
-            for &vertex in &obstacles.vertices {
-                writeln!(obstacles_obj, "v {} {} 0.3", vertex.x, vertex.y).expect("Failed to write to obstacles.obj");
-            }
-
-            let offset = obstacles.vertices.len();
-            for &(mut from, mut to) in &obstacles.edges {
-                from += 1;
-                to += 1;
-                writeln!(obstacles_obj, "f {to} {from} {} {}", from + offset, to + offset).expect("Failed to write to obstacles.obj");
-                // writeln!(obstacles_obj, "f {to} {from} {to}").expect("Failed to write to obstacles.obj");
-            }
             
-            // std::fs::write("obstacles.toml", toml::to_string(&*obstacles).unwrap()).expect("Failed to create end_point.toml");
-            std::fs::write("end_point.txt", format!("{end_point:?}")).expect("Failed to create end_point.toml");
+            let mut maze = std::fs::File::create("maze.toml").expect("Failed to create maze.toml");
+            writeln!(maze, "{}\nend = [{:.1}, {:.1}]", toml::to_string(&*obstacles).unwrap(), end_point.x, end_point.y).expect("Failed to write to maze.toml");
 
-            obstacles_obj.flush().expect("Failed to write to obstacles.obj");
+            obstacles_obj.flush().expect("Failed to write to maze.obj");
         } else {
             end_point = END_POINT.load();
         }
 
+        for &vertex in &obstacles.vertices {
+            writeln!(obstacles_obj, "v {} {} 0.0", vertex.x, vertex.y).expect("Failed to write to maze.obj");
+        }
+
+        for &vertex in &obstacles.vertices {
+            writeln!(obstacles_obj, "v {} {} 0.3", vertex.x, vertex.y).expect("Failed to write to maze.obj");
+        }
+
+        let offset = obstacles.vertices.len();
+        for &(mut from, mut to) in &obstacles.edges {
+            from += 1;
+            to += 1;
+            writeln!(obstacles_obj, "f {to} {from} {} {}", from + offset, to + offset).expect("Failed to write to maze.obj");
+        }
+
         let sleeper = SpinSleeper::default();
         let obstacles = RwLockWriteGuard::downgrade(obstacles);
-
-        loop {
+        let start_time = Instant::now();
+        let start_origin = SIMBOT_ORIGIN.load();
+        writeln!(obstacles_obj, "v {} {} -0.2", start_origin.x, start_origin.y).expect("Failed to write to maze.obj");
+        writeln!(obstacles_obj, "v {} {} 0.5", start_origin.x, start_origin.y).expect("Failed to write to maze.obj");
+        
+        let result = loop {
             if COLLIDED.load(Ordering::Relaxed) {
                 break Err("Your program collided with an obstacle!".to_string());
             }
             let origin = SIMBOT_ORIGIN.load();
             if (origin - end_point).magnitude() <= 0.5 {
-                break Ok("Your program reached the end!".green().to_string());
+                break Ok(format!("Your program reached the end in {:.2} secs!", start_time.elapsed().as_secs_f32()).green().to_string());
             }
-            self.raycast_callbacks.call(obstacles.raycast(origin, SIMBOT_DIRECTION.load()));
+            self.raycast_callbacks.call(obstacles.raycast(origin, SIMBOT_DIRECTION.load()).unwrap());
             sleeper.sleep(REFRESH_RATE);
+            if start_time.elapsed().as_secs_f32() > 5.0 {
+                break Err("Your program took longer than 5 secs to reach the end".to_string());
+            }
+        };
+
+        let history_len = DRIVE_HISTORY.len();
+        for _ in 0..history_len {
+            let next = DRIVE_HISTORY.pop().unwrap();
+            writeln!(obstacles_obj, "v {} {} -0.2", next.x, next.y).expect("Failed to write to maze.obj");
+            writeln!(obstacles_obj, "v {} {} 0.5", next.x, next.y).expect("Failed to write to maze.obj");
         }
+        let mut current = obstacles.vertices.len() * 2 + 1;
+        for _ in 0..history_len {
+            writeln!(obstacles_obj, "f {} {} {} {}", current, current + 1, current + 3, current + 2).expect("Failed to write to maze.obj");
+            current += 2;
+        }
+
+        obstacles_obj.flush().expect("Failed to write to maze.obj");
+        result
     }
 }

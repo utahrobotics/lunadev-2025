@@ -1,8 +1,7 @@
 use std::{sync::atomic::{AtomicBool, Ordering}, time::Duration};
 
-use crossbeam::atomic::AtomicCell;
+use crossbeam::{atomic::AtomicCell, queue::SegQueue};
 use nalgebra::{Rotation2, Vector2};
-use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use urobotics::parking_lot::RwLock;
 
@@ -14,6 +13,7 @@ static SIMBOT_DIRECTION: AtomicCell<f64> = AtomicCell::new(0.0);
 static OBSTACLES: RwLock<Obstacles> = RwLock::new(Obstacles { vertices: Vec::new(), edges: Vec::new() });
 static COLLIDED: AtomicBool = AtomicBool::new(false);
 static END_POINT: AtomicCell<Vector2<f64>> = AtomicCell::new(Vector2::new(0.0, 0.0));
+static DRIVE_HISTORY: SegQueue<Vector2<f64>> = SegQueue::new();
 
 
 pub struct Drive {
@@ -55,11 +55,12 @@ impl Drive {
         } else if let Some(raycast_distance) = OBSTACLES.read().raycast::<f64>(self.origin, self.direction) {
             if raycast_distance <= distance {
                 COLLIDED.store(true, Ordering::Relaxed);
+                distance = raycast_distance;
             }
-            distance = raycast_distance;
         }
         let rot = Rotation2::new(self.direction);
         self.origin += rot * Vector2::new(distance, 0.0);
+        DRIVE_HISTORY.push(self.origin);
         SIMBOT_ORIGIN.store(self.origin);
     }
 }
