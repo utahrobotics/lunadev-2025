@@ -1,4 +1,4 @@
-use std::{f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, FRAC_PI_4, PI}, io::Write, sync::atomic::Ordering, time::Instant};
+use std::{f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, FRAC_PI_4}, io::Write, sync::atomic::Ordering, time::Instant};
 
 use fxhash::FxBuildHasher;
 use indexmap::IndexSet;
@@ -71,38 +71,12 @@ impl SyncTask for LinearMazeSensor {
                 }
             }
 
-            macro_rules! make_wall_front {
-                () => {
-                    let from = Rotation2::new(direction - FRAC_PI_4) * Vector2::new(FRAC_1_SQRT_2, 0.0);
-                    let to = Rotation2::new(direction + FRAC_PI_4) * Vector2::new(FRAC_1_SQRT_2, 0.0);
-                    add_wall!(origin + from, origin + to);
-                }
-            }
+            let mut last_left_corner = Rotation2::new(direction + FRAC_PI_2 + FRAC_PI_4) * Vector2::new(FRAC_1_SQRT_2, 0.0) + origin;
+            let mut last_right_corner = Rotation2::new(direction - FRAC_PI_2 - FRAC_PI_4) * Vector2::new(FRAC_1_SQRT_2, 0.0) + origin;
+            add_wall!(last_left_corner, last_right_corner);
+            origin += Rotation2::new(direction) * Vector2::new(rng.gen_range(1..=5) as f64, 0.0);
 
-            macro_rules! make_line_of_walls {
-                ($distance:expr) => {
-                    let distance = $distance;
-                    if distance > 1 {
-                        let left_corner = Rotation2::new(direction + FRAC_PI_4) * Vector2::new(FRAC_1_SQRT_2, 0.0);
-                        let right_corner = Rotation2::new(direction - FRAC_PI_4) * Vector2::new(FRAC_1_SQRT_2, 0.0);
-                        let travel = Rotation2::new(direction) * Vector2::new(distance as f64 - 1.0, 0.0);
-                        add_wall!(origin + left_corner, origin + travel + left_corner);
-                        add_wall!(origin + right_corner, origin + travel + right_corner);
-                    }
-                    origin += Rotation2::new(direction) * Vector2::new(distance as f64, 0.0);
-                }
-            }
-
-            direction += FRAC_PI_2;
-            make_wall_front!();
-            direction += FRAC_PI_2;
-            make_wall_front!();
-            direction += FRAC_PI_2;
-            make_wall_front!();
-            direction -= FRAC_PI_2 * 3.0;
-            make_line_of_walls!(rng.gen_range(1..=5));
-
-            'main: for _ in 0..rng.gen_range(7..=13) {
+            'main: for i in 0..rng.gen_range(7..=13) {
                 let mut turn_options = heapless::Vec::<_, 2>::from_slice(&[TurnType::Left, TurnType::Right]).unwrap();
 
                 loop {
@@ -128,38 +102,43 @@ impl SyncTask for LinearMazeSensor {
                             }
                             continue;
                         } else if raycast_distance < distance as f64 + 0.5 {
+                            match turn_type {
+                                TurnType::Left => direction -= FRAC_PI_2,
+                                TurnType::Right => direction += FRAC_PI_2,
+                            }
                             continue;
                         }
                     }
 
                     match turn_type {
                         TurnType::Left => {
-                            direction -= FRAC_PI_2;
-                            make_wall_front!();
-                            direction -= FRAC_PI_2;
-                            make_wall_front!();
-                            direction += PI;
+                            let new_left_corner = Rotation2::new(direction + FRAC_PI_4) * Vector2::new(FRAC_1_SQRT_2, 0.0) + origin;
+                            let new_right_corner = Rotation2::new(direction - FRAC_PI_2 - FRAC_PI_4) * Vector2::new(FRAC_1_SQRT_2, 0.0) + origin;
+                            add_wall!(last_left_corner, new_left_corner);
+                            add_wall!(last_right_corner, new_right_corner);
+                            last_left_corner = new_left_corner;
+                            last_right_corner = new_right_corner;
                         }
                         TurnType::Right => {
-                            direction += FRAC_PI_2;
-                            make_wall_front!();
-                            direction += FRAC_PI_2;
-                            make_wall_front!();
-                            direction -= PI;
+                            let new_left_corner = Rotation2::new(direction + FRAC_PI_2 + FRAC_PI_4) * Vector2::new(FRAC_1_SQRT_2, 0.0) + origin;
+                            let new_right_corner = Rotation2::new(direction - FRAC_PI_4) * Vector2::new(FRAC_1_SQRT_2, 0.0) + origin;
+                            add_wall!(last_left_corner, new_left_corner);
+                            add_wall!(last_right_corner, new_right_corner);
+                            last_left_corner = new_left_corner;
+                            last_right_corner = new_right_corner;
                         }
                     }
+                    origin += Rotation2::new(direction) * Vector2::new(distance as f64, 0.0);
 
-                    make_line_of_walls!(distance);
                     break;
                 }
             }
 
-            direction += FRAC_PI_2;
-            make_wall_front!();
-            direction -= FRAC_PI_2;
-            make_wall_front!();
-            direction -= FRAC_PI_2;
-            make_wall_front!();
+            let new_left_corner = Rotation2::new(direction + FRAC_PI_4) * Vector2::new(FRAC_1_SQRT_2, 0.0) + origin;
+            let new_right_corner = Rotation2::new(direction - FRAC_PI_4) * Vector2::new(FRAC_1_SQRT_2, 0.0) + origin;
+            add_wall!(last_left_corner, new_left_corner);
+            add_wall!(last_right_corner, new_right_corner);
+            add_wall!(new_left_corner, new_right_corner);
             END_POINT.store(origin);
             end_point = origin;
             
