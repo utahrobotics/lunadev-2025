@@ -11,7 +11,7 @@ use urobotics::parking_lot::RwLock;
 pub mod linear_maze;
 pub mod teleop;
 
-const REFRESH_RATE: Duration = Duration::from_millis(20);
+pub const REFRESH_RATE: Duration = Duration::from_millis(20);
 static SIMBOT_ORIGIN: AtomicCell<Vector2<f64>> = AtomicCell::new(Vector2::new(0.0, 0.0));
 static SIMBOT_DIRECTION: AtomicCell<f64> = AtomicCell::new(0.0);
 static OBSTACLES: RwLock<Obstacles> = RwLock::new(Obstacles {

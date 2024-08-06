@@ -12,5 +12,6 @@ fn main() {
         .add_app::<camera::CameraConnection>()
         .add_app::<urobotics_learning::multiples_of_two::solution::MultiplesOfTwoSolution>()
         .add_app::<urobotics_learning::simbot::linear_maze::solution::LinearMazeSolution>()
+        .add_app::<urobotics_learning::simbot::teleop::solution::LinearMazeTeleopSolution>()
         .run();
 }

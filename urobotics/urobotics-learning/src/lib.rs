@@ -1,3 +1,5 @@
+#![feature(deadline_api)]
+#![feature(never_type)]
 // use std::cell::Cell;
 
 // use urobotics::log::error;
