@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use urobotics::parking_lot::RwLock;
 
 pub mod linear_maze;
+pub mod teleop;
 
 const REFRESH_RATE: Duration = Duration::from_millis(20);
 static SIMBOT_ORIGIN: AtomicCell<Vector2<f64>> = AtomicCell::new(Vector2::new(0.0, 0.0));
