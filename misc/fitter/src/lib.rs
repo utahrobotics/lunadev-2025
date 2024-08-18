@@ -1,10 +1,10 @@
 use bytemuck::cast_ref;
 use compute_shader::{
     buffers::{
-        BufferType, HostReadWrite, HostWriteOnly, OpaqueBuffer, ShaderReadOnly, ShaderReadWrite,
+        BufferType, DynamicSize, HostReadWrite, HostWriteOnly, ShaderReadOnly,
+        ShaderReadWrite, TypedOpaqueBuffer,
     },
-    wgpu,
-    Compute,
+    wgpu, Compute,
 };
 use crossbeam::queue::SegQueue;
 use nalgebra::{Rotation3, Vector2, Vector3, Vector4};
@@ -12,18 +12,18 @@ use rand::{thread_rng, Rng};
 
 // Points, Translation
 type TranslateShader = Compute<(
-    BufferType<[[f32; 4]], HostWriteOnly, ShaderReadWrite>,
+    BufferType<[Vector4<f32>], HostWriteOnly, ShaderReadWrite>,
     BufferType<[f32; 3], HostWriteOnly, ShaderReadOnly>,
 )>;
 // Points, Rotation (Mat3 with padding), Origin
 type RotateShader = Compute<(
-    BufferType<[[f32; 4]], HostWriteOnly, ShaderReadWrite>,
+    BufferType<[Vector4<f32>], HostWriteOnly, ShaderReadWrite>,
     BufferType<[[f32; 4]; 3], HostWriteOnly, ShaderReadOnly>,
     BufferType<[f32; 3], HostWriteOnly, ShaderReadOnly>,
 )>;
 // Points (Option<[f32; 3]>), Distance (Atomicf32), Translations (Vec3), Rotations (Mat3 with padding), PointsOrigin
 type FitterShader = Compute<(
-    BufferType<[[f32; 4]], HostWriteOnly, ShaderReadOnly>,
+    BufferType<[Vector4<f32>], HostWriteOnly, ShaderReadOnly>,
     BufferType<[u32], HostReadWrite, ShaderReadOnly>,
     BufferType<[[f32; 4]], HostWriteOnly, ShaderReadOnly>,
     BufferType<[[[f32; 4]; 3]], HostWriteOnly, ShaderReadOnly>,
@@ -52,7 +52,6 @@ impl Plane {
 }
 
 pub struct BufferFitter {
-    point_count: usize,
     iterations: usize,
     sample_count: usize,
     max_translation: f32,
@@ -62,7 +61,7 @@ pub struct BufferFitter {
     rotate_shader: RotateShader,
     fitter_shader: FitterShader,
 
-    point_buffers: SegQueue<Box<[Vector4<f32>]>>,
+    point_buffers: SegQueue<TypedOpaqueBuffer<[Vector4<f32>]>>,
     sample_buffers: SegQueue<(Box<[[f32; 4]]>, Box<[[[f32; 4]; 3]]>)>,
     distances_reset: Box<[u32]>,
     distances_buffers: SegQueue<Box<[u32]>>,
@@ -70,50 +69,79 @@ pub struct BufferFitter {
 
 impl BufferFitter {
     pub async fn fit_sparse(&self, points: &mut [Option<Vector3<f32>>]) -> anyhow::Result<()> {
-        let mut point_buffer = self
-            .point_buffers
-            .pop()
-            .unwrap_or_else(|| vec![Vector4::default(); self.point_count].into_boxed_slice());
-        points
-            .iter()
-            .zip(point_buffer.iter_mut())
-            .for_each(|(src, dst)| {
+        let mut point_buffer = match self.point_buffers.pop() {
+            Some(x) => x,
+            None => TypedOpaqueBuffer::new(DynamicSize::<Vector4<f32>>::new(points.len())).await?,
+        };
+        point_buffer.get_slice_mut(|slice| {
+            points.iter().zip(slice).for_each(|(src, dst)| {
                 if let Some(src) = src {
                     *dst = Vector4::new(src.x, src.y, src.z, 1.0);
                 } else {
                     *dst = Vector4::default();
                 }
             });
-        let result = self.fit_sparse_flagged(&mut point_buffer).await;
-        points
-            .iter_mut()
-            .zip(point_buffer.iter_mut())
-            .for_each(|(dst, src)| {
+        }).await;
+
+        let result = self.fit_buffer(&mut point_buffer).await;
+        point_buffer.get_slice(|slice| {
+            points.iter_mut().zip(slice).for_each(|(dst, src)| {
                 if src.w == 1.0 {
                     *dst = Some(Vector3::new(src.x, src.y, src.z));
                 } else {
                     *dst = None;
                 }
             });
+        }).await;
+
         self.point_buffers.push(point_buffer);
         result
     }
 
-    pub async fn fit_sparse_flagged(&self, points: &mut [Vector4<f32>]) -> anyhow::Result<()> {
-        let mut point_buffer = OpaqueBuffer::new_from_slice(points).await?;
+    pub async fn fit_dense(&self, points: &mut [Vector3<f32>]) -> anyhow::Result<()> {
+        let mut point_buffer = match self.point_buffers.pop() {
+            Some(x) => x,
+            None => TypedOpaqueBuffer::new(DynamicSize::<Vector4<f32>>::new(points.len())).await?,
+        };
+        point_buffer.get_slice_mut(|slice| {
+            points
+                .iter()
+                .map(|src| Vector4::new(src.x, src.y, src.z, 1.0))
+                .chain(std::iter::repeat(Vector4::default()))
+                .zip(slice)
+                .for_each(|(src, dst)| {
+                    *dst = src;
+                });
+        }).await;
 
+        let result = self.fit_buffer(&mut point_buffer).await;
+        point_buffer.get_slice(|slice| {
+            points.iter_mut().zip(slice).for_each(|(dst, src)| {
+                debug_assert_eq!(src.w, 1.0);
+                *dst = Vector3::new(src.x, src.y, src.z);
+            });
+        }).await;
+
+        self.point_buffers.push(point_buffer);
+        result
+    }
+
+    pub async fn fit_buffer(
+        &self,
+        point_buffer: &mut TypedOpaqueBuffer<[Vector4<f32>]>,
+    ) -> anyhow::Result<()> {
         let mut origin = Vector3::default();
-        {
+        point_buffer.get_slice(|points| {
             let mut count = 0usize;
 
-            for p in &mut *points {
+            for p in &*points {
                 if p.w != 0.0 {
                     origin += Vector3::new(p.x, p.y, p.z);
                     count += 1;
                 }
             }
             origin.unscale_mut(count as f32);
-        }
+        }).await;
 
         let (mut translation_buffer, mut rotation_buffer) =
             self.sample_buffers.pop().unwrap_or_else(|| {
@@ -139,7 +167,7 @@ impl BufferFitter {
                     rng.gen_range(-self.max_translation..=self.max_translation),
                     rng.gen_range(-self.max_translation..=self.max_translation),
                     rng.gen_range(-self.max_translation..=self.max_translation),
-                    0.0
+                    0.0,
                 ];
                 let mut rand_axis: Vector3<f32> = Vector3::new(
                     rng.gen_range(-1.0..=1.0),
@@ -148,7 +176,10 @@ impl BufferFitter {
                 );
                 rand_axis.normalize_mut();
 
-                let rot_mat = Rotation3::new(rand_axis * rng.gen_range(-self.max_rotation..=self.max_rotation)).into_inner();
+                let rot_mat = Rotation3::new(
+                    rand_axis * rng.gen_range(-self.max_rotation..=self.max_rotation),
+                )
+                .into_inner();
                 rotation_buffer[i] = [
                     [rot_mat[0], rot_mat[1], rot_mat[2], 0.0],
                     [rot_mat[3], rot_mat[4], rot_mat[5], 0.0],
@@ -161,7 +192,7 @@ impl BufferFitter {
                 .unwrap_or_else(|| vec![0; self.sample_count * 2 + 2].into_boxed_slice());
             self.fitter_shader
                 .new_pass(
-                    &point_buffer,
+                    &**point_buffer,
                     &*self.distances_reset,
                     &*translation_buffer,
                     &*rotation_buffer,
@@ -181,27 +212,26 @@ impl BufferFitter {
                 let min_translation = translation_buffer[min_i / 2];
                 self.translate_shader
                     .new_pass(
-                        &point_buffer,
+                        &**point_buffer,
                         &[min_translation[0], min_translation[1], min_translation[2]],
                     )
-                    .call(&mut point_buffer, ())
+                    .call(&mut **point_buffer, ())
                     .await;
             } else {
                 let min_rotation = rotation_buffer[min_i / 2];
                 self.rotate_shader
                     .new_pass(
-                        &point_buffer,
+                        &**point_buffer,
                         &min_rotation,
                         cast_ref::<_, [f32; 3]>(&origin),
                     )
-                    .call(&mut point_buffer, (), ())
+                    .call(&mut **point_buffer, (), ())
                     .await;
             }
         }
 
         self.sample_buffers
             .push((translation_buffer, rotation_buffer));
-        // TODO, copy from point buffer into points slice
 
         Ok(())
     }
@@ -377,7 +407,7 @@ fn main(
             planes.len()
         );
 
-        log::debug!("{shader}");
+        log::debug!("Compiling shader:\n\n{shader}");
 
         let fitter_shader = FitterShader::new(
             wgpu::ShaderModuleDescriptor {
@@ -398,7 +428,6 @@ fn main(
             fitter_shader,
             iterations: self.iterations,
             sample_count: self.sample_count,
-            point_count: self.point_count,
             max_translation: self.max_translation,
             max_rotation: self.max_rotation,
             point_buffers: SegQueue::default(),

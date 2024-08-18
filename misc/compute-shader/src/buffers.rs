@@ -3,10 +3,11 @@ use std::{
     marker::PhantomData,
     mem::{align_of, size_of},
     num::NonZeroU64,
+    ops::{Deref, DerefMut},
     sync::RwLock,
 };
 
-use bytemuck::{bytes_of, cast_slice, from_bytes};
+use bytemuck::{bytes_of, cast_slice, cast_slice_mut, from_bytes, from_bytes_mut};
 use crossbeam::queue::SegQueue;
 use fxhash::FxHashMap;
 use tokio::sync::oneshot;
@@ -730,25 +731,111 @@ impl OpaqueBuffer {
         })
     }
 
-    // pub async fn get_bytes(&mut self, f: impl FnOnce(&[u8])) {
-    //     let slice = self.buffer.slice(0..self.size);
-    //     let (sender, receiver) = oneshot::channel::<()>();
-    //     slice.map_async(MapMode::Read, move |_| {
-    //         let _sender = sender;
-    //     });
-    //     let _ = receiver.await;
-    //     f(&slice.get_mapped_range());
-    //     self.buffer.unmap();
-    // }
+    pub async fn get_bytes(&mut self, f: impl FnOnce(&[u8])) {
+        let slice = self.buffer.slice(0..self.size);
+        let (sender, receiver) = oneshot::channel::<()>();
+        slice.map_async(MapMode::Read, move |_| {
+            let _sender = sender;
+        });
+        let _ = receiver.await;
+        f(&slice.get_mapped_range());
+        self.buffer.unmap();
+    }
 
-    // pub async fn get_bytes_mut(&mut self, f: impl FnOnce(&mut [u8])) {
-    //     let slice = self.buffer.slice(0..self.size);
-    //     let (sender, receiver) = oneshot::channel::<()>();
-    //     slice.map_async(MapMode::Write, move |_| {
-    //         let _sender = sender;
-    //     });
-    //     let _ = receiver.await;
-    //     f(&mut slice.get_mapped_range_mut());
-    //     self.buffer.unmap();
-    // }
+    pub async fn get_bytes_mut(&mut self, f: impl FnOnce(&mut [u8])) {
+        let slice = self.buffer.slice(0..self.size);
+        let (sender, receiver) = oneshot::channel::<()>();
+        slice.map_async(MapMode::Write, move |_| {
+            let _sender = sender;
+        });
+        let _ = receiver.await;
+        f(&mut slice.get_mapped_range_mut());
+        self.buffer.unmap();
+    }
+}
+
+#[repr(transparent)]
+pub struct TypedOpaqueBuffer<T: ?Sized> {
+    buffer: OpaqueBuffer,
+    _phantom: PhantomData<T>,
+}
+
+impl<T: ?Sized> TypedOpaqueBuffer<T> {
+    pub fn from_opaque_buffer(buf: OpaqueBuffer) -> Self {
+        Self {
+            buffer: buf,
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn from_opaque_buffer_ref(buf: &OpaqueBuffer) -> &Self {
+        unsafe { std::mem::transmute(buf) }
+    }
+
+    pub fn from_opaque_buffer_mut(buf: &mut OpaqueBuffer) -> &mut Self {
+        unsafe { std::mem::transmute(buf) }
+    }
+
+    pub async fn new(size: impl BufferSize) -> anyhow::Result<Self> {
+        Ok(Self {
+            buffer: OpaqueBuffer::new(size).await?,
+            _phantom: PhantomData,
+        })
+    }
+
+    pub fn into_inner(self) -> OpaqueBuffer {
+        self.buffer
+    }
+}
+
+impl<T: bytemuck::Pod> TypedOpaqueBuffer<T> {
+    pub async fn new_from_value(value: &T) -> anyhow::Result<Self> {
+        Ok(Self {
+            buffer: OpaqueBuffer::new_from_value(value).await?,
+            _phantom: PhantomData,
+        })
+    }
+
+    pub async fn get_value(&mut self, f: impl FnOnce(&T)) {
+        self.buffer.get_bytes(|bytes| f(from_bytes(bytes))).await;
+    }
+
+    pub async fn get_value_mut(&mut self, f: impl FnOnce(&mut T)) {
+        self.buffer
+            .get_bytes_mut(|bytes| f(from_bytes_mut(bytes)))
+            .await;
+    }
+}
+
+impl<T: bytemuck::Pod> TypedOpaqueBuffer<[T]> {
+    pub async fn new_from_slice(slice: &[T]) -> anyhow::Result<Self> {
+        Ok(Self {
+            buffer: OpaqueBuffer::new_from_slice(slice).await?,
+            _phantom: PhantomData,
+        })
+    }
+
+    pub async fn get_slice(&mut self, f: impl FnOnce(&[T])) {
+        self.buffer.get_bytes(|bytes| f(cast_slice(bytes))).await;
+    }
+
+    pub async fn get_slice_mut(&mut self, f: impl FnOnce(&mut [T])) {
+        self.buffer
+            .get_bytes_mut(|bytes| f(cast_slice_mut(bytes)))
+            .await;
+    }
+}
+
+impl<T: ?Sized> Deref for TypedOpaqueBuffer<T> {
+    type Target = OpaqueBuffer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.buffer
+    }
+}
+
+impl<T: ?Sized> DerefMut for TypedOpaqueBuffer<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.buffer
+    }
 }
