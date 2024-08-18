@@ -1,11 +1,9 @@
-use std::sync::OnceLock;
-
-use bytemuck::{cast_ref, cast_slice, Pod, Zeroable};
+use bytemuck::cast_ref;
 use compute_shader::{
     buffers::{
         BufferType, HostReadWrite, HostWriteOnly, OpaqueBuffer, ShaderReadOnly, ShaderReadWrite,
     },
-    wgpu::{self, include_wgsl},
+    wgpu,
     Compute,
 };
 use crossbeam::queue::SegQueue;
@@ -142,6 +140,19 @@ impl BufferFitter {
                     rng.gen_range(-self.max_translation..=self.max_translation),
                     rng.gen_range(-self.max_translation..=self.max_translation),
                     0.0
+                ];
+                let mut rand_axis: Vector3<f32> = Vector3::new(
+                    rng.gen_range(-1.0..=1.0),
+                    rng.gen_range(-1.0..=1.0),
+                    rng.gen_range(-1.0..=1.0),
+                );
+                rand_axis.normalize_mut();
+
+                let rot_mat = Rotation3::new(rand_axis * rng.gen_range(-self.max_rotation..=self.max_rotation)).into_inner();
+                rotation_buffer[i] = [
+                    [rot_mat[0], rot_mat[1], rot_mat[2], 0.0],
+                    [rot_mat[3], rot_mat[4], rot_mat[5], 0.0],
+                    [rot_mat[6], rot_mat[7], rot_mat[8], 0.0],
                 ];
             }
             let mut distances_buffer = self
@@ -387,6 +398,13 @@ fn main(
             fitter_shader,
             iterations: self.iterations,
             sample_count: self.sample_count,
+            point_count: self.point_count,
+            max_translation: self.max_translation,
+            max_rotation: self.max_rotation,
+            point_buffers: SegQueue::default(),
+            sample_buffers: SegQueue::default(),
+            distances_reset: vec![0; self.sample_count * 2 + 2].into_boxed_slice(),
+            distances_buffers: SegQueue::default(),
         })
     }
 }
