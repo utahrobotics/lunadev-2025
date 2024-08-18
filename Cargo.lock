@@ -1006,6 +1006,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fitter"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "compute-shader",
+ "crossbeam",
+ "log",
+ "nalgebra 0.32.5",
+ "rand",
+]
+
+[[package]]
 name = "fixedbitset"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1987,6 +2000,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ea4908d4f23254adda3daa60ffef0f1ac7b8c3e9a864cf3cc154b251908a2ef"
 dependencies = [
  "approx",
+ "bytemuck",
  "matrixmultiply",
  "nalgebra-macros 0.2.1",
  "num-complex",

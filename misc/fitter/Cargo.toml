@@ -1,0 +1,13 @@
+[package]
+name = "fitter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+compute-shader = { workspace = true }
+nalgebra = { workspace = true }
+bytemuck = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+crossbeam = { workspace = true }
+rand = { workspace = true }

@@ -5,7 +5,6 @@ use crate::simbot::{linear_maze::LinearMazeSensor, teleop::LinearMazeTeleop, Dri
 
 use super::DriveInstruction;
 
-
 #[derive(Deserialize)]
 pub struct LinearMazeTeleopSolution {}
 
@@ -38,11 +37,11 @@ impl Application for LinearMazeTeleopSolution {
                 DriveInstruction::Drive(distance) => drive.drive(distance),
                 DriveInstruction::Turn(angle) => drive.set_direction(drive.get_direction() + angle),
             }
-            while let Ok(_) = distance_rx.try_recv() {
-
-            }
+            while let Ok(_) = distance_rx.try_recv() {}
             std::thread::sleep(REFRESH_RATE);
-            let Ok(distance) = distance_rx.recv() else { return; };
+            let Ok(distance) = distance_rx.recv() else {
+                return;
+            };
             raycast_callback(distance, ());
         });
 

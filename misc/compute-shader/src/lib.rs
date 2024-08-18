@@ -7,7 +7,6 @@ use fxhash::FxHashMap;
 use tokio::sync::OnceCell;
 use wgpu::{util::StagingBelt, BindGroupLayoutEntry, CommandEncoder};
 
-pub use bytemuck;
 pub mod buffers;
 pub use wgpu;
 

@@ -1,5 +1,8 @@
 use std::{
-    f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, FRAC_PI_4}, io::Write, sync::atomic::Ordering, time::Instant
+    f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, FRAC_PI_4},
+    io::Write,
+    sync::atomic::Ordering,
+    time::Instant,
 };
 
 use fxhash::FxBuildHasher;
@@ -8,12 +11,17 @@ use nalgebra::{Rotation2, Vector2};
 use rand::{thread_rng, Rng};
 use spin_sleep::SpinSleeper;
 use urobotics::{
-    define_callbacks, fn_alias, log::OwoColorize, parking_lot::{RwLockReadGuard, RwLockWriteGuard}, task::SyncTask,
+    define_callbacks, fn_alias,
+    log::OwoColorize,
+    parking_lot::{RwLockReadGuard, RwLockWriteGuard},
+    task::SyncTask,
 };
 
 use crate::simbot::END_POINT;
 
-use super::{Obstacles, COLLIDED, DRIVE_HISTORY, OBSTACLES, REFRESH_RATE, SIMBOT_DIRECTION, SIMBOT_ORIGIN};
+use super::{
+    Obstacles, COLLIDED, DRIVE_HISTORY, OBSTACLES, REFRESH_RATE, SIMBOT_DIRECTION, SIMBOT_ORIGIN,
+};
 
 pub mod solution;
 
@@ -120,10 +128,9 @@ pub(super) fn generate_linear_maze() -> (RwLockReadGuard<'static, Obstacles>, Ve
                         let new_left_corner = Rotation2::new(direction + FRAC_PI_4)
                             * Vector2::new(FRAC_1_SQRT_2, 0.0)
                             + origin;
-                        let new_right_corner =
-                            Rotation2::new(direction - FRAC_PI_2 - FRAC_PI_4)
-                                * Vector2::new(FRAC_1_SQRT_2, 0.0)
-                                + origin;
+                        let new_right_corner = Rotation2::new(direction - FRAC_PI_2 - FRAC_PI_4)
+                            * Vector2::new(FRAC_1_SQRT_2, 0.0)
+                            + origin;
                         add_wall!(last_left_corner, new_left_corner);
                         add_wall!(last_right_corner, new_right_corner);
                         last_left_corner = new_left_corner;
@@ -167,7 +174,6 @@ pub(super) fn generate_linear_maze() -> (RwLockReadGuard<'static, Obstacles>, Ve
             end_point.y
         )
         .expect("Failed to write to maze.toml");
-
     } else {
         end_point = END_POINT.load();
     }

@@ -4,7 +4,7 @@ members = [
     "urobotics/urobotics-core", "urobotics/urobotics-smach",
     "urobotics/urobotics-video",
     "urobotics/urobotics-serial", "urobotics/urobotics-app", "examples/urobotics-tool", "urobotics/urobotics",
-    "urobotics/urobotics-camera", "urobotics/urobotics-py", "urobotics/urobotics-apriltag", "misc/tasker", "lunabotics/cakap", "lunabotics/lunabot", "lunabotics/common", "lunabotics/pathfinding", "urobotics/urobotics-learning",
+    "urobotics/urobotics-camera", "urobotics/urobotics-py", "urobotics/urobotics-apriltag", "misc/tasker", "lunabotics/cakap", "lunabotics/lunabot", "lunabotics/common", "lunabotics/pathfinding", "urobotics/urobotics-learning", "misc/fitter",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]
@@ -17,7 +17,7 @@ static_assertions = "1"
 image = "0.25"
 bitcode = "0.6.3"
 ordered-float = "4.2.1"
-nalgebra = { version = "0.32", features = ["serde-serialize"] }
+nalgebra = { version = "0.32", features = ["serde-serialize", "convert-bytemuck"] }
 toml = "0.8"
 serde = { version = "1", features = ["derive", "rc"] }
 anyhow = "1"

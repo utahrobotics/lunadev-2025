@@ -1,4 +1,9 @@
-use std::{collections::BinaryHeap, f64::consts::{FRAC_PI_2, PI}, sync::mpsc::{Receiver, Sender}, time::{Duration, Instant}};
+use std::{
+    collections::BinaryHeap,
+    f64::consts::{FRAC_PI_2, PI},
+    sync::mpsc::{Receiver, Sender},
+    time::{Duration, Instant},
+};
 
 use rand::{thread_rng, Rng};
 use urobotics::{define_callbacks, fn_alias, task::SyncTask};
@@ -17,7 +22,6 @@ fn_alias! {
 }
 
 pub const MAX_PING: u64 = 50;
-
 
 pub struct LinearMazeTeleop<T, F1> {
     filter: F1,
@@ -76,8 +80,9 @@ impl<T> PartialEq for HeapElement<T> {
 
 impl<T> Eq for HeapElement<T> {}
 
-
-impl<T: Send + 'static, F1: FnMut(T) -> bool + Send + 'static> SyncTask for LinearMazeTeleop<T, F1> {
+impl<T: Send + 'static, F1: FnMut(T) -> bool + Send + 'static> SyncTask
+    for LinearMazeTeleop<T, F1>
+{
     type Output = Result<!, String>;
 
     fn run(mut self) -> Self::Output {
@@ -86,9 +91,8 @@ impl<T: Send + 'static, F1: FnMut(T) -> bool + Send + 'static> SyncTask for Line
         let mut heap = BinaryHeap::<HeapElement<T>>::default();
         let mut turned_left = false;
 
-        let mut rand_instant = || {
-            Instant::now() + Duration::from_millis(rng.gen_range(0..=MAX_PING))
-        };
+        let mut rand_instant =
+            || Instant::now() + Duration::from_millis(rng.gen_range(0..=MAX_PING));
 
         loop {
             if let Some(HeapElement(instant, _)) = heap.peek() {
@@ -98,24 +102,37 @@ impl<T: Send + 'static, F1: FnMut(T) -> bool + Send + 'static> SyncTask for Line
                     }
                     Err(e) => match e {
                         std::sync::mpsc::RecvTimeoutError::Timeout => match heap.pop().unwrap().1 {
-                            Event::Distance(distance, data) => if (self.filter)(data) {
-                                if (0.5 - distance).abs() < 0.01 {
-                                    if turned_left {
-                                        turned_left = false;
-                                        heap.push(HeapElement(rand_instant(), Event::Drive(DriveInstruction::Turn(-PI))));
+                            Event::Distance(distance, data) => {
+                                if (self.filter)(data) {
+                                    if (0.5 - distance).abs() < 0.01 {
+                                        if turned_left {
+                                            turned_left = false;
+                                            heap.push(HeapElement(
+                                                rand_instant(),
+                                                Event::Drive(DriveInstruction::Turn(-PI)),
+                                            ));
+                                        } else {
+                                            turned_left = true;
+                                            heap.push(HeapElement(
+                                                rand_instant(),
+                                                Event::Drive(DriveInstruction::Turn(FRAC_PI_2)),
+                                            ));
+                                        }
                                     } else {
-                                        turned_left = true;
-                                        heap.push(HeapElement(rand_instant(), Event::Drive(DriveInstruction::Turn(FRAC_PI_2))));
+                                        turned_left = false;
+                                        heap.push(HeapElement(
+                                            rand_instant(),
+                                            Event::Drive(DriveInstruction::Drive(distance - 0.5)),
+                                        ));
                                     }
-                                } else {
-                                    turned_left = false;
-                                    heap.push(HeapElement(rand_instant(), Event::Drive(DriveInstruction::Drive(distance - 0.5))));
                                 }
-                            },
+                            }
                             Event::Drive(d) => self.drive_callbacks.call(d),
+                        },
+                        std::sync::mpsc::RecvTimeoutError::Disconnected => {
+                            break Err("Your program terminated prematurely".to_string())
                         }
-                        std::sync::mpsc::RecvTimeoutError::Disconnected => break Err("Your program terminated prematurely".to_string()),
-                    }
+                    },
                 }
             } else {
                 let Ok((distance, data)) = self.raycast_distance_rx.recv() else {
