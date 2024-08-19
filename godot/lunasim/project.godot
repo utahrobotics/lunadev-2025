@@ -18,3 +18,8 @@ config/icon="res://icon.svg"
 [autoload]
 
 LunasimNode="*res://lunasim_node.gd"
+
+[display]
+
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
