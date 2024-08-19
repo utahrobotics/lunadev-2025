@@ -17,3 +17,4 @@ app_config.toml
 rtp.sdp
 
 *-venv
+.godot/

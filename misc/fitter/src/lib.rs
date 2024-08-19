@@ -1,8 +1,8 @@
 use bytemuck::cast_ref;
 use compute_shader::{
     buffers::{
-        BufferType, DynamicSize, HostReadWrite, HostWriteOnly, ShaderReadOnly,
-        ShaderReadWrite, TypedOpaqueBuffer,
+        BufferType, DynamicSize, HostReadWrite, HostWriteOnly, ShaderReadOnly, ShaderReadWrite,
+        TypedOpaqueBuffer,
     },
     wgpu, Compute,
 };
@@ -73,26 +73,30 @@ impl BufferFitter {
             Some(x) => x,
             None => TypedOpaqueBuffer::new(DynamicSize::<Vector4<f32>>::new(points.len())).await?,
         };
-        point_buffer.get_slice_mut(|slice| {
-            points.iter().zip(slice).for_each(|(src, dst)| {
-                if let Some(src) = src {
-                    *dst = Vector4::new(src.x, src.y, src.z, 1.0);
-                } else {
-                    *dst = Vector4::default();
-                }
-            });
-        }).await;
+        point_buffer
+            .get_slice_mut(|slice| {
+                points.iter().zip(slice).for_each(|(src, dst)| {
+                    if let Some(src) = src {
+                        *dst = Vector4::new(src.x, src.y, src.z, 1.0);
+                    } else {
+                        *dst = Vector4::default();
+                    }
+                });
+            })
+            .await;
 
         let result = self.fit_buffer(&mut point_buffer).await;
-        point_buffer.get_slice(|slice| {
-            points.iter_mut().zip(slice).for_each(|(dst, src)| {
-                if src.w == 1.0 {
-                    *dst = Some(Vector3::new(src.x, src.y, src.z));
-                } else {
-                    *dst = None;
-                }
-            });
-        }).await;
+        point_buffer
+            .get_slice(|slice| {
+                points.iter_mut().zip(slice).for_each(|(dst, src)| {
+                    if src.w == 1.0 {
+                        *dst = Some(Vector3::new(src.x, src.y, src.z));
+                    } else {
+                        *dst = None;
+                    }
+                });
+            })
+            .await;
 
         self.point_buffers.push(point_buffer);
         result
@@ -103,24 +107,28 @@ impl BufferFitter {
             Some(x) => x,
             None => TypedOpaqueBuffer::new(DynamicSize::<Vector4<f32>>::new(points.len())).await?,
         };
-        point_buffer.get_slice_mut(|slice| {
-            points
-                .iter()
-                .map(|src| Vector4::new(src.x, src.y, src.z, 1.0))
-                .chain(std::iter::repeat(Vector4::default()))
-                .zip(slice)
-                .for_each(|(src, dst)| {
-                    *dst = src;
-                });
-        }).await;
+        point_buffer
+            .get_slice_mut(|slice| {
+                points
+                    .iter()
+                    .map(|src| Vector4::new(src.x, src.y, src.z, 1.0))
+                    .chain(std::iter::repeat(Vector4::default()))
+                    .zip(slice)
+                    .for_each(|(src, dst)| {
+                        *dst = src;
+                    });
+            })
+            .await;
 
         let result = self.fit_buffer(&mut point_buffer).await;
-        point_buffer.get_slice(|slice| {
-            points.iter_mut().zip(slice).for_each(|(dst, src)| {
-                debug_assert_eq!(src.w, 1.0);
-                *dst = Vector3::new(src.x, src.y, src.z);
-            });
-        }).await;
+        point_buffer
+            .get_slice(|slice| {
+                points.iter_mut().zip(slice).for_each(|(dst, src)| {
+                    debug_assert_eq!(src.w, 1.0);
+                    *dst = Vector3::new(src.x, src.y, src.z);
+                });
+            })
+            .await;
 
         self.point_buffers.push(point_buffer);
         result
@@ -131,17 +139,19 @@ impl BufferFitter {
         point_buffer: &mut TypedOpaqueBuffer<[Vector4<f32>]>,
     ) -> anyhow::Result<()> {
         let mut origin = Vector3::default();
-        point_buffer.get_slice(|points| {
-            let mut count = 0usize;
+        point_buffer
+            .get_slice(|points| {
+                let mut count = 0usize;
 
-            for p in &*points {
-                if p.w != 0.0 {
-                    origin += Vector3::new(p.x, p.y, p.z);
-                    count += 1;
+                for p in &*points {
+                    if p.w != 0.0 {
+                        origin += Vector3::new(p.x, p.y, p.z);
+                        count += 1;
+                    }
                 }
-            }
-            origin.unscale_mut(count as f32);
-        }).await;
+                origin.unscale_mut(count as f32);
+            })
+            .await;
 
         let (mut translation_buffer, mut rotation_buffer) =
             self.sample_buffers.pop().unwrap_or_else(|| {

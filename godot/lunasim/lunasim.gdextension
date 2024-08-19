@@ -1,0 +1,14 @@
+[configuration]
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = 4.1
+reloadable = true
+
+[libraries]
+linux.debug.x86_64 =     "res://../../target/debug/liblunasim_lib.so"
+linux.release.x86_64 =   "res://../../target/release/liblunasim_lib.so"
+windows.debug.x86_64 =   "res://../../target/debug/lunasim_lib.dll"
+windows.release.x86_64 = "res://../../target/release/lunasim_lib.dll"
+macos.debug =            "res://../../target/debug/liblunasim_lib.dylib"
+macos.release =          "res://../../target/release/liblunasim_lib.dylib"
+macos.debug.arm64 =      "res://../../target/debug/liblunasim_lib.dylib"
+macos.release.arm64 =    "res://../../target/release/liblunasim_lib.dylib"

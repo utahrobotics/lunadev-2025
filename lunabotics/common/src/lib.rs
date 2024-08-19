@@ -2,6 +2,8 @@ use std::{cell::RefCell, io::Write};
 
 use bitcode::{Buffer, Decode, Encode};
 
+pub mod lunasim;
+
 thread_local! {
     static BITCODE_BUFFER: RefCell<Buffer> = RefCell::new(Buffer::default());
 }

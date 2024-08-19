@@ -166,7 +166,13 @@ impl Applications {
                 continue;
             }
             if let Some(app_name) = unformat!("[{}]", line) {
-                copying = app_name == &cmd;
+                if line.contains(',') || line.contains('\"') || line.contains('\'') {
+                    if copying {
+                        config_parsed.push_str(line);
+                    }
+                } else {
+                    copying = app_name == &cmd;
+                }
             } else if copying {
                 config_parsed.push_str(line);
             }

@@ -4,25 +4,30 @@ use std::{
     fs::File,
     net::SocketAddrV4,
     path::Path,
+    process::Stdio,
     time::{Duration, Instant},
 };
 
 use bonsai_bt::{Behavior::*, Event, Status, UpdateArgs, BT};
-use common::{FromLunabase, FromLunabot};
+use common::{lunasim::FromLunasim, FromLunabase, FromLunabot};
 use serde::{Deserialize, Serialize};
 use setup::Blackboard;
 use spin_sleep::SpinSleeper;
 use urobotics::{
     app::{adhoc_app, application, Application},
-    camera,
+    camera, define_callbacks, fn_alias, get_tokio_handle,
     log::{error, warn},
     python, serial,
+    tokio::{
+        self,
+        io::AsyncReadExt,
+        process::{ChildStdin, Command},
+    },
     video::info::list_media_input,
     BlockOn,
 };
 use video::VideoTestApp;
 
-// mod pathfinding;
 mod run;
 mod setup;
 mod soft_stop;
@@ -35,11 +40,34 @@ enum HighLevelActions {
     Run,
 }
 
+fn_alias! {
+    pub type FromLunasimRef = CallbacksRef(FromLunasim) + Send
+}
+define_callbacks!(FromLunasimCallbacks => CloneFn(msg: FromLunasim) + Send);
+
+enum RunMode {
+    Production,
+    Simulation {
+        #[allow(dead_code)]
+        child_stdin: tokio::sync::Mutex<ChildStdin>,
+        #[allow(dead_code)]
+        from_lunasim: FromLunasimRef,
+    },
+}
+
+impl Default for RunMode {
+    fn default() -> Self {
+        RunMode::Production
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 struct LunabotApp {
     #[serde(default = "default_delta")]
     target_delta: f64,
     lunabase_address: SocketAddrV4,
+    #[serde(skip)]
+    run_mode: RunMode,
 }
 
 fn default_delta() -> f64 {
@@ -64,6 +92,7 @@ impl Application for LunabotApp {
         {
             error!("Failed to write code sheet for FromLunabot: {e}");
         }
+
         // Whether or not Run succeeds or fails is ignored as it should
         // never terminate anyway. If it does terminate, that indicates
         // an event that requires user intervention. The event could
@@ -87,6 +116,17 @@ impl Application for LunabotApp {
         let target_delta = Duration::from_secs_f64(self.target_delta);
         let mut elapsed = target_delta;
         let mut last_action = HighLevelActions::SoftStop;
+
+        let interrupted = Box::leak(Box::new(std::sync::atomic::AtomicBool::default()));
+        get_tokio_handle().spawn(async {
+            match tokio::signal::ctrl_c().await {
+                Ok(()) => {
+                    warn!("Ctrl-C Received");
+                    interrupted.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                Err(e) => error!("Failed to await ctrl_c: {e}"),
+            }
+        });
 
         loop {
             let e: Event = UpdateArgs {
@@ -124,6 +164,11 @@ impl Application for LunabotApp {
                 }
             }
 
+            if interrupted.load(std::sync::atomic::Ordering::Relaxed) {
+                warn!("Exiting");
+                break;
+            }
+
             sleeper.sleep(remaining_delta);
             elapsed = start_time.elapsed();
             start_time += elapsed;
@@ -134,6 +179,121 @@ impl Application for LunabotApp {
 impl LunabotApp {
     pub fn get_target_delta(&self) -> Duration {
         Duration::from_secs_f64(self.target_delta)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct LunasimbotApp {
+    #[serde(flatten)]
+    app: LunabotApp,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
+    simulation_command: Vec<String>,
+}
+
+impl Application for LunasimbotApp {
+    const APP_NAME: &'static str = "sim";
+
+    const DESCRIPTION: &'static str = "The lunabot application in a simulated environment";
+
+    fn run(mut self) {
+        let mut cmd = if self.simulation_command.is_empty() {
+            let mut cmd = Command::new("godot");
+            cmd.args(["--path", "godot/lunasim"]);
+            cmd
+        } else {
+            let mut cmd = Command::new(self.simulation_command.remove(0));
+            cmd.args(self.simulation_command);
+            cmd
+        };
+
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+
+        let child;
+        let (child_stdin, from_lunasim) = match cmd.spawn() {
+            Ok(tmp) => {
+                child = tmp;
+                let stdin = child.stdin.unwrap();
+                let mut stdout = child.stdout.unwrap();
+                let mut stderr = child.stderr.unwrap();
+                macro_rules! handle_err {
+                    ($msg: literal, $err: ident) => {{
+                        match $err.kind() {
+                            std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::Other => {}
+                            _ => {
+                                error!(target: "lunasim", "Faced the following error while reading {}: {:?}", $msg, $err);
+                            }
+                        }
+                        break;
+                    }}
+                }
+
+                let handle = get_tokio_handle();
+                handle.spawn(async move {
+                    let mut bytes = Vec::with_capacity(1024);
+                    let mut buf = [0u8; 1024];
+
+                    loop {
+                        if bytes.len() == bytes.capacity() {
+                            bytes.reserve(bytes.len());
+                        }
+                        match stderr.read(&mut buf).await {
+                            Ok(0) => {}
+                            Ok(n) => {
+                                bytes.extend_from_slice(&buf[0..n]);
+                                if let Ok(string) = std::str::from_utf8(&bytes) {
+                                    if let Some(i) = string.find('\n') {
+                                        warn!(target: "lunasim", "{}", &string[0..i]);
+                                        bytes.drain(0..=i);
+                                    }
+                                }
+                            }
+                            Err(e) => handle_err!("stderr", e),
+                        }
+                    }
+                });
+
+                let mut callbacks = FromLunasimCallbacks::default();
+                let callbacks_ref = callbacks.get_ref();
+
+                handle.spawn(async move {
+                    let mut size_buf = [0u8; 4];
+                    let mut bytes = Vec::with_capacity(1024);
+                    loop {
+                        let size = match stdout.read_exact(&mut size_buf).await {
+                            Ok(_) => u32::from_ne_bytes(size_buf),
+                            Err(e) => handle_err!("stdout", e)
+                        };
+                        bytes.resize(size as usize, 0u8);
+                        match stdout.read_exact(&mut bytes).await {
+                            Ok(_) => {},
+                            Err(e) => handle_err!("stdout", e)
+                        }
+                        match FromLunasim::try_from(bytes.as_slice()) {
+                            Ok(msg) => callbacks.call(msg),
+                            Err(e) => {
+                                error!(target: "lunasim", "Failed to deserialize from lunasim: {e}");
+                                continue;
+                            }
+                        }
+                    }
+                });
+
+                (stdin.into(), callbacks_ref)
+            }
+            Err(e) => {
+                error!("Failed to run simulation command: {e}");
+                return;
+            }
+        };
+        self.app.run_mode = RunMode::Simulation {
+            child_stdin,
+            from_lunasim,
+        };
+        self.app.run()
     }
 }
 
@@ -161,11 +321,15 @@ fn main() {
     if Path::new("urobotics-venv").exists() {
         app.cabinet_builder.create_symlink_for("urobotics-venv");
     }
+    app.cabinet_builder.create_symlink_for("godot");
+    app.cabinet_builder.create_symlink_for("target");
+
     app.add_app::<serial::SerialConnection>()
         .add_app::<python::PythonVenvBuilder>()
         .add_app::<camera::CameraConnection>()
         .add_app::<LunabotApp>()
         .add_app::<VideoTestApp>()
         .add_app::<InfoApp>()
+        .add_app::<LunasimbotApp>()
         .run();
 }
