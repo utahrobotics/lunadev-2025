@@ -85,7 +85,15 @@ impl INode for Lunasim {
                 let Ok(msg) = to_lunasimbot_rx.recv() else {
                     break;
                 };
-                if let Err(e) = msg.encode(|bytes| stdout.write_all(bytes)) {
+                if let Err(e) = msg.encode(|bytes| {
+                    if bytes.len() > u32::MAX as usize {
+                        godot_error!("Message is too large");
+                        return Ok(());
+                    }
+                    let len = bytes.len() as u32;
+                    stdout.write_all(&len.to_ne_bytes())?;
+                    stdout.write_all(bytes)
+                }) {
                     godot_error!("Faced the following error while writing to stdout: {e}");
                 }
             }
@@ -175,5 +183,10 @@ impl Lunasim {
     #[func]
     fn set_accelerometer_deviation(&mut self, value: f64) {
         self.accelerometer_deviation = value;
+    }
+
+    #[func]
+    fn set_gyroscope_deviation(&mut self, value: f64) {
+        self.gyroscope_deviation = value;
     }
 }

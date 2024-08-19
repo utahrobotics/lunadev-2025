@@ -224,7 +224,7 @@ impl Application for LunasimbotApp {
                         match $err.kind() {
                             std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::Other => {}
                             _ => {
-                                error!(target: "lunasim", "Faced the following error while reading {}: {:?}", $msg, $err);
+                                error!(target: "lunasim", "Faced the following error while reading {}: {}", $msg, $err);
                             }
                         }
                         break;
@@ -260,6 +260,15 @@ impl Application for LunasimbotApp {
                 let callbacks_ref = callbacks.get_ref();
 
                 handle.spawn(async move {
+                    if let Err(e) = tokio::io::copy(&mut (&mut stdout).take(76), &mut tokio::io::sink()).await {
+                        match e.kind() {
+                            std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::Other => {}
+                            _ => {
+                                error!(target: "lunasim", "Faced the following error while reading stdout: {e}");
+                            }
+                        }
+                        return;
+                    }
                     let mut size_buf = [0u8; 4];
                     let mut bytes = Vec::with_capacity(1024);
                     loop {
@@ -272,8 +281,11 @@ impl Application for LunasimbotApp {
                             Ok(_) => {},
                             Err(e) => handle_err!("stdout", e)
                         }
+
                         match FromLunasim::try_from(bytes.as_slice()) {
-                            Ok(msg) => callbacks.call(msg),
+                            Ok(msg) => {
+                                callbacks.call(msg);
+                            }
                             Err(e) => {
                                 error!(target: "lunasim", "Failed to deserialize from lunasim: {e}");
                                 continue;

@@ -12,6 +12,7 @@ config_version=5
 
 config/name="Lunasim"
 run/main_scene="res://main.tscn"
+run/print_header=false
 config/features=PackedStringArray("4.3", "Forward Plus")
 config/icon="res://icon.svg"
 
@@ -19,7 +20,15 @@ config/icon="res://icon.svg"
 
 LunasimNode="*res://lunasim_node.gd"
 
+[debug]
+
+file_logging/enable_file_logging=true
+
 [display]
 
-window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+window/stretch/scale=1.3
+
+[rendering]
+
+environment/defaults/default_clear_color=Color(0.0885598, 0.08856, 0.0885599, 1)
