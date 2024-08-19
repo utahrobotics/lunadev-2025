@@ -23,8 +23,12 @@ struct LunasimShared {
 #[derive(GodotClass)]
 #[class(base=Node)]
 struct Lunasim {
+    #[var]
     accelerometer_deviation: f64,
+    #[var]
     gyroscope_deviation: f64,
+    #[var]
+    depth_deviation: f64,
     shared: Arc<LunasimShared>,
     base: Base<Node>,
 }
@@ -102,6 +106,7 @@ impl INode for Lunasim {
         Self {
             accelerometer_deviation: 0.0,
             gyroscope_deviation: 0.0,
+            depth_deviation: 0.0,
             shared,
             base,
         }
@@ -130,6 +135,12 @@ impl INode for Lunasim {
                         &[Transform3D { basis, origin }.to_variant()],
                     );
                 }
+                FromLunasimbot::Drive { left, right } => {
+                    self.base_mut().emit_signal(
+                        "drive".into(),
+                        &[left.to_variant(), right.to_variant()],
+                    );
+                }
             }
         }
     }
@@ -141,9 +152,16 @@ impl Lunasim {
     fn fitted_points(points: Vec<Vector3>);
     #[signal]
     fn transform(transform: Transform3D);
+    #[signal]
+    fn drive(left: f32, right: f32);
 
     #[func]
-    fn send_depth_map(&mut self, depth: Vec<f32>) {
+    fn send_depth_map(&mut self, mut depth: Vec<f32>) {
+        depth.iter_mut()
+            .for_each(|d| {
+                *d += randfn(0.0, self.depth_deviation) as f32;
+            });
+
         let _ = self
             .shared
             .to_lunasimbot
@@ -178,15 +196,5 @@ impl Lunasim {
             id: id as usize,
             axisangle: [axis_angle.x, axis_angle.y, axis_angle.z],
         });
-    }
-
-    #[func]
-    fn set_accelerometer_deviation(&mut self, value: f64) {
-        self.accelerometer_deviation = value;
-    }
-
-    #[func]
-    fn set_gyroscope_deviation(&mut self, value: f64) {
-        self.gyroscope_deviation = value;
     }
 }

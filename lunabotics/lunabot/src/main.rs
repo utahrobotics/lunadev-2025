@@ -222,7 +222,7 @@ impl Application for LunasimbotApp {
                 macro_rules! handle_err {
                     ($msg: literal, $err: ident) => {{
                         match $err.kind() {
-                            std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::Other => {}
+                            std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::Other | std::io::ErrorKind::UnexpectedEof => {}
                             _ => {
                                 error!(target: "lunasim", "Faced the following error while reading {}: {}", $msg, $err);
                             }

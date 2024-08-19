@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3 uid="uid://bxmnthetrtkso"]
+[gd_scene load_steps=23 format=3 uid="uid://bxmnthetrtkso"]
 
 [ext_resource type="Script" path="res://robot.gd" id="1_4gibj"]
 
@@ -105,17 +105,64 @@ sky_material = SubResource("PhysicalSkyMaterial_e6mxc")
 background_mode = 2
 sky = SubResource("Sky_1xo37")
 
-[sub_resource type="GDScript" id="GDScript_pnp73"]
-script/source = "extends Camera3D
+[sub_resource type="GDScript" id="GDScript_x4sn7"]
+script/source = "extends TabContainer
 
 
-var _timer := LunasimNode.DELTA
+func _ready() -> void:
+	# Initializes subviewports by displaying them once
+	for _i in range(get_child_count()):
+		await get_tree().process_frame
+		current_tab += 1
+	current_tab = 0
+"
+
+[sub_resource type="GDScript" id="GDScript_re1ur"]
+script/source = "extends MarginContainer
+
+const DELTA := 1.0 / 30
+const WIDTH := 36
+const HEIGHT := 24
+const MAX_DISTANCE := 4.0
+
+var raycasts: Array[RayCast3D] = []
+var depths: Array[float] = []
+
+var _timer := DELTA
+
+@onready var camera: Camera3D = $AspectRatioContainer/SubviewportContainer/SubViewport/DepthCamera
+
+
+func _ready() -> void:
+	$AspectRatioContainer.ratio = WIDTH as float / HEIGHT
+	while not is_visible_in_tree():
+		await visibility_changed
+	
+	await get_tree().process_frame
+	var v_size: Vector2 = get_viewport().size
+	
+	for y in range(HEIGHT):
+		for x in range(WIDTH):
+			var raycast := RayCast3D.new()
+			raycast.target_position = camera.project_local_ray_normal(v_size * Vector2(x as float / WIDTH, y as float / HEIGHT)).normalized() * MAX_DISTANCE
+			raycasts.append(raycast)
+			camera.add_child(raycast)
+			depths.append(0.0)
 
 
 func _process(delta: float) -> void:
 	_timer -= delta
 	if _timer <= 0.0:
-		_timer = LunasimNode.DELTA
+		_timer = DELTA
+		
+		for i in range(raycasts.size()):
+			var raycast := raycasts[i]
+			if raycast.is_colliding():
+				depths[i] = raycast.get_collision_point().distance_to(camera.global_position)
+			else:
+				depths[i] = 0.0
+		
+		LunasimNode.send_depth_map(depths)
 "
 
 [sub_resource type="GDScript" id="GDScript_4uyte"]
@@ -124,7 +171,7 @@ script/source = "extends LineEdit
 
 func _on_text_submitted(new_text: String) -> void:
 	if new_text.is_valid_float():
-		LunasimNode.set_accelerometer_deviation(float(new_text))
+		LunasimNode.accelerometer_deviation = float(new_text)
 	else:
 		push_error(\"Not a valid accelerometer deviation\")
 "
@@ -135,9 +182,38 @@ script/source = "extends LineEdit
 
 func _on_text_submitted(new_text: String) -> void:
 	if new_text.is_valid_float():
-		LunasimNode.set_gyroscope_deviation(float(new_text))
+		LunasimNode.gyroscope_deviation = float(new_text)
 	else:
 		push_error(\"Not a valid gyroscope deviation\")
+"
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eqihq"]
+shading_mode = 0
+albedo_color = Color(1, 0.105882, 0.113725, 1)
+use_point_size = true
+point_size = 5.0
+
+[sub_resource type="PointMesh" id="PointMesh_du1xb"]
+material = SubResource("StandardMaterial3D_eqihq")
+
+[sub_resource type="MultiMesh" id="MultiMesh_0ky77"]
+transform_format = 1
+instance_count = 5
+mesh = SubResource("PointMesh_du1xb")
+buffer = PackedFloat32Array(0, 0, 0.0672, 0.0768, 0.0928, 0.9, 0, 0, 0, 0, 0.0672, 0.0768, 0.0928, 0.9, 0, 0, 21, 0, 0.0672, 0.0768, 0.0928, 0.9, 1, 0, 21, 0, 0.0672, 0.0768, 0.0928, 0.9, 1, 0, 21, 30, 0.0672, 0.0768, 0.0928, 0.9, 1, 1, 21, 30, 0.0672, 0.0768, 0.0928, 0.9, 1, 1, 0, 30, 0.0672, 0.0768, 0.0928, 0.9, 0, 1, 0, 30, 0.0672, 0.0768)
+
+[sub_resource type="GDScript" id="GDScript_8ljls"]
+script/source = "extends MultiMeshInstance3D
+
+
+func _ready() -> void:
+	var mesh: MultiMesh = multimesh
+	LunasimNode.fitted_points.connect(
+		func(points: Array[Vector3]):
+			mesh.instance_count = points.size()
+			for i in range(points.size()):
+				mesh.set_instance_transform(i, Transform3D(Basis(), points[i]))
+	)
 "
 
 [node name="Node3D" type="Node3D"]
@@ -210,7 +286,7 @@ update_scale = false
 
 [node name="DepthCamera" type="RemoteTransform3D" parent="Robot"]
 transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, 0, 0.572526, -0.298189)
-remote_path = NodePath("../../CanvasLayer/TabContainer/DepthCamera1/SubviewportContainer/SubViewport/DepthCamera")
+remote_path = NodePath("../../CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport/DepthCamera")
 
 [node name="RayCast3D" type="RayCast3D" parent="Robot"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.218799, 0)
@@ -239,6 +315,7 @@ grow_horizontal = 2
 grow_vertical = 2
 current_tab = 0
 tab_focus_mode = 0
+script = SubResource("GDScript_x4sn7")
 
 [node name="ExternalView" type="MarginContainer" parent="CanvasLayer/TabContainer"]
 layout_mode = 2
@@ -258,7 +335,7 @@ size = Vector2i(1132, 597)
 render_target_update_mode = 4
 
 [node name="ExternalCamera" type="Camera3D" parent="CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport"]
-transform = Transform3D(0.283078, -0.220396, 0.933431, -1.77252e-08, 0.973239, 0.229795, -0.959097, -0.0650499, 0.275503, 3.23287, 2.10368, 0.954184)
+transform = Transform3D(0.283078, -0.220396, 0.93343, -1.77252e-08, 0.973239, 0.229795, -0.959097, -0.0650499, 0.275503, 3.23287, 2.10368, 0.954185)
 
 [node name="DepthCamera1" type="MarginContainer" parent="CanvasLayer/TabContainer"]
 visible = false
@@ -267,24 +344,28 @@ theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
+script = SubResource("GDScript_re1ur")
 metadata/_tab_index = 1
 
-[node name="SubviewportContainer" type="SubViewportContainer" parent="CanvasLayer/TabContainer/DepthCamera1"]
+[node name="AspectRatioContainer" type="AspectRatioContainer" parent="CanvasLayer/TabContainer/DepthCamera1"]
+layout_mode = 2
+
+[node name="SubviewportContainer" type="SubViewportContainer" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer"]
 layout_mode = 2
 stretch = true
 
-[node name="SubViewport" type="SubViewport" parent="CanvasLayer/TabContainer/DepthCamera1/SubviewportContainer"]
+[node name="SubViewport" type="SubViewport" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer"]
 handle_input_locally = false
-size = Vector2i(2, 2)
+size = Vector2i(597, 597)
 render_target_update_mode = 0
 
-[node name="DepthCamera" type="Camera3D" parent="CanvasLayer/TabContainer/DepthCamera1/SubviewportContainer/SubViewport"]
-transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, 0, 1.38032, -0.298189)
+[node name="DepthCamera" type="Camera3D" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport"]
+transform = Transform3D(1, 0, 0, 0, 0.814591, 0.580035, 0, -0.580035, 0.814591, 0, 1.38032, -0.298189)
 fov = 120.0
-script = SubResource("GDScript_pnp73")
 
 [node name="Control" type="Control" parent="CanvasLayer"]
 layout_mode = 3
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 10.0
@@ -319,6 +400,11 @@ text = "Gyroscope Deviation"
 layout_mode = 2
 text = "0.0"
 script = SubResource("GDScript_8qrn1")
+
+[node name="FittedPoints" type="MultiMeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.09728, -1.25368)
+multimesh = SubResource("MultiMesh_0ky77")
+script = SubResource("GDScript_8ljls")
 
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit" to="CanvasLayer/Control/VBoxContainer/LineEdit" method="_on_text_submitted"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit2" to="CanvasLayer/Control/VBoxContainer/LineEdit2" method="_on_text_submitted"]

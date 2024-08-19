@@ -14,7 +14,7 @@ config/name="Lunasim"
 run/main_scene="res://main.tscn"
 run/print_header=false
 config/features=PackedStringArray("4.3", "Forward Plus")
-config/icon="res://icon.svg"
+config/icon="res://icon.png"
 
 [autoload]
 

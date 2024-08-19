@@ -27,6 +27,10 @@ impl FromLunasim {
 pub enum FromLunasimbot {
     FittedPoints(Box<[[f32; 3]]>),
     Transform { quat: [f32; 4], origin: [f32; 3] },
+    Drive {
+        left: f32,
+        right: f32
+    }
 }
 
 impl TryFrom<&[u8]> for FromLunasimbot {

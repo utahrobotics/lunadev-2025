@@ -1,8 +1,9 @@
 class_name Robot
 extends Node3D
 
+const DELTA := 1.0 / 60
 
-var _timer := LunasimNode.DELTA
+var _timer := DELTA
 
 @onready var raycast: RayCast3D = $RayCast3D
 
@@ -19,5 +20,5 @@ func _physics_process(delta: float) -> void:
 	
 	_timer -= delta
 	if _timer <= 0.0:
-		_timer = LunasimNode.DELTA
+		_timer = DELTA
 		LunasimNode.send_accelerometer(0, global_basis.inverse() * Vector3.DOWN * 9.81)

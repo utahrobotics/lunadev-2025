@@ -18,3 +18,4 @@ rtp.sdp
 
 *-venv
 .godot/
+*.tmp
