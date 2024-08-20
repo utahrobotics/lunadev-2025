@@ -65,8 +65,7 @@ impl CakapSocket {
             UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port)).await?;
         let noreply_addr = noreply_socket.local_addr()?;
         let reply_socket = UdpSocket::bind(get_reply_addr(noreply_addr)).await?;
-        let ack_socket =
-            UdpSocket::bind(get_ack_addr(noreply_addr)).await?;
+        let ack_socket = UdpSocket::bind(get_ack_addr(noreply_addr)).await?;
         let (existing_stream_tx, existing_stream_rx) = mpsc::channel(1);
         Ok(Self {
             reply_socket,

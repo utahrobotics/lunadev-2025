@@ -6,7 +6,9 @@ use std::{
 use common::lunasim::{FromLunasim, FromLunasimbot};
 use crossbeam::queue::SegQueue;
 use godot::{
-    classes::Engine, global::{randf_range, randfn}, prelude::*
+    classes::Engine,
+    global::{randf_range, randfn},
+    prelude::*,
 };
 
 struct LunasimLib;
@@ -61,7 +63,7 @@ impl INode for Lunasim {
                         break;
                     }};
                 }
-    
+
                 loop {
                     let size = match stdin.read_exact(&mut size_buf) {
                         Ok(_) => u32::from_ne_bytes(size_buf),
@@ -81,10 +83,10 @@ impl INode for Lunasim {
                     }
                 }
             });
-    
+
             std::thread::spawn(move || {
                 let mut stdout = stdout().lock();
-    
+
                 loop {
                     let Ok(msg) = to_lunasimbot_rx.recv() else {
                         break;
@@ -137,10 +139,8 @@ impl INode for Lunasim {
                     );
                 }
                 FromLunasimbot::Drive { left, right } => {
-                    self.base_mut().emit_signal(
-                        "drive".into(),
-                        &[left.to_variant(), right.to_variant()],
-                    );
+                    self.base_mut()
+                        .emit_signal("drive".into(), &[left.to_variant(), right.to_variant()]);
                 }
             }
         }
@@ -158,10 +158,9 @@ impl Lunasim {
 
     #[func]
     fn send_depth_map(&mut self, mut depth: Vec<f32>) {
-        depth.iter_mut()
-            .for_each(|d| {
-                *d += randfn(0.0, self.depth_deviation) as f32;
-            });
+        depth.iter_mut().for_each(|d| {
+            *d += randfn(0.0, self.depth_deviation) as f32;
+        });
 
         let _ = self
             .shared

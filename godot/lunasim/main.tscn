@@ -1,4 +1,4 @@
-[gd_scene load_steps=24 format=3 uid="uid://bxmnthetrtkso"]
+[gd_scene load_steps=25 format=3 uid="uid://bxmnthetrtkso"]
 
 [ext_resource type="Script" path="res://robot.gd" id="1_4gibj"]
 
@@ -88,6 +88,11 @@ size = Vector2(2, 8)
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_reayg"]
 size = Vector2(2, 4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_qlvj5"]
+transparency = 1
+albedo_color = Color(1, 0.21, 0.21, 0.462745)
+disable_receive_shadows = true
 
 [sub_resource type="BoxMesh" id="BoxMesh_ho5pm"]
 size = Vector3(0.505, 0.6, 0.475)
@@ -271,6 +276,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.807798, 0)
 collision_layer = 0
 collision_mask = 2
 script = ExtResource("1_4gibj")
+estimate_material = SubResource("StandardMaterial3D_qlvj5")
 
 [node name="OriginOnly" type="Node3D" parent="Robot"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.807798, 0)
@@ -306,6 +312,10 @@ mesh = SubResource("PrismMesh_8fccl")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Robot"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
 shape = SubResource("BoxShape3D_gg88y")
+
+[node name="Estimate" type="Node3D" parent="Robot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.807798, 0)
+top_level = true
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_4hw3w")

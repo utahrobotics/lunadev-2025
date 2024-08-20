@@ -6,11 +6,14 @@ const SPEED := 0.3
 const WHEEL_SEPARATION := 0.6
 const DELTA := 1.0 / 60
 
+@export var estimate_material: StandardMaterial3D
+
 var _timer := DELTA
 var _left := 0.0
 var _right := 0.0
 
 @onready var raycast: RayCast3D = $RayCast3D
+@onready var estimate: Node3D = $Estimate
 
 
 func _ready() -> void:
@@ -19,6 +22,18 @@ func _ready() -> void:
 			_left = left
 			_right = right
 	)
+	@warning_ignore("shadowed_variable_base_class")
+	LunasimNode.transform.connect(
+		func(transform: Transform3D):
+			estimate.global_transform = transform
+	)
+	for node in get_children():
+		if node is not MeshInstance3D:
+			continue
+		var mesh_inst: MeshInstance3D = node.duplicate()
+		mesh_inst.mesh = mesh_inst.mesh.duplicate()
+		mesh_inst.mesh.material = estimate_material
+		estimate.add_child(mesh_inst)
 
 
 func _physics_process(delta: float) -> void:

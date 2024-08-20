@@ -137,7 +137,6 @@ impl Steering {
     }
 }
 
-
 impl Default for Steering {
     fn default() -> Self {
         Self::new(0.0, 0.0)

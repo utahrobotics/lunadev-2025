@@ -19,7 +19,6 @@ pub struct Localizer {
     pub acceleration: Arc<AtomicCell<Vector3<f64>>>,
 }
 
-
 impl SyncTask for Localizer {
     type Output = !;
 
@@ -29,16 +28,18 @@ impl SyncTask for Localizer {
         loop {
             spin_sleeper.sleep(Duration::from_secs_f64(LOCALIZATION_DELTA));
             let mut isometry = self.robot_chain.origin();
-            let down_axis = isometry * Vector3::new(0.0, -1.0, 0.0);
-            let acceleration = self.acceleration.load();
-            let angle = down_axis.angle(&acceleration) * lerp_value(LOCALIZATION_DELTA, ACCELEROMETER_LERP_SPEED);
+            let down_axis = Vector3::new(0.0, -1.0, 0.0);
+            let acceleration = isometry * self.acceleration.load().normalize();
+            let angle = down_axis.angle(&acceleration)
+                * lerp_value(LOCALIZATION_DELTA, ACCELEROMETER_LERP_SPEED);
 
-            if angle < 0.001 {
-                continue;
+            if angle > 0.001 {
+                let cross = UnitVector3::new_normalize(down_axis.cross(&acceleration));
+                isometry.append_rotation_wrt_center_mut(&UnitQuaternion::from_axis_angle(
+                    &cross, -angle,
+                ));
             }
 
-            let cross = UnitVector3::new_normalize(down_axis.cross(&acceleration));
-            isometry.append_rotation_wrt_center_mut(&UnitQuaternion::from_axis_angle(&cross, angle));
             self.robot_chain.set_origin(isometry);
 
             if let Some(lunasim_stdin) = &self.lunasim_stdin {
@@ -54,7 +55,7 @@ impl SyncTask for Localizer {
                     isometry.translation.y as f32,
                     isometry.translation.z as f32,
                 ];
-                
+
                 FromLunasimbot::Isometry { quat, origin }.encode(|bytes| {
                     lunasim_stdin.write(bytes);
                 });

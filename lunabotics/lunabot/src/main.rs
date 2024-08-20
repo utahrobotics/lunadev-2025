@@ -1,7 +1,12 @@
 #![feature(result_flattening, deadline_api, never_type)]
 
 use std::{
-    fs::File, net::SocketAddrV4, path::Path, process::Stdio, sync::Arc, time::{Duration, Instant}
+    fs::File,
+    net::SocketAddrV4,
+    path::Path,
+    process::Stdio,
+    sync::Arc,
+    time::{Duration, Instant},
 };
 
 use bonsai_bt::{Behavior::*, Event, Status, UpdateArgs, BT};
@@ -23,11 +28,11 @@ use urobotics::{
     BlockOn,
 };
 
+mod localization;
 mod run;
 mod setup;
 mod soft_stop;
 mod utils;
-mod localization;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum HighLevelActions {
@@ -47,9 +52,12 @@ struct LunasimStdin(Arc<urobotics::parking_lot::Mutex<ChildStdin>>);
 impl LunasimStdin {
     fn write(&self, bytes: &[u8]) {
         let mut stdin = self.0.lock();
-        if let Err(e) = stdin.write_all(&u32::to_ne_bytes(bytes.len() as u32)).block_on() {
+        if let Err(e) = stdin
+            .write_all(&u32::to_ne_bytes(bytes.len() as u32))
+            .block_on()
+        {
             error!("Failed to send to lunasim: {e}");
-            return
+            return;
         }
         if let Err(e) = stdin.write_all(bytes).block_on() {
             error!("Failed to send to lunasim: {e}");
@@ -347,6 +355,7 @@ fn main() {
     }
     app.cabinet_builder.create_symlink_for("godot");
     app.cabinet_builder.create_symlink_for("target");
+    app.cabinet_builder.add_file_to_copy("lunabot.urdf");
 
     app.add_app::<serial::SerialConnection>()
         .add_app::<python::PythonVenvBuilder>()

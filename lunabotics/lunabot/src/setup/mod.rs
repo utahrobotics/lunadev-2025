@@ -4,7 +4,11 @@ use crossbeam::atomic::AtomicCell;
 use k::Chain;
 use nalgebra::Vector3;
 use urobotics::{
-    callbacks::caller::try_drop_this_callback, define_callbacks, log::{error, info}, task::SyncTask, BlockOn
+    callbacks::caller::try_drop_this_callback,
+    define_callbacks,
+    log::{error, info},
+    task::SyncTask,
+    BlockOn,
 };
 
 use std::{
@@ -62,7 +66,6 @@ impl std::fmt::Debug for DriveCallbacks {
 //     }
 // }
 
-
 #[derive(Debug)]
 pub struct Blackboard {
     special_instants: BinaryHeap<Reverse<Instant>>,
@@ -101,25 +104,49 @@ impl Blackboard {
                 }
             }));
         socket.spawn_looping();
-        
+
         let robot_chain = Arc::new(Chain::<f64>::from_urdf_file("lunabot.urdf")?);
+        let current_acceleration = Arc::new(AtomicCell::new(Vector3::default()));
+        let current_acceleration2 = current_acceleration.clone();
 
         let mut drive_callbacks = DriveCallbacks::default();
         let lunasim_stdin = match &*lunabot_app.run_mode {
-            RunMode::Simulation { lunasim_stdin, .. } => Some(lunasim_stdin.clone()),
+            RunMode::Simulation {
+                lunasim_stdin,
+                from_lunasim,
+            } => {
+                from_lunasim.add_fn(move |msg| match msg {
+                    common::lunasim::FromLunasim::Accelerometer {
+                        id: _,
+                        acceleration,
+                    } => {
+                        let acceleration = Vector3::new(
+                            acceleration[0] as f64,
+                            acceleration[1] as f64,
+                            acceleration[2] as f64,
+                        );
+                        current_acceleration2.store(acceleration);
+                    }
+                    common::lunasim::FromLunasim::Gyroscope { .. } => {}
+                    common::lunasim::FromLunasim::DepthMap(_) => {}
+                });
+                Some(lunasim_stdin.clone())
+            }
             _ => None,
         };
 
         if let Some(lunasim_stdin) = lunasim_stdin.clone() {
             drive_callbacks.add_dyn_fn(Box::new(move |left, right| {
-                FromLunasimbot::Drive { left: left as f32, right: right as f32 }.encode(|bytes| {
+                FromLunasimbot::Drive {
+                    left: left as f32,
+                    right: right as f32,
+                }
+                .encode(|bytes| {
                     lunasim_stdin.write(bytes);
                 });
             }));
         }
 
-        let current_acceleration = Arc::new(AtomicCell::new(Vector3::default()));
-        
         let localizer = Localizer {
             robot_chain: robot_chain.clone(),
             lunasim_stdin: lunasim_stdin.clone(),

@@ -53,9 +53,8 @@ pub fn init_panic_hook() {
     });
 }
 
-
 struct LunabotShared {
-    from_lunabot: SegQueue<FromLunabot>
+    from_lunabot: SegQueue<FromLunabot>,
 }
 
 const STEERING_DELAY: f64 = 1.0 / 15.0;
@@ -96,21 +95,20 @@ impl Log for GodotLog {
 impl INode for LunabotConn {
     fn init(base: Base<Node>) -> Self {
         if Engine::singleton().is_editor_hint() {
-            return Self {
-                inner: None,
-                base
-            }
+            return Self { inner: None, base };
         }
         init_panic_hook();
         log::set_boxed_logger(Box::new(GodotLog)).unwrap();
 
         let shared = Arc::new(LunabotShared {
-            from_lunabot: SegQueue::default()
+            from_lunabot: SegQueue::default(),
         });
 
-        let socket = CakapSocket::bind(10600).block_on().expect("Failed to bind to 10600");
+        let socket = CakapSocket::bind(10600)
+            .block_on()
+            .expect("Failed to bind to 10600");
         let lunabase_conn = socket.get_stream();
-        
+
         let shared2 = shared.clone();
         socket
             .get_bytes_callback_ref()
@@ -125,14 +123,15 @@ impl INode for LunabotConn {
                 shared2.from_lunabot.push(msg);
             }));
         socket.spawn_looping();
-Self {
-        inner: Some(LunabotConnInner {
-            lunabase_conn,
-            shared,
-            steering: Steering::default(),
-            steering_timer: STEERING_DELAY,
-        }),
-        base,}
+        Self {
+            inner: Some(LunabotConnInner {
+                lunabase_conn,
+                shared,
+                steering: Steering::default(),
+                steering_timer: STEERING_DELAY,
+            }),
+            base,
+        }
     }
 
     fn process(&mut self, delta: f64) {
@@ -144,7 +143,7 @@ Self {
                     inner.lunabase_conn.send_unreliable(bytes).block_on();
                 });
             }
-    
+
             let mut received = false;
 
             while let Some(msg) = inner.shared.from_lunabot.pop() {
@@ -183,7 +182,7 @@ impl LunabotConn {
     fn set_steering(&mut self, drive: f64, steering: f64) {
         if let Some(inner) = &mut self.inner {
             inner.steering = Steering::new(drive, steering);
-    }
+        }
     }
 
     #[func]
