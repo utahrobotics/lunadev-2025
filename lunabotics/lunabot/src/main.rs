@@ -1,4 +1,4 @@
-#![feature(result_flattening, deadline_api)]
+#![feature(result_flattening, deadline_api, never_type)]
 
 use std::{
     fs::File, net::SocketAddrV4, path::Path, process::Stdio, sync::Arc, time::{Duration, Instant}
@@ -26,6 +26,8 @@ use urobotics::{
 mod run;
 mod setup;
 mod soft_stop;
+mod utils;
+mod localization;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum HighLevelActions {
@@ -39,7 +41,8 @@ fn_alias! {
 }
 define_callbacks!(FromLunasimCallbacks => CloneFn(msg: FromLunasim) + Send);
 
-struct LunasimStdin(urobotics::parking_lot::Mutex<ChildStdin>);
+#[derive(Clone)]
+struct LunasimStdin(Arc<urobotics::parking_lot::Mutex<ChildStdin>>);
 
 impl LunasimStdin {
     fn write(&self, bytes: &[u8]) {
@@ -303,7 +306,7 @@ impl Application for LunasimbotApp {
                     }
                 });
 
-                (stdin.into(), callbacks_ref)
+                (Arc::new(stdin.into()), callbacks_ref)
             }
             Err(e) => {
                 error!("Failed to run simulation command: {e}");

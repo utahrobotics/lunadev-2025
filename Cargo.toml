@@ -20,6 +20,7 @@ members = [
     "misc/fitter",
     "lunabotics/lunabase-lib",
     "lunabotics/lunasim-lib",
+    "misc/k"
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]
@@ -63,7 +64,7 @@ heapless = "0.8.0"
 indexmap = "2.3.0"
 godot = { git = "https://github.com/godot-rust/gdext", branch = "master", features = ["experimental-threads"]}
 
-k = "0.31.0"
+k = { path = "misc/k" }
 bincode = "1.3.3"
 
 compute-shader = { path = "misc/compute-shader" }

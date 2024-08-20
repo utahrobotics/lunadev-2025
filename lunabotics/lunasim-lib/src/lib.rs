@@ -124,7 +124,7 @@ impl INode for Lunasim {
                     self.base_mut()
                         .emit_signal("fitted_points".into(), &[points.to_variant()]);
                 }
-                FromLunasimbot::Transform { quat, origin } => {
+                FromLunasimbot::Isometry { quat, origin } => {
                     let [x, y, z, w] = quat;
                     let quat = Quaternion { x, y, z, w };
                     let basis = Basis::from_quat(quat);

@@ -20,3 +20,4 @@ rtp.sdp
 .godot/
 *.tmp
 *.log
+~*

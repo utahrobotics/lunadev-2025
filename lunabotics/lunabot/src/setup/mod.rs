@@ -1,7 +1,10 @@
 use bonsai_bt::Status;
 use common::{lunasim::FromLunasimbot, FromLunabase, FromLunabot};
+use crossbeam::atomic::AtomicCell;
+use k::Chain;
+use nalgebra::Vector3;
 use urobotics::{
-    callbacks::caller::try_drop_this_callback, define_callbacks, log::{error, info}, BlockOn
+    callbacks::caller::try_drop_this_callback, define_callbacks, log::{error, info}, task::SyncTask, BlockOn
 };
 
 use std::{
@@ -9,13 +12,13 @@ use std::{
     collections::BinaryHeap,
     net::SocketAddr,
     ops::ControlFlow,
-    sync::mpsc,
+    sync::{mpsc, Arc},
     time::{Duration, Instant},
 };
 
 use cakap::{CakapSender, CakapSocket};
 
-use crate::{run::RunState, LunabotApp, RunMode};
+use crate::{localization::Localizer, run::RunState, LunabotApp, RunMode};
 
 pub(super) fn setup(
     bb: &mut Option<Blackboard>,
@@ -44,9 +47,6 @@ pub(super) fn setup(
 }
 
 const PING_DELAY: f64 = 1.0;
-// fn_alias! {
-//     pub type LogCallbacksRef = CallbacksRef(&log::Record) + Send
-// }
 define_callbacks!(DriveCallbacks => Fn(left: f64, right: f64) + Send);
 
 impl std::fmt::Debug for DriveCallbacks {
@@ -54,6 +54,14 @@ impl std::fmt::Debug for DriveCallbacks {
         f.debug_struct("DriveCallbacks").finish()
     }
 }
+// define_callbacks!(Vector3Callbacks => Fn(vec3: Vector3<f64>) + Send);
+
+// impl std::fmt::Debug for Vector3Callbacks {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("Vector3Callbacks").finish()
+//     }
+// }
+
 
 #[derive(Debug)]
 pub struct Blackboard {
@@ -62,6 +70,9 @@ pub struct Blackboard {
     from_lunabase: mpsc::Receiver<FromLunabase>,
     ping_timer: f64,
     drive_callbacks: DriveCallbacks,
+    current_acceleration: Arc<AtomicCell<Vector3<f64>>>,
+    // accelerometer_callbacks: Vector3Callbacks,
+    robot_chain: Arc<Chain<f64>>,
     pub(crate) run_state: Option<RunState>,
 }
 
@@ -90,20 +101,31 @@ impl Blackboard {
                 }
             }));
         socket.spawn_looping();
+        
+        let robot_chain = Arc::new(Chain::<f64>::from_urdf_file("lunabot.urdf")?);
 
         let mut drive_callbacks = DriveCallbacks::default();
+        let lunasim_stdin = match &*lunabot_app.run_mode {
+            RunMode::Simulation { lunasim_stdin, .. } => Some(lunasim_stdin.clone()),
+            _ => None,
+        };
 
-        if let RunMode::Simulation { .. } = &*lunabot_app.run_mode {
-            let run_mode = lunabot_app.run_mode.clone();
-
+        if let Some(lunasim_stdin) = lunasim_stdin.clone() {
             drive_callbacks.add_dyn_fn(Box::new(move |left, right| {
-                let RunMode::Simulation { lunasim_stdin: child_stdin, .. } = &*run_mode else { unreachable!(); };
-
                 FromLunasimbot::Drive { left: left as f32, right: right as f32 }.encode(|bytes| {
-                    child_stdin.write(bytes);
+                    lunasim_stdin.write(bytes);
                 });
             }));
         }
+
+        let current_acceleration = Arc::new(AtomicCell::new(Vector3::default()));
+        
+        let localizer = Localizer {
+            robot_chain: robot_chain.clone(),
+            lunasim_stdin: lunasim_stdin.clone(),
+            acceleration: current_acceleration.clone(),
+        };
+        localizer.spawn();
 
         Ok(Self {
             special_instants: BinaryHeap::new(),
@@ -111,6 +133,8 @@ impl Blackboard {
             from_lunabase,
             ping_timer: 0.0,
             drive_callbacks,
+            current_acceleration,
+            robot_chain,
             run_state: Some(RunState::new(lunabot_app)?),
         })
     }
@@ -164,7 +188,11 @@ impl Blackboard {
         }
     }
 
-    pub fn set_drive(&self, left: f64, right: f64) {
-        self.drive_callbacks.call_immut(left, right);
+    pub fn set_drive(&mut self, left: f64, right: f64) {
+        self.drive_callbacks.call(left, right);
+    }
+
+    pub fn get_robot_chain(&self) -> Arc<Chain<f64>> {
+        self.robot_chain.clone()
     }
 }
