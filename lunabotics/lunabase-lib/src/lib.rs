@@ -206,8 +206,8 @@ impl LunabotConn {
         self.send_reliable(&FromLunabase::SoftStop);
     }
 
-    #[func]
-    fn send_ping(&self) {
-        self.send_reliable(&FromLunabase::Pong);
-    }
+    // #[func]
+    // fn send_ping(&self) {
+    //     self.send_reliable(&FromLunabase::Ping);
+    // }
 }

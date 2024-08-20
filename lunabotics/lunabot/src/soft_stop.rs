@@ -19,15 +19,15 @@ pub(super) fn soft_stop(
         if first_time {
             info!("Blackboard present, awaiting lunabase command");
         }
+        bb.poll_ping(dt);
+
         // We have a connection to lunabase, so wait for commands
         // Operator may request Failure to trigger setup again
         // or Success to trigger run
 
         bb.on_get_msg_from_lunabase(lunabot_app.get_target_delta(), |msg| {
             match msg {
-                FromLunabase::Pong => {
-                    bb.respond_pong();
-                }
+                // FromLunabase::Pong => {}
                 FromLunabase::ContinueMission => {
                     warn!("Continuing mission");
                     return ControlFlow::Break((Status::Success, 0.0));

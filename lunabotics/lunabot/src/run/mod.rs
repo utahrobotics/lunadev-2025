@@ -19,6 +19,7 @@ pub(super) fn run(
         error!("Blackboard is null");
         return (Status::Failure, dt);
     };
+    bb.poll_ping(dt);
     let Some(mut run_state) = bb.run_state.take() else {
         error!("RunState is null");
         return (Status::Failure, dt);
@@ -36,9 +37,7 @@ pub(super) fn run(
                 RunActions::ManualControl => {
                     bb.on_get_msg_from_lunabase(lunabot_app.get_target_delta(), |msg| {
                         match msg {
-                            FromLunabase::Pong => {
-                                bb.respond_pong();
-                            }
+                            // FromLunabase::Pong => {}
                             FromLunabase::Steering(steering) => {
                                 let (drive, steering) = steering.get_drive_and_steering();
                                 info!("Received steering command: drive: {drive}, steering: {steering}");

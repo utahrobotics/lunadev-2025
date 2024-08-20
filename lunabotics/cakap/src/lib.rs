@@ -43,21 +43,30 @@ pub struct CakapSocket {
     existing_stream_rx: mpsc::Receiver<()>,
 }
 
+fn get_reply_addr(mut noreply_addr: SocketAddr) -> SocketAddr {
+    noreply_addr.set_port(noreply_addr.port().wrapping_add(1));
+    if noreply_addr.port() < MIN_PORT {
+        noreply_addr.set_port(MIN_PORT);
+    }
+    noreply_addr
+}
+
+fn get_ack_addr(mut noreply_addr: SocketAddr) -> SocketAddr {
+    noreply_addr.set_port(noreply_addr.port().wrapping_add(2));
+    if noreply_addr.port() < MIN_PORT {
+        noreply_addr.set_port(MIN_PORT);
+    }
+    noreply_addr
+}
+
 impl CakapSocket {
     pub async fn bind(port: u16) -> std::io::Result<Self> {
-        let reply_socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port)).await?;
-        let mut next_port = reply_socket.local_addr()?.port().wrapping_add(1);
-        if next_port == 0 {
-            next_port = MIN_PORT;
-        }
         let noreply_socket =
-            UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, next_port)).await?;
-        next_port = next_port.wrapping_add(1);
-        if next_port == 0 {
-            next_port = MIN_PORT;
-        }
+            UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port)).await?;
+        let noreply_addr = noreply_socket.local_addr()?;
+        let reply_socket = UdpSocket::bind(get_reply_addr(noreply_addr)).await?;
         let ack_socket =
-            UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, next_port)).await?;
+            UdpSocket::bind(get_ack_addr(noreply_addr)).await?;
         let (existing_stream_tx, existing_stream_rx) = mpsc::channel(1);
         Ok(Self {
             reply_socket,
@@ -136,7 +145,7 @@ impl AsyncTask for CakapSocket {
                     self.bytes_callbacks.call(payload);
 
                     let ack = ReliablePacket::create_ack(payload);
-                    if let Err(e) = self.reply_socket.send_to(&ack, addr).await {
+                    if let Err(e) = self.ack_socket.send_to(&ack, get_ack_addr(addr)).await {
                         break Err((self, e));
                     }
                 }
@@ -174,7 +183,7 @@ impl AsyncTask for CakapSocket {
                                     continue;
                                 };
 
-                                if let Err(e) = self.reply_socket.send_to(&retransmit.payload, addr).await {
+                                if let Err(e) = self.reply_socket.send_to(&retransmit.payload, get_reply_addr(addr)).await {
                                     break e;
                                 }
                             } else {
@@ -203,7 +212,7 @@ impl AsyncTask for CakapSocket {
                                 continue;
                             };
 
-                            if let Err(e) = self.reply_socket.send_to(&payload, addr).await {
+                            if let Err(e) = self.reply_socket.send_to(&payload, get_reply_addr(addr)).await {
                                 break Err((self, e));
                             }
                             retransmission_queue.push(PacketToRetransmit {
@@ -219,7 +228,7 @@ impl AsyncTask for CakapSocket {
                                 error!("No address to send to");
                                 continue;
                             };
-                            if let Err(e) = self.reply_socket.send_to(&payload, addr).await {
+                            if let Err(e) = self.reply_socket.send_to(&payload, get_reply_addr(addr)).await {
                                 break Err((self, e));
                             }
                             retransmission_queue.push(PacketToRetransmit {

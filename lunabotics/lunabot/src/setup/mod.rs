@@ -45,11 +45,14 @@ pub(super) fn setup(
     }
 }
 
+const PING_DELAY: f64 = 1.0;
+
 #[derive(Debug)]
 pub struct Blackboard {
     special_instants: BinaryHeap<Reverse<Instant>>,
     lunabase_conn: CakapSender,
     from_lunabase: mpsc::Receiver<FromLunabase>,
+    ping_timer: f64,
     pub(crate) run_state: Option<RunState>,
 }
 
@@ -83,6 +86,7 @@ impl Blackboard {
             special_instants: BinaryHeap::new(),
             lunabase_conn,
             from_lunabase,
+            ping_timer: 0.0,
             run_state: Some(RunState::new(lunabot_app)?),
         })
     }
@@ -109,10 +113,14 @@ impl Blackboard {
         &self.lunabase_conn
     }
 
-    pub fn respond_pong(&self) {
-        FromLunabot::Ping.encode(|bytes| {
-            let _ = self.get_lunabase_conn().send_unreliable(bytes);
-        })
+    pub fn poll_ping(&mut self, delta: f64) {
+        self.ping_timer -= delta;
+        if self.ping_timer <= 0.0 {
+            self.ping_timer = PING_DELAY;
+            FromLunabot::Ping.encode(|bytes| {
+                let _ = self.get_lunabase_conn().send_unreliable(bytes);
+            })
+        }
     }
 
     pub fn on_get_msg_from_lunabase<T>(

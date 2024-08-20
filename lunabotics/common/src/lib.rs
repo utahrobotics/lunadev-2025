@@ -10,7 +10,7 @@ thread_local! {
 
 #[derive(Debug, Encode, Decode)]
 pub enum FromLunabase {
-    Pong,
+    // Pong,
     ContinueMission,
     TriggerSetup,
     Steering(Steering),
@@ -42,7 +42,7 @@ impl FromLunabase {
     }
 
     pub fn write_code_sheet(mut w: impl Write) -> std::io::Result<()> {
-        FromLunabase::Pong.write_code(&mut w)?;
+        // FromLunabase::Pong.write_code(&mut w)?;
         FromLunabase::ContinueMission.write_code(&mut w)?;
         FromLunabase::TriggerSetup.write_code(&mut w)?;
         FromLunabase::Steering(Steering::new(0.0, 0.0)).write_code(&mut w)?;
