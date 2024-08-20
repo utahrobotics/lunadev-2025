@@ -1,9 +1,7 @@
 use bonsai_bt::Status;
-use common::{FromLunabase, FromLunabot};
+use common::{lunasim::FromLunasimbot, FromLunabase, FromLunabot};
 use urobotics::{
-    callbacks::caller::try_drop_this_callback,
-    log::{error, info},
-    BlockOn,
+    callbacks::caller::try_drop_this_callback, define_callbacks, log::{error, info}, BlockOn
 };
 
 use std::{
@@ -17,7 +15,7 @@ use std::{
 
 use cakap::{CakapSender, CakapSocket};
 
-use crate::{run::RunState, LunabotApp};
+use crate::{run::RunState, LunabotApp, RunMode};
 
 pub(super) fn setup(
     bb: &mut Option<Blackboard>,
@@ -46,6 +44,16 @@ pub(super) fn setup(
 }
 
 const PING_DELAY: f64 = 1.0;
+// fn_alias! {
+//     pub type LogCallbacksRef = CallbacksRef(&log::Record) + Send
+// }
+define_callbacks!(DriveCallbacks => Fn(left: f64, right: f64) + Send);
+
+impl std::fmt::Debug for DriveCallbacks {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DriveCallbacks").finish()
+    }
+}
 
 #[derive(Debug)]
 pub struct Blackboard {
@@ -53,6 +61,7 @@ pub struct Blackboard {
     lunabase_conn: CakapSender,
     from_lunabase: mpsc::Receiver<FromLunabase>,
     ping_timer: f64,
+    drive_callbacks: DriveCallbacks,
     pub(crate) run_state: Option<RunState>,
 }
 
@@ -82,11 +91,26 @@ impl Blackboard {
             }));
         socket.spawn_looping();
 
+        let mut drive_callbacks = DriveCallbacks::default();
+
+        if let RunMode::Simulation { .. } = &*lunabot_app.run_mode {
+            let run_mode = lunabot_app.run_mode.clone();
+
+            drive_callbacks.add_dyn_fn(Box::new(move |left, right| {
+                let RunMode::Simulation { lunasim_stdin: child_stdin, .. } = &*run_mode else { unreachable!(); };
+
+                FromLunasimbot::Drive { left: left as f32, right: right as f32 }.encode(|bytes| {
+                    child_stdin.write(bytes);
+                });
+            }));
+        }
+
         Ok(Self {
             special_instants: BinaryHeap::new(),
             lunabase_conn,
             from_lunabase,
             ping_timer: 0.0,
+            drive_callbacks,
             run_state: Some(RunState::new(lunabot_app)?),
         })
     }
@@ -124,19 +148,23 @@ impl Blackboard {
     }
 
     pub fn on_get_msg_from_lunabase<T>(
-        &self,
+        &mut self,
         duration: Duration,
-        mut f: impl FnMut(FromLunabase) -> ControlFlow<T>,
+        mut f: impl FnMut(&mut Self, FromLunabase) -> ControlFlow<T>,
     ) -> Option<T> {
         let deadline = Instant::now() + duration;
         loop {
             let Ok(msg) = self.from_lunabase.recv_deadline(deadline) else {
                 break None;
             };
-            match f(msg) {
+            match f(self, msg) {
                 ControlFlow::Continue(()) => (),
                 ControlFlow::Break(val) => break Some(val),
             }
         }
+    }
+
+    pub fn set_drive(&self, left: f64, right: f64) {
+        self.drive_callbacks.call_immut(left, right);
     }
 }

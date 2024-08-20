@@ -35,12 +35,12 @@ pub(super) fn run(
                 RunActions::Dig => todo!(),
                 RunActions::Dump => todo!(),
                 RunActions::ManualControl => {
-                    bb.on_get_msg_from_lunabase(lunabot_app.get_target_delta(), |msg| {
+                    bb.on_get_msg_from_lunabase(lunabot_app.get_target_delta(), |bb, msg| {
                         match msg {
                             // FromLunabase::Pong => {}
                             FromLunabase::Steering(steering) => {
-                                let (drive, steering) = steering.get_drive_and_steering();
-                                info!("Received steering command: drive: {drive}, steering: {steering}");
+                                let (left, right) = steering.get_left_and_right();
+                                bb.set_drive(left, right);
                             }
                             FromLunabase::TraverseObstacles => {
                                 info!("Commencing obstacle zone traversal");

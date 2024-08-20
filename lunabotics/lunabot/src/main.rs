@@ -1,11 +1,7 @@
 #![feature(result_flattening, deadline_api)]
 
 use std::{
-    fs::File,
-    net::SocketAddrV4,
-    path::Path,
-    process::Stdio,
-    time::{Duration, Instant},
+    fs::File, net::SocketAddrV4, path::Path, process::Stdio, sync::Arc, time::{Duration, Instant}
 };
 
 use bonsai_bt::{Behavior::*, Event, Status, UpdateArgs, BT};
@@ -20,18 +16,16 @@ use urobotics::{
     python, serial,
     tokio::{
         self,
-        io::AsyncReadExt,
+        io::{AsyncReadExt, AsyncWriteExt},
         process::{ChildStdin, Command},
     },
     video::info::list_media_input,
     BlockOn,
 };
-use video::VideoTestApp;
 
 mod run;
 mod setup;
 mod soft_stop;
-mod video;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum HighLevelActions {
@@ -45,11 +39,26 @@ fn_alias! {
 }
 define_callbacks!(FromLunasimCallbacks => CloneFn(msg: FromLunasim) + Send);
 
+struct LunasimStdin(urobotics::parking_lot::Mutex<ChildStdin>);
+
+impl LunasimStdin {
+    fn write(&self, bytes: &[u8]) {
+        let mut stdin = self.0.lock();
+        if let Err(e) = stdin.write_all(&u32::to_ne_bytes(bytes.len() as u32)).block_on() {
+            error!("Failed to send to lunasim: {e}");
+            return
+        }
+        if let Err(e) = stdin.write_all(bytes).block_on() {
+            error!("Failed to send to lunasim: {e}");
+        }
+    }
+}
+
 enum RunMode {
     Production,
     Simulation {
         #[allow(dead_code)]
-        child_stdin: tokio::sync::Mutex<ChildStdin>,
+        lunasim_stdin: LunasimStdin,
         #[allow(dead_code)]
         from_lunasim: FromLunasimRef,
     },
@@ -67,7 +76,7 @@ struct LunabotApp {
     target_delta: f64,
     lunabase_address: SocketAddrV4,
     #[serde(skip)]
-    run_mode: RunMode,
+    run_mode: Arc<RunMode>,
 }
 
 fn default_delta() -> f64 {
@@ -301,10 +310,10 @@ impl Application for LunasimbotApp {
                 return;
             }
         };
-        self.app.run_mode = RunMode::Simulation {
-            child_stdin,
+        self.app.run_mode = Arc::new(RunMode::Simulation {
+            lunasim_stdin: LunasimStdin(child_stdin),
             from_lunasim,
-        };
+        });
         self.app.run()
     }
 }
@@ -340,7 +349,6 @@ fn main() {
         .add_app::<python::PythonVenvBuilder>()
         .add_app::<camera::CameraConnection>()
         .add_app::<LunabotApp>()
-        .add_app::<VideoTestApp>()
         .add_app::<InfoApp>()
         .add_app::<LunasimbotApp>()
         .run();

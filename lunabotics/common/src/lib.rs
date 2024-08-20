@@ -124,6 +124,17 @@ impl Steering {
         let steering = (self.0 & 0b00001111) as f64 / MAX_STEERING as f64 * 2.0 - 1.0;
         (drive, steering)
     }
+
+    pub fn get_left_and_right(self) -> (f64, f64) {
+        let (drive, steering) = self.get_drive_and_steering();
+        let opposite_drive = 1.0 - 2.0 * steering.abs();
+
+        if steering >= 0.0 {
+            (drive * opposite_drive, drive)
+        } else {
+            (drive, drive * opposite_drive)
+        }
+    }
 }
 
 

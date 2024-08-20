@@ -1,4 +1,4 @@
-[gd_scene load_steps=23 format=3 uid="uid://bxmnthetrtkso"]
+[gd_scene load_steps=24 format=3 uid="uid://bxmnthetrtkso"]
 
 [ext_resource type="Script" path="res://robot.gd" id="1_4gibj"]
 
@@ -94,6 +94,9 @@ size = Vector3(0.505, 0.6, 0.475)
 
 [sub_resource type="PrismMesh" id="PrismMesh_8fccl"]
 size = Vector3(0.29, 0.35, 0.33)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_gg88y"]
+size = Vector3(0.51, 0.6, 0.48)
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_e6mxc"]
 energy_multiplier = 2.0
@@ -198,9 +201,7 @@ material = SubResource("StandardMaterial3D_eqihq")
 
 [sub_resource type="MultiMesh" id="MultiMesh_0ky77"]
 transform_format = 1
-instance_count = 5
 mesh = SubResource("PointMesh_du1xb")
-buffer = PackedFloat32Array(0, 0, 0.0672, 0.0768, 0.0928, 0.9, 0, 0, 0, 0, 0.0672, 0.0768, 0.0928, 0.9, 0, 0, 21, 0, 0.0672, 0.0768, 0.0928, 0.9, 1, 0, 21, 0, 0.0672, 0.0768, 0.0928, 0.9, 1, 0, 21, 30, 0.0672, 0.0768, 0.0928, 0.9, 1, 1, 21, 30, 0.0672, 0.0768, 0.0928, 0.9, 1, 1, 0, 30, 0.0672, 0.0768, 0.0928, 0.9, 0, 1, 0, 30, 0.0672, 0.0768)
 
 [sub_resource type="GDScript" id="GDScript_8ljls"]
 script/source = "extends MultiMeshInstance3D
@@ -231,6 +232,7 @@ material_override = SubResource("StandardMaterial3D_501rf")
 mesh = SubResource("ImmediateMesh_np8a4")
 
 [node name="StaticBody3D" type="StaticBody3D" parent="."]
+collision_layer = 3
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
 transform = Transform3D(-4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, 0, 1, -3.5, 0, 0)
@@ -264,8 +266,10 @@ shape = SubResource("WorldBoundaryShape3D_kxs4p")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, 3.5)
 mesh = SubResource("PlaneMesh_twbw0")
 
-[node name="Robot" type="Node3D" parent="."]
+[node name="Robot" type="CharacterBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.807798, 0)
+collision_layer = 0
+collision_mask = 2
 script = ExtResource("1_4gibj")
 
 [node name="OriginOnly" type="Node3D" parent="Robot"]
@@ -298,6 +302,10 @@ mesh = SubResource("BoxMesh_ho5pm")
 [node name="MeshInstance3D2" type="MeshInstance3D" parent="Robot"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, -0.138658)
 mesh = SubResource("PrismMesh_8fccl")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Robot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
+shape = SubResource("BoxShape3D_gg88y")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_4hw3w")
@@ -356,11 +364,11 @@ stretch = true
 
 [node name="SubViewport" type="SubViewport" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer"]
 handle_input_locally = false
-size = Vector2i(597, 597)
+size = Vector2i(2, 2)
 render_target_update_mode = 0
 
 [node name="DepthCamera" type="Camera3D" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport"]
-transform = Transform3D(1, 0, 0, 0, 0.814591, 0.580035, 0, -0.580035, 0.814591, 0, 1.38032, -0.298189)
+transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, 0, 1.38032, -0.298189)
 fov = 120.0
 
 [node name="Control" type="Control" parent="CanvasLayer"]
