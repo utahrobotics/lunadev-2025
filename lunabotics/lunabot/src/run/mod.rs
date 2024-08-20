@@ -36,7 +36,7 @@ pub(super) fn run(
                 RunActions::ManualControl => {
                     bb.on_get_msg_from_lunabase(lunabot_app.get_target_delta(), |msg| {
                         match msg {
-                            FromLunabase::Ping => {
+                            FromLunabase::Pong => {
                                 bb.respond_pong();
                             }
                             FromLunabase::Steering(steering) => {

@@ -110,7 +110,7 @@ impl Blackboard {
     }
 
     pub fn respond_pong(&self) {
-        FromLunabot::Pong.encode(|bytes| {
+        FromLunabot::Ping.encode(|bytes| {
             let _ = self.get_lunabase_conn().send_unreliable(bytes);
         })
     }

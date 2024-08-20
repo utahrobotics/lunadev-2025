@@ -14,7 +14,7 @@ use std::{
 
 pub use color_eyre::owo_colors::OwoColorize;
 use crossbeam::atomic::AtomicCell;
-use log::set_logger;
+use log::set_boxed_logger;
 pub use log::{debug, error, info, trace, warn, Level, LevelFilter, Log, Record};
 use parking_lot::Mutex;
 
@@ -37,7 +37,7 @@ static LOG_CALLBACKS: LazyLock<LogCallbacksRef> = LazyLock::new(|| {
     let log_pub = LogPub::default();
     let log_pub_ref = log_pub.callbacks.get_ref();
     log::set_max_level(LevelFilter::Trace);
-    let _ = set_logger(Box::leak(Box::new(log_pub)));
+    let _ = set_boxed_logger(Box::new(log_pub));
     log_pub_ref
 });
 

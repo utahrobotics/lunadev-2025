@@ -10,7 +10,7 @@ thread_local! {
 
 #[derive(Debug, Encode, Decode)]
 pub enum FromLunabase {
-    Ping,
+    Pong,
     ContinueMission,
     TriggerSetup,
     Steering(Steering),
@@ -42,7 +42,7 @@ impl FromLunabase {
     }
 
     pub fn write_code_sheet(mut w: impl Write) -> std::io::Result<()> {
-        FromLunabase::Ping.write_code(&mut w)?;
+        FromLunabase::Pong.write_code(&mut w)?;
         FromLunabase::ContinueMission.write_code(&mut w)?;
         FromLunabase::TriggerSetup.write_code(&mut w)?;
         FromLunabase::Steering(Steering::new(0.0, 0.0)).write_code(&mut w)?;
@@ -54,7 +54,7 @@ impl FromLunabase {
 
 #[derive(Debug, Encode, Decode)]
 pub enum FromLunabot {
-    Pong,
+    Ping,
 }
 
 impl TryFrom<&[u8]> for FromLunabot {
@@ -81,7 +81,7 @@ impl FromLunabot {
     }
 
     pub fn write_code_sheet(mut w: impl Write) -> std::io::Result<()> {
-        FromLunabot::Pong.write_code(&mut w)?;
+        FromLunabot::Ping.write_code(&mut w)?;
         Ok(())
     }
 }
@@ -123,5 +123,12 @@ impl Steering {
         let drive = (self.0 >> 4) as f64 / MAX_STEERING as f64 * 2.0 - 1.0;
         let steering = (self.0 & 0b00001111) as f64 / MAX_STEERING as f64 * 2.0 - 1.0;
         (drive, steering)
+    }
+}
+
+
+impl Default for Steering {
+    fn default() -> Self {
+        Self::new(0.0, 0.0)
     }
 }

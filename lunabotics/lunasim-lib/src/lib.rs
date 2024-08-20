@@ -6,8 +6,7 @@ use std::{
 use common::lunasim::{FromLunasim, FromLunasimbot};
 use crossbeam::queue::SegQueue;
 use godot::{
-    global::{randf_range, randfn},
-    prelude::*,
+    classes::Engine, global::{randf_range, randfn}, prelude::*
 };
 
 struct LunasimLib;
@@ -42,66 +41,68 @@ impl INode for Lunasim {
             to_lunasimbot,
         });
 
-        let shared2 = shared.clone();
-        std::thread::spawn(move || {
-            let mut stdin = BufReader::new(stdin().lock());
-            let mut size_buf = [0u8; 4];
-            let mut bytes = Vec::with_capacity(1024);
-            macro_rules! handle_err {
-                ($err: ident) => {{
-                    match $err.kind() {
-                        std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::UnexpectedEof => {}
-                        _ => {
-                            godot_error!(
-                                "Faced the following error while reading stdin: {:?}",
-                                $err
-                            );
+        if !Engine::singleton().is_editor_hint() {
+            let shared2 = shared.clone();
+            std::thread::spawn(move || {
+                let mut stdin = BufReader::new(stdin().lock());
+                let mut size_buf = [0u8; 4];
+                let mut bytes = Vec::with_capacity(1024);
+                macro_rules! handle_err {
+                    ($err: ident) => {{
+                        match $err.kind() {
+                            std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::UnexpectedEof => {}
+                            _ => {
+                                godot_error!(
+                                    "Faced the following error while reading stdin: {:?}",
+                                    $err
+                                );
+                            }
+                        }
+                        break;
+                    }};
+                }
+    
+                loop {
+                    let size = match stdin.read_exact(&mut size_buf) {
+                        Ok(_) => u32::from_ne_bytes(size_buf),
+                        Err(e) => handle_err!(e),
+                    };
+                    bytes.resize(size as usize, 0u8);
+                    match stdin.read_exact(&mut bytes) {
+                        Ok(_) => {}
+                        Err(e) => handle_err!(e),
+                    }
+                    match FromLunasimbot::try_from(bytes.as_slice()) {
+                        Ok(msg) => shared2.from_lunasimbot.push(msg),
+                        Err(e) => {
+                            godot_error!("Failed to deserialize from lunasim: {e}");
+                            continue;
                         }
                     }
-                    break;
-                }};
-            }
-
-            loop {
-                let size = match stdin.read_exact(&mut size_buf) {
-                    Ok(_) => u32::from_ne_bytes(size_buf),
-                    Err(e) => handle_err!(e),
-                };
-                bytes.resize(size as usize, 0u8);
-                match stdin.read_exact(&mut bytes) {
-                    Ok(_) => {}
-                    Err(e) => handle_err!(e),
                 }
-                match FromLunasimbot::try_from(bytes.as_slice()) {
-                    Ok(msg) => shared2.from_lunasimbot.push(msg),
-                    Err(e) => {
-                        godot_error!("Failed to deserialize from lunasim: {e}");
-                        continue;
+            });
+    
+            std::thread::spawn(move || {
+                let mut stdout = stdout().lock();
+    
+                loop {
+                    let Ok(msg) = to_lunasimbot_rx.recv() else {
+                        break;
+                    };
+                    if let Err(e) = msg.encode(|bytes| {
+                        if bytes.len() > u32::MAX as usize {
+                            godot_error!("Message is too large");
+                            return Ok(());
+                        }
+                        let len = bytes.len() as u32;
+                        stdout.write_all(&len.to_ne_bytes())?;
+                        stdout.write_all(bytes)
+                    }) {
+                        godot_error!("Faced the following error while writing to stdout: {e}");
                     }
                 }
-            }
-        });
-
-        std::thread::spawn(move || {
-            let mut stdout = stdout().lock();
-
-            loop {
-                let Ok(msg) = to_lunasimbot_rx.recv() else {
-                    break;
-                };
-                if let Err(e) = msg.encode(|bytes| {
-                    if bytes.len() > u32::MAX as usize {
-                        godot_error!("Message is too large");
-                        return Ok(());
-                    }
-                    let len = bytes.len() as u32;
-                    stdout.write_all(&len.to_ne_bytes())?;
-                    stdout.write_all(bytes)
-                }) {
-                    godot_error!("Faced the following error while writing to stdout: {e}");
-                }
-            }
-        });
+            });
+        }
 
         Self {
             accelerometer_deviation: 0.0,

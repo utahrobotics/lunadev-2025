@@ -427,8 +427,8 @@ impl CakapSender {
         }
     }
 
-    pub fn get_recycled_byte_vecs(&self) -> RecycledByteVecs {
-        self.recycled_byte_vecs.clone()
+    pub fn get_recycled_byte_vecs(&self) -> &RecycledByteVecs {
+        &self.recycled_byte_vecs
     }
 
     pub fn send_reliable(&self, payload: Vec<u8>) {
@@ -469,13 +469,13 @@ impl<'a, 'b> Drop for SendUnreliable<'a, 'b> {
     fn drop(&mut self) {
         let (recycled_byte_vecs, stream, payload) = match self {
             SendUnreliable::Slice { stream, slice } => {
-                let recycled_byte_vecs = stream.get_recycled_byte_vecs();
+                let recycled_byte_vecs = stream.get_recycled_byte_vecs().clone();
                 let mut vec = recycled_byte_vecs.get_vec();
                 vec.extend_from_slice(slice);
                 (recycled_byte_vecs, *stream, vec)
             }
             SendUnreliable::Vec { stream, vec } => (
-                stream.get_recycled_byte_vecs(),
+                stream.get_recycled_byte_vecs().clone(),
                 *stream,
                 std::mem::take(vec),
             ),

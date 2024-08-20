@@ -18,6 +18,7 @@ members = [
     "lunabotics/pathfinding",
     "urobotics/urobotics-learning",
     "misc/fitter",
+    "lunabotics/lunabase-lib",
     "lunabotics/lunasim-lib",
 ]
 resolver = "2"
@@ -49,7 +50,7 @@ futures = "0.3.30"
 serde-big-array = "0.5"
 rand_distr = "0.4"
 bytemuck = { version = "1", features = ["derive"] }
-log = "0.4"
+log = { version = "0.4", features = ["std"] }
 # eigenvalues = { git = "https://github.com/Masterchef365/eigenvalues.git" }
 ffmpeg-sidecar = "1.0"
 # interprocess = { git = "https://github.com/kotauskas/interprocess", default-features = false, branch = "main", features = ["tokio"] }

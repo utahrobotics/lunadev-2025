@@ -1837,6 +1837,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "lunabase-lib"
+version = "0.1.0"
+dependencies = [
+ "cakap",
+ "common",
+ "crossbeam",
+ "godot",
+ "log",
+ "tasker",
+]
+
+[[package]]
 name = "lunabot"
 version = "0.1.0"
 dependencies = [
