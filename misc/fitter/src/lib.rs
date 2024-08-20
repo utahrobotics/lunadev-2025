@@ -2,7 +2,7 @@ use bytemuck::cast_ref;
 use compute_shader::{
     buffers::{
         BufferType, DynamicSize, HostReadWrite, HostWriteOnly, ShaderReadOnly, ShaderReadWrite,
-        TypedOpaqueBuffer,
+        TypedBuffer,
     },
     wgpu, Compute,
 };
@@ -61,7 +61,7 @@ pub struct BufferFitter {
     rotate_shader: RotateShader,
     fitter_shader: FitterShader,
 
-    point_buffers: SegQueue<TypedOpaqueBuffer<[Vector4<f32>]>>,
+    point_buffers: SegQueue<TypedBuffer<[Vector4<f32>]>>,
     sample_buffers: SegQueue<(Box<[[f32; 4]]>, Box<[[[f32; 4]; 3]]>)>,
     distances_reset: Box<[u32]>,
     distances_buffers: SegQueue<Box<[u32]>>,
@@ -71,7 +71,7 @@ impl BufferFitter {
     pub async fn fit_sparse(&self, points: &mut [Option<Vector3<f32>>]) -> anyhow::Result<()> {
         let mut point_buffer = match self.point_buffers.pop() {
             Some(x) => x,
-            None => TypedOpaqueBuffer::new(DynamicSize::<Vector4<f32>>::new(points.len())).await?,
+            None => TypedBuffer::new(DynamicSize::<Vector4<f32>>::new(points.len())).await?,
         };
         point_buffer
             .get_slice_mut(|slice| {
@@ -105,7 +105,7 @@ impl BufferFitter {
     pub async fn fit_dense(&self, points: &mut [Vector3<f32>]) -> anyhow::Result<()> {
         let mut point_buffer = match self.point_buffers.pop() {
             Some(x) => x,
-            None => TypedOpaqueBuffer::new(DynamicSize::<Vector4<f32>>::new(points.len())).await?,
+            None => TypedBuffer::new(DynamicSize::<Vector4<f32>>::new(points.len())).await?,
         };
         point_buffer
             .get_slice_mut(|slice| {
@@ -136,7 +136,7 @@ impl BufferFitter {
 
     pub async fn fit_buffer(
         &self,
-        point_buffer: &mut TypedOpaqueBuffer<[Vector4<f32>]>,
+        point_buffer: &mut TypedBuffer<[Vector4<f32>]>,
     ) -> anyhow::Result<()> {
         let mut origin = Vector3::default();
         point_buffer

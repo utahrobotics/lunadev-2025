@@ -755,12 +755,12 @@ impl OpaqueBuffer {
 }
 
 #[repr(transparent)]
-pub struct TypedOpaqueBuffer<T: ?Sized> {
+pub struct TypedBuffer<T: ?Sized> {
     buffer: OpaqueBuffer,
     _phantom: PhantomData<T>,
 }
 
-impl<T: ?Sized> TypedOpaqueBuffer<T> {
+impl<T: ?Sized> TypedBuffer<T> {
     pub fn from_opaque_buffer(buf: OpaqueBuffer) -> Self {
         Self {
             buffer: buf,
@@ -788,7 +788,7 @@ impl<T: ?Sized> TypedOpaqueBuffer<T> {
     }
 }
 
-impl<T: bytemuck::Pod> TypedOpaqueBuffer<T> {
+impl<T: bytemuck::Pod> TypedBuffer<T> {
     pub async fn new_from_value(value: &T) -> anyhow::Result<Self> {
         Ok(Self {
             buffer: OpaqueBuffer::new_from_value(value).await?,
@@ -807,7 +807,7 @@ impl<T: bytemuck::Pod> TypedOpaqueBuffer<T> {
     }
 }
 
-impl<T: bytemuck::Pod> TypedOpaqueBuffer<[T]> {
+impl<T: bytemuck::Pod> TypedBuffer<[T]> {
     pub async fn new_from_slice(slice: &[T]) -> anyhow::Result<Self> {
         Ok(Self {
             buffer: OpaqueBuffer::new_from_slice(slice).await?,
@@ -826,7 +826,7 @@ impl<T: bytemuck::Pod> TypedOpaqueBuffer<[T]> {
     }
 }
 
-impl<T: ?Sized> Deref for TypedOpaqueBuffer<T> {
+impl<T: ?Sized> Deref for TypedBuffer<T> {
     type Target = OpaqueBuffer;
 
     fn deref(&self) -> &Self::Target {
@@ -834,7 +834,7 @@ impl<T: ?Sized> Deref for TypedOpaqueBuffer<T> {
     }
 }
 
-impl<T: ?Sized> DerefMut for TypedOpaqueBuffer<T> {
+impl<T: ?Sized> DerefMut for TypedBuffer<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.buffer
     }
