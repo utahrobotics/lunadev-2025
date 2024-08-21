@@ -1,6 +1,7 @@
-[gd_scene load_steps=25 format=3 uid="uid://bxmnthetrtkso"]
+[gd_scene load_steps=20 format=3 uid="uid://bxmnthetrtkso"]
 
-[ext_resource type="Script" path="res://robot.gd" id="1_4gibj"]
+[ext_resource type="PackedScene" uid="uid://leqgym66qbuo" path="res://robot.tscn" id="1_y4wm8"]
+[ext_resource type="PackedScene" uid="uid://y0gvb4s2mi2x" path="res://apriltag.tscn" id="2_nhvh2"]
 
 [sub_resource type="GDScript" id="GDScript_lj4gt"]
 script/source = "extends Node3D
@@ -89,20 +90,6 @@ size = Vector2(2, 8)
 [sub_resource type="PlaneMesh" id="PlaneMesh_reayg"]
 size = Vector2(2, 4)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_qlvj5"]
-transparency = 1
-albedo_color = Color(1, 0.21, 0.21, 0.462745)
-disable_receive_shadows = true
-
-[sub_resource type="BoxMesh" id="BoxMesh_ho5pm"]
-size = Vector3(0.505, 0.6, 0.475)
-
-[sub_resource type="PrismMesh" id="PrismMesh_8fccl"]
-size = Vector3(0.29, 0.35, 0.33)
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_gg88y"]
-size = Vector3(0.51, 0.6, 0.48)
-
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_e6mxc"]
 energy_multiplier = 2.0
 
@@ -164,11 +151,12 @@ func _process(delta: float) -> void:
 		_timer = DELTA
 		
 		for i in range(raycasts.size()):
-			var raycast := raycasts[i]
-			if raycast.is_colliding():
-				depths[i] = raycast.get_collision_point().distance_to(camera.global_position)
-			else:
-				depths[i] = 0.0
+			depths[i] = 4.0
+			#var raycast := raycasts[i]
+			#if raycast.is_colliding():
+				#depths[i] = raycast.get_collision_point().distance_to(camera.global_position)
+			#else:
+				#depths[i] = 0.0
 		
 		LunasimNode.send_depth_map(depths)
 "
@@ -195,38 +183,18 @@ func _on_text_submitted(new_text: String) -> void:
 		push_error(\"Not a valid gyroscope deviation\")
 "
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eqihq"]
-shading_mode = 0
-albedo_color = Color(1, 0.105882, 0.113725, 1)
-use_point_size = true
-point_size = 5.0
+[sub_resource type="BoxShape3D" id="BoxShape3D_ir4kq"]
+size = Vector3(0.4, 0.4, 0.4)
 
-[sub_resource type="PointMesh" id="PointMesh_du1xb"]
-material = SubResource("StandardMaterial3D_eqihq")
-
-[sub_resource type="MultiMesh" id="MultiMesh_0ky77"]
-transform_format = 1
-mesh = SubResource("PointMesh_du1xb")
-
-[sub_resource type="GDScript" id="GDScript_8ljls"]
-script/source = "extends MultiMeshInstance3D
-
-
-func _ready() -> void:
-	var mesh: MultiMesh = multimesh
-	LunasimNode.fitted_points.connect(
-		func(points: Array[Vector3]):
-			mesh.instance_count = points.size()
-			for i in range(points.size()):
-				mesh.set_instance_transform(i, Transform3D(Basis(), points[i]))
-	)
-"
+[sub_resource type="BoxMesh" id="BoxMesh_u4f2i"]
+size = Vector3(0.4, 0.4, 0.4)
 
 [node name="Node3D" type="Node3D"]
 script = SubResource("GDScript_lj4gt")
 
 [node name="Floor" type="StaticBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0, 0.5)
+collision_mask = 0
 script = SubResource("GDScript_x4vum")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
@@ -238,6 +206,7 @@ mesh = SubResource("ImmediateMesh_np8a4")
 
 [node name="StaticBody3D" type="StaticBody3D" parent="."]
 collision_layer = 3
+collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
 transform = Transform3D(-4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, 0, 1, -3.5, 0, 0)
@@ -245,6 +214,7 @@ shape = SubResource("WorldBoundaryShape3D_kxs4p")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D/CollisionShape3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -3.5)
+layers = 3
 mesh = SubResource("PlaneMesh_twbw0")
 
 [node name="CollisionShape3D2" type="CollisionShape3D" parent="StaticBody3D"]
@@ -253,6 +223,7 @@ shape = SubResource("WorldBoundaryShape3D_kxs4p")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D/CollisionShape3D2"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -1.5)
+layers = 3
 mesh = SubResource("PlaneMesh_reayg")
 
 [node name="CollisionShape3D3" type="CollisionShape3D" parent="StaticBody3D"]
@@ -261,6 +232,7 @@ shape = SubResource("WorldBoundaryShape3D_kxs4p")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D/CollisionShape3D3"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, 1.5)
+layers = 3
 mesh = SubResource("PlaneMesh_reayg")
 
 [node name="CollisionShape3D4" type="CollisionShape3D" parent="StaticBody3D"]
@@ -269,59 +241,27 @@ shape = SubResource("WorldBoundaryShape3D_kxs4p")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D/CollisionShape3D4"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, 3.5)
+layers = 3
 mesh = SubResource("PlaneMesh_twbw0")
 
-[node name="Robot" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.807798, 0)
-collision_layer = 0
-collision_mask = 2
-script = ExtResource("1_4gibj")
-estimate_material = SubResource("StandardMaterial3D_qlvj5")
+[node name="Robot" parent="." instance=ExtResource("1_y4wm8")]
 
-[node name="OriginOnly" type="Node3D" parent="Robot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.807798, 0)
-top_level = true
-
-[node name="CameraPivot" type="Marker3D" parent="Robot/OriginOnly"]
-transform = Transform3D(0.93343, -0.220396, -0.283078, 0.229795, 0.973239, 0, 0.275503, -0.0650499, 0.959097, 0, 0.5, 0)
-
-[node name="ExternalView" type="RemoteTransform3D" parent="Robot/OriginOnly/CameraPivot"]
-transform = Transform3D(-2.98023e-08, -9.31323e-09, 1, -1.11759e-08, 1, -2.23517e-08, -1, -7.45058e-09, 0, 3.46343, -2.98023e-08, 6.33299e-08)
+[node name="ExternalView" parent="Robot/OriginOnly/CameraPivot" index="0"]
 remote_path = NodePath("../../../../CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport/ExternalCamera")
 
-[node name="RemoteTransform3D" type="RemoteTransform3D" parent="Robot"]
-remote_path = NodePath("../OriginOnly")
-update_rotation = false
-update_scale = false
-
-[node name="DepthCamera" type="RemoteTransform3D" parent="Robot"]
-transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, 0, 0.572526, -0.298189)
+[node name="DepthCamera" parent="Robot" index="2"]
 remote_path = NodePath("../../CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport/DepthCamera")
 
-[node name="RayCast3D" type="RayCast3D" parent="Robot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.218799, 0)
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Robot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
-mesh = SubResource("BoxMesh_ho5pm")
-
-[node name="MeshInstance3D2" type="MeshInstance3D" parent="Robot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, -0.138658)
-mesh = SubResource("PrismMesh_8fccl")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Robot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
-shape = SubResource("BoxShape3D_gg88y")
-
-[node name="Estimate" type="Node3D" parent="Robot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.807798, 0)
-top_level = true
+[node name="RearCamera" parent="Robot" index="3"]
+remote_path = NodePath("../../CanvasLayer/TabContainer/RearCamera/AspectRatioContainer/SubviewportContainer/SubViewport/RearCamera")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_4hw3w")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="WorldEnvironment"]
 transform = Transform3D(0.926909, 0.34775, -0.141101, 0.330633, -0.57883, 0.745411, 0.177544, -0.737581, -0.6515, -2.51144, 3.72433, 0)
+
+[node name="Apriltag" parent="." instance=ExtResource("2_nhvh2")]
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
 
@@ -381,6 +321,31 @@ render_target_update_mode = 0
 transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, 0, 1.38032, -0.298189)
 fov = 120.0
 
+[node name="RearCamera" type="MarginContainer" parent="CanvasLayer/TabContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+metadata/_tab_index = 2
+
+[node name="AspectRatioContainer" type="AspectRatioContainer" parent="CanvasLayer/TabContainer/RearCamera"]
+layout_mode = 2
+
+[node name="SubviewportContainer" type="SubViewportContainer" parent="CanvasLayer/TabContainer/RearCamera/AspectRatioContainer"]
+layout_mode = 2
+stretch = true
+
+[node name="SubViewport" type="SubViewport" parent="CanvasLayer/TabContainer/RearCamera/AspectRatioContainer/SubviewportContainer"]
+handle_input_locally = false
+size = Vector2i(2, 2)
+render_target_update_mode = 0
+
+[node name="RearCamera" type="Camera3D" parent="CanvasLayer/TabContainer/RearCamera/AspectRatioContainer/SubviewportContainer/SubViewport"]
+transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, 0, 1.38032, 0.248651)
+fov = 120.0
+
 [node name="Control" type="Control" parent="CanvasLayer"]
 layout_mode = 3
 anchors_preset = 15
@@ -419,10 +384,16 @@ layout_mode = 2
 text = "0.0"
 script = SubResource("GDScript_8qrn1")
 
-[node name="FittedPoints" type="MultiMeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.09728, -1.25368)
-multimesh = SubResource("MultiMesh_0ky77")
-script = SubResource("GDScript_8ljls")
+[node name="StaticBody3D2" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.17693, -0.970092)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D2"]
+shape = SubResource("BoxShape3D_ir4kq")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D2"]
+mesh = SubResource("BoxMesh_u4f2i")
 
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit" to="CanvasLayer/Control/VBoxContainer/LineEdit" method="_on_text_submitted"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit2" to="CanvasLayer/Control/VBoxContainer/LineEdit2" method="_on_text_submitted"]
+
+[editable path="Robot"]

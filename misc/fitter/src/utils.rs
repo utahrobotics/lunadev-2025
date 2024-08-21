@@ -62,7 +62,7 @@ fn main(
     let y = (f32(workgroup_id.y) - f32(PRINCIPAL_POINT_PX.y)) / FOCAL_LENGTH_PX;
     let x = (f32(workgroup_id.x) - f32(PRINCIPAL_POINT_PX.x)) / FOCAL_LENGTH_PX;
 
-    let point = transform * vec4<f32>(x * depth, y * depth, depth, 1.0);
+    let point = transform * vec4<f32>(x * depth, y * depth, -depth, 1.0);
     points[i] = vec4<f32>(point.xyz, 1.0);
 }}
 "#,

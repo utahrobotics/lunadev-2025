@@ -115,7 +115,7 @@ impl Blackboard {
             } => {
                 let depth_project = Arc::new(CameraProjection::new(10.39, Vector2::new(36, 24), 0.01).block_on()?);
                 let lunasim_stdin2 = lunasim_stdin.clone();
-                let robot_chain2 = robot_chain.clone();
+                let camera_link = robot_chain.find_link("depth_camera_link").unwrap().clone();
 
                 from_lunasim.add_fn(move |msg| match msg {
                     common::lunasim::FromLunasim::Accelerometer {
@@ -133,10 +133,10 @@ impl Blackboard {
                     common::lunasim::FromLunasim::DepthMap(depths) => {
                         let depth_project2 = depth_project.clone();
                         let lunasim_stdin2 = lunasim_stdin2.clone();
-                        let robot_chain2 = robot_chain2.clone();
+                        let Some(camera_transform) = camera_link.world_transform() else { return; };
 
                         get_tokio_handle().spawn(async move {
-                            depth_project2.project(&depths, robot_chain2.origin().cast(), |points| {
+                            depth_project2.project(&depths, camera_transform.cast(), |points| {
                                 let points: Box<[_]> = points.iter()
                                     .filter_map(|p| {
                                         if p.w == 1.0 {

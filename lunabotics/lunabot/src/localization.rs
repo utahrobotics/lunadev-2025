@@ -41,6 +41,7 @@ impl SyncTask for Localizer {
             }
 
             self.robot_chain.set_origin(isometry);
+            self.robot_chain.update_transforms();
 
             if let Some(lunasim_stdin) = &self.lunasim_stdin {
                 let quat = [
