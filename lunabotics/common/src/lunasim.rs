@@ -6,7 +6,7 @@ use crate::BITCODE_BUFFER;
 pub enum FromLunasim {
     Accelerometer { id: usize, acceleration: [f32; 3] },
     Gyroscope { id: usize, axisangle: [f32; 3] },
-    DepthMap(Box<[f32]>),
+    DepthMap(Box<[u32]>),
 }
 
 impl TryFrom<&[u8]> for FromLunasim {

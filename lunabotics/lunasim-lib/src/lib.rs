@@ -16,6 +16,8 @@ struct LunasimLib;
 #[gdextension]
 unsafe impl ExtensionLibrary for LunasimLib {}
 
+const DEPTH_SCALE: f32 = 0.01;
+
 struct LunasimShared {
     from_lunasimbot: SegQueue<FromLunasimbot>,
     to_lunasimbot: Sender<FromLunasim>,
@@ -157,15 +159,15 @@ impl Lunasim {
     fn drive(left: f32, right: f32);
 
     #[func]
-    fn send_depth_map(&mut self, mut depth: Vec<f32>) {
-        depth.iter_mut().for_each(|d| {
-            *d += randfn(0.0, self.depth_deviation) as f32;
-        });
+    fn send_depth_map(&mut self, depth: Vec<f32>) {
+        let depth = depth.into_iter().map(|d| {
+            (d * randfn(1.0, self.depth_deviation).abs() as f32 / DEPTH_SCALE).round() as u32
+        }).collect();
 
         let _ = self
             .shared
             .to_lunasimbot
-            .send(FromLunasim::DepthMap(depth.into_boxed_slice()));
+            .send(FromLunasim::DepthMap(depth));
     }
 
     #[func]

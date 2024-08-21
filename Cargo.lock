@@ -2429,6 +2429,7 @@ dependencies = [
  "cakap",
  "common",
  "crossbeam",
+ "fitter",
  "fxhash",
  "k",
  "nalgebra 0.32.5",

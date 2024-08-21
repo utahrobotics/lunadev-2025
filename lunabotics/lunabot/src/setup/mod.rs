@@ -1,14 +1,11 @@
 use bonsai_bt::Status;
 use common::{lunasim::FromLunasimbot, FromLunabase, FromLunabot};
 use crossbeam::atomic::AtomicCell;
+use fitter::utils::CameraProjection;
 use k::Chain;
-use nalgebra::Vector3;
+use nalgebra::{Vector2, Vector3};
 use urobotics::{
-    callbacks::caller::try_drop_this_callback,
-    define_callbacks,
-    log::{error, info},
-    task::SyncTask,
-    BlockOn,
+    callbacks::caller::try_drop_this_callback, define_callbacks, get_tokio_handle, log::{error, info}, task::SyncTask, tokio::task::block_in_place, BlockOn
 };
 
 use std::{
@@ -73,7 +70,7 @@ pub struct Blackboard {
     from_lunabase: mpsc::Receiver<FromLunabase>,
     ping_timer: f64,
     drive_callbacks: DriveCallbacks,
-    current_acceleration: Arc<AtomicCell<Vector3<f64>>>,
+    // acceleration: Arc<AtomicCell<Vector3<f64>>>,
     // accelerometer_callbacks: Vector3Callbacks,
     robot_chain: Arc<Chain<f64>>,
     pub(crate) run_state: Option<RunState>,
@@ -106,6 +103,7 @@ impl Blackboard {
         socket.spawn_looping();
 
         let robot_chain = Arc::new(Chain::<f64>::from_urdf_file("lunabot.urdf")?);
+        
         let current_acceleration = Arc::new(AtomicCell::new(Vector3::default()));
         let current_acceleration2 = current_acceleration.clone();
 
@@ -115,6 +113,10 @@ impl Blackboard {
                 lunasim_stdin,
                 from_lunasim,
             } => {
+                let depth_project = Arc::new(CameraProjection::new(10.39, Vector2::new(36, 24), 0.01).block_on()?);
+                let lunasim_stdin2 = lunasim_stdin.clone();
+                let robot_chain2 = robot_chain.clone();
+
                 from_lunasim.add_fn(move |msg| match msg {
                     common::lunasim::FromLunasim::Accelerometer {
                         id: _,
@@ -128,8 +130,33 @@ impl Blackboard {
                         current_acceleration2.store(acceleration);
                     }
                     common::lunasim::FromLunasim::Gyroscope { .. } => {}
-                    common::lunasim::FromLunasim::DepthMap(_) => {}
+                    common::lunasim::FromLunasim::DepthMap(depths) => {
+                        let depth_project2 = depth_project.clone();
+                        let lunasim_stdin2 = lunasim_stdin2.clone();
+                        let robot_chain2 = robot_chain2.clone();
+
+                        get_tokio_handle().spawn(async move {
+                            depth_project2.project(&depths, robot_chain2.origin().cast(), |points| {
+                                let points: Box<[_]> = points.iter()
+                                    .filter_map(|p| {
+                                        if p.w == 1.0 {
+                                            Some([p.x, p.y, p.z])
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .collect();
+                                // TODO Fit points
+                                FromLunasimbot::FittedPoints(points).encode(|bytes| {
+                                    block_in_place(|| {
+                                        lunasim_stdin2.write(bytes);
+                                    });
+                                });
+                            }).await;
+                        });
+                    }
                 });
+
                 Some(lunasim_stdin.clone())
             }
             _ => None,
@@ -160,7 +187,7 @@ impl Blackboard {
             from_lunabase,
             ping_timer: 0.0,
             drive_callbacks,
-            current_acceleration,
+            // acceleration: current_acceleration,
             robot_chain,
             run_state: Some(RunState::new(lunabot_app)?),
         })

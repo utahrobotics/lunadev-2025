@@ -17,3 +17,4 @@ nalgebra = { workspace = true }
 k = { workspace = true }
 # indexmap = "2.2.6"
 fxhash = { workspace = true }
+fitter = { workspace = true }

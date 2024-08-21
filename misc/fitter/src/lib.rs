@@ -10,6 +10,8 @@ use crossbeam::queue::SegQueue;
 use nalgebra::{Rotation3, Vector2, Vector3, Vector4};
 use rand::{thread_rng, Rng};
 
+pub mod utils;
+
 // Points, Translation
 type TranslateShader = Compute<(
     BufferType<[Vector4<f32>], HostWriteOnly, ShaderReadWrite>,
@@ -79,7 +81,7 @@ impl BufferFitter {
                     if let Some(src) = src {
                         *dst = Vector4::new(src.x, src.y, src.z, 1.0);
                     } else {
-                        *dst = Vector4::default();
+                        dst.z = 0.0;
                     }
                 });
             })
