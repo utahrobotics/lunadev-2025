@@ -24,15 +24,6 @@ func _process(delta: float) -> void:
 		rotation.z -= ROTATION_SPEED * delta
 "
 
-[sub_resource type="BoxMesh" id="BoxMesh_ho5pm"]
-size = Vector3(0.505, 0.6, 0.475)
-
-[sub_resource type="PrismMesh" id="PrismMesh_8fccl"]
-size = Vector3(0.29, 0.35, 0.33)
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_gg88y"]
-size = Vector3(0.51, 0.6, 0.48)
-
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eqihq"]
 shading_mode = 0
 albedo_color = Color(1, 0.105882, 0.113725, 1)
@@ -60,7 +51,16 @@ func _ready() -> void:
 	)
 "
 
-[node name="Robot" type="CharacterBody3D"]
+[sub_resource type="BoxMesh" id="BoxMesh_ho5pm"]
+size = Vector3(0.505, 0.6, 0.475)
+
+[sub_resource type="PrismMesh" id="PrismMesh_8fccl"]
+size = Vector3(0.29, 0.35, 0.33)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_gg88y"]
+size = Vector3(0.51, 0.6, 0.48)
+
+[node name="Robot" type="CharacterBody3D" groups=["Robot"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.807798, 0)
 collision_layer = 0
 collision_mask = 2
@@ -86,6 +86,11 @@ update_scale = false
 [node name="DepthCamera" type="RemoteTransform3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, 0, 0.572526, -0.298189)
 
+[node name="FittedPoints" type="MultiMeshInstance3D" parent="DepthCamera"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+multimesh = SubResource("MultiMesh_0ky77")
+script = SubResource("GDScript_8ljls")
+
 [node name="RearCamera" type="RemoteTransform3D" parent="."]
 transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, 0, 0.572526, 0.248651)
 
@@ -107,8 +112,3 @@ shape = SubResource("BoxShape3D_gg88y")
 [node name="Estimate" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.807798, 0)
 top_level = true
-
-[node name="FittedPoints" type="MultiMeshInstance3D" parent="."]
-top_level = true
-multimesh = SubResource("MultiMesh_0ky77")
-script = SubResource("GDScript_8ljls")

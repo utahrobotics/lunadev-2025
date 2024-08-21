@@ -1,7 +1,8 @@
-[gd_scene load_steps=20 format=3 uid="uid://bxmnthetrtkso"]
+[gd_scene load_steps=22 format=3 uid="uid://bxmnthetrtkso"]
 
 [ext_resource type="PackedScene" uid="uid://leqgym66qbuo" path="res://robot.tscn" id="1_y4wm8"]
 [ext_resource type="PackedScene" uid="uid://y0gvb4s2mi2x" path="res://apriltag.tscn" id="2_nhvh2"]
+[ext_resource type="Script" path="res://robo_camera.gd" id="3_n7k3i"]
 
 [sub_resource type="GDScript" id="GDScript_lj4gt"]
 script/source = "extends Node3D
@@ -130,16 +131,12 @@ var _timer := DELTA
 
 func _ready() -> void:
 	$AspectRatioContainer.ratio = WIDTH as float / HEIGHT
-	while not is_visible_in_tree():
-		await visibility_changed
-	
-	await get_tree().process_frame
-	var v_size: Vector2 = get_viewport().size
+	var f := WIDTH / 2.0 / tan(deg_to_rad(camera.fov) / 2.0)
 	
 	for y in range(HEIGHT):
 		for x in range(WIDTH):
 			var raycast := RayCast3D.new()
-			raycast.target_position = camera.project_local_ray_normal(v_size * Vector2(x as float / WIDTH, y as float / HEIGHT)).normalized() * MAX_DISTANCE
+			raycast.target_position = Vector3((x - WIDTH / 2.0) / f, (y - HEIGHT / 2.0) / f, -1).normalized() * MAX_DISTANCE
 			raycasts.append(raycast)
 			camera.add_child(raycast)
 			depths.append(0.0)
@@ -151,12 +148,12 @@ func _process(delta: float) -> void:
 		_timer = DELTA
 		
 		for i in range(raycasts.size()):
-			depths[i] = 4.0
-			#var raycast := raycasts[i]
-			#if raycast.is_colliding():
-				#depths[i] = raycast.get_collision_point().distance_to(camera.global_position)
-			#else:
-				#depths[i] = 0.0
+			#depths[i] = 0.5
+			var raycast := raycasts[i]
+			if raycast.is_colliding():
+				depths[i] = raycast.get_collision_point().distance_to(camera.global_position)
+			else:
+				depths[i] = 0.0
 		
 		LunasimNode.send_depth_map(depths)
 "
@@ -181,6 +178,17 @@ func _on_text_submitted(new_text: String) -> void:
 		LunasimNode.gyroscope_deviation = float(new_text)
 	else:
 		push_error(\"Not a valid gyroscope deviation\")
+"
+
+[sub_resource type="GDScript" id="GDScript_rdt3l"]
+script/source = "extends LineEdit
+
+
+func _on_text_submitted(new_text: String) -> void:
+	if new_text.is_valid_float():
+		LunasimNode.depth_deviation = float(new_text)
+	else:
+		push_error(\"Not a valid depth deviation\")
 "
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_ir4kq"]
@@ -262,6 +270,7 @@ environment = SubResource("Environment_4hw3w")
 transform = Transform3D(0.926909, 0.34775, -0.141101, 0.330633, -0.57883, 0.745411, 0.177544, -0.737581, -0.6515, -2.51144, 3.72433, 0)
 
 [node name="Apriltag" parent="." instance=ExtResource("2_nhvh2")]
+explicit = true
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
 
@@ -320,6 +329,7 @@ render_target_update_mode = 0
 [node name="DepthCamera" type="Camera3D" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport"]
 transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, 0, 1.38032, -0.298189)
 fov = 120.0
+script = ExtResource("3_n7k3i")
 
 [node name="RearCamera" type="MarginContainer" parent="CanvasLayer/TabContainer"]
 visible = false
@@ -332,6 +342,7 @@ metadata/_tab_index = 2
 
 [node name="AspectRatioContainer" type="AspectRatioContainer" parent="CanvasLayer/TabContainer/RearCamera"]
 layout_mode = 2
+ratio = 1.666
 
 [node name="SubviewportContainer" type="SubViewportContainer" parent="CanvasLayer/TabContainer/RearCamera/AspectRatioContainer"]
 layout_mode = 2
@@ -345,6 +356,7 @@ render_target_update_mode = 0
 [node name="RearCamera" type="Camera3D" parent="CanvasLayer/TabContainer/RearCamera/AspectRatioContainer/SubviewportContainer/SubViewport"]
 transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, 0, 1.38032, 0.248651)
 fov = 120.0
+script = ExtResource("3_n7k3i")
 
 [node name="Control" type="Control" parent="CanvasLayer"]
 layout_mode = 3
@@ -372,6 +384,7 @@ text = "Accelerometer Deviation"
 
 [node name="LineEdit" type="LineEdit" parent="CanvasLayer/Control/VBoxContainer"]
 layout_mode = 2
+focus_mode = 0
 text = "0.0"
 script = SubResource("GDScript_4uyte")
 
@@ -381,11 +394,22 @@ text = "Gyroscope Deviation"
 
 [node name="LineEdit2" type="LineEdit" parent="CanvasLayer/Control/VBoxContainer"]
 layout_mode = 2
+focus_mode = 0
 text = "0.0"
 script = SubResource("GDScript_8qrn1")
 
+[node name="Label3" type="Label" parent="CanvasLayer/Control/VBoxContainer"]
+layout_mode = 2
+text = "Depth Deviation"
+
+[node name="LineEdit3" type="LineEdit" parent="CanvasLayer/Control/VBoxContainer"]
+layout_mode = 2
+focus_mode = 0
+text = "0.0"
+script = SubResource("GDScript_rdt3l")
+
 [node name="StaticBody3D2" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.17693, -0.970092)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.17693, -3.20674)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D2"]
 shape = SubResource("BoxShape3D_ir4kq")
@@ -395,5 +419,6 @@ mesh = SubResource("BoxMesh_u4f2i")
 
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit" to="CanvasLayer/Control/VBoxContainer/LineEdit" method="_on_text_submitted"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit2" to="CanvasLayer/Control/VBoxContainer/LineEdit2" method="_on_text_submitted"]
+[connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit3" to="CanvasLayer/Control/VBoxContainer/LineEdit3" method="_on_text_submitted"]
 
 [editable path="Robot"]

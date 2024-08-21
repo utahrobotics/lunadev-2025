@@ -2,10 +2,15 @@ use bonsai_bt::Status;
 use common::{lunasim::FromLunasimbot, FromLunabase, FromLunabot};
 use crossbeam::atomic::AtomicCell;
 use fitter::utils::CameraProjection;
-use k::Chain;
-use nalgebra::{Vector2, Vector3};
+use k::{Chain, Isometry3, UnitQuaternion};
+use nalgebra::{Quaternion, Vector2, Vector3};
 use urobotics::{
-    callbacks::caller::try_drop_this_callback, define_callbacks, get_tokio_handle, log::{error, info}, task::SyncTask, tokio::task::block_in_place, BlockOn
+    callbacks::caller::try_drop_this_callback,
+    define_callbacks, get_tokio_handle,
+    log::{error, info},
+    task::SyncTask,
+    tokio::task::block_in_place,
+    BlockOn,
 };
 
 use std::{
@@ -103,7 +108,7 @@ impl Blackboard {
         socket.spawn_looping();
 
         let robot_chain = Arc::new(Chain::<f64>::from_urdf_file("lunabot.urdf")?);
-        
+
         let current_acceleration = Arc::new(AtomicCell::new(Vector3::default()));
         let current_acceleration2 = current_acceleration.clone();
 
@@ -113,9 +118,11 @@ impl Blackboard {
                 lunasim_stdin,
                 from_lunasim,
             } => {
-                let depth_project = Arc::new(CameraProjection::new(10.39, Vector2::new(36, 24), 0.01).block_on()?);
+                let depth_project =
+                    Arc::new(CameraProjection::new(10.392, Vector2::new(36, 24), 0.01).block_on()?);
                 let lunasim_stdin2 = lunasim_stdin.clone();
                 let camera_link = robot_chain.find_link("depth_camera_link").unwrap().clone();
+                let robot_chain2 = robot_chain.clone();
 
                 from_lunasim.add_fn(move |msg| match msg {
                     common::lunasim::FromLunasim::Accelerometer {
@@ -133,27 +140,53 @@ impl Blackboard {
                     common::lunasim::FromLunasim::DepthMap(depths) => {
                         let depth_project2 = depth_project.clone();
                         let lunasim_stdin2 = lunasim_stdin2.clone();
-                        let Some(camera_transform) = camera_link.world_transform() else { return; };
+                        let Some(camera_transform) = camera_link.world_transform() else {
+                            return;
+                        };
 
                         get_tokio_handle().spawn(async move {
-                            depth_project2.project(&depths, camera_transform.cast(), |points| {
-                                let points: Box<[_]> = points.iter()
-                                    .filter_map(|p| {
-                                        if p.w == 1.0 {
-                                            Some([p.x, p.y, p.z])
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .collect();
-                                // TODO Fit points
-                                FromLunasimbot::FittedPoints(points).encode(|bytes| {
-                                    block_in_place(|| {
-                                        lunasim_stdin2.write(bytes);
+                            depth_project2
+                                .project(&depths, camera_transform.cast(), |points| {
+                                    let points: Box<[_]> = points
+                                        .iter()
+                                        .filter_map(|p| {
+                                            if p.w == 1.0 {
+                                                Some([p.x, p.y, p.z])
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                        .collect();
+                                    // TODO Fit points
+                                    FromLunasimbot::FittedPoints(points).encode(|bytes| {
+                                        block_in_place(|| {
+                                            lunasim_stdin2.write(bytes);
+                                        });
                                     });
-                                });
-                            }).await;
+                                })
+                                .await;
                         });
+                    }
+                    common::lunasim::FromLunasim::ExplicitApriltag {
+                        robot_quat,
+                        robot_origin,
+                    } => {
+                        let isometry = Isometry3::from_parts(
+                            Vector3::new(
+                                robot_origin[0] as f64,
+                                robot_origin[1] as f64,
+                                robot_origin[2] as f64,
+                            )
+                            .into(),
+                            UnitQuaternion::new_normalize(Quaternion::new(
+                                robot_quat[3] as f64,
+                                robot_quat[0] as f64,
+                                robot_quat[1] as f64,
+                                robot_quat[2] as f64,
+                            )),
+                        );
+                        robot_chain2.set_origin(isometry);
+                        robot_chain2.update_transforms();
                     }
                 });
 

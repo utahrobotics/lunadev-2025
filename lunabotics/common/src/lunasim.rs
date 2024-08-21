@@ -4,9 +4,19 @@ use crate::BITCODE_BUFFER;
 
 #[derive(Debug, Encode, Decode, Clone)]
 pub enum FromLunasim {
-    Accelerometer { id: usize, acceleration: [f32; 3] },
-    Gyroscope { id: usize, axisangle: [f32; 3] },
+    Accelerometer {
+        id: usize,
+        acceleration: [f32; 3],
+    },
+    Gyroscope {
+        id: usize,
+        axisangle: [f32; 3],
+    },
     DepthMap(Box<[u32]>),
+    ExplicitApriltag {
+        robot_quat: [f32; 4],
+        robot_origin: [f32; 3],
+    },
 }
 
 impl TryFrom<&[u8]> for FromLunasim {

@@ -160,14 +160,14 @@ impl Lunasim {
 
     #[func]
     fn send_depth_map(&mut self, depth: Vec<f32>) {
-        let depth = depth.into_iter().map(|d| {
-            (d * randfn(1.0, self.depth_deviation).abs() as f32 / DEPTH_SCALE).round() as u32
-        }).collect();
+        let depth = depth
+            .into_iter()
+            .map(|d| {
+                (d * randfn(1.0, self.depth_deviation).abs() as f32 / DEPTH_SCALE).round() as u32
+            })
+            .collect();
 
-        let _ = self
-            .shared
-            .to_lunasimbot
-            .send(FromLunasim::DepthMap(depth));
+        let _ = self.shared.to_lunasimbot.send(FromLunasim::DepthMap(depth));
     }
 
     #[func]
@@ -198,5 +198,21 @@ impl Lunasim {
             id: id as usize,
             axisangle: [axis_angle.x, axis_angle.y, axis_angle.z],
         });
+    }
+
+    #[func]
+    fn send_explicit_apriltag(&mut self, robot_transform: Transform3D) {
+        let quat = robot_transform.basis.to_quat();
+        let _ = self
+            .shared
+            .to_lunasimbot
+            .send(FromLunasim::ExplicitApriltag {
+                robot_quat: [quat.x, quat.y, quat.z, quat.w],
+                robot_origin: [
+                    robot_transform.origin.x,
+                    robot_transform.origin.y,
+                    robot_transform.origin.z,
+                ],
+            });
     }
 }
