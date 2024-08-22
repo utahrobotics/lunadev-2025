@@ -47,7 +47,7 @@ impl CameraProjection {
         image_size: Vector2<u32>,
         depth_scale: f32,
     ) -> anyhow::Result<Self> {
-        let principal_point_px = image_size / 2;
+        let principal_point_px = (image_size - Vector2::new(1, 1)).cast::<f32>() / 2.0;
         let pixel_count = image_size.x as usize * image_size.y as usize;
         let shader = format!(
             r#"
@@ -73,15 +73,17 @@ fn main(
     }}
 
     let depth = f32(depths[i]) * DEPTH_SCALE;
-    let y = (f32(workgroup_id.y) - f32(PRINCIPAL_POINT_PX.y)) / FOCAL_LENGTH_PX;
-    let x = (f32(workgroup_id.x) - f32(PRINCIPAL_POINT_PX.x)) / FOCAL_LENGTH_PX;
+    let x = (f32(workgroup_id.x) - PRINCIPAL_POINT_PX.x) / FOCAL_LENGTH_PX;
+    let y = (f32(workgroup_id.y) - PRINCIPAL_POINT_PX.y) / FOCAL_LENGTH_PX;
 
-    let point = vec4<f32>(x * depth, y * depth, -depth, 1.0);
+    let point = normalize(vec3(x, y, -1)) * depth;
     points[i] = vec4<f32>(point.xyz, 1.0);
 }}
 "#,
             principal_point_px.x, principal_point_px.y, image_size.x, depth_scale,
         );
+
+        log::trace!("CameraProjectionShader:\n\n{}", shader);
 
         let project_shader = ProjectShader::new(
             wgpu::ShaderModuleDescriptor {

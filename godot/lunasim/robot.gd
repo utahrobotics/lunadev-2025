@@ -12,7 +12,7 @@ var _timer := DELTA
 var _left := 0.0
 var _right := 0.0
 
-@onready var raycast: RayCast3D = $RayCast3D
+@onready var raycast: RayCast3D = $RaycastOrigin/RayCast3D
 @onready var estimate: Node3D = $Estimate
 
 

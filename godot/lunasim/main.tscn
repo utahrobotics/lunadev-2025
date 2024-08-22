@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3 uid="uid://bxmnthetrtkso"]
+[gd_scene load_steps=25 format=3 uid="uid://bxmnthetrtkso"]
 
 [ext_resource type="PackedScene" uid="uid://leqgym66qbuo" path="res://robot.tscn" id="1_y4wm8"]
 [ext_resource type="PackedScene" uid="uid://y0gvb4s2mi2x" path="res://apriltag.tscn" id="2_nhvh2"]
@@ -136,7 +136,11 @@ func _ready() -> void:
 	for y in range(HEIGHT):
 		for x in range(WIDTH):
 			var raycast := RayCast3D.new()
-			raycast.target_position = Vector3((x - WIDTH / 2.0) / f, (y - HEIGHT / 2.0) / f, -1).normalized() * MAX_DISTANCE
+			raycast.target_position = Vector3(
+				(x - (WIDTH - 1) / 2.0) / f,
+				(y - (HEIGHT - 1) / 2.0) / f,
+				-1
+			).normalized() * MAX_DISTANCE
 			raycasts.append(raycast)
 			camera.add_child(raycast)
 			depths.append(0.0)
@@ -148,7 +152,6 @@ func _process(delta: float) -> void:
 		_timer = DELTA
 		
 		for i in range(raycasts.size()):
-			#depths[i] = 0.5
 			var raycast := raycasts[i]
 			if raycast.is_colliding():
 				depths[i] = raycast.get_collision_point().distance_to(camera.global_position)
@@ -157,6 +160,19 @@ func _process(delta: float) -> void:
 		
 		LunasimNode.send_depth_map(depths)
 "
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_f3qo5"]
+shading_mode = 0
+albedo_color = Color(0.11, 0.658833, 1, 1)
+use_point_size = true
+point_size = 5.0
+
+[sub_resource type="PointMesh" id="PointMesh_du1xb"]
+material = SubResource("StandardMaterial3D_f3qo5")
+
+[sub_resource type="MultiMesh" id="MultiMesh_tlyfr"]
+transform_format = 1
+mesh = SubResource("PointMesh_du1xb")
 
 [sub_resource type="GDScript" id="GDScript_4uyte"]
 script/source = "extends LineEdit
@@ -302,7 +318,7 @@ size = Vector2i(1132, 597)
 render_target_update_mode = 4
 
 [node name="ExternalCamera" type="Camera3D" parent="CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport"]
-transform = Transform3D(0.283078, -0.220396, 0.93343, -1.77252e-08, 0.973239, 0.229795, -0.959097, -0.0650499, 0.275503, 3.23287, 2.10368, 0.954185)
+transform = Transform3D(0.283078, -0.220396, 0.93343, -1.77252e-08, 0.973239, 0.229795, -0.959097, -0.0650499, 0.275503, 3.23287, 1.29588, 0.954185)
 
 [node name="DepthCamera1" type="MarginContainer" parent="CanvasLayer/TabContainer"]
 visible = false
@@ -327,9 +343,13 @@ size = Vector2i(2, 2)
 render_target_update_mode = 0
 
 [node name="DepthCamera" type="Camera3D" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport"]
-transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, 0, 1.38032, -0.298189)
+transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, 0, 0.572526, -0.298189)
 fov = 120.0
 script = ExtResource("3_n7k3i")
+
+[node name="FittedPoints" type="MultiMeshInstance3D" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport/DepthCamera"]
+visible = false
+multimesh = SubResource("MultiMesh_tlyfr")
 
 [node name="RearCamera" type="MarginContainer" parent="CanvasLayer/TabContainer"]
 visible = false
@@ -354,7 +374,7 @@ size = Vector2i(2, 2)
 render_target_update_mode = 0
 
 [node name="RearCamera" type="Camera3D" parent="CanvasLayer/TabContainer/RearCamera/AspectRatioContainer/SubviewportContainer/SubViewport"]
-transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, 0, 1.38032, 0.248651)
+transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, 0, 0.572526, 0.248651)
 fov = 120.0
 script = ExtResource("3_n7k3i")
 
@@ -384,7 +404,7 @@ text = "Accelerometer Deviation"
 
 [node name="LineEdit" type="LineEdit" parent="CanvasLayer/Control/VBoxContainer"]
 layout_mode = 2
-focus_mode = 0
+focus_mode = 1
 text = "0.0"
 script = SubResource("GDScript_4uyte")
 
@@ -394,7 +414,7 @@ text = "Gyroscope Deviation"
 
 [node name="LineEdit2" type="LineEdit" parent="CanvasLayer/Control/VBoxContainer"]
 layout_mode = 2
-focus_mode = 0
+focus_mode = 1
 text = "0.0"
 script = SubResource("GDScript_8qrn1")
 
@@ -404,7 +424,7 @@ text = "Depth Deviation"
 
 [node name="LineEdit3" type="LineEdit" parent="CanvasLayer/Control/VBoxContainer"]
 layout_mode = 2
-focus_mode = 0
+focus_mode = 1
 text = "0.0"
 script = SubResource("GDScript_rdt3l")
 

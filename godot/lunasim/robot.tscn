@@ -26,16 +26,16 @@ func _process(delta: float) -> void:
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eqihq"]
 shading_mode = 0
-albedo_color = Color(1, 0.105882, 0.113725, 1)
+albedo_color = Color(0.11, 0.658833, 1, 1)
 use_point_size = true
 point_size = 5.0
 
-[sub_resource type="PointMesh" id="PointMesh_du1xb"]
+[sub_resource type="PointMesh" id="PointMesh_fxwe8"]
 material = SubResource("StandardMaterial3D_eqihq")
 
 [sub_resource type="MultiMesh" id="MultiMesh_0ky77"]
 transform_format = 1
-mesh = SubResource("PointMesh_du1xb")
+mesh = SubResource("PointMesh_fxwe8")
 
 [sub_resource type="GDScript" id="GDScript_8ljls"]
 script/source = "extends MultiMeshInstance3D
@@ -61,14 +61,12 @@ size = Vector3(0.29, 0.35, 0.33)
 size = Vector3(0.51, 0.6, 0.48)
 
 [node name="Robot" type="CharacterBody3D" groups=["Robot"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.807798, 0)
 collision_layer = 0
 collision_mask = 2
 script = ExtResource("1_65wgt")
 estimate_material = SubResource("StandardMaterial3D_qlvj5")
 
 [node name="OriginOnly" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.807798, 0)
 top_level = true
 
 [node name="CameraPivot" type="Marker3D" parent="OriginOnly"]
@@ -87,15 +85,16 @@ update_scale = false
 transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, 0, 0.572526, -0.298189)
 
 [node name="FittedPoints" type="MultiMeshInstance3D" parent="DepthCamera"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
 multimesh = SubResource("MultiMesh_0ky77")
 script = SubResource("GDScript_8ljls")
 
 [node name="RearCamera" type="RemoteTransform3D" parent="."]
 transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, 0, 0.572526, 0.248651)
 
-[node name="RayCast3D" type="RayCast3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.218799, 0)
+[node name="RayCastRemote" type="RemoteTransform3D" parent="."]
+remote_path = NodePath("../RaycastOrigin")
+update_rotation = false
+update_scale = false
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
@@ -111,4 +110,10 @@ shape = SubResource("BoxShape3D_gg88y")
 
 [node name="Estimate" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.807798, 0)
+top_level = true
+
+[node name="RaycastOrigin" type="Node3D" parent="."]
+
+[node name="RayCast3D" type="RayCast3D" parent="RaycastOrigin"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.422899, 0)
 top_level = true
