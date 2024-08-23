@@ -3,7 +3,7 @@ use common::{lunasim::FromLunasimbot, FromLunabase, FromLunabot};
 use crossbeam::atomic::AtomicCell;
 use fitter::utils::CameraProjection;
 use k::{Chain, Isometry3, UnitQuaternion};
-use nalgebra::{Quaternion, Vector2, Vector3};
+use nalgebra::{UnitVector3, Vector2, Vector3};
 use urobotics::{
     callbacks::caller::try_drop_this_callback,
     define_callbacks, get_tokio_handle,
@@ -168,9 +168,15 @@ impl Blackboard {
                         });
                     }
                     common::lunasim::FromLunasim::ExplicitApriltag {
-                        robot_quat,
                         robot_origin,
+                        robot_axis,
+                        robot_angle,
                     } => {
+                        let robot_axis = UnitVector3::new_normalize(Vector3::new(
+                            robot_axis[0] as f64,
+                            robot_axis[1] as f64,
+                            robot_axis[2] as f64,
+                        ));
                         let isometry = Isometry3::from_parts(
                             Vector3::new(
                                 robot_origin[0] as f64,
@@ -178,12 +184,7 @@ impl Blackboard {
                                 robot_origin[2] as f64,
                             )
                             .into(),
-                            UnitQuaternion::new_normalize(Quaternion::new(
-                                robot_quat[3] as f64,
-                                robot_quat[0] as f64,
-                                robot_quat[1] as f64,
-                                robot_quat[2] as f64,
-                            )),
+                            UnitQuaternion::from_axis_angle(&robot_axis, robot_angle as f64),
                         );
                         robot_chain2.set_origin(isometry);
                         robot_chain2.update_transforms();

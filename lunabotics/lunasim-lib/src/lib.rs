@@ -128,10 +128,17 @@ impl INode for Lunasim {
                     self.base_mut()
                         .emit_signal("fitted_points".into(), &[points.to_variant()]);
                 }
-                FromLunasimbot::Isometry { quat, origin } => {
-                    let [x, y, z, w] = quat;
-                    let quat = Quaternion { x, y, z, w };
-                    let basis = Basis::from_quat(quat);
+                FromLunasimbot::Isometry {
+                    axis,
+                    angle,
+                    origin,
+                } => {
+                    let axis = Vector3 {
+                        x: axis[0],
+                        y: axis[1],
+                        z: axis[2],
+                    };
+                    let basis = Basis::from_axis_angle(axis, angle);
                     let [x, y, z] = origin;
                     let origin = Vector3 { x, y, z };
 
@@ -163,7 +170,9 @@ impl Lunasim {
         let depth = depth
             .into_iter()
             .map(|d| {
-                (randfn(d as f64, (d as f64).powi(2) * self.depth_deviation).abs() as f32 / DEPTH_SCALE).round() as u32
+                (randfn(d as f64, (d as f64).powi(2) * self.depth_deviation).abs() as f32
+                    / DEPTH_SCALE)
+                    .round() as u32
             })
             .collect();
 
@@ -203,11 +212,14 @@ impl Lunasim {
     #[func]
     fn send_explicit_apriltag(&mut self, robot_transform: Transform3D) {
         let quat = robot_transform.basis.to_quat();
+        let robot_axis = quat.get_axis();
+        let robot_axis = [robot_axis.x, robot_axis.y, robot_axis.z];
         let _ = self
             .shared
             .to_lunasimbot
             .send(FromLunasim::ExplicitApriltag {
-                robot_quat: [quat.x, quat.y, quat.z, quat.w],
+                robot_axis,
+                robot_angle: quat.get_angle(),
                 robot_origin: [
                     robot_transform.origin.x,
                     robot_transform.origin.y,

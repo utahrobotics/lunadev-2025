@@ -44,12 +44,11 @@ impl SyncTask for Localizer {
             self.robot_chain.update_transforms();
 
             if let Some(lunasim_stdin) = &self.lunasim_stdin {
-                let quat = [
-                    isometry.rotation.i as f32,
-                    isometry.rotation.j as f32,
-                    isometry.rotation.k as f32,
-                    isometry.rotation.w as f32,
-                ];
+                let (axis, angle) = isometry
+                    .rotation
+                    .axis_angle()
+                    .unwrap_or((UnitVector3::new_normalize(Vector3::new(0.0, 0.0, 1.0)), 0.0));
+                let axis = [axis.x as f32, axis.y as f32, axis.z as f32];
 
                 let origin = [
                     isometry.translation.x as f32,
@@ -57,7 +56,12 @@ impl SyncTask for Localizer {
                     isometry.translation.z as f32,
                 ];
 
-                FromLunasimbot::Isometry { quat, origin }.encode(|bytes| {
+                FromLunasimbot::Isometry {
+                    axis,
+                    angle: angle as f32,
+                    origin,
+                }
+                .encode(|bytes| {
                     lunasim_stdin.write(bytes);
                 });
             }

@@ -77,7 +77,9 @@ fn main(
     let y = (f32(workgroup_id.y) - PRINCIPAL_POINT_PX.y) / FOCAL_LENGTH_PX;
 
     let point = normalize(vec3(x, y, -1)) * depth;
-    points[i] = vec4<f32>(point.xyz, 1.0);
+    var point_transformed = transform * vec4<f32>(point, 1.0);
+    point_transformed.w = 1.0;
+    points[i] = point_transformed;
 }}
 "#,
             principal_point_px.x, principal_point_px.y, image_size.x, depth_scale,

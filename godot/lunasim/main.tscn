@@ -1,4 +1,4 @@
-[gd_scene load_steps=25 format=3 uid="uid://bxmnthetrtkso"]
+[gd_scene load_steps=21 format=3 uid="uid://bxmnthetrtkso"]
 
 [ext_resource type="PackedScene" uid="uid://leqgym66qbuo" path="res://robot.tscn" id="1_y4wm8"]
 [ext_resource type="PackedScene" uid="uid://y0gvb4s2mi2x" path="res://apriltag.tscn" id="2_nhvh2"]
@@ -83,10 +83,14 @@ albedo_color = Color(0.74558, 0.74558, 0.74558, 1)
 
 [sub_resource type="ImmediateMesh" id="ImmediateMesh_np8a4"]
 
-[sub_resource type="WorldBoundaryShape3D" id="WorldBoundaryShape3D_kxs4p"]
+[sub_resource type="BoxShape3D" id="BoxShape3D_cjilj"]
+size = Vector3(2, 2, 8)
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_twbw0"]
 size = Vector2(2, 8)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_lb8fb"]
+size = Vector3(2, 2, 4)
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_reayg"]
 size = Vector2(2, 4)
@@ -161,19 +165,6 @@ func _process(delta: float) -> void:
 		LunasimNode.send_depth_map(depths)
 "
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_f3qo5"]
-shading_mode = 0
-albedo_color = Color(0.11, 0.658833, 1, 1)
-use_point_size = true
-point_size = 5.0
-
-[sub_resource type="PointMesh" id="PointMesh_du1xb"]
-material = SubResource("StandardMaterial3D_f3qo5")
-
-[sub_resource type="MultiMesh" id="MultiMesh_tlyfr"]
-transform_format = 1
-mesh = SubResource("PointMesh_du1xb")
-
 [sub_resource type="GDScript" id="GDScript_4uyte"]
 script/source = "extends LineEdit
 
@@ -207,12 +198,6 @@ func _on_text_submitted(new_text: String) -> void:
 		push_error(\"Not a valid depth deviation\")
 "
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_ir4kq"]
-size = Vector3(0.4, 0.4, 0.4)
-
-[sub_resource type="BoxMesh" id="BoxMesh_u4f2i"]
-size = Vector3(0.4, 0.4, 0.4)
-
 [node name="Node3D" type="Node3D"]
 script = SubResource("GDScript_lj4gt")
 
@@ -233,40 +218,40 @@ collision_layer = 3
 collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
-transform = Transform3D(-4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, 0, 1, -3.5, 0, 0)
-shape = SubResource("WorldBoundaryShape3D_kxs4p")
+transform = Transform3D(-4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, 0, 1, -4.5, 1, -3.5)
+shape = SubResource("BoxShape3D_cjilj")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D/CollisionShape3D"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -3.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.58932e-08, 1, 0)
+layers = 3
+mesh = SubResource("PlaneMesh_twbw0")
+
+[node name="CollisionShape3D4" type="CollisionShape3D" parent="StaticBody3D"]
+transform = Transform3D(4.37114e-08, -1, -8.74228e-08, -1, -4.37114e-08, 0, -3.82137e-15, 8.74228e-08, -1, 1.5, 1, -3.5)
+shape = SubResource("BoxShape3D_cjilj")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D/CollisionShape3D4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.58932e-08, 1, 0)
 layers = 3
 mesh = SubResource("PlaneMesh_twbw0")
 
 [node name="CollisionShape3D2" type="CollisionShape3D" parent="StaticBody3D"]
-transform = Transform3D(1.91069e-15, -4.37114e-08, 1, -1, -4.37114e-08, 0, 4.37114e-08, -1, -4.37114e-08, 0, 0, 0.5)
-shape = SubResource("WorldBoundaryShape3D_kxs4p")
+transform = Transform3D(1.91069e-15, -4.37114e-08, 1, -1, -4.37114e-08, 0, 4.37114e-08, -1, -4.37114e-08, -1.5, 1, 1.5)
+shape = SubResource("BoxShape3D_lb8fb")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D/CollisionShape3D2"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -1.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 layers = 3
 mesh = SubResource("PlaneMesh_reayg")
 
 [node name="CollisionShape3D3" type="CollisionShape3D" parent="StaticBody3D"]
-transform = Transform3D(-5.73206e-15, 1.31134e-07, -1, -1, -4.37114e-08, 0, -4.37114e-08, 1, 1.31134e-07, 0, 0, -7.5)
-shape = SubResource("WorldBoundaryShape3D_kxs4p")
+transform = Transform3D(-5.73206e-15, 1.31134e-07, -1, -1, -4.37114e-08, 0, -4.37114e-08, 1, 1.31134e-07, -1.5, 1, -8.5)
+shape = SubResource("BoxShape3D_lb8fb")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D/CollisionShape3D3"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, 1.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 layers = 3
 mesh = SubResource("PlaneMesh_reayg")
-
-[node name="CollisionShape3D4" type="CollisionShape3D" parent="StaticBody3D"]
-transform = Transform3D(4.37114e-08, -1, -8.74228e-08, -1, -4.37114e-08, 0, -3.82137e-15, 8.74228e-08, -1, 0.5, 0, 0)
-shape = SubResource("WorldBoundaryShape3D_kxs4p")
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D/CollisionShape3D4"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, 3.5)
-layers = 3
-mesh = SubResource("PlaneMesh_twbw0")
 
 [node name="Robot" parent="." instance=ExtResource("1_y4wm8")]
 
@@ -275,6 +260,7 @@ remote_path = NodePath("../../../../CanvasLayer/TabContainer/ExternalView/Subvie
 
 [node name="DepthCamera" parent="Robot" index="2"]
 remote_path = NodePath("../../CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport/DepthCamera")
+script = null
 
 [node name="RearCamera" parent="Robot" index="3"]
 remote_path = NodePath("../../CanvasLayer/TabContainer/RearCamera/AspectRatioContainer/SubviewportContainer/SubViewport/RearCamera")
@@ -346,10 +332,6 @@ render_target_update_mode = 0
 transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, 0, 0.572526, -0.298189)
 fov = 120.0
 script = ExtResource("3_n7k3i")
-
-[node name="FittedPoints" type="MultiMeshInstance3D" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport/DepthCamera"]
-visible = false
-multimesh = SubResource("MultiMesh_tlyfr")
 
 [node name="RearCamera" type="MarginContainer" parent="CanvasLayer/TabContainer"]
 visible = false
@@ -427,15 +409,6 @@ layout_mode = 2
 focus_mode = 1
 text = "0.0"
 script = SubResource("GDScript_rdt3l")
-
-[node name="StaticBody3D2" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.17693, -3.20674)
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D2"]
-shape = SubResource("BoxShape3D_ir4kq")
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D2"]
-mesh = SubResource("BoxMesh_u4f2i")
 
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit" to="CanvasLayer/Control/VBoxContainer/LineEdit" method="_on_text_submitted"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit2" to="CanvasLayer/Control/VBoxContainer/LineEdit2" method="_on_text_submitted"]

@@ -14,7 +14,8 @@ pub enum FromLunasim {
     },
     DepthMap(Box<[u32]>),
     ExplicitApriltag {
-        robot_quat: [f32; 4],
+        robot_axis: [f32; 3],
+        robot_angle: f32,
         robot_origin: [f32; 3],
     },
 }
@@ -36,8 +37,15 @@ impl FromLunasim {
 #[derive(Debug, Encode, Decode, Clone)]
 pub enum FromLunasimbot {
     FittedPoints(Box<[[f32; 3]]>),
-    Isometry { quat: [f32; 4], origin: [f32; 3] },
-    Drive { left: f32, right: f32 },
+    Isometry {
+        axis: [f32; 3],
+        angle: f32,
+        origin: [f32; 3],
+    },
+    Drive {
+        left: f32,
+        right: f32,
+    },
 }
 
 impl TryFrom<&[u8]> for FromLunasimbot {
