@@ -3,7 +3,6 @@ use std::{
     marker::PhantomData,
     mem::{align_of, size_of},
     num::NonZeroU64,
-    ops::{Deref, DerefMut},
     sync::RwLock,
 };
 
@@ -15,11 +14,12 @@ use wgpu::{util::StagingBelt, CommandEncoder, Maintain, MapMode};
 
 use crate::{get_gpu_device, GpuDevice};
 
-pub trait HostReadableWritable {
+trait HostReadableWritable {
     const CAN_READ: bool;
     const CAN_WRITE: bool;
 }
 
+/// Marker type indicating that a buffer can only be read from by the host.
 #[derive(Debug, Clone, Copy)]
 pub struct HostReadOnly;
 
@@ -27,6 +27,8 @@ impl HostReadableWritable for HostReadOnly {
     const CAN_READ: bool = true;
     const CAN_WRITE: bool = false;
 }
+
+/// Marker type indicating that a buffer can only be written to by the host.
 #[derive(Debug, Clone, Copy)]
 pub struct HostWriteOnly;
 
@@ -35,6 +37,7 @@ impl HostReadableWritable for HostWriteOnly {
     const CAN_WRITE: bool = true;
 }
 
+/// Marker type indicating that a buffer can be read from and written to by the host.
 #[derive(Debug, Clone, Copy)]
 pub struct HostReadWrite;
 
@@ -43,10 +46,11 @@ impl HostReadableWritable for HostReadWrite {
     const CAN_WRITE: bool = true;
 }
 
-pub trait ShaderWritable {
+trait ShaderWritable {
     const CAN_WRITE: bool;
 }
 
+/// Marker type indicating that a buffer can only be read from by shaders.
 #[derive(Debug, Clone, Copy)]
 pub struct ShaderReadOnly;
 
@@ -54,6 +58,7 @@ impl ShaderWritable for ShaderReadOnly {
     const CAN_WRITE: bool = false;
 }
 
+/// Marker type indicating that a buffer can be read from and written to by shaders.
 #[derive(Debug, Clone, Copy)]
 pub struct ShaderReadWrite;
 
@@ -61,10 +66,11 @@ impl ShaderWritable for ShaderReadWrite {
     const CAN_WRITE: bool = true;
 }
 
-pub trait UniformOrStorage {
+trait UniformOrStorage {
     const IS_UNIFORM: bool;
 }
 
+/// Marker type indicating that a buffer is a uniform buffer.
 #[derive(Debug, Clone, Copy)]
 pub struct UniformOnly;
 
@@ -72,6 +78,9 @@ impl UniformOrStorage for UniformOnly {
     const IS_UNIFORM: bool = true;
 }
 
+/// Marker type indicating that a buffer is a storage buffer.
+/// 
+/// This is the default since storage buffers are bigger and can be written to.
 #[derive(Debug, Clone, Copy)]
 pub struct StorageOnly;
 
@@ -79,9 +88,15 @@ impl UniformOrStorage for StorageOnly {
     const IS_UNIFORM: bool = false;
 }
 
+/// Statically encodes the type of buffer.
+/// 
+/// The first generic type is the type of data stored in the buffer.
+/// The second generic type is the type of access the host has to the buffer.
+/// The third generic type is the type of access shaders have to the buffer.
+/// The fourth generic type is the type of buffer (uniform or storage), and is Storage by default
 pub struct BufferType<T: BufferSized + ?Sized, H, S, O = StorageOnly> {
     size: T::Size,
-    _phantom: PhantomData<(H, S, O, T)>,
+    _phantom: PhantomData<fn() -> (H, S, O, T)>,
 }
 
 impl<T: BufferSized, H, S, O> Clone for BufferType<T, H, S, O> {
@@ -96,6 +111,7 @@ impl<T: BufferSized, H, S, O> Clone for BufferType<T, H, S, O> {
 impl<T: BufferSized, H, S, O> Copy for BufferType<T, H, S, O> {}
 
 impl<T: 'static, H, S, O> BufferType<T, H, S, O> {
+    /// Creates a new buffer capable of holding `T`.
     pub fn new() -> Self {
         Self {
             size: StaticSize::default(),
@@ -105,6 +121,7 @@ impl<T: 'static, H, S, O> BufferType<T, H, S, O> {
 }
 
 impl<T: 'static, H, S, O> BufferType<[T], H, S, O> {
+    /// Creates a new buffer capable of holding a slice of `T` with the given `len`.
     pub fn new_dyn(len: usize) -> Self {
         Self {
             size: DynamicSize::new(len),
@@ -113,6 +130,9 @@ impl<T: 'static, H, S, O> BufferType<[T], H, S, O> {
     }
 }
 
+/// A trait for `BufferType` indicating that it is capable of creating a buffer.
+/// 
+/// If a `BufferType` implements `ValidBufferType`, it can be used to create a buffer.
 pub trait CreateBuffer: ValidBufferType {
     const HOST_CAN_READ: bool;
     const HOST_CAN_WRITE: bool;
@@ -200,6 +220,7 @@ where
     }
 }
 
+/// Marker trait for valid buffer types considering all of the statically known information.
 pub trait ValidBufferType {
     type WriteType: ?Sized + BufferSized + 'static;
     type ReadType: ?Sized + BufferSized + 'static;
@@ -247,14 +268,13 @@ impl<T: BufferSized + ?Sized + 'static> ValidBufferType
     type ReadType = T;
 }
 
+/// A trait for types that can accurately represent the size of a buffer.
 pub trait BufferSize: Copy + Default + Send + 'static {
     fn size(&self) -> u64;
 }
 
-pub struct StaticSize<T>(PhantomData<T>);
-
-unsafe impl<T> Send for StaticSize<T> {}
-unsafe impl<T> Sync for StaticSize<T> {}
+/// A buffer size that is statically known as `T` is statically sized.
+pub struct StaticSize<T>(PhantomData<fn() -> T>);
 
 impl<T> Default for StaticSize<T> {
     fn default() -> Self {
@@ -275,10 +295,10 @@ impl<T: 'static> BufferSize for StaticSize<T> {
     }
 }
 
-pub struct DynamicSize<T: ?Sized>(pub usize, PhantomData<T>);
-
-unsafe impl<T> Send for DynamicSize<T> {}
-unsafe impl<T> Sync for DynamicSize<T> {}
+/// A buffer size that is a multiple of `T`, where `T` is statically sized.
+/// 
+/// Used for slices.
+pub struct DynamicSize<T: ?Sized>(pub usize, PhantomData<fn() -> T>);
 
 impl<T: 'static> BufferSize for DynamicSize<T> {
     fn size(&self) -> u64 {
@@ -304,7 +324,12 @@ impl<T: ?Sized> Clone for DynamicSize<T> {
     }
 }
 
+/// Marker trait for types that can fit into a buffer.
+/// 
+/// Valid types are types that have a `'static` lifetime, and are either
+/// statically sized, or are slices of types that are statically sized.
 pub trait BufferSized {
+    /// The type of size that this type can be represented with.
     type Size: BufferSize;
 }
 
@@ -316,6 +341,12 @@ impl<T: 'static> BufferSized for [T] {
     type Size = DynamicSize<T>;
 }
 
+/// A type that implements `BufferSource<T>` can be written to a buffer that stores `T`.
+/// 
+/// All buffer sized types are buffer sources for themselves.  
+/// `()` is a buffer source for any type, but it is a noop. No data actually gets written to the buffer.  
+/// `Option<&T>` is a buffer source for `T`, but only if the option is `Some`. Otherwise, it is equivalent to `()`.  
+/// Refer to `OpaqueBuffer` for the last category.
 pub trait BufferSource<T: BufferSized + ?Sized> {
     fn into_buffer(
         self,
@@ -357,7 +388,7 @@ impl<T: BufferSized + bytemuck::Pod> BufferSource<T> for &T {
     }
 }
 
-impl<T: BufferSized + bytemuck::Pod> BufferSource<[T]> for &[T] {
+impl<T: bytemuck::Pod> BufferSource<[T]> for &[T] {
     fn into_buffer(
         self,
         command_encoder: &mut CommandEncoder,
@@ -395,7 +426,13 @@ impl<T: BufferSized + bytemuck::Pod> BufferSource<T> for Option<&T> {
     }
 }
 
-pub trait BufferDestination<T: BufferSized + ?Sized> {
+/// A type that implements `BufferDestination<T>` can be read from a buffer that stores `T`.
+/// 
+/// All buffer sized types are buffer destinations for themselves.
+/// `()` is a buffer destination for any type, but it is a noop. No data actually gets read from the buffer.
+/// `Option<&mut T>` is a buffer destination for `T`, but only if the option is `Some`. Otherwise, it is equivalent to `()`.
+/// Refer to `OpaqueBuffer` for the last category.
+pub trait BufferDestination<T: ?Sized> {
     type State;
     fn enqueue(
         &self,
@@ -412,7 +449,7 @@ pub trait BufferDestination<T: BufferSized + ?Sized> {
     ) -> impl Future<Output = ()>;
 }
 
-impl<T: BufferSized + bytemuck::Pod> BufferDestination<T> for &mut T {
+impl<T: bytemuck::Pod> BufferDestination<T> for &mut T {
     type State = wgpu::Buffer;
 
     fn enqueue(
@@ -483,7 +520,7 @@ impl<T: BufferSized + bytemuck::Pod> BufferDestination<T> for &mut T {
     }
 }
 
-impl<T: BufferSized + bytemuck::Pod + Send> BufferDestination<[T]> for &mut [T] {
+impl<T: bytemuck::Pod> BufferDestination<[T]> for &mut [T] {
     type State = Option<wgpu::Buffer>;
 
     fn enqueue(
@@ -560,7 +597,7 @@ impl<T: BufferSized + bytemuck::Pod + Send> BufferDestination<[T]> for &mut [T] 
     }
 }
 
-impl<'a, T: 'static> BufferDestination<T> for Option<&'a mut T>
+impl<'a, T> BufferDestination<T> for Option<&'a mut T>
 where
     &'a mut T: BufferDestination<T>,
 {
@@ -592,7 +629,7 @@ where
     }
 }
 
-impl<T: ?Sized + BufferSized + 'static> BufferDestination<T> for () {
+impl<T: ?Sized> BufferDestination<T> for () {
     type State = ();
 
     fn enqueue(
@@ -613,8 +650,25 @@ impl<T: ?Sized + BufferSized + 'static> BufferDestination<T> for () {
     }
 }
 
+/// An Opaque Buffer is a buffer that cannot be read or written to outside of a shader.
+/// 
+/// This is useful for when you want to pass data between shaders but don't need to read or write to it on the host.
+/// If you do need to access the data, you can copy to and from this buffer with another buffer that has your desired access.
+/// 
+/// An `OpaqueBuffer` is a valid buffer source and destination for any buffer sized type. Care must be taken to ensure that the
+/// `OpaqueBuffer` is of an appropriate size for the actual type stored in the buffer.
+/// 
+/// While this is limiting, this is the fastest way to pass data between shaders as it skips synchronizing data with the host entirely.
+/// Due to the underlying implemention of `wgpu`, for a buffer to be able to copy to and from other buffers its data cannot be accessible
+/// by the host in any capacity.
 pub struct OpaqueBuffer {
+    /// The size of the buffer in bytes.
+    /// 
+    /// This value can be smaller than the actual size. If it is larger, this buffer may panic when used.
     pub size: u64,
+    /// The byte offset in the buffer to start reading or writing from.
+    /// 
+    /// This affects how the host and shaders interact with the buffer.
     pub start_offset: u64,
     buffer: wgpu::Buffer,
 }
@@ -672,6 +726,7 @@ impl<T: ?Sized + BufferSized + 'static> BufferDestination<T> for &mut OpaqueBuff
 }
 
 impl OpaqueBuffer {
+    /// Creates a buffer with the given size.
     pub async fn new(size: impl BufferSize) -> anyhow::Result<Self> {
         let size = size.size();
         let GpuDevice { device, .. } = get_gpu_device().await?;
@@ -679,7 +734,7 @@ impl OpaqueBuffer {
             label: None,
             size,
             mapped_at_creation: false,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::MAP_WRITE,
         });
         Ok(Self {
             buffer,
@@ -688,6 +743,7 @@ impl OpaqueBuffer {
         })
     }
 
+    /// Creates a buffer that will store the given value.
     pub async fn new_from_value<T: bytemuck::Pod>(value: &T) -> anyhow::Result<Self> {
         let size = size_of::<T>() as u64;
         let GpuDevice { device, .. } = get_gpu_device().await?;
@@ -695,7 +751,7 @@ impl OpaqueBuffer {
             label: None,
             size,
             mapped_at_creation: true,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::MAP_WRITE,
         });
         buffer
             .slice(..)
@@ -709,6 +765,7 @@ impl OpaqueBuffer {
         })
     }
 
+    /// Creates a buffer that will store the given slice.
     pub async fn new_from_slice<T: bytemuck::Pod>(slice: &[T]) -> anyhow::Result<Self> {
         let GpuDevice { device, .. } = get_gpu_device().await?;
         let bytes: &[u8] = cast_slice(slice);
@@ -730,112 +787,123 @@ impl OpaqueBuffer {
             start_offset: 0,
         })
     }
+}
 
-    pub async fn get_bytes(&mut self, f: impl FnOnce(&[u8])) {
-        let slice = self.buffer.slice(0..self.size);
+macro_rules! map_buffer {
+    ($self: ident, $f: ident) => {{
+        let slice = $self.buffer.slice(0..$self.size);
         let (sender, receiver) = oneshot::channel::<()>();
         slice.map_async(MapMode::Read, move |_| {
             let _sender = sender;
         });
         let _ = receiver.await;
-        f(&slice.get_mapped_range());
-        self.buffer.unmap();
-    }
+        let result = $f(&slice.get_mapped_range());
+        $self.buffer.unmap();
+        result
+    }}
+}
 
-    pub async fn get_bytes_mut(&mut self, f: impl FnOnce(&mut [u8])) {
-        let slice = self.buffer.slice(0..self.size);
+/// A Read-Only Buffer can only be read by the host, and shaders can only write to it.
+/// 
+/// Use this to receive data from a shader.
+pub struct ReadOnlyBuffer<T: ?Sized> {
+    size: u64,
+    buffer: wgpu::Buffer,
+    _phantom: PhantomData<T>,
+}
+
+impl<T: BufferSized + ?Sized> ReadOnlyBuffer<T> {
+    pub async fn new(size: T::Size) -> anyhow::Result<Self> {
+        let size = size.size();
+        let GpuDevice { device, .. } = get_gpu_device().await?;
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size,
+            mapped_at_creation: false,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        });
+        Ok(Self {
+            buffer,
+            size,
+            _phantom: PhantomData,
+        })
+    }
+}
+
+impl<T: bytemuck::Pod> ReadOnlyBuffer<T> {
+    pub async fn get_value<V>(&mut self, f: impl FnOnce(&T) -> V) -> V {
+        let f = |bytes: &[u8]| f(from_bytes(bytes));
+        map_buffer!(self, f)
+    }
+}
+
+impl<T: bytemuck::Pod> ReadOnlyBuffer<[T]> {
+    pub async fn get_slice<V>(&mut self, f: impl FnOnce(&[T]) -> V) -> V {
+        let f = |bytes: &[u8]| f(cast_slice(bytes));
+        map_buffer!(self, f)
+    }
+}
+
+macro_rules! map_buffer_mut {
+    ($self: ident, $f: ident) => {{
+        let slice = $self.buffer.slice(0..$self.size);
         let (sender, receiver) = oneshot::channel::<()>();
         slice.map_async(MapMode::Write, move |_| {
             let _sender = sender;
         });
         let _ = receiver.await;
-        f(&mut slice.get_mapped_range_mut());
-        self.buffer.unmap();
-    }
+        let result = $f(&mut slice.get_mapped_range_mut());
+        $self.buffer.unmap();
+        result
+    }}
 }
 
-#[repr(transparent)]
-pub struct TypedBuffer<T: ?Sized> {
-    buffer: OpaqueBuffer,
+/// A Read-Write Buffer can be read and written to by the host, but shaders can only read from it.
+/// 
+/// Use this to send data to a shader.
+pub struct ReadWriteBuffer<T: ?Sized> {
+    size: u64,
+    buffer: wgpu::Buffer,
     _phantom: PhantomData<T>,
 }
 
-impl<T: ?Sized> TypedBuffer<T> {
-    pub fn from_opaque_buffer(buf: OpaqueBuffer) -> Self {
-        Self {
-            buffer: buf,
-            _phantom: PhantomData,
-        }
-    }
-
-    pub fn from_opaque_buffer_ref(buf: &OpaqueBuffer) -> &Self {
-        unsafe { std::mem::transmute(buf) }
-    }
-
-    pub fn from_opaque_buffer_mut(buf: &mut OpaqueBuffer) -> &mut Self {
-        unsafe { std::mem::transmute(buf) }
-    }
-
-    pub async fn new(size: impl BufferSize) -> anyhow::Result<Self> {
+impl<T: BufferSized + ?Sized> ReadWriteBuffer<T> {
+    pub async fn new(size: T::Size) -> anyhow::Result<Self> {
+        let size = size.size();
+        let GpuDevice { device, .. } = get_gpu_device().await?;
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size,
+            mapped_at_creation: false,
+            usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::MAP_WRITE,
+        });
         Ok(Self {
-            buffer: OpaqueBuffer::new(size).await?,
+            buffer,
+            size,
             _phantom: PhantomData,
         })
     }
+}
 
-    pub fn into_inner(self) -> OpaqueBuffer {
-        self.buffer
+impl<T: bytemuck::Pod> ReadWriteBuffer<T> {
+    pub async fn get_value<V>(&mut self, f: impl FnOnce(&T) -> V) -> V {
+        let f = |bytes: &[u8]| f(from_bytes(bytes));
+        map_buffer!(self, f)
+    }
+    pub async fn get_value_mut<V>(&mut self, f: impl FnOnce(&mut T) -> V) -> V {
+        let f = |bytes: &mut [u8]| f(from_bytes_mut(bytes));
+        map_buffer_mut!(self, f)
     }
 }
 
-impl<T: bytemuck::Pod> TypedBuffer<T> {
-    pub async fn new_from_value(value: &T) -> anyhow::Result<Self> {
-        Ok(Self {
-            buffer: OpaqueBuffer::new_from_value(value).await?,
-            _phantom: PhantomData,
-        })
+impl<T: bytemuck::Pod> ReadWriteBuffer<[T]> {
+    pub async fn get_slice<V>(&mut self, f: impl FnOnce(&[T]) -> V) -> V {
+        let f = |bytes: &[u8]| f(cast_slice(bytes));
+        map_buffer!(self, f)
     }
 
-    pub async fn get_value(&mut self, f: impl FnOnce(&T)) {
-        self.buffer.get_bytes(|bytes| f(from_bytes(bytes))).await;
-    }
-
-    pub async fn get_value_mut(&mut self, f: impl FnOnce(&mut T)) {
-        self.buffer
-            .get_bytes_mut(|bytes| f(from_bytes_mut(bytes)))
-            .await;
-    }
-}
-
-impl<T: bytemuck::Pod> TypedBuffer<[T]> {
-    pub async fn new_from_slice(slice: &[T]) -> anyhow::Result<Self> {
-        Ok(Self {
-            buffer: OpaqueBuffer::new_from_slice(slice).await?,
-            _phantom: PhantomData,
-        })
-    }
-
-    pub async fn get_slice(&mut self, f: impl FnOnce(&[T])) {
-        self.buffer.get_bytes(|bytes| f(cast_slice(bytes))).await;
-    }
-
-    pub async fn get_slice_mut(&mut self, f: impl FnOnce(&mut [T])) {
-        self.buffer
-            .get_bytes_mut(|bytes| f(cast_slice_mut(bytes)))
-            .await;
-    }
-}
-
-impl<T: ?Sized> Deref for TypedBuffer<T> {
-    type Target = OpaqueBuffer;
-
-    fn deref(&self) -> &Self::Target {
-        &self.buffer
-    }
-}
-
-impl<T: ?Sized> DerefMut for TypedBuffer<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.buffer
+    pub async fn get_slice_mut<V>(&mut self, f: impl FnOnce(&mut [T]) -> V) -> V {
+        let f = |bytes: &mut [u8]| f(cast_slice_mut(bytes));
+        map_buffer_mut!(self, f)
     }
 }

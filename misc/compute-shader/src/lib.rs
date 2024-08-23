@@ -60,6 +60,11 @@ async fn get_gpu_device() -> anyhow::Result<&'static GpuDevice> {
         .await
 }
 
+/// A simple compute shader with only one bind group.
+/// 
+/// More specifically, this represents a host's view of a compute shader, and this view is statically
+/// verified to be correct. This helps to prevent several mistakes and provides the most amount of
+/// information to the shader compiler, allowing for better optimizations.
 pub struct Compute<A> {
     arg_buffers: Box<[wgpu::Buffer]>,
 
@@ -146,11 +151,11 @@ impl<A> Compute<A> {
             command_encoder,
             compute: self,
             stager,
-            workgroup_size: (1, 1, 1),
+            workgroups_count: (1, 1, 1),
         }
     }
 
-    pub async fn write_args_inner(
+    async fn write_args_inner(
         &self,
         into_buffer: impl FnOnce(&mut CommandEncoder, &[wgpu::Buffer], &mut StagingBelt, &wgpu::Device),
     ) {
@@ -174,303 +179,112 @@ impl<A> Compute<A> {
     }
 }
 
-impl<B1> Compute<(B1,)>
-where
-    B1: CreateBuffer,
-{
-    pub async fn new(
-        shader_module_decsriptor: wgpu::ShaderModuleDescriptor<'_>,
-        type1: B1,
-    ) -> anyhow::Result<Self> {
-        let GpuDevice { device, .. } = get_gpu_device().await?;
+macro_rules! compute_impl {
+    ($($buf_type: ident $buf_arg: ident $index: literal,)+) => {
+        impl<$($buf_type,)+> Compute<($($buf_type,)+)>
+        where
+            $($buf_type: CreateBuffer,)+
+        {
+            /// Create a new compute shader with the given arguments.
+            /// 
+            /// Each argument corresponds to a `var` binding in the shader, which corresponds to a Storage/Uniform buffer.
+            /// Buffers are initialized to 0.
+            pub async fn new(
+                shader_module_decsriptor: wgpu::ShaderModuleDescriptor<'_>,
+                $($buf_arg: $buf_type,)+
+            ) -> anyhow::Result<Self> {
+                let GpuDevice { device, .. } = get_gpu_device().await?;
 
-        Ok(Self::new_inner(
-            shader_module_decsriptor,
-            device,
-            Box::new([type1.into_buffer(0, device)]),
-            Box::new([type1.into_layout(0)]),
-            [type1.size()].into_iter().max().unwrap(),
-        ))
-    }
+                Ok(Self::new_inner(
+                    shader_module_decsriptor,
+                    device,
+                    Box::new([
+                        $($buf_arg.into_buffer($index, device),)+
+                    ]),
+                    Box::new([
+                        $($buf_arg.into_layout($index),)+
+                    ]),
+                    [
+                        $($buf_arg.size(),)+
+                    ].into_iter().max().unwrap(),
+                ))
+            }
 
-    pub fn new_pass(&self, arg1: impl BufferSource<B1::WriteType>) -> ComputePass<(B1,)> {
-        self.new_pass_inner(|command_encoder, arg_buffers, stager, device| {
-            arg1.into_buffer(command_encoder, &arg_buffers[0], stager, device);
-        })
-    }
+            /// Create a new compute pass with the given arguments.
+            /// 
+            /// A pass represents one computation of the shader, and the arguments are written to the GPU before the pass is executed.
+            /// The given arguments are copied immediately, with the exception of `OpaqueBuffer`, which is only read when the pass is executed.
+            pub fn new_pass(
+                &self,
+                $($buf_arg: impl BufferSource<$buf_type::WriteType>,)+
+            ) -> ComputePass<($($buf_type,)+)> {
+                self.new_pass_inner(|command_encoder, arg_buffers, stager, device| {
+                    $($buf_arg.into_buffer(command_encoder, &arg_buffers[$index], stager, device);)+
+                })
+            }
 
-    pub async fn write_args(&self, arg1: impl BufferSource<B1::WriteType>) {
-        self.write_args_inner(|command_encoder, arg_buffers, stager, device| {
-            arg1.into_buffer(command_encoder, &arg_buffers[0], stager, device);
-        })
-        .await;
-    }
-}
-
-impl<B1, B2> Compute<(B1, B2)>
-where
-    B1: CreateBuffer,
-    B2: CreateBuffer,
-{
-    pub async fn new(
-        shader_module_decsriptor: wgpu::ShaderModuleDescriptor<'_>,
-        type1: B1,
-        type2: B2,
-    ) -> anyhow::Result<Self> {
-        let GpuDevice { device, .. } = get_gpu_device().await?;
-
-        Ok(Self::new_inner(
-            shader_module_decsriptor,
-            device,
-            Box::new([type1.into_buffer(0, device), type2.into_buffer(1, device)]),
-            Box::new([type1.into_layout(0), type2.into_layout(1)]),
-            [type1.size(), type2.size()].into_iter().max().unwrap(),
-        ))
-    }
-
-    pub fn new_pass(
-        &self,
-        arg1: impl BufferSource<B1::WriteType>,
-        arg2: impl BufferSource<B2::WriteType>,
-    ) -> ComputePass<(B1, B2)> {
-        self.new_pass_inner(|command_encoder, arg_buffers, stager, device| {
-            arg1.into_buffer(command_encoder, &arg_buffers[0], stager, device);
-            arg2.into_buffer(command_encoder, &arg_buffers[1], stager, device);
-        })
-    }
-
-    pub async fn write_args(
-        &self,
-        arg1: impl BufferSource<B1::WriteType>,
-        arg2: impl BufferSource<B2::WriteType>,
-    ) {
-        self.write_args_inner(|command_encoder, arg_buffers, stager, device| {
-            arg1.into_buffer(command_encoder, &arg_buffers[0], stager, device);
-            arg2.into_buffer(command_encoder, &arg_buffers[1], stager, device);
-        })
-        .await;
+            /// Write the given arguments to the GPU.
+            /// 
+            /// This is a way to write to the buffers on the GPU without running the shader.
+            pub async fn write_args(
+                &self,
+                $($buf_arg: impl BufferSource<$buf_type::WriteType>,)+
+            ) {
+                self.write_args_inner(|command_encoder, arg_buffers, stager, device| {
+                    $($buf_arg.into_buffer(command_encoder, &arg_buffers[$index], stager, device);)+
+                })
+                .await;
+            }
+        }
     }
 }
 
-impl<B1, B2, B3> Compute<(B1, B2, B3)>
-where
-    B1: CreateBuffer,
-    B2: CreateBuffer,
-    B3: CreateBuffer,
-{
-    pub async fn new(
-        shader_module_decsriptor: wgpu::ShaderModuleDescriptor<'_>,
-        type1: B1,
-        type2: B2,
-        type3: B3,
-    ) -> anyhow::Result<Self> {
-        let GpuDevice { device, .. } = get_gpu_device().await?;
+compute_impl!(
+    B1 arg1 0,
+);
 
-        Ok(Self::new_inner(
-            shader_module_decsriptor,
-            device,
-            Box::new([
-                type1.into_buffer(0, device),
-                type2.into_buffer(1, device),
-                type3.into_buffer(2, device),
-            ]),
-            Box::new([
-                type1.into_layout(0),
-                type2.into_layout(1),
-                type3.into_layout(2),
-            ]),
-            [type1.size(), type2.size(), type3.size()]
-                .into_iter()
-                .max()
-                .unwrap(),
-        ))
-    }
+compute_impl!(
+    B1 arg1 0,
+    B2 arg2 1,
+);
 
-    pub fn new_pass(
-        &self,
-        arg1: impl BufferSource<B1::WriteType>,
-        arg2: impl BufferSource<B2::WriteType>,
-        arg3: impl BufferSource<B3::WriteType>,
-    ) -> ComputePass<(B1, B2, B3)> {
-        self.new_pass_inner(|command_encoder, arg_buffers, stager, device| {
-            arg1.into_buffer(command_encoder, &arg_buffers[0], stager, device);
-            arg2.into_buffer(command_encoder, &arg_buffers[1], stager, device);
-            arg3.into_buffer(command_encoder, &arg_buffers[2], stager, device);
-        })
-    }
+compute_impl!(
+    B1 arg1 0,
+    B2 arg2 1,
+    B3 arg3 2,
+);
 
-    pub async fn write_args(
-        &self,
-        arg1: impl BufferSource<B1::WriteType>,
-        arg2: impl BufferSource<B2::WriteType>,
-        arg3: impl BufferSource<B3::WriteType>,
-    ) {
-        self.write_args_inner(|command_encoder, arg_buffers, stager, device| {
-            arg1.into_buffer(command_encoder, &arg_buffers[0], stager, device);
-            arg2.into_buffer(command_encoder, &arg_buffers[1], stager, device);
-            arg3.into_buffer(command_encoder, &arg_buffers[2], stager, device);
-        })
-        .await;
-    }
-}
-impl<B1, B2, B3, B4> Compute<(B1, B2, B3, B4)>
-where
-    B1: CreateBuffer,
-    B2: CreateBuffer,
-    B3: CreateBuffer,
-    B4: CreateBuffer,
-{
-    pub async fn new(
-        shader_module_decsriptor: wgpu::ShaderModuleDescriptor<'_>,
-        type1: B1,
-        type2: B2,
-        type3: B3,
-        type4: B4,
-    ) -> anyhow::Result<Self> {
-        let GpuDevice { device, .. } = get_gpu_device().await?;
+compute_impl!(
+    B1 arg1 0,
+    B2 arg2 1,
+    B3 arg3 2,
+    B4 arg4 3,
+);
 
-        Ok(Self::new_inner(
-            shader_module_decsriptor,
-            device,
-            Box::new([
-                type1.into_buffer(0, device),
-                type2.into_buffer(1, device),
-                type3.into_buffer(2, device),
-                type4.into_buffer(3, device),
-            ]),
-            Box::new([
-                type1.into_layout(0),
-                type2.into_layout(1),
-                type3.into_layout(2),
-                type4.into_layout(3),
-            ]),
-            [type1.size(), type2.size(), type3.size(), type4.size()]
-                .into_iter()
-                .max()
-                .unwrap(),
-        ))
-    }
+compute_impl!(
+    B1 arg1 0,
+    B2 arg2 1,
+    B3 arg3 2,
+    B4 arg4 3,
+    B5 arg5 4,
+);
 
-    pub fn new_pass(
-        &self,
-        arg1: impl BufferSource<B1::WriteType>,
-        arg2: impl BufferSource<B2::WriteType>,
-        arg3: impl BufferSource<B3::WriteType>,
-        arg4: impl BufferSource<B4::WriteType>,
-    ) -> ComputePass<(B1, B2, B3, B4)> {
-        self.new_pass_inner(|command_encoder, arg_buffers, stager, device| {
-            arg1.into_buffer(command_encoder, &arg_buffers[0], stager, device);
-            arg2.into_buffer(command_encoder, &arg_buffers[1], stager, device);
-            arg3.into_buffer(command_encoder, &arg_buffers[2], stager, device);
-            arg4.into_buffer(command_encoder, &arg_buffers[3], stager, device);
-        })
-    }
+compute_impl!(
+    B1 arg1 0,
+    B2 arg2 1,
+    B3 arg3 2,
+    B4 arg4 3,
+    B5 arg5 4,
+    B6 arg6 5,
+);
 
-    pub async fn write_args(
-        &self,
-        arg1: impl BufferSource<B1::WriteType>,
-        arg2: impl BufferSource<B2::WriteType>,
-        arg3: impl BufferSource<B3::WriteType>,
-        arg4: impl BufferSource<B4::WriteType>,
-    ) {
-        self.write_args_inner(|command_encoder, arg_buffers, stager, device| {
-            arg1.into_buffer(command_encoder, &arg_buffers[0], stager, device);
-            arg2.into_buffer(command_encoder, &arg_buffers[1], stager, device);
-            arg3.into_buffer(command_encoder, &arg_buffers[2], stager, device);
-            arg4.into_buffer(command_encoder, &arg_buffers[3], stager, device);
-        })
-        .await;
-    }
-}
-impl<B1, B2, B3, B4, B5> Compute<(B1, B2, B3, B4, B5)>
-where
-    B1: CreateBuffer,
-    B2: CreateBuffer,
-    B3: CreateBuffer,
-    B4: CreateBuffer,
-    B5: CreateBuffer,
-{
-    pub async fn new(
-        shader_module_decsriptor: wgpu::ShaderModuleDescriptor<'_>,
-        type1: B1,
-        type2: B2,
-        type3: B3,
-        type4: B4,
-        type5: B5,
-    ) -> anyhow::Result<Self> {
-        let GpuDevice { device, .. } = get_gpu_device().await?;
-
-        Ok(Self::new_inner(
-            shader_module_decsriptor,
-            device,
-            Box::new([
-                type1.into_buffer(0, device),
-                type2.into_buffer(1, device),
-                type3.into_buffer(2, device),
-                type4.into_buffer(3, device),
-                type5.into_buffer(4, device),
-            ]),
-            Box::new([
-                type1.into_layout(0),
-                type2.into_layout(1),
-                type3.into_layout(2),
-                type4.into_layout(3),
-                type5.into_layout(4),
-            ]),
-            [
-                type1.size(),
-                type2.size(),
-                type3.size(),
-                type4.size(),
-                type5.size(),
-            ]
-            .into_iter()
-            .max()
-            .unwrap(),
-        ))
-    }
-
-    pub fn new_pass(
-        &self,
-        arg1: impl BufferSource<B1::WriteType>,
-        arg2: impl BufferSource<B2::WriteType>,
-        arg3: impl BufferSource<B3::WriteType>,
-        arg4: impl BufferSource<B4::WriteType>,
-        arg5: impl BufferSource<B5::WriteType>,
-    ) -> ComputePass<(B1, B2, B3, B4, B5)> {
-        self.new_pass_inner(|command_encoder, arg_buffers, stager, device| {
-            arg1.into_buffer(command_encoder, &arg_buffers[0], stager, device);
-            arg2.into_buffer(command_encoder, &arg_buffers[1], stager, device);
-            arg3.into_buffer(command_encoder, &arg_buffers[2], stager, device);
-            arg4.into_buffer(command_encoder, &arg_buffers[3], stager, device);
-            arg5.into_buffer(command_encoder, &arg_buffers[4], stager, device);
-        })
-    }
-
-    pub async fn write_args(
-        &self,
-        arg1: impl BufferSource<B1::WriteType>,
-        arg2: impl BufferSource<B2::WriteType>,
-        arg3: impl BufferSource<B3::WriteType>,
-        arg4: impl BufferSource<B4::WriteType>,
-        arg5: impl BufferSource<B5::WriteType>,
-    ) {
-        self.write_args_inner(|command_encoder, arg_buffers, stager, device| {
-            arg1.into_buffer(command_encoder, &arg_buffers[0], stager, device);
-            arg2.into_buffer(command_encoder, &arg_buffers[1], stager, device);
-            arg3.into_buffer(command_encoder, &arg_buffers[2], stager, device);
-            arg4.into_buffer(command_encoder, &arg_buffers[3], stager, device);
-            arg5.into_buffer(command_encoder, &arg_buffers[4], stager, device);
-        })
-        .await;
-    }
-}
-
+/// A pending compute shader pass.
 pub struct ComputePass<'a, A> {
     command_encoder: CommandEncoder,
     compute: &'a Compute<A>,
     stager: StagingBelt,
-    pub workgroup_size: (u32, u32, u32),
+    /// The number of workgroups to dispatch.
+    pub workgroups_count: (u32, u32, u32),
 }
 
 impl<'a, A> ComputePass<'a, A> {
@@ -509,9 +323,9 @@ impl<'a, A> ComputePass<'a, A> {
             compute_pass.set_pipeline(compute_pipeline);
             compute_pass.set_bind_group(0, &bind_group, &[]);
             compute_pass.dispatch_workgroups(
-                self.workgroup_size.0,
-                self.workgroup_size.1,
-                self.workgroup_size.2,
+                self.workgroups_count.0,
+                self.workgroups_count.1,
+                self.workgroups_count.2,
             );
         }
 
@@ -529,142 +343,68 @@ impl<'a, A> ComputePass<'a, A> {
         (device, buffers, state)
     }
 
-    pub fn workgroup_size(mut self, x: u32, y: u32, z: u32) -> Self {
-        self.workgroup_size = (x, y, z);
+    /// Sets the number of workgroups.
+    /// 
+    /// This is just a convenience method. Setting the field directly is also possible.
+    pub fn workgroups_count(mut self, x: u32, y: u32, z: u32) -> Self {
+        self.workgroups_count = (x, y, z);
         self
     }
 }
 
-impl<'a, B1> ComputePass<'a, (B1,)>
-where
-    B1: ValidBufferType,
-{
-    pub async fn call(self, mut arg1: impl BufferDestination<B1::ReadType>) {
-        let (device, buffers, (state1,)) = self
-            .call_inner(|command_encoder, arg_buffers, buffers, device| {
-                (arg1.enqueue(command_encoder, &arg_buffers[0], &buffers, device),)
-            })
-            .await;
+macro_rules! compute_pass_impl {
+    ($($buf_type: ident $buf_arg: ident $index: literal $state: ident,)+) => {
+        impl<'a, $($buf_type,)+> ComputePass<'a, ($($buf_type,)+)>
+        where
+            $($buf_type: ValidBufferType,)+
+        {
+            /// Executes the compute shader pass.
+            /// 
+            /// The final state of each `var` binding (aka Storage/Uniform buffers) is written to the given arguments.
+            pub async fn call(
+                self,
+                $(mut $buf_arg: impl BufferDestination<$buf_type::ReadType>,)+
+            ) {
+                let (device, buffers, ($($state,)+)) = self
+                    .call_inner(|command_encoder, arg_buffers, buffers, device| {
+                        (
+                            $($buf_arg.enqueue(command_encoder, &arg_buffers[$index], &buffers, device),)+
+                        )
+                    })
+                    .await;
 
-        arg1.from_buffer(state1, device, buffers).await;
+                $($buf_arg.from_buffer($state, device, buffers).await;)+
+            }
+        }
     }
 }
 
-impl<'a, B1, B2> ComputePass<'a, (B1, B2)>
-where
-    B1: ValidBufferType,
-    B2: ValidBufferType,
-{
-    pub async fn call(
-        self,
-        mut arg1: impl BufferDestination<B1::ReadType>,
-        mut arg2: impl BufferDestination<B2::ReadType>,
-    ) {
-        let (device, buffers, (state1, state2)) = self
-            .call_inner(|command_encoder, arg_buffers, buffers, device| {
-                (
-                    arg1.enqueue(command_encoder, &arg_buffers[0], &buffers, device),
-                    arg2.enqueue(command_encoder, &arg_buffers[1], &buffers, device),
-                )
-            })
-            .await;
+compute_pass_impl!(
+    B1 arg1 0 state1,
+);
 
-        arg1.from_buffer(state1, device, buffers).await;
-        arg2.from_buffer(state2, device, buffers).await;
-    }
-}
-impl<'a, B1, B2, B3> ComputePass<'a, (B1, B2, B3)>
-where
-    B1: ValidBufferType,
-    B2: ValidBufferType,
-    B3: ValidBufferType,
-{
-    pub async fn call(
-        self,
-        mut arg1: impl BufferDestination<B1::ReadType>,
-        mut arg2: impl BufferDestination<B2::ReadType>,
-        mut arg3: impl BufferDestination<B3::ReadType>,
-    ) {
-        let (device, buffers, (state1, state2, state3)) = self
-            .call_inner(|command_encoder, arg_buffers, buffers, device| {
-                (
-                    arg1.enqueue(command_encoder, &arg_buffers[0], &buffers, device),
-                    arg2.enqueue(command_encoder, &arg_buffers[1], &buffers, device),
-                    arg3.enqueue(command_encoder, &arg_buffers[2], &buffers, device),
-                )
-            })
-            .await;
+compute_pass_impl!(
+    B1 arg1 0 state1,
+    B2 arg2 1 state2,
+);
 
-        arg1.from_buffer(state1, device, buffers).await;
-        arg2.from_buffer(state2, device, buffers).await;
-        arg3.from_buffer(state3, device, buffers).await;
-    }
-}
+compute_pass_impl!(
+    B1 arg1 0 state1,
+    B2 arg2 1 state2,
+    B3 arg3 2 state3,
+);
 
-impl<'a, B1, B2, B3, B4> ComputePass<'a, (B1, B2, B3, B4)>
-where
-    B1: ValidBufferType,
-    B2: ValidBufferType,
-    B3: ValidBufferType,
-    B4: ValidBufferType,
-{
-    pub async fn call(
-        self,
-        mut arg1: impl BufferDestination<B1::ReadType>,
-        mut arg2: impl BufferDestination<B2::ReadType>,
-        mut arg3: impl BufferDestination<B3::ReadType>,
-        mut arg4: impl BufferDestination<B4::ReadType>,
-    ) {
-        let (device, buffers, (state1, state2, state3, state4)) = self
-            .call_inner(|command_encoder, arg_buffers, buffers, device| {
-                (
-                    arg1.enqueue(command_encoder, &arg_buffers[0], &buffers, device),
-                    arg2.enqueue(command_encoder, &arg_buffers[1], &buffers, device),
-                    arg3.enqueue(command_encoder, &arg_buffers[2], &buffers, device),
-                    arg4.enqueue(command_encoder, &arg_buffers[3], &buffers, device),
-                )
-            })
-            .await;
+compute_pass_impl!(
+    B1 arg1 0 state1,
+    B2 arg2 1 state2,
+    B3 arg3 2 state3,
+    B4 arg4 3 state4,
+);
 
-        arg1.from_buffer(state1, device, buffers).await;
-        arg2.from_buffer(state2, device, buffers).await;
-        arg3.from_buffer(state3, device, buffers).await;
-        arg4.from_buffer(state4, device, buffers).await;
-    }
-}
-
-impl<'a, B1, B2, B3, B4, B5> ComputePass<'a, (B1, B2, B3, B4, B5)>
-where
-    B1: ValidBufferType,
-    B2: ValidBufferType,
-    B3: ValidBufferType,
-    B4: ValidBufferType,
-    B5: ValidBufferType,
-{
-    pub async fn call(
-        self,
-        mut arg1: impl BufferDestination<B1::ReadType>,
-        mut arg2: impl BufferDestination<B2::ReadType>,
-        mut arg3: impl BufferDestination<B3::ReadType>,
-        mut arg4: impl BufferDestination<B4::ReadType>,
-        mut arg5: impl BufferDestination<B5::ReadType>,
-    ) {
-        let (device, buffers, (state1, state2, state3, state4, state5)) = self
-            .call_inner(|command_encoder, arg_buffers, buffers, device| {
-                (
-                    arg1.enqueue(command_encoder, &arg_buffers[0], &buffers, device),
-                    arg2.enqueue(command_encoder, &arg_buffers[1], &buffers, device),
-                    arg3.enqueue(command_encoder, &arg_buffers[2], &buffers, device),
-                    arg4.enqueue(command_encoder, &arg_buffers[3], &buffers, device),
-                    arg5.enqueue(command_encoder, &arg_buffers[4], &buffers, device),
-                )
-            })
-            .await;
-
-        arg1.from_buffer(state1, device, buffers).await;
-        arg2.from_buffer(state2, device, buffers).await;
-        arg3.from_buffer(state3, device, buffers).await;
-        arg4.from_buffer(state4, device, buffers).await;
-        arg5.from_buffer(state5, device, buffers).await;
-    }
-}
+compute_pass_impl!(
+    B1 arg1 0 state1,
+    B2 arg2 1 state2,
+    B3 arg3 2 state3,
+    B4 arg4 3 state4,
+    B5 arg5 4 state5,
+);

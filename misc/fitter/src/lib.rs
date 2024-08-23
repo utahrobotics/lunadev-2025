@@ -2,7 +2,7 @@ use bytemuck::cast_ref;
 use compute_shader::{
     buffers::{
         BufferType, DynamicSize, HostReadWrite, HostWriteOnly, ShaderReadOnly, ShaderReadWrite,
-        TypedBuffer,
+        ReadOnlyBuffer, UniformOnly,
     },
     wgpu, Compute,
 };
@@ -15,21 +15,21 @@ pub mod utils;
 // Points, Translation
 type TranslateShader = Compute<(
     BufferType<[Vector4<f32>], HostWriteOnly, ShaderReadWrite>,
-    BufferType<[f32; 3], HostWriteOnly, ShaderReadOnly>,
+    BufferType<[f32; 3], HostWriteOnly, ShaderReadOnly, UniformOnly>,
 )>;
 // Points, Rotation (Mat3 with padding), Origin
 type RotateShader = Compute<(
     BufferType<[Vector4<f32>], HostWriteOnly, ShaderReadWrite>,
-    BufferType<[[f32; 4]; 3], HostWriteOnly, ShaderReadOnly>,
-    BufferType<[f32; 3], HostWriteOnly, ShaderReadOnly>,
+    BufferType<[[f32; 4]; 3], HostWriteOnly, ShaderReadOnly, UniformOnly>,
+    BufferType<[f32; 3], HostWriteOnly, ShaderReadOnly, UniformOnly>,
 )>;
 // Points (Option<[f32; 3]>), Distance (Atomicf32), Translations (Vec3), Rotations (Mat3 with padding), PointsOrigin
 type FitterShader = Compute<(
     BufferType<[Vector4<f32>], HostWriteOnly, ShaderReadOnly>,
-    BufferType<[u32], HostReadWrite, ShaderReadOnly>,
-    BufferType<[[f32; 4]], HostWriteOnly, ShaderReadOnly>,
-    BufferType<[[[f32; 4]; 3]], HostWriteOnly, ShaderReadOnly>,
-    BufferType<[f32; 3], HostWriteOnly, ShaderReadOnly>,
+    BufferType<[u32], HostReadWrite, ShaderReadWrite>,
+    BufferType<[[f32; 4]], HostWriteOnly, ShaderReadOnly, UniformOnly>,
+    BufferType<[[[f32; 4]; 3]], HostWriteOnly, ShaderReadOnly, UniformOnly>,
+    BufferType<[f32; 3], HostWriteOnly, ShaderReadOnly, UniformOnly>,
 )>;
 
 pub struct Plane {
@@ -43,7 +43,7 @@ impl Plane {
         let inv = self.rotation_matrix.inverse();
         let matrix = inv.matrix();
         format!(
-            "Plane{{rotation_matrix:mat3x3({},{},{},{},{},{},{},{},{}),origin:vec3({},{},{}),half_size:vec2({},{})}}",
+            "Plane(mat3x3({},{},{},{},{},{},{},{},{}),vec3({},{},{}),vec2({},{}))",
             matrix[0], matrix[1], matrix[2],
             matrix[3], matrix[4], matrix[5],
             matrix[6], matrix[7], matrix[8],
@@ -58,45 +58,48 @@ pub struct BufferFitter {
     sample_count: usize,
     max_translation: f32,
     max_rotation: f32,
+    point_count: u32,
 
     translate_shader: TranslateShader,
     rotate_shader: RotateShader,
     fitter_shader: FitterShader,
 
-    point_buffers: SegQueue<TypedBuffer<[Vector4<f32>]>>,
+    point_buffers: SegQueue<ReadOnlyBuffer<[Vector4<f32>]>>,
     sample_buffers: SegQueue<(Box<[[f32; 4]]>, Box<[[[f32; 4]; 3]]>)>,
     distances_reset: Box<[u32]>,
     distances_buffers: SegQueue<Box<[u32]>>,
 }
 
 impl BufferFitter {
-    pub async fn fit_sparse(&self, points: &mut [Option<Vector3<f32>>]) -> anyhow::Result<()> {
+    pub async fn fit_sparse(&self, points: &mut [Vector4<f32>]) -> anyhow::Result<()> {
         let mut point_buffer = match self.point_buffers.pop() {
             Some(x) => x,
-            None => TypedBuffer::new(DynamicSize::<Vector4<f32>>::new(points.len())).await?,
+            None => ReadOnlyBuffer::new(DynamicSize::<Vector4<f32>>::new(self.point_count as usize)).await?,
         };
         point_buffer
             .get_slice_mut(|slice| {
-                points.iter().zip(slice).for_each(|(src, dst)| {
-                    if let Some(src) = src {
-                        *dst = Vector4::new(src.x, src.y, src.z, 1.0);
-                    } else {
-                        dst.z = 0.0;
-                    }
-                });
+                slice.copy_from_slice(points);
+                // points.iter().zip(slice).for_each(|(src, dst)| {
+                //     if let Some(src) = src {
+                //         *dst = Vector4::new(src.x, src.y, src.z, 1.0);
+                //     } else {
+                //         dst.z = 0.0;
+                //     }
+                // });
             })
             .await;
 
         let result = self.fit_buffer(&mut point_buffer).await;
         point_buffer
             .get_slice(|slice| {
-                points.iter_mut().zip(slice).for_each(|(dst, src)| {
-                    if src.w == 1.0 {
-                        *dst = Some(Vector3::new(src.x, src.y, src.z));
-                    } else {
-                        *dst = None;
-                    }
-                });
+                points.copy_from_slice(slice);
+                // points.iter_mut().zip(slice).for_each(|(dst, src)| {
+                //     if src.w == 1.0 {
+                //         *dst = Some(Vector3::new(src.x, src.y, src.z));
+                //     } else {
+                //         *dst = None;
+                //     }
+                // });
             })
             .await;
 
@@ -107,7 +110,7 @@ impl BufferFitter {
     pub async fn fit_dense(&self, points: &mut [Vector3<f32>]) -> anyhow::Result<()> {
         let mut point_buffer = match self.point_buffers.pop() {
             Some(x) => x,
-            None => TypedBuffer::new(DynamicSize::<Vector4<f32>>::new(points.len())).await?,
+            None => ReadOnlyBuffer::new(DynamicSize::<Vector4<f32>>::new(points.len())).await?,
         };
         point_buffer
             .get_slice_mut(|slice| {
@@ -138,7 +141,7 @@ impl BufferFitter {
 
     pub async fn fit_buffer(
         &self,
-        point_buffer: &mut TypedBuffer<[Vector4<f32>]>,
+        point_buffer: &mut ReadOnlyBuffer<[Vector4<f32>]>,
     ) -> anyhow::Result<()> {
         let mut origin = Vector3::default();
         point_buffer
@@ -171,10 +174,11 @@ impl BufferFitter {
                 )
             });
 
-        let mut rng = thread_rng();
 
         for _ in 0..self.iterations {
             for i in 1..=self.sample_count {
+                {
+                let mut rng = thread_rng();
                 translation_buffer[i] = [
                     rng.gen_range(-self.max_translation..=self.max_translation),
                     rng.gen_range(-self.max_translation..=self.max_translation),
@@ -197,7 +201,7 @@ impl BufferFitter {
                     [rot_mat[3], rot_mat[4], rot_mat[5], 0.0],
                     [rot_mat[6], rot_mat[7], rot_mat[8], 0.0],
                 ];
-            }
+            }}
             let mut distances_buffer = self
                 .distances_buffers
                 .pop()
@@ -210,6 +214,7 @@ impl BufferFitter {
                     &*rotation_buffer,
                     cast_ref::<_, [f32; 3]>(&origin),
                 )
+                .workgroups_count(self.point_count, 1, 1)
                 .call((), &mut *distances_buffer, (), (), ())
                 .await;
             let (min_i, _) = distances_buffer
@@ -227,6 +232,7 @@ impl BufferFitter {
                         &**point_buffer,
                         &[min_translation[0], min_translation[1], min_translation[2]],
                     )
+                    .workgroups_count(self.point_count, 1, 1)
                     .call(&mut **point_buffer, ())
                     .await;
             } else {
@@ -237,6 +243,7 @@ impl BufferFitter {
                         &min_rotation,
                         cast_ref::<_, [f32; 3]>(&origin),
                     )
+                    .workgroups_count(self.point_count, 1, 1)
                     .call(&mut **point_buffer, (), ())
                     .await;
             }
@@ -251,7 +258,7 @@ impl BufferFitter {
 
 #[derive(Debug, Clone, Copy)]
 pub struct BufferFitterBuilder {
-    pub point_count: usize,
+    pub point_count: u32,
     pub iterations: usize,
     pub max_translation: f32,
     pub max_rotation: f32,
@@ -263,28 +270,21 @@ impl BufferFitterBuilder {
     pub async fn build(self, planes: &[Plane]) -> anyhow::Result<BufferFitter> {
         let variation_count = self.iterations * self.sample_count + 1;
         let distance_resolution = 1.0 / self.distance_resolution;
-        let mut planes_str = String::new();
-
-        for plane in planes {
-            planes_str.push_str(&plane.to_string());
-            planes_str.push_str(",");
-        }
-        planes_str.pop();
 
         let shader = format!(
             r#"
 @group(0) @binding(0) var<storage, read_write> points: array<vec3<f32>, {}>;
-@group(0) @binding(1) var<uniform, read> translation: vec3<f32>;
+@group(0) @binding(1) var<uniform> translation: vec3<f32>;
 
 @compute
-@workgroup_size({}, 1, 1)
+@workgroup_size(1, 1, 1)
 fn main(
     @builtin(workgroup_id) workgroup_id : vec3<u32>,
 ) {{
     points[workgroup_id.x] += translation;
 }}
 "#,
-            self.point_count, self.point_count,
+            self.point_count,
         );
 
         let translate_shader = TranslateShader::new(
@@ -292,7 +292,7 @@ fn main(
                 label: Some("TranslateShader"),
                 source: wgpu::ShaderSource::Wgsl(shader.into()),
             },
-            BufferType::new_dyn(self.point_count),
+            BufferType::new_dyn(self.point_count as usize),
             BufferType::new(),
         )
         .await?;
@@ -300,18 +300,18 @@ fn main(
         let shader = format!(
             r#"
 @group(0) @binding(0) var<storage, read_write> points: array<vec3<f32>, {}>;
-@group(0) @binding(1) var<uniform, read> rotation: mat3x3<f32>;
-@group(0) @binding(2) var<uniform, read> origin: vec3<f32>;
+@group(0) @binding(1) var<uniform> rotation: mat3x3<f32>;
+@group(0) @binding(2) var<uniform> origin: vec3<f32>;
 
 @compute
-@workgroup_size({}, 1, 1)
+@workgroup_size(1, 1, 1)
 fn main(
     @builtin(workgroup_id) workgroup_id : vec3<u32>,
 ) {{
     points[workgroup_id.x] = rotation * (points[workgroup_id.x] - origin) + origin;
 }}
 "#,
-            self.point_count, self.point_count,
+            self.point_count,
         );
 
         let rotate_shader = RotateShader::new(
@@ -319,49 +319,18 @@ fn main(
                 label: Some("RotateShader"),
                 source: wgpu::ShaderSource::Wgsl(shader.into()),
             },
-            BufferType::new_dyn(self.point_count),
+            BufferType::new_dyn(self.point_count as usize),
             BufferType::new(),
             BufferType::new(),
         )
         .await?;
 
-        let shader = format!(
-            r#"
-@group(0) @binding(0) var<storage, read> points: array<vec4<f32>, {}>;
-@group(0) @binding(1) var<storage, read_write> distances: array<atomic<u32>, {}>;
-@group(0) @binding(2) var<storage, read> translations: array<vec3<f32>, {}>;
-@group(0) @binding(3) var<storage, read> rotations: array<mat3x3<f32>, {}>;
-@group(0) @binding(4) var<uniform, read> origin: vec3<f32>;
+        let mut planes_loop = String::new();
 
-struct Plane {{
-    inv_rotation_matrix: mat3x3<f32>;
-    origin: vec3<f32>;
-    half_size: vec2<f32>;
-}};
-
-const PLANES = array<Plane, {}>({planes_str});
-const DISTANCE_RESOLUTION = {distance_resolution};
-
-@compute
-@workgroup_size({}, 2, {})
-fn main(
-    @builtin(workgroup_id) workgroup_id : vec3<u32>,
-) {{
-    var point = points[workgroup_id.x];
-
-    if point.w == 0.0 {{
-        return;
-    }}
-
-    if workgroup_id.y == 0 {{
-        point = point + translations[workgroup_id.z];
-    }} else {{
-        point = rotations[workgroup_id.z] * (point - origin) + origin;
-    }}
-
-    var min_distance = {};
-    for (var i = 0; i < {}, i++) {{
-        let plane = PLANES[i];
+        for plane in planes {
+            planes_loop.push_str(&format!("
+    {{
+        let plane = {};
         let transformed_point = plane.inv_rotation_matrix * (point - plane.origin);
         var dist: f32;
 
@@ -404,6 +373,45 @@ fn main(
             min_distance = dist;
         }}
     }}
+", plane.to_string()));
+        }
+
+        let shader = format!(
+            r#"
+@group(0) @binding(0) var<storage, read> points: array<vec4<f32>, {}>;
+@group(0) @binding(1) var<storage, read_write> distances: array<atomic<u32>, {}>;
+@group(0) @binding(2) var<uniform> translations: array<vec3<f32>, {}>;
+@group(0) @binding(3) var<uniform> rotations: array<mat3x3<f32>, {}>;
+@group(0) @binding(4) var<uniform> origin: vec3<f32>;
+
+struct Plane {{
+    inv_rotation_matrix: mat3x3<f32>,
+    origin: vec3<f32>,
+    half_size: vec2<f32>,
+}};
+
+const DISTANCE_RESOLUTION: f32 = {distance_resolution};
+
+@compute
+@workgroup_size(1, 2, {})
+fn main(
+    @builtin(workgroup_id) workgroup_id : vec3<u32>,
+) {{
+    let point4 = points[workgroup_id.x];
+
+    if point4.w == 0.0 {{
+        return;
+    }}
+    var point = point4.xyz;
+
+    if workgroup_id.y == 0 {{
+        point += translations[workgroup_id.z];
+    }} else {{
+        point = rotations[workgroup_id.z] * (point - origin) + origin;
+    }}
+
+    var min_distance: f32 = {:?};
+{planes_loop}
 
     atomicAdd(&distances[workgroup_id.z * 2 + workgroup_id.y], u32(round(min_distance * DISTANCE_RESOLUTION)));
 }}
@@ -412,11 +420,9 @@ fn main(
             self.sample_count * 2 + 2,
             self.sample_count + 1,
             self.sample_count + 1,
-            planes.len(),
-            self.point_count,
-            f32::MAX,
+            // planes.len(),
             self.sample_count + 1,
-            planes.len()
+            f32::MAX,
         );
 
         log::debug!("Compiling shader:\n\n{shader}");
@@ -426,7 +432,7 @@ fn main(
                 label: Some("FitterShader"),
                 source: wgpu::ShaderSource::Wgsl(shader.into()),
             },
-            BufferType::new_dyn(self.point_count),
+            BufferType::new_dyn(self.point_count as usize),
             BufferType::new_dyn(variation_count),
             BufferType::new_dyn(variation_count),
             BufferType::new_dyn(variation_count),
@@ -438,6 +444,7 @@ fn main(
             translate_shader,
             rotate_shader,
             fitter_shader,
+            point_count: self.point_count,
             iterations: self.iterations,
             sample_count: self.sample_count,
             max_translation: self.max_translation,

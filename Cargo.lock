@@ -2428,6 +2428,7 @@ dependencies = [
  "bonsai-bt",
  "cakap",
  "common",
+ "compute-shader",
  "crossbeam",
  "fitter",
  "fxhash",

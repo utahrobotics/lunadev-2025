@@ -25,7 +25,7 @@ async fn mul2() {
     let mut vecs = original;
     compute
         .new_pass(vecs.as_slice())
-        .workgroup_size(5, 1, 1)
+        .workgroups_count(5, 1, 1)
         .call(vecs.as_mut_slice())
         .await;
 

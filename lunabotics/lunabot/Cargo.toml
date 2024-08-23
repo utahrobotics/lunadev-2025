@@ -11,6 +11,7 @@ spin_sleep = { workspace = true }
 cakap = { workspace = true }
 anyhow = { workspace = true }
 crossbeam = { workspace = true }
+compute-shader = { workspace = true }
 common = { path = "../common" }
 pathfinding = { path = "../pathfinding" }
 nalgebra = { workspace = true }

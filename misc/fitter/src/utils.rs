@@ -1,6 +1,6 @@
 use compute_shader::{
     buffers::{
-        BufferType, HostReadOnly, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, UniformOnly,
+        BufferType, HostReadOnly, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, ReadOnlyBuffer, UniformOnly
     },
     wgpu, Compute,
 };
@@ -34,12 +34,26 @@ impl CameraProjection {
 
         self.project_shader
             .new_pass(depths, (), &mat4)
-            .workgroup_size(self.image_size.x, self.image_size.y, 1)
+            .workgroups_count(self.image_size.x, self.image_size.y, 1)
             .call((), &mut *point_buffer, ())
             .await;
         let result = f(&point_buffer);
         self.point_buffers.push(point_buffer);
         result
+    }
+    pub async fn project_buffer(
+        &self,
+        depths: &[u32],
+        camera_isometry: Isometry3<f32>,
+        buf: &mut ReadOnlyBuffer<[Vector4<f32>]>,
+    ) {
+        let mat4 = camera_isometry.to_matrix();
+
+        self.project_shader
+            .new_pass(depths, (), &mat4)
+            .workgroups_count(self.image_size.x, self.image_size.y, 1)
+            .call((), &mut **buf, ())
+            .await;
     }
 
     pub async fn new(
