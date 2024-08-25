@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3 uid="uid://bxmnthetrtkso"]
+[gd_scene load_steps=23 format=3 uid="uid://bxmnthetrtkso"]
 
 [ext_resource type="PackedScene" uid="uid://leqgym66qbuo" path="res://robot.tscn" id="1_y4wm8"]
 [ext_resource type="PackedScene" uid="uid://y0gvb4s2mi2x" path="res://apriltag.tscn" id="2_nhvh2"]
@@ -173,6 +173,7 @@ func _on_text_submitted(new_text: String) -> void:
 	if new_text.is_valid_float():
 		LunasimNode.accelerometer_deviation = float(new_text)
 	else:
+		text = \"0\"
 		push_error(\"Not a valid accelerometer deviation\")
 "
 
@@ -184,6 +185,7 @@ func _on_text_submitted(new_text: String) -> void:
 	if new_text.is_valid_float():
 		LunasimNode.gyroscope_deviation = float(new_text)
 	else:
+		text = \"0\"
 		push_error(\"Not a valid gyroscope deviation\")
 "
 
@@ -195,7 +197,32 @@ func _on_text_submitted(new_text: String) -> void:
 	if new_text.is_valid_float():
 		LunasimNode.depth_deviation = float(new_text)
 	else:
+		text = \"0\"
 		push_error(\"Not a valid depth deviation\")
+"
+
+[sub_resource type="GDScript" id="GDScript_kgahb"]
+script/source = "extends LineEdit
+
+
+func _on_text_submitted(new_text: String) -> void:
+	if new_text.is_valid_float():
+		LunasimNode.explicit_apriltag_rotation_deviation = float(new_text)
+	else:
+		text = \"0\"
+		push_error(\"Not a valid explicit tag rotation deviation\")
+"
+
+[sub_resource type="GDScript" id="GDScript_f6nnu"]
+script/source = "extends LineEdit
+
+
+func _on_text_submitted(new_text: String) -> void:
+	if new_text.is_valid_float():
+		LunasimNode.explicit_apriltag_translation_deviation = float(new_text)
+	else:
+		text = \"0\"
+		push_error(\"Not a valid explicit tag translation deviation\")
 "
 
 [node name="Node3D" type="Node3D"]
@@ -330,6 +357,7 @@ render_target_update_mode = 0
 
 [node name="DepthCamera" type="Camera3D" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport"]
 transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, 0, 0.572526, -0.298189)
+cull_mask = 1048571
 fov = 120.0
 script = ExtResource("3_n7k3i")
 
@@ -357,6 +385,7 @@ render_target_update_mode = 0
 
 [node name="RearCamera" type="Camera3D" parent="CanvasLayer/TabContainer/RearCamera/AspectRatioContainer/SubviewportContainer/SubViewport"]
 transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, 0, 0.572526, 0.248651)
+cull_mask = 1048571
 fov = 120.0
 script = ExtResource("3_n7k3i")
 
@@ -410,8 +439,31 @@ focus_mode = 1
 text = "0.0"
 script = SubResource("GDScript_rdt3l")
 
+[node name="Label4" type="Label" parent="CanvasLayer/Control/VBoxContainer"]
+layout_mode = 2
+text = "Explicit Tag Rotation Deviation"
+
+[node name="LineEdit4" type="LineEdit" parent="CanvasLayer/Control/VBoxContainer"]
+layout_mode = 2
+focus_mode = 1
+text = "0.0"
+script = SubResource("GDScript_kgahb")
+
+[node name="Label5" type="Label" parent="CanvasLayer/Control/VBoxContainer"]
+layout_mode = 2
+text = "Explicit Tag Translation Deviation"
+
+[node name="LineEdit5" type="LineEdit" parent="CanvasLayer/Control/VBoxContainer"]
+layout_mode = 2
+focus_mode = 1
+text = "0.0"
+script = SubResource("GDScript_f6nnu")
+
+[connection signal="fov_changed" from="Robot/OriginOnly/CameraPivot" to="CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport/ExternalCamera" method="set_fov"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit" to="CanvasLayer/Control/VBoxContainer/LineEdit" method="_on_text_submitted"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit2" to="CanvasLayer/Control/VBoxContainer/LineEdit2" method="_on_text_submitted"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit3" to="CanvasLayer/Control/VBoxContainer/LineEdit3" method="_on_text_submitted"]
+[connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit4" to="CanvasLayer/Control/VBoxContainer/LineEdit4" method="_on_text_submitted"]
+[connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit5" to="CanvasLayer/Control/VBoxContainer/LineEdit5" method="_on_text_submitted"]
 
 [editable path="Robot"]

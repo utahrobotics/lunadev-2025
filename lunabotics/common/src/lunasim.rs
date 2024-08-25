@@ -10,7 +10,8 @@ pub enum FromLunasim {
     },
     Gyroscope {
         id: usize,
-        axisangle: [f32; 3],
+        axis: [f32; 3],
+        angle: f32,
     },
     DepthMap(Box<[u32]>),
     ExplicitApriltag {
@@ -36,7 +37,7 @@ impl FromLunasim {
 
 #[derive(Debug, Encode, Decode, Clone)]
 pub enum FromLunasimbot {
-    FittedPoints(Box<[[f32; 3]]>),
+    PointCloud(Box<[[f32; 3]]>),
     Isometry {
         axis: [f32; 3],
         angle: f32,

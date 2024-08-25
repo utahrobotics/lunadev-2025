@@ -14,6 +14,7 @@ var _right := 0.0
 
 @onready var raycast: RayCast3D = $RaycastOrigin/RayCast3D
 @onready var estimate: Node3D = $Estimate
+@onready var _last_quat := quaternion
 
 
 func _ready() -> void:
@@ -33,6 +34,7 @@ func _ready() -> void:
 		var mesh_inst: MeshInstance3D = node.duplicate()
 		mesh_inst.mesh = mesh_inst.mesh.duplicate()
 		mesh_inst.mesh.material = estimate_material
+		mesh_inst.layers = 4
 		estimate.add_child(mesh_inst)
 
 
@@ -56,3 +58,5 @@ func _physics_process(delta: float) -> void:
 	if _timer <= 0.0:
 		_timer = DELTA
 		LunasimNode.send_accelerometer(0, global_basis.inverse() * Vector3.DOWN * 9.81)
+		LunasimNode.send_gyroscope(0, quaternion * _last_quat.inverse())
+		_last_quat = quaternion

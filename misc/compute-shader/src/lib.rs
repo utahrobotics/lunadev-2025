@@ -61,7 +61,7 @@ async fn get_gpu_device() -> anyhow::Result<&'static GpuDevice> {
 }
 
 /// A simple compute shader with only one bind group.
-/// 
+///
 /// More specifically, this represents a host's view of a compute shader, and this view is statically
 /// verified to be correct. This helps to prevent several mistakes and provides the most amount of
 /// information to the shader compiler, allowing for better optimizations.
@@ -80,13 +80,13 @@ pub struct Compute<A> {
 
 impl<A> Compute<A> {
     fn new_inner(
-        shader_module_decsriptor: wgpu::ShaderModuleDescriptor<'_>,
+        shader_module_descriptor: wgpu::ShaderModuleDescriptor<'_>,
         device: &wgpu::Device,
         arg_buffers: Box<[wgpu::Buffer]>,
         entries: Box<[BindGroupLayoutEntry]>,
         staging_belt_size: u64,
     ) -> Self {
-        let module = device.create_shader_module(shader_module_decsriptor);
+        let module = device.create_shader_module(shader_module_descriptor);
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &entries,
@@ -186,17 +186,20 @@ macro_rules! compute_impl {
             $($buf_type: CreateBuffer,)+
         {
             /// Create a new compute shader with the given arguments.
-            /// 
+            ///
             /// Each argument corresponds to a `var` binding in the shader, which corresponds to a Storage/Uniform buffer.
             /// Buffers are initialized to 0.
+            ///
+            /// # Errors
+            /// Providing an invalid shader, or the GPU being inacessible, will result in an error.
             pub async fn new(
-                shader_module_decsriptor: wgpu::ShaderModuleDescriptor<'_>,
+                shader_module_descriptor: wgpu::ShaderModuleDescriptor<'_>,
                 $($buf_arg: $buf_type,)+
             ) -> anyhow::Result<Self> {
                 let GpuDevice { device, .. } = get_gpu_device().await?;
 
                 Ok(Self::new_inner(
-                    shader_module_decsriptor,
+                    shader_module_descriptor,
                     device,
                     Box::new([
                         $($buf_arg.into_buffer($index, device),)+
@@ -211,9 +214,11 @@ macro_rules! compute_impl {
             }
 
             /// Create a new compute pass with the given arguments.
-            /// 
+            ///
             /// A pass represents one computation of the shader, and the arguments are written to the GPU before the pass is executed.
             /// The given arguments are copied immediately, with the exception of `OpaqueBuffer`, which is only read when the pass is executed.
+            /// As such, using `OpaqueBuffer` in multiple invocations without awaiting for the previous one to finish *may* result in data races
+            /// from the perspective of the GPU only. Therefore, it is still safe Rust.
             pub fn new_pass(
                 &self,
                 $($buf_arg: impl BufferSource<$buf_type::WriteType>,)+
@@ -224,7 +229,7 @@ macro_rules! compute_impl {
             }
 
             /// Write the given arguments to the GPU.
-            /// 
+            ///
             /// This is a way to write to the buffers on the GPU without running the shader.
             pub async fn write_args(
                 &self,
@@ -301,6 +306,7 @@ impl<'a, A> ComputePass<'a, A> {
         &'a RwLock<FxHashMap<u64, SegQueue<wgpu::Buffer>>>,
         T,
     ) {
+        // Safe to unwrap as a compute pass is made with a compute shader, which must mean the GPU is accessible.
         let GpuDevice { queue, device } = get_gpu_device().await.unwrap();
         let Compute {
             compute_pipeline,
@@ -344,7 +350,7 @@ impl<'a, A> ComputePass<'a, A> {
     }
 
     /// Sets the number of workgroups.
-    /// 
+    ///
     /// This is just a convenience method. Setting the field directly is also possible.
     pub fn workgroups_count(mut self, x: u32, y: u32, z: u32) -> Self {
         self.workgroups_count = (x, y, z);
@@ -359,7 +365,7 @@ macro_rules! compute_pass_impl {
             $($buf_type: ValidBufferType,)+
         {
             /// Executes the compute shader pass.
-            /// 
+            ///
             /// The final state of each `var` binding (aka Storage/Uniform buffers) is written to the given arguments.
             pub async fn call(
                 self,

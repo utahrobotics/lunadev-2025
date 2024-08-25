@@ -1,12 +1,15 @@
 use bonsai_bt::Status;
 use common::{lunasim::FromLunasimbot, FromLunabase, FromLunabot};
-use compute_shader::buffers::{DynamicSize, ReadOnlyBuffer};
-use crossbeam::atomic::AtomicCell;
-use fitter::{utils::CameraProjection, BufferFitterBuilder, Plane};
+use fitter::utils::CameraProjection;
 use k::{Chain, Isometry3, UnitQuaternion};
-use nalgebra::{Rotation3, UnitVector3, Vector2, Vector3, Vector4};
+use nalgebra::{UnitVector3, Vector2, Vector3, Vector4};
 use urobotics::{
-    callbacks::caller::try_drop_this_callback, define_callbacks, fn_alias, get_tokio_handle, log::{error, info}, task::SyncTask, tokio::task::{block_in_place, spawn_blocking}, BlockOn
+    callbacks::caller::try_drop_this_callback,
+    define_callbacks, fn_alias, get_tokio_handle,
+    log::{error, info},
+    task::SyncTask,
+    tokio::task::block_in_place,
+    BlockOn,
 };
 
 use std::{
@@ -20,7 +23,12 @@ use std::{
 
 use cakap::{CakapSender, CakapSocket};
 
-use crate::{localization::Localizer, run::RunState, utils::{RecycleGuard, Recycler}, LunabotApp, RunMode};
+use crate::{
+    localization::{Localizer, LocalizerRef},
+    run::RunState,
+    utils::Recycler,
+    LunabotApp, RunMode,
+};
 
 pub(super) fn setup(
     bb: &mut Option<Blackboard>,
@@ -50,12 +58,10 @@ pub(super) fn setup(
 
 const PING_DELAY: f64 = 1.0;
 define_callbacks!(DriveCallbacks => Fn(left: f64, right: f64) + Send);
-
 fn_alias! {
-    type FittedCallbacksRef = CallbacksRef(&[Vector4<f32>]) + Send + Sync
+    type PointCloudCallbacksRef = CallbacksRef(&[Vector4<f32>]) + Send + Sync
 }
-define_callbacks!(FittedPointsCallbacks => Fn(points: &[Vector4<f32>]) + Send + Sync);
-
+define_callbacks!(PointCloudCallbacks => Fn(point_cloud: &[Vector4<f32>]) + Send + Sync);
 
 pub struct Blackboard {
     special_instants: BinaryHeap<Reverse<Instant>>,
@@ -67,8 +73,7 @@ pub struct Blackboard {
     // accelerometer_callbacks: Vector3Callbacks,
     robot_chain: Arc<Chain<f64>>,
     pub(crate) run_state: Option<RunState>,
-    unfitted_points_tx: mpsc::Sender<RecycleGuard<ReadOnlyBuffer<[Vector4<f32>]>>>,
-    fitted_points_callbacks_ref: FittedCallbacksRef,
+    // raw_point_cloud_callbacks: PointCloudCallbacksRef,
 }
 
 impl std::fmt::Debug for Blackboard {
@@ -103,14 +108,13 @@ impl Blackboard {
             }));
         socket.spawn_looping();
 
-        let (unfitted_points_tx, unfitted_points_rx) = mpsc::channel::<RecycleGuard<ReadOnlyBuffer<[Vector4<f32>]>>>();
-        let unfitted_points_tx2 = unfitted_points_tx.clone();
-        let points_fitter_builder;
-
         let robot_chain = Arc::new(Chain::<f64>::from_urdf_file("lunabot.urdf")?);
 
-        let current_acceleration = Arc::new(AtomicCell::new(Vector3::default()));
-        let current_acceleration2 = current_acceleration.clone();
+        let localizer_ref = LocalizerRef::default();
+        let localizer_ref2 = localizer_ref.clone();
+
+        let raw_pcl_callbacks = Arc::new(PointCloudCallbacks::default());
+        let raw_pcl_callbacks_ref = raw_pcl_callbacks.get_ref();
 
         let mut drive_callbacks = DriveCallbacks::default();
         let lunasim_stdin = match &*lunabot_app.run_mode {
@@ -118,21 +122,21 @@ impl Blackboard {
                 lunasim_stdin,
                 from_lunasim,
             } => {
-                points_fitter_builder = BufferFitterBuilder {
-                    point_count: 36 * 24,
-                    iterations: 10,
-                    max_translation: 0.1,
-                    max_rotation: 0.1,
-                    sample_count: 10,
-                    distance_resolution: 0.01,
-                };
-
                 let depth_project =
                     Arc::new(CameraProjection::new(10.392, Vector2::new(36, 24), 0.01).block_on()?);
                 // let lunasim_stdin2 = lunasim_stdin.clone();
                 let camera_link = robot_chain.find_link("depth_camera_link").unwrap().clone();
-                let robot_chain2 = robot_chain.clone();
-                let buffer_recycler = Recycler::<ReadOnlyBuffer<[Vector4<f32>]>>::default();
+                let points_buffer_recycler = Recycler::<Box<[Vector4<f32>]>>::default();
+
+                let axis_angle = |axis: [f32; 3], angle: f32| {
+                    let axis = UnitVector3::new_normalize(Vector3::new(
+                        axis[0] as f64,
+                        axis[1] as f64,
+                        axis[2] as f64,
+                    ));
+
+                    UnitQuaternion::from_axis_angle(&axis, angle as f64)
+                };
 
                 from_lunasim.add_fn(move |msg| match msg {
                     common::lunasim::FromLunasim::Accelerometer {
@@ -144,32 +148,31 @@ impl Blackboard {
                             acceleration[1] as f64,
                             acceleration[2] as f64,
                         );
-                        current_acceleration2.store(acceleration);
+                        localizer_ref2.set_acceleration(acceleration);
                     }
-                    common::lunasim::FromLunasim::Gyroscope { .. } => {}
+                    common::lunasim::FromLunasim::Gyroscope { id: _, axis, angle } => {
+                        localizer_ref2.set_angular_velocity(axis_angle(axis, angle));
+                    }
                     common::lunasim::FromLunasim::DepthMap(depths) => {
                         let Some(camera_transform) = camera_link.world_transform() else {
                             return;
                         };
-                        let mut points_buffer = if let Some(x) = buffer_recycler.get() {
-                            x
-                        } else {
-                            match block_in_place(|| {ReadOnlyBuffer::new(DynamicSize::<Vector4<f32>>::new(36 * 24)).block_on()}) {
-                                Ok(x) => buffer_recycler.associate(x),
-                                Err(e) => {
-                                    error!("Failed to create points buffer: {e}");
-                                    return;
-                                }
-                            }
-                        };
-                        let depth_project2 = depth_project.clone();
-                        let unfitted_points_tx2 = unfitted_points_tx2.clone();
+                        let mut points_buffer = points_buffer_recycler
+                            .get_or_else(|| vec![Vector4::default(); 36 * 24].into_boxed_slice());
+                        let depth_project = depth_project.clone();
+                        let raw_pcl_callbacks = raw_pcl_callbacks.clone();
 
                         get_tokio_handle().spawn(async move {
-                            depth_project2
-                                .project_buffer(&depths, camera_transform.cast(), &mut *points_buffer)
+                            depth_project
+                                .project_buffer(
+                                    &depths,
+                                    camera_transform.cast(),
+                                    &mut **points_buffer,
+                                )
                                 .await;
-                            let _ = unfitted_points_tx2.send(points_buffer);
+                            block_in_place(|| {
+                                raw_pcl_callbacks.call_immut(&points_buffer);
+                            });
                         });
                     }
                     common::lunasim::FromLunasim::ExplicitApriltag {
@@ -177,11 +180,6 @@ impl Blackboard {
                         robot_axis,
                         robot_angle,
                     } => {
-                        let robot_axis = UnitVector3::new_normalize(Vector3::new(
-                            robot_axis[0] as f64,
-                            robot_axis[1] as f64,
-                            robot_axis[2] as f64,
-                        ));
                         let isometry = Isometry3::from_parts(
                             Vector3::new(
                                 robot_origin[0] as f64,
@@ -189,30 +187,19 @@ impl Blackboard {
                                 robot_origin[2] as f64,
                             )
                             .into(),
-                            UnitQuaternion::from_axis_angle(&robot_axis, robot_angle as f64),
+                            axis_angle(robot_axis, robot_angle),
                         );
-                        robot_chain2.set_origin(isometry);
-                        robot_chain2.update_transforms();
+                        localizer_ref2.set_april_tag_isometry(isometry);
                     }
                 });
 
                 Some(lunasim_stdin.clone())
             }
-            RunMode::Production => {
-                // TODO match point count to depth camera
-                points_fitter_builder = BufferFitterBuilder {
-                    point_count: 36 * 24,
-                    iterations: 10,
-                    max_translation: 0.1,
-                    max_rotation: 0.1,
-                    sample_count: 10,
-                    distance_resolution: 0.01,
-                };
-                None
-            }
+            RunMode::Production => None,
         };
 
         if let Some(lunasim_stdin) = lunasim_stdin.clone() {
+            let lunasim_stdin2 = lunasim_stdin.clone();
             drive_callbacks.add_dyn_fn(Box::new(move |left, right| {
                 FromLunasimbot::Drive {
                     left: left as f32,
@@ -222,81 +209,20 @@ impl Blackboard {
                     lunasim_stdin.write(bytes);
                 });
             }));
+            raw_pcl_callbacks_ref.add_dyn_fn(Box::new(move |point_cloud| {
+                FromLunasimbot::PointCloud(point_cloud.iter().map(|p| [p.x, p.y, p.z]).collect())
+                    .encode(|bytes| {
+                        lunasim_stdin2.write(bytes);
+                    });
+            }));
         }
 
         let localizer = Localizer {
             robot_chain: robot_chain.clone(),
             lunasim_stdin: lunasim_stdin.clone(),
-            acceleration: current_acceleration.clone(),
+            localizer_ref,
         };
         localizer.spawn();
-
-        let points_fitter = points_fitter_builder.build(&[
-            Plane {
-                rotation_matrix: Rotation3::identity(),
-                origin: Vector3::new(-1.5, 1.0, 0.5),
-                size: Vector2::new(4.0, 2.0),
-            },
-            Plane {
-                rotation_matrix: Rotation3::identity(),
-                origin: Vector3::new(-1.5, 1.0, -7.5),
-                size: Vector2::new(4.0, 2.0),
-            },
-            Plane {
-                rotation_matrix: Rotation3::from_axis_angle(&UnitVector3::new_normalize(Vector3::new(0.0, 1.0, 0.0)), std::f32::consts::FRAC_PI_2),
-                origin: Vector3::new(0.5, 1.0, -3.5),
-                size: Vector2::new(8.0, 2.0),
-            },
-            Plane {
-                rotation_matrix: Rotation3::from_axis_angle(&UnitVector3::new_normalize(Vector3::new(0.0, 1.0, 0.0)), std::f32::consts::FRAC_PI_2),
-                origin: Vector3::new(-3.5, 1.0, -3.5),
-                size: Vector2::new(8.0, 2.0),
-            }
-        ]).block_on()?;
-
-        let fitted_points_callbacks = Arc::new(FittedPointsCallbacks::default());
-        let fitted_points_callbacks_ref = fitted_points_callbacks.get_ref();
-
-        std::thread::spawn(move || {
-            let points_fitter = Arc::new(points_fitter);
-            loop {
-                let Ok(mut points) = unfitted_points_rx.recv() else {
-                    break;
-                };
-                let points_fitter = points_fitter.clone();
-                let fitted_points_callbacks = fitted_points_callbacks.clone();
-
-                get_tokio_handle().spawn(async move {
-                    if let Err(e) = points_fitter.fit_buffer(&mut *points).await {
-                        error!("Failed to fit points: {e}");
-                        return;
-                    }
-                    points.get_slice(|points| {
-                        fitted_points_callbacks.call_immut(points);
-                    }).await;
-                });
-            }
-        });
-
-        if let Some(lunasim_stdin) = lunasim_stdin.clone() {
-            fitted_points_callbacks_ref.add_dyn_fn(Box::new(move |points| {
-                let points = points.iter()
-                    .filter_map(|point| {
-                        if point[3] == 1.0 {
-                            Some([point[0], point[1], point[2]])
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                let lunasim_stdin = lunasim_stdin.clone();
-                spawn_blocking(move || {
-                    FromLunasimbot::FittedPoints(points).encode(|bytes| {
-                        lunasim_stdin.write(bytes);
-                    });
-                });
-            }));
-        }
 
         Ok(Self {
             special_instants: BinaryHeap::new(),
@@ -307,8 +233,7 @@ impl Blackboard {
             // acceleration: current_acceleration,
             robot_chain,
             run_state: Some(RunState::new(lunabot_app)?),
-            unfitted_points_tx,
-            fitted_points_callbacks_ref,
+            // raw_point_cloud_callbacks: raw_pcl_callbacks_ref,
         })
     }
     /// A special instant is an instant that the behavior tree will attempt

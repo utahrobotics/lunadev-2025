@@ -1,6 +1,11 @@
-use std::{ops::{Add, Deref, DerefMut, Mul, Sub}, sync::Arc};
+use std::{
+    ops::{Add, Deref, DerefMut, Mul, Sub},
+    sync::Arc,
+};
 
 use crossbeam::queue::SegQueue;
+use k::UnitQuaternion;
+use nalgebra::{Quaternion, SimdRealField, UnitVector3, Vector3};
 
 pub fn lerp_value(delta: f64, speed: f64) -> f64 {
     0.5f64.powf(speed * delta)
@@ -14,7 +19,6 @@ where
     let diff = to - from;
     from + diff * lerp_value(delta, speed)
 }
-
 
 pub struct Recycler<T> {
     queue: Arc<SegQueue<T>>,
@@ -33,7 +37,6 @@ pub struct RecycleGuard<T> {
     queue: Option<Arc<SegQueue<T>>>,
 }
 
-
 impl<T> Drop for RecycleGuard<T> {
     fn drop(&mut self) {
         if let Some(queue) = self.queue.as_ref() {
@@ -42,7 +45,6 @@ impl<T> Drop for RecycleGuard<T> {
     }
 }
 
-
 impl<T> Deref for RecycleGuard<T> {
     type Target = T;
 
@@ -50,7 +52,6 @@ impl<T> Deref for RecycleGuard<T> {
         self.value.as_ref().unwrap()
     }
 }
-
 
 impl<T> DerefMut for RecycleGuard<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
@@ -64,8 +65,7 @@ impl<T> Default for Recycler<T> {
             queue: Arc::new(SegQueue::new()),
         }
     }
-}   
-
+}
 
 impl<T> Recycler<T> {
     pub fn get(&self) -> Option<RecycleGuard<T>> {
@@ -99,7 +99,6 @@ impl<T> Recycler<T> {
     }
 }
 
-
 impl<T> RecycleGuard<T> {
     pub fn noop(value: T) -> Self {
         Self {
@@ -113,4 +112,33 @@ impl<T: Default> Recycler<T> {
     pub fn get_or_default(&self) -> RecycleGuard<T> {
         self.get_or_else(T::default)
     }
+}
+
+/// Decomposes the `src` quaternion into two quaternions: the `twist` quaternion is the rotation around the `axis` vector, and the `swing` quaternion is the remaining rotation.
+///
+/// The returned order is `(swing, twist)`. The original quaternion can be reconstructed by `swing * twist`.
+///
+/// # Source
+/// 1. https://stackoverflow.com/questions/3684269/component-of-a-quaternion-rotation-around-an-axis
+/// 2. https://www.euclideanspace.com/maths/geometry/rotations/for/decomposition/
+#[inline]
+pub fn swing_twist_decomposition<F>(
+    src: &UnitQuaternion<F>,
+    axis: &UnitVector3<F>,
+) -> (UnitQuaternion<F>, UnitQuaternion<F>)
+where
+    F: SimdRealField + Copy,
+    F::Element: SimdRealField,
+{
+    let rotation_axis = Vector3::new(src.i, src.j, src.k);
+    let dot = rotation_axis.dot(axis.as_ref());
+    let projection = axis.into_inner() * dot;
+    let twist = UnitQuaternion::new_normalize(Quaternion::new(
+        src.w,
+        projection.x,
+        projection.y,
+        projection.z,
+    ));
+    let swing = src * twist.conjugate();
+    (swing, twist)
 }

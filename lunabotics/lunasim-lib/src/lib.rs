@@ -32,6 +32,11 @@ struct Lunasim {
     gyroscope_deviation: f64,
     #[var]
     depth_deviation: f64,
+    #[var]
+    explicit_apriltag_rotation_deviation: f64,
+    #[var]
+    explicit_apriltag_translation_deviation: f64,
+
     shared: Arc<LunasimShared>,
     base: Base<Node>,
 }
@@ -112,6 +117,8 @@ impl INode for Lunasim {
             accelerometer_deviation: 0.0,
             gyroscope_deviation: 0.0,
             depth_deviation: 0.0,
+            explicit_apriltag_rotation_deviation: 0.0,
+            explicit_apriltag_translation_deviation: 0.0,
             shared,
             base,
         }
@@ -120,7 +127,7 @@ impl INode for Lunasim {
     fn process(&mut self, _delta: f64) {
         while let Some(msg) = self.shared.from_lunasimbot.pop() {
             match msg {
-                FromLunasimbot::FittedPoints(points) => {
+                FromLunasimbot::PointCloud(points) => {
                     let points: Vec<_> = Box::into_iter(points)
                         .map(|[x, y, z]| Vector3 { x, y, z })
                         .collect();
@@ -156,6 +163,25 @@ impl INode for Lunasim {
     }
 }
 
+fn rand_quat(deviation: f64) -> Quaternion {
+    let mut rand_axis = Vector3 {
+        x: randf_range(-1.0, 1.0) as f32,
+        y: randf_range(-1.0, 1.0) as f32,
+        z: randf_range(-1.0, 1.0) as f32,
+    };
+    rand_axis = rand_axis.normalized();
+    let rand_angle = randfn(0.0, deviation) as f32;
+    Quaternion::from_axis_angle(rand_axis, rand_angle)
+}
+
+fn rand_vec(deviation: f64) -> Vector3 {
+    Vector3 {
+        x: randfn(0.0, deviation) as f32,
+        y: randfn(0.0, deviation) as f32,
+        z: randfn(0.0, deviation) as f32,
+    }
+}
+
 #[godot_api]
 impl Lunasim {
     #[signal]
@@ -181,11 +207,7 @@ impl Lunasim {
 
     #[func]
     fn send_accelerometer(&mut self, id: u64, mut accel: Vector3) {
-        accel += Vector3 {
-            x: randfn(0.0, self.accelerometer_deviation) as f32,
-            y: randfn(0.0, self.accelerometer_deviation) as f32,
-            z: randfn(0.0, self.accelerometer_deviation) as f32,
-        };
+        accel += rand_vec(self.accelerometer_deviation);
         let _ = self.shared.to_lunasimbot.send(FromLunasim::Accelerometer {
             id: id as usize,
             acceleration: [accel.x, accel.y, accel.z],
@@ -194,37 +216,30 @@ impl Lunasim {
 
     #[func]
     fn send_gyroscope(&mut self, id: u64, mut delta: Quaternion) {
-        let mut rand_axis = Vector3 {
-            x: randf_range(-1.0, 1.0) as f32,
-            y: randf_range(-1.0, 1.0) as f32,
-            z: randf_range(-1.0, 1.0) as f32,
-        };
-        rand_axis = rand_axis.normalized();
-        let angle = randfn(0.0, self.gyroscope_deviation) as f32;
-        delta = Quaternion::from_axis_angle(rand_axis, angle) * delta;
-        let axis_angle = delta.get_axis() * delta.get_angle();
+        delta = rand_quat(self.gyroscope_deviation) * delta;
+        let axis = delta.get_axis();
         let _ = self.shared.to_lunasimbot.send(FromLunasim::Gyroscope {
             id: id as usize,
-            axisangle: [axis_angle.x, axis_angle.y, axis_angle.z],
+            axis: [axis.x, axis.y, axis.z],
+            angle: delta.get_angle(),
         });
     }
 
     #[func]
     fn send_explicit_apriltag(&mut self, robot_transform: Transform3D) {
-        let quat = robot_transform.basis.to_quat();
+        let quat =
+            rand_quat(self.explicit_apriltag_rotation_deviation) * robot_transform.basis.to_quat();
         let robot_axis = quat.get_axis();
         let robot_axis = [robot_axis.x, robot_axis.y, robot_axis.z];
+        let origin =
+            robot_transform.origin + rand_vec(self.explicit_apriltag_translation_deviation);
         let _ = self
             .shared
             .to_lunasimbot
             .send(FromLunasim::ExplicitApriltag {
                 robot_axis,
                 robot_angle: quat.get_angle(),
-                robot_origin: [
-                    robot_transform.origin.x,
-                    robot_transform.origin.y,
-                    robot_transform.origin.z,
-                ],
+                robot_origin: [origin.x, origin.y, origin.z],
             });
     }
 }

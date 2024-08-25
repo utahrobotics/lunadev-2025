@@ -1,6 +1,7 @@
 use compute_shader::{
     buffers::{
-        BufferType, HostReadOnly, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, ReadOnlyBuffer, UniformOnly
+        BufferDestination, BufferType, HostReadOnly, HostWriteOnly, ShaderReadOnly,
+        ShaderReadWrite, UniformOnly,
     },
     wgpu, Compute,
 };
@@ -30,29 +31,23 @@ impl CameraProjection {
             vec![Vector4::default(); self.image_size.x as usize * self.image_size.y as usize]
                 .into_boxed_slice()
         });
-        let mat4 = camera_isometry.to_matrix();
 
-        self.project_shader
-            .new_pass(depths, (), &mat4)
-            .workgroups_count(self.image_size.x, self.image_size.y, 1)
-            .call((), &mut *point_buffer, ())
+        self.project_buffer(depths, camera_isometry, &mut *point_buffer)
             .await;
         let result = f(&point_buffer);
         self.point_buffers.push(point_buffer);
         result
     }
-    pub async fn project_buffer(
-        &self,
-        depths: &[u32],
-        camera_isometry: Isometry3<f32>,
-        buf: &mut ReadOnlyBuffer<[Vector4<f32>]>,
-    ) {
+    pub async fn project_buffer<T>(&self, depths: &[u32], camera_isometry: Isometry3<f32>, buf: T)
+    where
+        T: BufferDestination<[Vector4<f32>]>,
+    {
         let mat4 = camera_isometry.to_matrix();
 
         self.project_shader
             .new_pass(depths, (), &mat4)
             .workgroups_count(self.image_size.x, self.image_size.y, 1)
-            .call((), &mut **buf, ())
+            .call((), buf, ())
             .await;
     }
 

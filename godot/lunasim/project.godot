@@ -34,6 +34,12 @@ window/stretch/scale=1.3
 Apriltags=""
 Robot=""
 
+[layer_names]
+
+3d_render/layer_1="default"
+3d_render/layer_2="wall"
+3d_render/layer_3="estimate"
+
 [rendering]
 
 textures/decals/filter=0

@@ -10,18 +10,63 @@ disable_receive_shadows = true
 [sub_resource type="GDScript" id="GDScript_31cpk"]
 script/source = "extends Marker3D
 
-const ROTATION_SPEED := 1.0
+signal fov_changed(fov: float)
+
+const DRAG_SPEED := 1.5
+const MOUSE_SENSITIVITY := 3.0
+
+var _skip_next_mouse := false
+var _zoom_factor := 0.5
 
 
-func _process(delta: float) -> void:
-	if Input.is_action_pressed(\"ui_left\"):
-		rotation.y -= ROTATION_SPEED * delta
-	elif Input.is_action_pressed(\"ui_right\"):
-		rotation.y += ROTATION_SPEED * delta
-	if Input.is_action_pressed(\"ui_up\"):
-		rotation.z += ROTATION_SPEED * delta
-	elif Input.is_action_pressed(\"ui_down\"):
-		rotation.z -= ROTATION_SPEED * delta
+func _input(event: InputEvent) -> void:
+	if !is_visible_in_tree():
+		return
+		
+	if event is InputEventMouseMotion:
+		if _skip_next_mouse:
+			_skip_next_mouse = false
+			return
+		
+		var viewport_size := Vector2(get_viewport().size)
+		var relative: Vector2 = event.screen_relative / viewport_size * MOUSE_SENSITIVITY
+		
+		if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+			rotation.y -= relative.x
+			rotation.z += relative.y
+		
+		elif Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE):
+			var motion := Vector3(0, relative.y, relative.x)
+			position += global_basis * motion * DRAG_SPEED
+		
+		else:
+			return
+		
+		var mouse_pos := get_viewport().get_screen_transform() * get_viewport().get_mouse_position()
+		
+		if mouse_pos.x >= viewport_size.x - 1:
+			Input.warp_mouse(Vector2(0, mouse_pos.y))
+			_skip_next_mouse = true
+		elif mouse_pos.x <= 0:
+			Input.warp_mouse(Vector2(viewport_size.x - 2, mouse_pos.y))
+			_skip_next_mouse = true
+			
+		if mouse_pos.y >= viewport_size.y - 1:
+			Input.warp_mouse(Vector2(mouse_pos.x, 0))
+			_skip_next_mouse = true
+		elif mouse_pos.y <= 0:
+			Input.warp_mouse(Vector2(mouse_pos.x, viewport_size.y - 2))
+			_skip_next_mouse = true
+	
+	elif event is InputEventMouseButton:
+		match event.button_index:
+			MOUSE_BUTTON_WHEEL_UP:
+				_zoom_factor -= 0.1
+			MOUSE_BUTTON_WHEEL_DOWN:
+				_zoom_factor += 0.1
+		
+		_zoom_factor = clampf(_zoom_factor, 0, 1)
+		fov_changed.emit(lerpf(30, 120, _zoom_factor))
 "
 
 [sub_resource type="GDScript" id="GDScript_3w5bg"]
@@ -118,7 +163,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.807798, 0)
 top_level = true
 
 [node name="FittedPoints" type="MultiMeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
 top_level = true
 multimesh = SubResource("MultiMesh_0ky77")
 script = SubResource("GDScript_8ljls")
