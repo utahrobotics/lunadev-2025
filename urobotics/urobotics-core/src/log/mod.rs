@@ -2,7 +2,7 @@
 //! prototyping cycles.
 //!
 //! Having plenty sources of data while remaining highly configurable is
-//! the goal of Unros, and this module provides that.
+//! the goal of URobotics, and this module provides that.
 
 use std::{
     fs::File,
@@ -66,6 +66,9 @@ static PANIC_CALLBACKS: LazyLock<PanicCallbacksRef> = LazyLock::new(|| {
     panic_pub_ref
 });
 
+/// Gets a reference to the callbacks that are invoked when a new log record is created.
+/// 
+/// Calling this function will initialize the logging system if it has not been initialized yet.
 #[inline(always)]
 pub fn get_log_callbacks() -> &'static LogCallbacksRef {
     &LOG_CALLBACKS
@@ -80,14 +83,19 @@ pub fn add_logger(logger: impl log::Log + 'static) {
     LOG_CALLBACKS.add_dyn_fn(Box::new(move |record| logger.log(record)));
 }
 
+/// Gets a reference to the callbacks that are invoked when a panic occurs.
+/// 
+/// Calling this function will initialize the panic hook if it has not been initialized yet.
 #[inline(always)]
 pub fn get_panic_hook_callbacks() -> &'static PanicCallbacksRef {
     &PANIC_CALLBACKS
 }
 
-pub fn init_panic_hook() {
-    LazyLock::force(&PANIC_CALLBACKS);
-}
+// Commented out because it is not used.
+// /// Initializes the panic hook.
+// pub fn init_panic_hook() {
+//     LazyLock::force(&PANIC_CALLBACKS);
+// }
 
 #[derive(Default)]
 struct LogPub {
@@ -106,6 +114,10 @@ impl log::Log for LogPub {
     fn flush(&self) {}
 }
 
+/// Adds a logger that logs panics.
+/// 
+/// Calling this multiple times will cause multiple logs to be generated for each panic.
+/// Panics are always considered `Error` level.
 pub fn log_panics() {
     get_panic_hook_callbacks().add_dyn_fn(Box::new(|panic_info| {
         use std::fmt::Write;
@@ -136,23 +148,34 @@ pub fn log_panics() {
     }));
 }
 
+/// A log level filter for some specific logger.
 #[derive(Clone)]
 pub struct LogFilter(Arc<AtomicCell<LevelFilter>>);
 
 impl LogFilter {
+    /// Creates a new log level filter that accepts `Info` and higher.
     fn new() -> Self {
         Self(Arc::new(AtomicCell::new(LevelFilter::Info)))
     }
 
+    /// Sets the log level filter.
     pub fn set(&self, level: LevelFilter) {
         self.0.store(level);
     }
 
+    /// Gets the log level filter.
     pub fn get(&self) -> LevelFilter {
         self.0.load()
     }
 }
 
+/// Sets up a logger that outputs to a file.
+/// 
+/// The file will be created if it does not exist, and will be cleared if it does.
+/// The log level for this specific file can be controlled with the returned `LogFilter`.
+/// 
+/// # Errors
+/// Returns an error if the file could not be created or written to.
 pub fn log_to_file(path: impl AsRef<Path>) -> std::io::Result<LogFilter> {
     use std::io::Write;
     get_program_time();
@@ -183,6 +206,9 @@ pub fn log_to_file(path: impl AsRef<Path>) -> std::io::Result<LogFilter> {
     Ok(filter2)
 }
 
+/// Sets up a logger that outputs to the console.
+/// 
+/// The log level for this specific console logger can be controlled with the returned `LogFilter`.
 pub fn log_to_console() -> LogFilter {
     get_program_time();
     let filter = LogFilter::new();

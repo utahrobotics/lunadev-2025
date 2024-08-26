@@ -1,8 +1,8 @@
 #![feature(never_type)]
 #![feature(buf_read_has_data_left)]
-// #![feature(unboxed_closures)]
-// #![feature(tuple_trait)]
-// #![feature(const_option)]
+//! Core library for URobotics
+//! 
+//! Contains utilities for logging and concurrency with tokio.
 
 pub mod cabinet;
 pub mod log;

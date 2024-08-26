@@ -4,13 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# fern = { version = "0.6", features = ["colored"] }
 chrono = { workspace = true }
 fxhash = { workspace = true }
 log = { workspace = true }
 tokio = { workspace = true }
 crossbeam = { workspace = true }
-# serde = { workspace = true }
 sysinfo = "0.30"
 color-eyre = { version = "0.6", default-features = false }
 ctrlc = "3.4.2"
@@ -21,4 +19,4 @@ futures = { workspace = true }
 tasker = { workspace = true }
 serde = { workspace = true }
 bincode = { workspace = true }
-spin_sleep = { workspace = true }
+# spin_sleep = { workspace = true }

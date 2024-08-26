@@ -4569,7 +4569,6 @@ dependencies = [
  "parking_lot 0.12.2",
  "rayon",
  "serde",
- "spin_sleep",
  "static_assertions",
  "sysinfo",
  "tasker",

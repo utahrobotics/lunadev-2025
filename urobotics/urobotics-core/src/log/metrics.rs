@@ -1,3 +1,5 @@
+//! Utilities for logging metrics such as CPU temperature and CPU usage.
+
 use std::time::Instant;
 
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -5,9 +7,12 @@ use fxhash::FxHashSet;
 use sysinfo::{Components, Pid};
 use tasker::task::AsyncTask;
 
+/// Configuration for the temperature monitoring task.
 #[derive(Clone)]
 pub struct Temperature {
+    /// The minimum temperature (in celsius) that will trigger a warning.
     pub temperature_warning_threshold: f32,
+    /// Component names to ignore when checking temperature.
     pub ignore_component_temperature: FxHashSet<String>,
 }
 
@@ -56,8 +61,10 @@ impl AsyncTask for Temperature {
     }
 }
 
+/// Configuration for the CPU usage monitoring task.
 #[derive(Clone, Copy)]
 pub struct CpuUsage {
+    /// The minimum CPU usage (out of 100) that will trigger a warning.
     pub cpu_usage_warning_threshold: f32,
 }
 
