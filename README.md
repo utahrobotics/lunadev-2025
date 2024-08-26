@@ -1,4 +1,4 @@
-# lunadev-2024
+# lunadev-2025
 
 This is the official workspace for the software team for Utah Student Robotics for the NASA Lunabotics 2024 competition.  
 If you are a student (ie. not an active contributor) you will find more value on the [wiki](https://github.com/utahrobotics/lunadev-2024/wiki) page.
