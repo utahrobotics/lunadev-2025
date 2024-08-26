@@ -417,6 +417,34 @@ cull_mask = 1048571
 fov = 120.0
 script = ExtResource("3_n7k3i")
 
+[node name="ArenaCamera1" type="MarginContainer" parent="CanvasLayer/TabContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+metadata/_tab_index = 3
+
+[node name="AspectRatioContainer" type="AspectRatioContainer" parent="CanvasLayer/TabContainer/ArenaCamera1"]
+layout_mode = 2
+ratio = 1.666
+
+[node name="SubviewportContainer" type="SubViewportContainer" parent="CanvasLayer/TabContainer/ArenaCamera1/AspectRatioContainer"]
+layout_mode = 2
+stretch = true
+
+[node name="SubViewport" type="SubViewport" parent="CanvasLayer/TabContainer/ArenaCamera1/AspectRatioContainer/SubviewportContainer"]
+handle_input_locally = false
+size = Vector2i(2, 2)
+render_target_update_mode = 0
+
+[node name="ArenaCamera1" type="Camera3D" parent="CanvasLayer/TabContainer/ArenaCamera1/AspectRatioContainer/SubviewportContainer/SubViewport"]
+transform = Transform3D(0.767165, -0.436648, 0.469889, 0, 0.732543, 0.680721, -0.64145, -0.522225, 0.561981, 0.405, 1.805, 0.384)
+cull_mask = 1048571
+fov = 100.0
+script = ExtResource("3_n7k3i")
+
 [node name="Control" type="Control" parent="CanvasLayer"]
 layout_mode = 3
 anchors_preset = 15

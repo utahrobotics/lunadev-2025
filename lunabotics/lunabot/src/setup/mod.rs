@@ -108,7 +108,7 @@ impl Blackboard {
             }));
         socket.spawn_looping();
 
-        let robot_chain = Arc::new(Chain::<f64>::from_urdf_file("lunabot.urdf")?);
+        let robot_chain = Arc::new(Chain::<f64>::from_urdf_file("urdf/lunabot.urdf")?);
 
         let localizer_ref = LocalizerRef::default();
         let localizer_ref2 = localizer_ref.clone();
