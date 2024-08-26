@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://53po1wtuhcem"]
+[gd_scene load_steps=7 format=3 uid="uid://53po1wtuhcem"]
 
 [sub_resource type="GDScript" id="GDScript_2pc2q"]
 script/source = "extends Label
@@ -20,6 +20,70 @@ func _process(delta: float) -> void:
 	modulate = Color.GREEN.lerp(Color.RED, remap(clamp(timer, 0, 5), 0, 5, 0, 1))
 "
 
+[sub_resource type="GDScript" id="GDScript_jbt8y"]
+script/source = "@tool
+extends CenterContainer
+
+
+func _process(_delta: float) -> void:
+	$Control/JoystickBase.scale = size
+"
+
+[sub_resource type="SphereMesh" id="SphereMesh_u3l10"]
+radial_segments = 4
+rings = 16
+
+[sub_resource type="GDScript" id="GDScript_m2w7i"]
+script/source = "extends Area2D
+
+
+const MAX_DISTANCE := 80.0
+
+var _pressed := false
+var _relative_at_start: Vector2
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT and !event.pressed:
+			_pressed = false
+			position = Vector2.ZERO
+	
+	elif event is InputEventMouseMotion:
+		if _pressed:
+			global_position = get_global_mouse_position() - _relative_at_start
+			var travel: Vector2 = global_position - get_parent().global_position
+			var length := travel.length()
+			if length > MAX_DISTANCE:
+				global_position = get_parent().global_position + travel / length * MAX_DISTANCE
+	
+	elif event is InputEventJoypadMotion:
+		var travel := Vector2(Input.get_joy_axis(event.device, JOY_AXIS_RIGHT_X), Input.get_joy_axis(event.device, JOY_AXIS_RIGHT_Y))
+		global_position = get_parent().global_position + travel * MAX_DISTANCE
+
+
+func _input_event(_viewport: Viewport, event: InputEvent, _shape_idx: int) -> void:
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			_pressed = true
+			_relative_at_start = get_global_mouse_position() - global_position
+
+
+func _process(_delta: float) -> void:
+	var travel: Vector2 = (global_position - get_parent().global_position) / MAX_DISTANCE
+	var angle := travel.angle()
+	var travel_scale := Vector2(absf(cos(angle)), absf(sin(angle)))
+	travel /= travel_scale[travel_scale.max_axis_index()]
+	Lunabot.set_steering(-travel.y, -travel.x)
+"
+
+[sub_resource type="SphereMesh" id="SphereMesh_7mlwg"]
+radial_segments = 4
+rings = 16
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_e3oq2"]
+radius = 0.5
+
 [node name="Control" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -27,6 +91,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 1
 
 [node name="Label" type="Label" parent="."]
 layout_mode = 1
@@ -35,3 +100,56 @@ offset_left = 10.0
 offset_top = 10.0
 text = "Last Received: 0ms"
 script = SubResource("GDScript_2pc2q")
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="."]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = -200.0
+offset_right = 200.0
+offset_bottom = -10.0
+grow_vertical = 0
+mouse_filter = 0
+stretch = true
+
+[node name="SubViewport" type="SubViewport" parent="SubViewportContainer"]
+disable_3d = true
+transparent_bg = true
+handle_input_locally = false
+size = Vector2i(190, 190)
+render_target_update_mode = 4
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = -200.0
+offset_right = 200.0
+offset_bottom = -10.0
+grow_vertical = 0
+script = SubResource("GDScript_jbt8y")
+
+[node name="Control" type="Control" parent="CenterContainer"]
+layout_mode = 2
+
+[node name="JoystickBase" type="MeshInstance2D" parent="CenterContainer/Control"]
+self_modulate = Color(0.281187, 0.281187, 0.281187, 1)
+scale = Vector2(190, 190)
+mesh = SubResource("SphereMesh_u3l10")
+
+[node name="Joystick" type="Area2D" parent="CenterContainer/Control/JoystickBase"]
+scale = Vector2(0.4, 0.4)
+script = SubResource("GDScript_m2w7i")
+
+[node name="MeshInstance2D" type="MeshInstance2D" parent="CenterContainer/Control/JoystickBase/Joystick"]
+self_modulate = Color(0.165656, 0.165656, 0.165656, 1)
+mesh = SubResource("SphereMesh_7mlwg")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CenterContainer/Control/JoystickBase/Joystick"]
+shape = SubResource("CircleShape2D_e3oq2")
+
+[connection signal="resized" from="CenterContainer" to="CenterContainer" method="_on_resized"]

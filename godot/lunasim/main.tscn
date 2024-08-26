@@ -19,8 +19,8 @@ const WIDTH := 4.0
 const LENGTH := 8.0
 const WIDTH_CELLS := 50
 const LENGTH_CELLS := 100
-const MAX_NOISE_HEIGHT := 0.06
-const MAX_HILL_HEIGHT := 0.4
+const MAX_NOISE_HEIGHT := 0.1
+const MAX_HILL_HEIGHT := 0.6
 
 
 func _ready() -> void:
@@ -37,11 +37,11 @@ func _ready() -> void:
 	
 	var noise := FastNoiseLite.new()
 	noise.seed = randi()
-	noise.frequency = 0.3
+	noise.frequency = 0.08
 	
 	var hills := FastNoiseLite.new()
 	hills.seed = randi()
-	hills.frequency = 0.05
+	hills.frequency = 0.01
 	push_warning(\"Using noise seed: %s, hills seed: %s\" % [noise.seed, hills.seed])
 	
 	for x in range(WIDTH_CELLS):
@@ -299,6 +299,7 @@ environment = SubResource("Environment_4hw3w")
 transform = Transform3D(0.926909, 0.34775, -0.141101, 0.330633, -0.57883, 0.745411, 0.177544, -0.737581, -0.6515, -2.51144, 3.72433, 0)
 
 [node name="Apriltag" parent="." instance=ExtResource("2_nhvh2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.610044, 0.50416)
 explicit = true
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
@@ -327,8 +328,8 @@ stretch = true
 
 [node name="SubViewport" type="SubViewport" parent="CanvasLayer/TabContainer/ExternalView/SubviewportContainer"]
 handle_input_locally = false
-size = Vector2i(1132, 597)
-render_target_update_mode = 4
+size = Vector2i(2, 2)
+render_target_update_mode = 0
 
 [node name="ExternalCamera" type="Camera3D" parent="CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport"]
 transform = Transform3D(0.283078, -0.220396, 0.93343, -1.77252e-08, 0.973239, 0.229795, -0.959097, -0.0650499, 0.275503, 3.23287, 1.29588, 0.954185)
@@ -407,11 +408,13 @@ layout_mode = 1
 anchors_preset = -1
 anchor_left = 1.0
 anchor_right = 1.0
+offset_top = 10.0
+offset_right = -10.0
 grow_horizontal = 0
 
 [node name="Label" type="Label" parent="CanvasLayer/Control/VBoxContainer"]
 layout_mode = 2
-text = "Accelerometer Deviation"
+text = "Accelerometer σ"
 
 [node name="LineEdit" type="LineEdit" parent="CanvasLayer/Control/VBoxContainer"]
 layout_mode = 2
@@ -421,7 +424,7 @@ script = SubResource("GDScript_4uyte")
 
 [node name="Label2" type="Label" parent="CanvasLayer/Control/VBoxContainer"]
 layout_mode = 2
-text = "Gyroscope Deviation"
+text = "Gyroscope σ"
 
 [node name="LineEdit2" type="LineEdit" parent="CanvasLayer/Control/VBoxContainer"]
 layout_mode = 2
@@ -431,7 +434,7 @@ script = SubResource("GDScript_8qrn1")
 
 [node name="Label3" type="Label" parent="CanvasLayer/Control/VBoxContainer"]
 layout_mode = 2
-text = "Depth Deviation"
+text = "Depth σ"
 
 [node name="LineEdit3" type="LineEdit" parent="CanvasLayer/Control/VBoxContainer"]
 layout_mode = 2
@@ -441,7 +444,7 @@ script = SubResource("GDScript_rdt3l")
 
 [node name="Label4" type="Label" parent="CanvasLayer/Control/VBoxContainer"]
 layout_mode = 2
-text = "Explicit Tag Rotation Deviation"
+text = "Explicit Tag Rotation σ"
 
 [node name="LineEdit4" type="LineEdit" parent="CanvasLayer/Control/VBoxContainer"]
 layout_mode = 2
@@ -451,7 +454,7 @@ script = SubResource("GDScript_kgahb")
 
 [node name="Label5" type="Label" parent="CanvasLayer/Control/VBoxContainer"]
 layout_mode = 2
-text = "Explicit Tag Translation Deviation"
+text = "Explicit Tag Translation σ"
 
 [node name="LineEdit5" type="LineEdit" parent="CanvasLayer/Control/VBoxContainer"]
 layout_mode = 2

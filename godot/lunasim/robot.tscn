@@ -168,7 +168,7 @@ multimesh = SubResource("MultiMesh_0ky77")
 script = SubResource("GDScript_8ljls")
 
 [node name="RaycastOrigin" type="Node3D" parent="."]
+top_level = true
 
 [node name="RayCast3D" type="RayCast3D" parent="RaycastOrigin"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.422899, 0)
-top_level = true

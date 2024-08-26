@@ -124,7 +124,7 @@ impl Blackboard {
             } => {
                 let depth_project =
                     Arc::new(CameraProjection::new(10.392, Vector2::new(36, 24), 0.01).block_on()?);
-                // let lunasim_stdin2 = lunasim_stdin.clone();
+
                 let camera_link = robot_chain.find_link("depth_camera_link").unwrap().clone();
                 let points_buffer_recycler = Recycler::<Box<[Vector4<f32>]>>::default();
 

@@ -215,13 +215,27 @@ impl Lunasim {
     }
 
     #[func]
-    fn send_gyroscope(&mut self, id: u64, mut delta: Quaternion) {
-        delta = rand_quat(self.gyroscope_deviation) * delta;
-        let axis = delta.get_axis();
+    fn send_gyroscope(&mut self, id: u64, mut angular_difference: Quaternion, delta: f32) {
+        let mut angle = angular_difference.get_angle() / delta;
+
+        angular_difference = rand_quat(self.gyroscope_deviation) * angular_difference;
+        let mut axis = angular_difference.get_axis();
+
+        if !angle.is_finite()
+            || angle.abs() < 0.001
+            || !axis.x.is_finite()
+            || !axis.y.is_finite()
+            || !axis.z.is_finite()
+            || (axis.x == 0.0 && axis.y == 0.0 && axis.z == 0.0)
+        {
+            axis = Vector3::new(0.0, 1.0, 0.0);
+            angle = 0.0;
+        }
+
         let _ = self.shared.to_lunasimbot.send(FromLunasim::Gyroscope {
             id: id as usize,
             axis: [axis.x, axis.y, axis.z],
-            angle: delta.get_angle(),
+            angle,
         });
     }
 

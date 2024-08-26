@@ -374,7 +374,7 @@ impl CakapSender {
             slice: &payload,
         };
         async {
-            let Some(mut addr) = self.shared.send_to_addr.load() else {
+            let Some(addr) = self.shared.send_to_addr.load() else {
                 error!("No address to send to");
                 std::mem::forget(guard);
                 return;
@@ -383,12 +383,6 @@ impl CakapSender {
                 error!("Payload too large to send");
                 std::mem::forget(guard);
                 return;
-            }
-            let new_port = addr.port().wrapping_add(1);
-            if new_port == 0 {
-                addr.set_port(MIN_PORT);
-            } else {
-                addr.set_port(new_port);
             }
             let _ = self.shared.noreply_socket.send_to(payload, addr).await;
             std::mem::forget(guard);
@@ -409,7 +403,7 @@ impl CakapSender {
             vec: payload,
         };
         async {
-            let Some(mut addr) = self.shared.send_to_addr.load() else {
+            let Some(addr) = self.shared.send_to_addr.load() else {
                 error!("No address to send to");
                 std::mem::forget(guard);
                 return;
@@ -421,13 +415,6 @@ impl CakapSender {
                 error!("Payload too large to send");
                 std::mem::forget(guard);
                 return;
-            }
-
-            let new_port = addr.port().wrapping_add(1);
-            if new_port == 0 {
-                addr.set_port(MIN_PORT);
-            } else {
-                addr.set_port(new_port);
             }
 
             let _ = self.shared.noreply_socket.send_to(vec, addr).await;

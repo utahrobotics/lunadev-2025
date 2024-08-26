@@ -40,6 +40,10 @@ Robot=""
 3d_render/layer_2="wall"
 3d_render/layer_3="estimate"
 
+[physics]
+
+3d/physics_engine="JoltPhysics3D"
+
 [rendering]
 
 textures/decals/filter=0

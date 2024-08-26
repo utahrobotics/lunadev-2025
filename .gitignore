@@ -21,3 +21,5 @@ rtp.sdp
 *.tmp
 *.log
 ~*
+godot/lunabase/exports/
+/export_presets.cfg

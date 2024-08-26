@@ -1,7 +1,8 @@
 class_name Robot
 extends CharacterBody3D
 
-const TERRAIN_LERP_SPEED := 150.0
+const TERRAIN_TRANSLATION_LERP_SPEED := 150.0
+const TERRAIN_ROTATION_LERP_SPEED := 150.0
 const SPEED := 0.3
 const WHEEL_SEPARATION := 0.6
 const DELTA := 1.0 / 60
@@ -40,12 +41,13 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	if raycast.is_colliding():
-		position = raycast.get_collision_point()
+		var blend := pow(0.5, delta * TERRAIN_TRANSLATION_LERP_SPEED)
+		position = position.lerp(raycast.get_collision_point(), blend)
 		var normal := raycast.get_collision_normal()
 		var angle := normal.angle_to(global_basis.y)
 		if angle > 0.001:
 			var cross := global_basis.y.cross(normal).normalized()
-			var blend := pow(0.5, delta * TERRAIN_LERP_SPEED)
+			blend = pow(0.5, delta * TERRAIN_ROTATION_LERP_SPEED)
 			global_rotate(cross, angle * blend)
 	
 	var drive_diff := _right - _left
@@ -56,7 +58,7 @@ func _physics_process(delta: float) -> void:
 	
 	_timer -= delta
 	if _timer <= 0.0:
-		_timer = DELTA
 		LunasimNode.send_accelerometer(0, global_basis.inverse() * Vector3.DOWN * 9.81)
-		LunasimNode.send_gyroscope(0, quaternion * _last_quat.inverse())
+		LunasimNode.send_gyroscope(0, quaternion * _last_quat.inverse(), DELTA - _timer)
+		_timer = DELTA
 		_last_quat = quaternion
