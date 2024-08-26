@@ -12,6 +12,7 @@ const DELTA := 1.0 / 60
 var _timer := DELTA
 var _left := 0.0
 var _right := 0.0
+var _drive_noise := FastNoiseLite.new()
 
 @onready var raycast: RayCast3D = $RaycastOrigin/RayCast3D
 @onready var estimate: Node3D = $Estimate
@@ -37,6 +38,10 @@ func _ready() -> void:
 		mesh_inst.mesh.material = estimate_material
 		mesh_inst.layers = 4
 		estimate.add_child(mesh_inst)
+	
+	_drive_noise.seed = randi()
+	_drive_noise.frequency = 0.03
+	push_warning("Using drive noise: %s" % _drive_noise.seed)
 
 
 func _physics_process(delta: float) -> void:
@@ -50,11 +55,18 @@ func _physics_process(delta: float) -> void:
 			blend = pow(0.5, delta * TERRAIN_ROTATION_LERP_SPEED)
 			global_rotate(cross, angle * blend)
 	
-	var drive_diff := _right - _left
-	var drive_mean := (_right + _left) / 2
+	var noise_origin := global_transform * Vector3.RIGHT * WHEEL_SEPARATION / 2
+	var right := _right * remap(_drive_noise.get_noise_2d(noise_origin.x, noise_origin.y), -1,  1, 0.3, 1)
+	
+	noise_origin = global_transform * Vector3.LEFT * WHEEL_SEPARATION / 2
+	var left := _left * remap(_drive_noise.get_noise_2d(noise_origin.x, noise_origin.y), -1,  1, 0.3, 1)
+	
+	var drive_diff := right - left
+	var drive_mean := (right + left) / 2
+	
 	rotation.y += drive_diff * SPEED * delta / WHEEL_SEPARATION
 	velocity = -global_basis.z * drive_mean
-	move_and_slide()
+	move_and_collide(velocity * delta)
 	
 	_timer -= delta
 	if _timer <= 0.0:

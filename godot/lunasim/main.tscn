@@ -2,6 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://leqgym66qbuo" path="res://robot.tscn" id="1_y4wm8"]
 [ext_resource type="PackedScene" uid="uid://y0gvb4s2mi2x" path="res://apriltag.tscn" id="2_nhvh2"]
+[ext_resource type="Script" path="res://rocks/rock.gd" id="3_5i5qc"]
 [ext_resource type="Script" path="res://robo_camera.gd" id="3_n7k3i"]
 
 [sub_resource type="GDScript" id="GDScript_lj4gt"]
@@ -22,9 +23,12 @@ const LENGTH_CELLS := 100
 const MAX_NOISE_HEIGHT := 0.1
 const MAX_HILL_HEIGHT := 0.6
 
+var thr := Thread.new()
+
 
 func _ready() -> void:
 	var collision_shape: CollisionShape3D = $CollisionShape3D
+	var mesh_instance: MeshInstance3D = $MeshInstance3D
 	var width_scale := WIDTH / (WIDTH_CELLS - 1)
 	var length_scale := LENGTH / (LENGTH_CELLS - 1)
 	collision_shape.scale.x = width_scale
@@ -34,45 +38,57 @@ func _ready() -> void:
 	var heightmap: HeightMapShape3D = collision_shape.shape
 	heightmap.map_width = WIDTH_CELLS
 	heightmap.map_depth = LENGTH_CELLS
+	var map_data := heightmap.map_data
 	
-	var noise := FastNoiseLite.new()
-	noise.seed = randi()
-	noise.frequency = 0.08
-	
-	var hills := FastNoiseLite.new()
-	hills.seed = randi()
-	hills.frequency = 0.01
-	push_warning(\"Using noise seed: %s, hills seed: %s\" % [noise.seed, hills.seed])
-	
-	for x in range(WIDTH_CELLS):
-		for y in range(LENGTH_CELLS):
-			heightmap.map_data[x + y * WIDTH_CELLS] = remap(noise.get_noise_2d(x, y), -1, 1, 0, MAX_NOISE_HEIGHT) + remap(hills.get_noise_2d(x, y), -1, 1, 0, MAX_HILL_HEIGHT)
-	
-	collision_shape.position.y = - heightmap.get_min_height()
-	
-	var mesh_instance: MeshInstance3D = $MeshInstance3D
-	var mesh: ImmediateMesh = mesh_instance.mesh
-	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
-	
-	for y in range(LENGTH_CELLS - 1):
-		for x in range(WIDTH_CELLS):
-			if y % 2 != 0:
-				x = WIDTH_CELLS - x - 1
-			var current_height := heightmap.map_data[(WIDTH_CELLS - x - 1) + (LENGTH_CELLS - y - 1) * WIDTH_CELLS]
-			var next_height := heightmap.map_data[(WIDTH_CELLS - x - 1) + (LENGTH_CELLS - y - 2) * WIDTH_CELLS]
-			var height_diff = next_height - current_height
-			var angle := atan2(height_diff, length_scale)
+	thr.start(
+		func():
+			var noise := FastNoiseLite.new()
+			noise.seed = randi()
+			noise.frequency = 0.08
 			
-			if y % 2 == 0:
-				mesh.surface_set_normal(Vector3.DOWN.rotated(Vector3.RIGHT, angle))
-			else:
-				mesh.surface_set_normal(Vector3.UP.rotated(Vector3.RIGHT, angle))
+			var hills := FastNoiseLite.new()
+			hills.seed = randi()
+			hills.frequency = 0.01
+			push_warning(\"Using noise seed: %s, hills seed: %s\" % [noise.seed, hills.seed])
 			
-			mesh.surface_add_vertex(Vector3(- x * width_scale, current_height, - y * length_scale))
-			mesh.surface_add_vertex(Vector3(- x * width_scale, next_height, - (y + 1) * length_scale))
+			for x in range(WIDTH_CELLS):
+				for y in range(LENGTH_CELLS):
+					map_data[x + y * WIDTH_CELLS] = remap(noise.get_noise_2d(x, y), -1, 1, 0, MAX_NOISE_HEIGHT) + remap(hills.get_noise_2d(x, y), -1, 1, 0, MAX_HILL_HEIGHT)
 			
-	mesh.surface_end()
-	mesh_instance.position.y = collision_shape.position.y
+			(
+				func():
+					heightmap.map_data = map_data
+					collision_shape.position.y = - heightmap.get_min_height()
+					mesh_instance.position.y = collision_shape.position.y
+			).call_deferred()
+			
+			var mesh: ImmediateMesh = ImmediateMesh.new()
+			mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+			
+			for y in range(LENGTH_CELLS - 1):
+				for x in range(WIDTH_CELLS):
+					if y % 2 != 0:
+						x = WIDTH_CELLS - x - 1
+					var current_height := map_data[(WIDTH_CELLS - x - 1) + (LENGTH_CELLS - y - 1) * WIDTH_CELLS]
+					var next_height := map_data[(WIDTH_CELLS - x - 1) + (LENGTH_CELLS - y - 2) * WIDTH_CELLS]
+					var height_diff = next_height - current_height
+					var angle := atan2(height_diff, length_scale)
+					
+					if y % 2 == 0:
+						mesh.surface_set_normal(Vector3.DOWN.rotated(Vector3.RIGHT, angle))
+					else:
+						mesh.surface_set_normal(Vector3.UP.rotated(Vector3.RIGHT, angle))
+					
+					mesh.surface_add_vertex(Vector3(- x * width_scale, current_height, - y * length_scale))
+					mesh.surface_add_vertex(Vector3(- x * width_scale, next_height, - (y + 1) * length_scale))
+			
+			mesh.surface_end()
+			mesh_instance.set_mesh.call_deferred(mesh)
+	)
+
+
+func _exit_tree() -> void:
+	thr.wait_to_finish()
 "
 
 [sub_resource type="HeightMapShape3D" id="HeightMapShape3D_s2y32"]
@@ -80,8 +96,6 @@ func _ready() -> void:
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_501rf"]
 cull_mode = 2
 albedo_color = Color(0.74558, 0.74558, 0.74558, 1)
-
-[sub_resource type="ImmediateMesh" id="ImmediateMesh_np8a4"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_cjilj"]
 size = Vector3(2, 2, 8)
@@ -238,44 +252,43 @@ shape = SubResource("HeightMapShape3D_s2y32")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Floor"]
 material_override = SubResource("StandardMaterial3D_501rf")
-mesh = SubResource("ImmediateMesh_np8a4")
 
-[node name="StaticBody3D" type="StaticBody3D" parent="."]
+[node name="Walls" type="StaticBody3D" parent="."]
 collision_layer = 3
 collision_mask = 0
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Walls"]
 transform = Transform3D(-4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, 0, 1, -4.5, 1, -3.5)
 shape = SubResource("BoxShape3D_cjilj")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D/CollisionShape3D"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Walls/CollisionShape3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.58932e-08, 1, 0)
 layers = 3
 mesh = SubResource("PlaneMesh_twbw0")
 
-[node name="CollisionShape3D4" type="CollisionShape3D" parent="StaticBody3D"]
+[node name="CollisionShape3D4" type="CollisionShape3D" parent="Walls"]
 transform = Transform3D(4.37114e-08, -1, -8.74228e-08, -1, -4.37114e-08, 0, -3.82137e-15, 8.74228e-08, -1, 1.5, 1, -3.5)
 shape = SubResource("BoxShape3D_cjilj")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D/CollisionShape3D4"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Walls/CollisionShape3D4"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.58932e-08, 1, 0)
 layers = 3
 mesh = SubResource("PlaneMesh_twbw0")
 
-[node name="CollisionShape3D2" type="CollisionShape3D" parent="StaticBody3D"]
+[node name="CollisionShape3D2" type="CollisionShape3D" parent="Walls"]
 transform = Transform3D(1.91069e-15, -4.37114e-08, 1, -1, -4.37114e-08, 0, 4.37114e-08, -1, -4.37114e-08, -1.5, 1, 1.5)
 shape = SubResource("BoxShape3D_lb8fb")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D/CollisionShape3D2"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Walls/CollisionShape3D2"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 layers = 3
 mesh = SubResource("PlaneMesh_reayg")
 
-[node name="CollisionShape3D3" type="CollisionShape3D" parent="StaticBody3D"]
+[node name="CollisionShape3D3" type="CollisionShape3D" parent="Walls"]
 transform = Transform3D(-5.73206e-15, 1.31134e-07, -1, -1, -4.37114e-08, 0, -4.37114e-08, 1, 1.31134e-07, -1.5, 1, -8.5)
 shape = SubResource("BoxShape3D_lb8fb")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D/CollisionShape3D3"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Walls/CollisionShape3D3"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 layers = 3
 mesh = SubResource("PlaneMesh_reayg")
@@ -301,6 +314,20 @@ transform = Transform3D(0.926909, 0.34775, -0.141101, 0.330633, -0.57883, 0.7454
 [node name="Apriltag" parent="." instance=ExtResource("2_nhvh2")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.610044, 0.50416)
 explicit = true
+
+[node name="Rocks" type="Node" parent="."]
+
+[node name="Rock" type="Node3D" parent="Rocks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.187387, 2.20208, -1.0874)
+script = ExtResource("3_5i5qc")
+
+[node name="Rock2" type="Node3D" parent="Rocks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.647925, 2.20208, -1.0874)
+script = ExtResource("3_5i5qc")
+
+[node name="Rock3" type="Node3D" parent="Rocks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.04411, 2.20208, -1.0874)
+script = ExtResource("3_5i5qc")
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
 
@@ -328,8 +355,8 @@ stretch = true
 
 [node name="SubViewport" type="SubViewport" parent="CanvasLayer/TabContainer/ExternalView/SubviewportContainer"]
 handle_input_locally = false
-size = Vector2i(2, 2)
-render_target_update_mode = 0
+size = Vector2i(1132, 597)
+render_target_update_mode = 4
 
 [node name="ExternalCamera" type="Camera3D" parent="CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport"]
 transform = Transform3D(0.283078, -0.220396, 0.93343, -1.77252e-08, 0.973239, 0.229795, -0.959097, -0.0650499, 0.275503, 3.23287, 1.29588, 0.954185)
