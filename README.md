@@ -3,6 +3,10 @@
 This is the official workspace for the software team for Utah Student Robotics for the NASA Lunabotics 2024 competition.  
 If you are a student (ie. not an active contributor) you will find more value on the [wiki](https://github.com/utahrobotics/lunadev-2024/wiki) page.
 
+## Note
+
+Lunaserver is currently down, so the following instructions will not work. When it is eventually brought back online, these instructions will work without modification.
+
 ## Quickstart
 
 You will need Visual Studio Code (We'll call it VSCode). Any other IDE that can do remote development will also work, but these instructions are for VSCode specifically.
@@ -31,21 +35,24 @@ If you need a display soon, please let me know as there are temporary solutions.
 
 ## Directory
 
-1. [unros-core](https://github.com/utahrobotics/lunadev-2024/tree/main/unros-core) - The core framework for Unros
-2. [rig](https://github.com/utahrobotics/lunadev-2024/tree/main/rig) - Tracks the various moving parts of a robot
-3. [realsense](https://github.com/utahrobotics/lunadev-2024/tree/main/realsense) - Working with realsense cameras
-4. [camera](https://github.com/utahrobotics/lunadev-2024/tree/main/camera) - Working with generic cameras
-5. [apriltag](https://github.com/utahrobotics/lunadev-2024/tree/main/apriltag) - Identifying apriltags
-6. [drive](https://github.com/utahrobotics/lunadev-2024/tree/main/drive) - Controlling the wheels
-7. [global-msgs](https://github.com/utahrobotics/lunadev-2024/tree/main/global-msgs) - Messages used for lunabotics that are not related to Unros
-8. [navigator](https://github.com/utahrobotics/lunadev-2024/tree/main/navigator) - Drive controller for driving to waypoints
-9. [localization](https://github.com/utahrobotics/lunadev-2024/tree/main/localization) - Localizes the robot in space based on sensor data
-10. [serial](https://github.com/utahrobotics/lunadev-2024/tree/main/serial) - Working with serial ports
-11. [telemetry](https://github.com/utahrobotics/lunadev-2024/tree/main/telemetry) - Connecting with Lunabase
-12. [lunabase](https://github.com/utahrobotics/lunadev-2024/tree/main/lunabase) - Mission control software, with some development utilities
-13. [tools](https://github.com/utahrobotics/lunadev-2024/tree/main/tools) - Command Line Application for controlling Unros externally
-14. [lunabot](https://github.com/utahrobotics/lunadev-2024/tree/main/lunabot) - The final executable for lunabot
-15. [lunadev](https://github.com/utahrobotics/lunadev-2024/tree/main/lunadev) - Some stuff that help with development
+1. [urobotics](https://github.com/utahrobotics/lunadev-2025/tree/main/urobotics) - The core Rust framework and ecosystem for URobotics
+2. [misc](https://github.com/utahrobotics/lunadev-2025/tree/main/misc) - Generic utility libraries, or "forks" of existing libraries
+3. [unros](https://github.com/utahrobotics/lunadev-2025/tree/main/unros) - Legacy code that has not been fully ported over.
+4. [urobotics-guide](https://github.com/utahrobotics/lunadev-2025/tree/main/urobotics-guide) - The source code for the URobotics Guide Book
+5. [lunabotics](https://github.com/utahrobotics/lunadev-2025/tree/main/lunabotics) - Rust code relevant only to the lunabotics competition
+6. [godot](https://github.com/utahrobotics/lunadev-2025/tree/main/godot) - Front-end software created with the Godot Game Engine
+7. [examples](https://github.com/utahrobotics/lunadev-2025/tree/main/examples) - Sample projects demonstrating how to use the URobotics framework
+8. [camera-db](https://github.com/utahrobotics/lunadev-2025/tree/main/camera-db) - Legacy data used for camera calibration
+9. [urdf](https://github.com/utahrobotics/lunadev-2025/tree/main/urdf) - Collection of Universal Robot Description Formats
+10. [.micropico](https://github.com/utahrobotics/lunadev-2025/tree/main/.micropico) - Related to experimental micropico support
+
+### Local-only
+
+The following files/folders are not provided in this repository and you may need to generate some of them yourself. However, most will be auto-generated.
+
+1. [app_config.toml](https://github.com/utahrobotics/lunadev-2024/tree/main/examples/app_config.toml) - This file needs to be in the top-most directory and is *not* auto-generated. An example file can be found in the `examples` folder
+2. urobotics-venv - A Python Virtual Environment that is used for Python interop
+3. cabinet - Logging folder that is auto-generated everytime a [urobotics-app](https://github.com/utahrobotics/lunadev-2025/tree/main/urobotics/urobotics-app) is executed
 
 ## Third Part Assets
 

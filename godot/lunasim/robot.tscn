@@ -164,6 +164,7 @@ top_level = true
 
 [node name="FittedPoints" type="MultiMeshInstance3D" parent="."]
 top_level = true
+layers = 4
 multimesh = SubResource("MultiMesh_0ky77")
 script = SubResource("GDScript_8ljls")
 

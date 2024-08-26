@@ -355,7 +355,7 @@ fn main() {
     }
     app.cabinet_builder.create_symlink_for("godot");
     app.cabinet_builder.create_symlink_for("target");
-    app.cabinet_builder.add_file_to_copy("lunabot.urdf");
+    app.cabinet_builder.add_file_to_copy("urdf/lunabot.urdf");
 
     app.add_app::<serial::SerialConnection>()
         .add_app::<python::PythonVenvBuilder>()
