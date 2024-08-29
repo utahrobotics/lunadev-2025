@@ -1,3 +1,5 @@
+//! A framework and ecosystem for developing robotics applications.
+
 #[cfg(feature = "app")]
 pub use urobotics_app as app;
 #[cfg(feature = "camera")]

@@ -1,3 +1,7 @@
+//! A thin wrapper around the system's Python interpreter.
+//! 
+//! THis module avoids statically or dynamically linking to the Python interpreter, and instead uses
+//! Python as a subprocess.
 use std::{
     ffi::OsString,
     future::Future,
@@ -17,12 +21,18 @@ use urobotics_core::{
     BlockOn,
 };
 
+/// Configuration for building a Python virtual environment.
 #[derive(Deserialize)]
 pub struct PythonVenvBuilder {
+    /// The path to the virtual environment.
+    /// 
+    /// If it doesn't exist, it will be created.
     #[serde(default = "default_venv_path")]
     pub venv_path: PathBuf,
+    /// The name of the system's Python interpreter (ie. `python` or `python3`).
     #[serde(default = "default_system_interpreter")]
     pub system_interpreter: OsString,
+    /// A list of pip packages to install in the virtual environment.
     #[serde(default)]
     pub packages_to_install: Vec<String>,
 }
@@ -46,6 +56,7 @@ impl Default for PythonVenvBuilder {
 }
 
 impl PythonVenvBuilder {
+    /// Builds the Python virtual environment.
     pub async fn build(&self) -> std::io::Result<PythonVenv> {
         if !Path::new(&self.venv_path).exists() {
             let std::process::Output { status, stderr, .. } =
@@ -77,10 +88,12 @@ impl PythonVenvBuilder {
     }
 }
 
+/// An initialized python virtual environment.
 pub struct PythonVenv {
     path: PathBuf,
 }
 
+/// A Python value returned from the REPL.
 #[derive(Debug, Clone)]
 pub enum PythonValue {
     Int(i64),
@@ -107,6 +120,7 @@ impl std::fmt::Display for PythonValue {
 }
 
 impl PythonVenv {
+    /// Installs a pip package in the virtual environment.
     pub async fn pip_install(&self, package: &str) -> std::io::Result<()> {
         let std::process::Output { status, stderr, .. } = tokio::process::Command::new(&self.path)
             .args(["-m", "pip", "install", package])
@@ -124,6 +138,7 @@ impl PythonVenv {
         Ok(())
     }
 
+    /// Starts a Python REPL.
     pub async fn repl(&self) -> std::io::Result<PyRepl> {
         let child = tokio::process::Command::new(&self.path)
             .arg("-c")
@@ -143,6 +158,7 @@ impl PythonVenv {
     }
 }
 
+/// A connection to a Python REPL.
 pub struct PyRepl {
     stdin: tokio::process::ChildStdin,
     stdout: tokio::process::ChildStdout,

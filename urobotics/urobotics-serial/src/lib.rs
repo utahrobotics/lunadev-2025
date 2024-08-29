@@ -25,9 +25,10 @@ use urobotics_core::{
 
 define_callbacks!(BytesCallbacks => Fn(bytes: &[u8]) + Send + Sync);
 
-/// A single duplex connection to a serial port
+/// A single duplex connection to a serial port.
 #[derive(Deserialize)]
 pub struct SerialConnection {
+    /// The path to the serial port.
     pub path: Cow<'static, str>,
     #[serde(default = "default_baud_rate")]
     pub baud_rate: u32,
@@ -64,6 +65,7 @@ impl SerialConnection {
         }
     }
 
+    /// Takes a `PendingWriter` if it has not been taken yet.
     pub fn take_writer(&mut self) -> Option<PendingWriter> {
         if Arc::strong_count(&self.serial_input) > 1 {
             None
@@ -73,9 +75,16 @@ impl SerialConnection {
     }
 }
 
+/// A pending writer for a serial connection.
+/// 
+/// When the `SerialConnection` is ran, the writer is set.
 pub struct PendingWriter(Arc<OnceLock<Exclusive<WriteHalf<SerialStream>>>>);
 
 impl PendingWriter {
+    /// Attempts to unwrap the writer.
+    /// 
+    /// # Errors
+    /// If the `SerialConnection` has not ran yet, then the writer will not be available.
     pub fn try_unwrap(self) -> Result<WriteHalf<SerialStream>, Self> {
         if Arc::strong_count(&self.0) == 1 && self.0.get().is_some() {
             Ok(Arc::try_unwrap(self.0)
@@ -88,6 +97,7 @@ impl PendingWriter {
         }
     }
 
+    /// Blocks until the writer is available by blocking the current thread.
     pub fn blocking_unwrap(mut self) -> WriteHalf<SerialStream> {
         let backoff = Backoff::default();
         loop {
@@ -101,6 +111,7 @@ impl PendingWriter {
         }
     }
 
+    /// Blocks until the writer is available.
     pub async fn unwrap(mut self) -> WriteHalf<SerialStream> {
         loop {
             match self.try_unwrap() {

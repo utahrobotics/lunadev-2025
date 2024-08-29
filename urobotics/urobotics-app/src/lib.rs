@@ -1,3 +1,5 @@
+//! A library for creating applications with a command line interface.
+
 use std::{path::PathBuf, sync::Once};
 
 use fxhash::FxHashMap;
@@ -14,10 +16,14 @@ use urobotics_core::{
     task::AsyncTask,
 };
 
+/// A trait that represents an application that can be run.
 pub trait Application: DeserializeOwned {
+    /// The name of the application as it appears in the command-line.
     const APP_NAME: &'static str;
+    /// A description of the application as it appears in the command-line.
     const DESCRIPTION: &'static str;
 
+    /// Runs the application on the current thread.
     fn run(self);
 }
 
@@ -26,18 +32,29 @@ struct BoxedApp {
     func: Box<dyn FnOnce(String)>,
 }
 
+/// A collection of applications that can be run.
 pub struct Applications {
+    /// The name of the current crate.
     pub name: &'static str,
+    /// The description of the current crate.
     pub description: &'static str,
+    /// The path to the configuration file.
     pub config_path: PathBuf,
+    /// The path to create the log file.
     pub log_path: PathBuf,
+    /// The cabinet builder for creating a cabinet.
     pub cabinet_builder: CabinetBuilder,
+    /// The CPU usage monitoring configuration.
     pub cpu_usage: Option<CpuUsage>,
+    /// The temperature monitoring configuration.
     pub temperature: Option<Temperature>,
     functions: FxHashMap<&'static str, BoxedApp>,
 }
 
 impl Default for Applications {
+    /// Creates a default `Applications` with possibly inaccurate values.
+    /// 
+    /// Refer to the `application` macro for a more accurate default.
     fn default() -> Self {
         Self {
             name: "unnamed",
@@ -59,6 +76,7 @@ impl Default for Applications {
 
 static APPLICATION_CONSUMED: Once = Once::new();
 
+/// Creates a default `Applications` struct with the current crate's name and description.
 #[macro_export]
 macro_rules! application {
     () => {{
@@ -182,6 +200,9 @@ impl Applications {
         (app.func)(config_parsed);
     }
 
+    /// Adds an application to the collection of applications.
+    /// 
+    /// Do note that the application is added statically as a type parameter.
     pub fn add_app<T: Application>(mut self) -> Self {
         self.functions.insert(
             T::APP_NAME,
@@ -202,6 +223,16 @@ impl Applications {
     }
 }
 
+/// A macro for creating an ad-hoc application from a function.
+/// 
+/// # Examples
+/// ```rust
+/// fn my_func() {
+///     // TODO
+/// }
+/// 
+/// adhoc_app!(pub MyApp, "myapp", "My application", my_func);
+/// ```
 #[macro_export]
 macro_rules! adhoc_app {
     ($vis:vis $type_name:ident, $cmd_name: literal, $description:literal, $func:ident) => {
