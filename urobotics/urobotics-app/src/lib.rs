@@ -53,7 +53,7 @@ pub struct Applications {
 
 impl Default for Applications {
     /// Creates a default `Applications` with possibly inaccurate values.
-    /// 
+    ///
     /// Refer to the `application` macro for a more accurate default.
     fn default() -> Self {
         Self {
@@ -201,7 +201,7 @@ impl Applications {
     }
 
     /// Adds an application to the collection of applications.
-    /// 
+    ///
     /// Do note that the application is added statically as a type parameter.
     pub fn add_app<T: Application>(mut self) -> Self {
         self.functions.insert(
@@ -224,13 +224,13 @@ impl Applications {
 }
 
 /// A macro for creating an ad-hoc application from a function.
-/// 
+///
 /// # Examples
 /// ```rust
 /// fn my_func() {
 ///     // TODO
 /// }
-/// 
+///
 /// adhoc_app!(pub MyApp, "myapp", "My application", my_func);
 /// ```
 #[macro_export]

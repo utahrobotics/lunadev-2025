@@ -76,13 +76,13 @@ impl SerialConnection {
 }
 
 /// A pending writer for a serial connection.
-/// 
+///
 /// When the `SerialConnection` is ran, the writer is set.
 pub struct PendingWriter(Arc<OnceLock<Exclusive<WriteHalf<SerialStream>>>>);
 
 impl PendingWriter {
     /// Attempts to unwrap the writer.
-    /// 
+    ///
     /// # Errors
     /// If the `SerialConnection` has not ran yet, then the writer will not be available.
     pub fn try_unwrap(self) -> Result<WriteHalf<SerialStream>, Self> {

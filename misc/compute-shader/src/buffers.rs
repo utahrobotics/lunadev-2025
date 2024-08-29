@@ -1,8 +1,14 @@
 use std::{
-    cell::OnceCell, future::Future, marker::PhantomData, mem::{align_of, size_of}, num::NonZeroU64, ops::{Deref, DerefMut}, sync::{Exclusive, RwLock}
+    cell::OnceCell,
+    future::Future,
+    marker::PhantomData,
+    mem::{align_of, size_of},
+    num::NonZeroU64,
+    ops::{Deref, DerefMut},
+    sync::{Exclusive, RwLock},
 };
 
-use bytemuck::{bytes_of, cast_slice, from_bytes};
+use bytemuck::{bytes_of, cast_slice, cast_slice_mut, checked::from_bytes_mut, from_bytes};
 use crossbeam::queue::SegQueue;
 use futures::FutureExt;
 use fxhash::FxHashMap;
@@ -658,22 +664,15 @@ impl<T: ?Sized> BufferDestination<T> for () {
 /// While this is limiting, this is the fastest way to pass data between shaders as it skips synchronizing data with the host entirely.
 /// Due to the underlying implemention of `wgpu`, for a buffer to be able to copy to and from other buffers its data cannot be accessible
 /// by the host in any capacity.
-pub struct OpaqueBuffer {
-    /// The size of the buffer in bytes.
-    ///
-    /// This value can be smaller than the actual size. If it is larger, this buffer may panic when used.
-    size: u64,
-    /// The byte offset in the buffer to start reading or writing from.
-    ///
-    /// This affects how the host and shaders interact with the buffer.
-    start_offset: u64,
-    max_size: u64,
+pub struct GpuBuffer<T: BufferSized + ?Sized> {
+    size: T::Size,
     buffer: wgpu::Buffer,
     read_buffer: Exclusive<OnceCell<wgpu::Buffer>>,
     write_buffer: Exclusive<OnceCell<wgpu::Buffer>>,
+    _phantom: PhantomData<fn() -> T>,
 }
 
-impl<T: ?Sized + BufferSized + 'static> BufferSource<T> for &OpaqueBuffer {
+impl<T: ?Sized + BufferSized + 'static> BufferSource<T> for &GpuBuffer<T> {
     fn into_buffer(
         self,
         command_encoder: &mut CommandEncoder,
@@ -681,20 +680,14 @@ impl<T: ?Sized + BufferSized + 'static> BufferSource<T> for &OpaqueBuffer {
         _stager: &mut StagingBelt,
         _device: &wgpu::Device,
     ) {
-        if self.size == 0 {
+        if self.size.size() == 0 {
             return;
         }
-        command_encoder.copy_buffer_to_buffer(
-            &self.buffer,
-            self.start_offset,
-            &buffer,
-            0,
-            self.size,
-        );
+        command_encoder.copy_buffer_to_buffer(&self.buffer, 0, &buffer, 0, self.size.size());
     }
 }
 
-impl<T: ?Sized + BufferSized + 'static> BufferDestination<T> for &mut OpaqueBuffer {
+impl<T: ?Sized + BufferSized + 'static> BufferDestination<T> for &mut GpuBuffer<T> {
     type State = ();
 
     fn enqueue(
@@ -704,16 +697,10 @@ impl<T: ?Sized + BufferSized + 'static> BufferDestination<T> for &mut OpaqueBuff
         _buffers: &RwLock<FxHashMap<u64, SegQueue<wgpu::Buffer>>>,
         _device: &wgpu::Device,
     ) -> Self::State {
-        if self.size == 0 {
+        if self.size.size() == 0 {
             return;
         }
-        command_encoder.copy_buffer_to_buffer(
-            &src_buffer,
-            0,
-            &self.buffer,
-            self.start_offset,
-            self.size,
-        );
+        command_encoder.copy_buffer_to_buffer(&src_buffer, 0, &self.buffer, 0, self.size.size());
     }
 
     async fn from_buffer(
@@ -725,38 +712,101 @@ impl<T: ?Sized + BufferSized + 'static> BufferDestination<T> for &mut OpaqueBuff
     }
 }
 
-impl OpaqueBuffer {
-    /// Creates a buffer with the given size.
-    pub async fn new(size: impl BufferSize) -> anyhow::Result<Self> {
-        let size = size.size();
+impl<T: BufferSized + ?Sized> GpuBuffer<T> {
+    /// Creates a zeroed buffer with the given size.
+    pub async fn zeroed(size: T::Size) -> anyhow::Result<Self> {
         let GpuDevice { device, .. } = get_gpu_device().await?;
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size,
+            size: size.size(),
             mapped_at_creation: false,
-            usage: wgpu::BufferUsages::COPY_DST
-                | wgpu::BufferUsages::COPY_SRC
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
         });
         Ok(Self {
             buffer,
             size,
-            max_size: size,
-            start_offset: 0,
             read_buffer: Default::default(),
             write_buffer: Default::default(),
+            _phantom: PhantomData,
         })
     }
 
+    async fn read_bytes(&mut self) -> BytesReadGuard {
+        let GpuDevice { device, queue } = get_gpu_device().now_or_never().unwrap().unwrap();
+
+        let read_buffer = self.read_buffer.get_mut().get_mut_or_init(|| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: self.size.size(),
+                mapped_at_creation: false,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            })
+        });
+
+        let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Render Encoder"),
+        });
+
+        command_encoder.copy_buffer_to_buffer(&self.buffer, 0, read_buffer, 0, self.size.size());
+
+        let slice = self.buffer.slice(0..self.size.size());
+        let (sender, receiver) = oneshot::channel::<()>();
+        slice.map_async(MapMode::Read, move |_| {
+            let _sender = sender;
+        });
+        queue.submit(std::iter::once(command_encoder.finish()));
+        let _ = receiver.await;
+        let view = slice.get_mapped_range();
+        BytesReadGuard {
+            view: Some(view),
+            buffer: &self.buffer,
+        }
+    }
+
+    async fn write_bytes(&mut self) -> BytesWriteGuard {
+        let GpuDevice { device, queue } = get_gpu_device().now_or_never().unwrap().unwrap();
+
+        let mut already_mapped = false;
+
+        let write_buffer = self.write_buffer.get_mut().get_mut_or_init(|| {
+            already_mapped = true;
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: self.size.size(),
+                mapped_at_creation: true,
+                usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
+            })
+        });
+
+        let slice = write_buffer.slice(0..self.size.size());
+        if !already_mapped {
+            let (sender, receiver) = oneshot::channel::<()>();
+            slice.map_async(MapMode::Read, move |_| {
+                let _sender = sender;
+            });
+            queue.submit(std::iter::empty());
+            let _ = receiver.await;
+        }
+        let view = slice.get_mapped_range_mut();
+        BytesWriteGuard {
+            view: Some(view),
+            size: self.size.size(),
+            write_buffer,
+            buffer: &self.buffer,
+        }
+    }
+}
+
+impl<T: bytemuck::Pod> GpuBuffer<T> {
     /// Creates a buffer that will store the given value.
-    pub async fn new_from_value<T: bytemuck::Pod>(value: &T) -> anyhow::Result<Self> {
-        let size = size_of::<T>() as u64;
+    pub async fn new(value: &T) -> anyhow::Result<Self> {
+        let size = StaticSize::<T>::default();
         let GpuDevice { device, .. } = get_gpu_device().await?;
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size,
+            size: size.size(),
             mapped_at_creation: true,
-            usage: wgpu::BufferUsages::COPY_DST
-                | wgpu::BufferUsages::COPY_SRC
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
         });
         buffer
             .slice(..)
@@ -766,15 +816,32 @@ impl OpaqueBuffer {
         Ok(Self {
             buffer,
             size,
-            max_size: size,
-            start_offset: 0,
             read_buffer: Default::default(),
             write_buffer: Default::default(),
+            _phantom: PhantomData,
         })
     }
 
+    pub async fn read(&mut self) -> ReadGuard<'_, T> {
+        let guard = self.read_bytes().await;
+        ReadGuard {
+            guard,
+            _phantom: PhantomData,
+        }
+    }
+
+    pub async fn write(&mut self) -> WriteGuard<'_, T> {
+        let guard = self.write_bytes().await;
+        WriteGuard {
+            guard,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<T: bytemuck::Pod> GpuBuffer<[T]> {
     /// Creates a buffer that will store the given slice.
-    pub async fn new_from_slice<T: bytemuck::Pod>(slice: &[T]) -> anyhow::Result<Self> {
+    pub async fn new(slice: &[T]) -> anyhow::Result<Self> {
         let GpuDevice { device, .. } = get_gpu_device().await?;
         let bytes: &[u8] = cast_slice(slice);
         let size = bytes.len() as u64;
@@ -791,125 +858,43 @@ impl OpaqueBuffer {
         buffer.unmap();
         Ok(Self {
             buffer,
-            size,
-            max_size: size,
-            start_offset: 0,
+            size: DynamicSize::new(slice.len()),
             read_buffer: Default::default(),
             write_buffer: Default::default(),
+            _phantom: PhantomData,
         })
-
     }
 
-    pub fn set_size(&mut self, size: u64) -> bool {
-        if size > self.max_size || size < self.start_offset {
-            return false;
-        }
-        self.size = size;
-        true
-    }
-
-    pub fn set_start_offset(&mut self, start_offset: u64) -> bool {
-        if start_offset > self.size {
-            return false;
-        }
-        self.start_offset = start_offset;
-        true
-    }
-
-    pub fn get_size(&self) -> u64 {
-        self.size
-    }
-
-    pub fn get_start_offset(&self) -> u64 {
-        self.start_offset
-    }
-
-    pub async fn read(&mut self) -> ReadGuard {
-        let GpuDevice { device, queue } = get_gpu_device().now_or_never().unwrap().unwrap();
-
-        let read_buffer = self.read_buffer.get_mut().get_mut_or_init(|| {
-            device.create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size: self.max_size,
-                mapped_at_creation: false,
-                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            })
-        });
-
-        let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Render Encoder"),
-        });
-
-        command_encoder.copy_buffer_to_buffer(
-            &self.buffer,
-            self.start_offset,
-            read_buffer,
-            self.start_offset,
-            self.size,
-        );
-
-        let slice = self.buffer.slice(self.start_offset..self.size);
-        let (sender, receiver) = oneshot::channel::<()>();
-        slice.map_async(MapMode::Read, move |_| {
-            let _sender = sender;
-        });
-        queue.submit(std::iter::once(command_encoder.finish()));
-        let _ = receiver.await;
-        let view = slice.get_mapped_range();
+    pub async fn read(&mut self) -> ReadGuard<'_, [T]> {
+        let guard = self.read_bytes().await;
         ReadGuard {
-            view: Some(view),
-            buffer: &self.buffer,
+            guard,
+            _phantom: PhantomData,
         }
     }
 
-    pub async fn write(&mut self) -> WriteGuard {
-        let GpuDevice { device, queue } = get_gpu_device().now_or_never().unwrap().unwrap();
-
-        let mut already_mapped = false;
-
-        let write_buffer = self.write_buffer.get_mut().get_mut_or_init(|| {
-            already_mapped = true;
-            device.create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size: self.max_size,
-                mapped_at_creation: true,
-                usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
-            })
-        });
-
-        let slice = write_buffer.slice(self.start_offset..self.size);
-        if !already_mapped {
-            let (sender, receiver) = oneshot::channel::<()>();
-            slice.map_async(MapMode::Read, move |_| {
-                let _sender = sender;
-            });
-            queue.submit(std::iter::empty());
-            let _ = receiver.await;
-        }
-        let view = slice.get_mapped_range_mut();
+    pub async fn write(&mut self) -> WriteGuard<'_, [T]> {
+        let guard = self.write_bytes().await;
         WriteGuard {
-            view: Some(view),
-            start_offset: self.start_offset,
-            size: self.size,
-            write_buffer,
-            buffer: &self.buffer,
+            guard,
+            _phantom: PhantomData,
         }
     }
 }
 
-pub struct ReadGuard<'a> {
+struct BytesReadGuard<'a> {
     buffer: &'a wgpu::Buffer,
-    view: Option<BufferView<'a>>
+    view: Option<BufferView<'a>>,
 }
 
-impl<'a> Drop for ReadGuard<'a> {
+impl<'a> Drop for BytesReadGuard<'a> {
     fn drop(&mut self) {
         self.view = None;
         self.buffer.unmap();
     }
 }
 
-impl<'a> Deref for ReadGuard<'a> {
+impl<'a> Deref for BytesReadGuard<'a> {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
@@ -917,19 +902,18 @@ impl<'a> Deref for ReadGuard<'a> {
     }
 }
 
-pub struct WriteGuard<'a> {
+struct BytesWriteGuard<'a> {
     buffer: &'a wgpu::Buffer,
     write_buffer: &'a wgpu::Buffer,
-    start_offset: u64,
     size: u64,
-    view: Option<BufferViewMut<'a>>
+    view: Option<BufferViewMut<'a>>,
 }
 
-impl<'a> WriteGuard<'a> {
+impl<'a> BytesWriteGuard<'a> {
     /// Writes the data in this buffer into the original buffer.
-    /// 
+    ///
     /// This happens automatically when the guard is dropped.
-    /// 
+    ///
     /// # Note
     /// Awaiting the future is optional. The data will be written to the buffer regardless at some point in the future.
     /// Await the future if you want to know when the data has been written.
@@ -940,13 +924,7 @@ impl<'a> WriteGuard<'a> {
             label: Some("Render Encoder"),
         });
 
-        command_encoder.copy_buffer_to_buffer(
-            self.write_buffer,
-            self.start_offset,
-            self.buffer,
-            self.start_offset,
-            self.size,
-        );
+        command_encoder.copy_buffer_to_buffer(self.write_buffer, 0, self.buffer, 0, self.size);
 
         let idx = queue.submit(std::iter::once(command_encoder.finish()));
 
@@ -957,7 +935,7 @@ impl<'a> WriteGuard<'a> {
     }
 }
 
-impl<'a> Drop for WriteGuard<'a> {
+impl<'a> Drop for BytesWriteGuard<'a> {
     fn drop(&mut self) {
         let _ = self.flush();
         self.view = None;
@@ -965,7 +943,7 @@ impl<'a> Drop for WriteGuard<'a> {
     }
 }
 
-impl<'a> Deref for WriteGuard<'a> {
+impl<'a> Deref for BytesWriteGuard<'a> {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
@@ -973,127 +951,62 @@ impl<'a> Deref for WriteGuard<'a> {
     }
 }
 
-impl<'a> DerefMut for WriteGuard<'a> {
+impl<'a> DerefMut for BytesWriteGuard<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut *self.view.as_mut().unwrap()
     }
 }
 
-// macro_rules! map_buffer {
-//     ($self: ident, $f: ident) => {{
-//         let slice = $self.buffer.slice(0..$self.size);
-//         let (sender, receiver) = oneshot::channel::<()>();
-//         slice.map_async(MapMode::Read, move |_| {
-//             let _sender = sender;
-//         });
-//         let _ = receiver.await;
-//         let result = $f(&slice.get_mapped_range());
-//         $self.buffer.unmap();
-//         result
-//     }}
-// }
+pub struct ReadGuard<'a, T: ?Sized> {
+    guard: BytesReadGuard<'a>,
+    _phantom: PhantomData<T>,
+}
 
-// /// A Read-Only Buffer can only be read by the host, and shaders can only write to it.
-// ///
-// /// Use this to receive data from a shader.
-// pub struct ReadOnlyBuffer<T: ?Sized> {
-//     size: u64,
-//     buffer: wgpu::Buffer,
-//     _phantom: PhantomData<T>,
-// }
+impl<'a, T: bytemuck::Pod> Deref for ReadGuard<'a, T> {
+    type Target = T;
 
-// impl<T: BufferSized + ?Sized> ReadOnlyBuffer<T> {
-//     pub async fn new(size: T::Size) -> anyhow::Result<Self> {
-//         let size = size.size();
-//         let GpuDevice { device, .. } = get_gpu_device().await?;
-//         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-//             label: None,
-//             size,
-//             mapped_at_creation: false,
-//             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-//         });
-//         Ok(Self {
-//             buffer,
-//             size,
-//             _phantom: PhantomData,
-//         })
-//     }
-// }
+    fn deref(&self) -> &Self::Target {
+        from_bytes(&self.guard)
+    }
+}
 
-// impl<T: bytemuck::Pod> ReadOnlyBuffer<T> {
-//     pub async fn get_value<V>(&mut self, f: impl FnOnce(&T) -> V) -> V {
-//         let f = |bytes: &[u8]| f(from_bytes(bytes));
-//         map_buffer!(self, f)
-//     }
-// }
+impl<'a, T: bytemuck::Pod> Deref for ReadGuard<'a, [T]> {
+    type Target = [T];
 
-// impl<T: bytemuck::Pod> ReadOnlyBuffer<[T]> {
-//     pub async fn get_slice<V>(&mut self, f: impl FnOnce(&[T]) -> V) -> V {
-//         let f = |bytes: &[u8]| f(cast_slice(bytes));
-//         map_buffer!(self, f)
-//     }
-// }
+    fn deref(&self) -> &Self::Target {
+        cast_slice(&self.guard)
+    }
+}
 
-// macro_rules! map_buffer_mut {
-//     ($self: ident, $f: ident) => {{
-//         let slice = $self.buffer.slice(0..$self.size);
-//         let (sender, receiver) = oneshot::channel::<()>();
-//         slice.map_async(MapMode::Write, move |_| {
-//             let _sender = sender;
-//         });
-//         let _ = receiver.await;
-//         let result = $f(&mut slice.get_mapped_range_mut());
-//         $self.buffer.unmap();
-//         result
-//     }}
-// }
+pub struct WriteGuard<'a, T: ?Sized> {
+    guard: BytesWriteGuard<'a>,
+    _phantom: PhantomData<T>,
+}
 
-// /// A Read-Write Buffer can be read and written to by the host, but shaders can only read from it.
-// ///
-// /// Use this to send data to a shader.
-// pub struct ReadWriteBuffer<T: ?Sized> {
-//     size: u64,
-//     buffer: wgpu::Buffer,
-//     _phantom: PhantomData<T>,
-// }
+impl<'a, T: bytemuck::Pod> Deref for WriteGuard<'a, T> {
+    type Target = T;
 
-// impl<T: BufferSized + ?Sized> ReadWriteBuffer<T> {
-//     pub async fn new(size: T::Size) -> anyhow::Result<Self> {
-//         let size = size.size();
-//         let GpuDevice { device, .. } = get_gpu_device().await?;
-//         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-//             label: None,
-//             size,
-//             mapped_at_creation: false,
-//             usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::MAP_WRITE,
-//         });
-//         Ok(Self {
-//             buffer,
-//             size,
-//             _phantom: PhantomData,
-//         })
-//     }
-// }
+    fn deref(&self) -> &Self::Target {
+        from_bytes(&self.guard)
+    }
+}
 
-// impl<T: bytemuck::Pod> ReadWriteBuffer<T> {
-//     pub async fn get_value<V>(&mut self, f: impl FnOnce(&T) -> V) -> V {
-//         let f = |bytes: &[u8]| f(from_bytes(bytes));
-//         map_buffer!(self, f)
-//     }
-//     pub async fn get_value_mut<V>(&mut self, f: impl FnOnce(&mut T) -> V) -> V {
-//         let f = |bytes: &mut [u8]| f(from_bytes_mut(bytes));
-//         map_buffer_mut!(self, f)
-//     }
-// }
+impl<'a, T: bytemuck::Pod> Deref for WriteGuard<'a, [T]> {
+    type Target = [T];
 
-// impl<T: bytemuck::Pod> ReadWriteBuffer<[T]> {
-//     pub async fn get_slice<V>(&mut self, f: impl FnOnce(&[T]) -> V) -> V {
-//         let f = |bytes: &[u8]| f(cast_slice(bytes));
-//         map_buffer!(self, f)
-//     }
+    fn deref(&self) -> &Self::Target {
+        cast_slice(&self.guard)
+    }
+}
 
-//     pub async fn get_slice_mut<V>(&mut self, f: impl FnOnce(&mut [T]) -> V) -> V {
-//         let f = |bytes: &mut [u8]| f(cast_slice_mut(bytes));
-//         map_buffer_mut!(self, f)
-//     }
-// }
+impl<'a, T: bytemuck::Pod> DerefMut for WriteGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        from_bytes_mut(&mut self.guard)
+    }
+}
+
+impl<'a, T: bytemuck::Pod> DerefMut for WriteGuard<'a, [T]> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        cast_slice_mut(&mut self.guard)
+    }
+}

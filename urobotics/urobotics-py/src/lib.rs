@@ -1,5 +1,5 @@
 //! A thin wrapper around the system's Python interpreter.
-//! 
+//!
 //! THis module avoids statically or dynamically linking to the Python interpreter, and instead uses
 //! Python as a subprocess.
 use std::{
@@ -25,7 +25,7 @@ use urobotics_core::{
 #[derive(Deserialize)]
 pub struct PythonVenvBuilder {
     /// The path to the virtual environment.
-    /// 
+    ///
     /// If it doesn't exist, it will be created.
     #[serde(default = "default_venv_path")]
     pub venv_path: PathBuf,

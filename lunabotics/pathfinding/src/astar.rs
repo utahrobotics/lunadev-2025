@@ -110,7 +110,10 @@ pub(crate) fn astar(
             let node_parent = parents.get(&node).unwrap();
             let mut successors = heapless::Vec::<_, 8>::new();
             let mut try_add = |next: Vector2<u32>, successor_parent: Parent, cost: usize| {
-                if is_safe(step_size * node.cast() + offset, step_size * next.cast() + offset) {
+                if is_safe(
+                    step_size * node.cast() + offset,
+                    step_size * next.cast() + offset,
+                ) {
                     successors.push((next, successor_parent, cost)).unwrap();
                 }
             };

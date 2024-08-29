@@ -1,9 +1,9 @@
 //! A utility for setting up workspaces for an executable.
-//! 
+//!
 //! Some executables produce many files that are useful for debugging or analysis. One example is log files.
 //! This module makes it easy to set up a timestamped folder (the cabinet) for all generated files to be stored in, without
 //! any modification to the rest of the executable. This is done simply by changing the current working directory.
-//! 
+//!
 //! Since this can mess with relative paths, this module also provides a way to copy files and symlink folders to the new directory.
 
 use std::{
@@ -32,7 +32,7 @@ pub struct CabinetBuilder {
 
 impl CabinetBuilder {
     /// Create a new cabinet builder where the given path is used to create the folder.
-    /// 
+    ///
     /// As such, the folder name will be the same as the last part of the path.
     pub fn new(path: impl Into<PathBuf>) -> Self {
         Self {
@@ -43,7 +43,7 @@ impl CabinetBuilder {
     }
 
     /// Create a new cabinet builder where the cabinet folder is created under the given root path.
-    /// 
+    ///
     /// The folder name will be the timestamp that the cabinet was created.
     pub fn new_with_crate_name(root_path: impl Into<PathBuf>, crate_name: &str) -> Self {
         let mut out = Self::new(PathBuf::new());
@@ -142,7 +142,7 @@ macro_rules! default_cabinet_builder {
 }
 
 /// An abstraction allowing I/O writers to have a callback API.
-/// 
+///
 /// `T` is the type being serialized and `F` is the function that writes the data.
 pub struct DataDump<T, F> {
     receiver: Receiver<T>,
@@ -184,7 +184,7 @@ impl<T, F> DataDump<T, F> {
     }
 
     /// Boxes `self`.
-    /// 
+    ///
     /// The type `F` must be a valid writer function.
     pub fn boxed_writer(self) -> DataDump<T, Box<dyn FnMut(T) -> std::io::Result<()>>>
     where
@@ -325,7 +325,7 @@ impl<F> DataReader<F> {
     }
 
     /// Creates a new `DataReader` with the given reader function and callback, assuming that `T` can be deserialized from a `&str`.
-    /// 
+    ///
     /// Sections of data, separated by the given delimiter, are deserialized using `from_string` and passed to the callback.
     pub fn new_with_text_reader<T>(
         delimit: impl Into<String>,
@@ -365,7 +365,7 @@ impl<F> DataReader<F> {
     }
 
     /// Creates a new `DataReader` with the given file and callback, assuming that `T` can be deserialized from a `&str`.
-    /// 
+    ///
     /// Sections of data, separated by the given delimiter, are deserialized using `from_string` and passed to the callback.
     pub fn new_with_text_file<T>(
         delimit: impl Into<String>,

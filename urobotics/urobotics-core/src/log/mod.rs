@@ -67,7 +67,7 @@ static PANIC_CALLBACKS: LazyLock<PanicCallbacksRef> = LazyLock::new(|| {
 });
 
 /// Gets a reference to the callbacks that are invoked when a new log record is created.
-/// 
+///
 /// Calling this function will initialize the logging system if it has not been initialized yet.
 #[inline(always)]
 pub fn get_log_callbacks() -> &'static LogCallbacksRef {
@@ -84,7 +84,7 @@ pub fn add_logger(logger: impl log::Log + 'static) {
 }
 
 /// Gets a reference to the callbacks that are invoked when a panic occurs.
-/// 
+///
 /// Calling this function will initialize the panic hook if it has not been initialized yet.
 #[inline(always)]
 pub fn get_panic_hook_callbacks() -> &'static PanicCallbacksRef {
@@ -115,7 +115,7 @@ impl log::Log for LogPub {
 }
 
 /// Adds a logger that logs panics.
-/// 
+///
 /// Calling this multiple times will cause multiple logs to be generated for each panic.
 /// Panics are always considered `Error` level.
 pub fn log_panics() {
@@ -170,10 +170,10 @@ impl LogFilter {
 }
 
 /// Sets up a logger that outputs to a file.
-/// 
+///
 /// The file will be created if it does not exist, and will be cleared if it does.
 /// The log level for this specific file can be controlled with the returned `LogFilter`.
-/// 
+///
 /// # Errors
 /// Returns an error if the file could not be created or written to.
 pub fn log_to_file(path: impl AsRef<Path>) -> std::io::Result<LogFilter> {
@@ -207,7 +207,7 @@ pub fn log_to_file(path: impl AsRef<Path>) -> std::io::Result<LogFilter> {
 }
 
 /// Sets up a logger that outputs to the console.
-/// 
+///
 /// The log level for this specific console logger can be controlled with the returned `LogFilter`.
 pub fn log_to_console() -> LogFilter {
     get_program_time();
