@@ -714,7 +714,7 @@ impl<T: ?Sized + BufferSized + 'static> BufferDestination<T> for &mut GpuBuffer<
 
 impl<T: BufferSized + ?Sized> GpuBuffer<T> {
     /// Creates a zeroed buffer with the given size.
-    pub async fn zeroed(size: T::Size) -> anyhow::Result<Self> {
+    async fn zeroed_inner(size: T::Size) -> anyhow::Result<Self> {
         let GpuDevice { device, .. } = get_gpu_device().await?;
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
@@ -791,6 +791,7 @@ impl<T: BufferSized + ?Sized> GpuBuffer<T> {
         BytesWriteGuard {
             view: Some(view),
             size: self.size.size(),
+            referenced: false,
             write_buffer,
             buffer: &self.buffer,
         }
@@ -820,6 +821,10 @@ impl<T: bytemuck::Pod> GpuBuffer<T> {
             write_buffer: Default::default(),
             _phantom: PhantomData,
         })
+    }
+
+    pub async fn zeroed() -> anyhow::Result<Self> {
+        Self::zeroed_inner(StaticSize::default()).await
     }
 
     pub async fn read(&mut self) -> ReadGuard<'_, T> {
@@ -865,6 +870,10 @@ impl<T: bytemuck::Pod> GpuBuffer<[T]> {
         })
     }
 
+    pub async fn zeroed(len: usize) -> anyhow::Result<Self> {
+        Self::zeroed_inner(DynamicSize::new(len)).await
+    }
+
     pub async fn read(&mut self) -> ReadGuard<'_, [T]> {
         let guard = self.read_bytes().await;
         ReadGuard {
@@ -906,13 +915,14 @@ struct BytesWriteGuard<'a> {
     buffer: &'a wgpu::Buffer,
     write_buffer: &'a wgpu::Buffer,
     size: u64,
+    referenced: bool,
     view: Option<BufferViewMut<'a>>,
 }
 
 impl<'a> BytesWriteGuard<'a> {
     /// Writes the data in this buffer into the original buffer.
     ///
-    /// This happens automatically when the guard is dropped.
+    /// This happens automatically when the guard is dropped. However, it is not guaranteed that the write completes as soon as `drop` returns.
     ///
     /// # Note
     /// Awaiting the future is optional. The data will be written to the buffer regardless at some point in the future.
@@ -927,6 +937,7 @@ impl<'a> BytesWriteGuard<'a> {
         command_encoder.copy_buffer_to_buffer(self.write_buffer, 0, self.buffer, 0, self.size);
 
         let idx = queue.submit(std::iter::once(command_encoder.finish()));
+        self.referenced = false;
 
         let _ = tokio::task::spawn_blocking(|| {
             device.poll(wgpu::MaintainBase::WaitForSubmissionIndex(idx));
@@ -937,7 +948,9 @@ impl<'a> BytesWriteGuard<'a> {
 
 impl<'a> Drop for BytesWriteGuard<'a> {
     fn drop(&mut self) {
-        let _ = self.flush();
+        if self.referenced {
+            let _ = self.flush();
+        }
         self.view = None;
         self.buffer.unmap();
     }
@@ -953,6 +966,7 @@ impl<'a> Deref for BytesWriteGuard<'a> {
 
 impl<'a> DerefMut for BytesWriteGuard<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
+        self.referenced = true;
         &mut *self.view.as_mut().unwrap()
     }
 }
