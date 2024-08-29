@@ -11,8 +11,7 @@ thread_local! {
 /// The capacity of the given vector may change.
 pub(crate) fn decimate(
     path: &mut Vec<Vector2<f64>>,
-    step_size: f64,
-    mut is_safe: impl FnMut(Vector2<f64>) -> bool,
+    mut is_safe: impl FnMut(Vector2<f64>, Vector2<f64>) -> bool,
 ) {
     if path.len() < 3 {
         return;
@@ -32,19 +31,7 @@ pub(crate) fn decimate(
                 if path[to_index - 1] == from {
                     break;
                 }
-                let mut travel = to - from;
-                let distance = travel.magnitude();
-                travel.unscale_mut(distance);
-
-                let mut safe = true;
-                for i in 1..(distance / step_size).floor() as usize {
-                    let point = from + travel * (i as f64 * step_size);
-                    if !is_safe(point) {
-                        safe = false;
-                        break;
-                    }
-                }
-                if safe {
+                if is_safe(from, to) {
                     break;
                 }
                 to_index -= 1;

@@ -4,6 +4,7 @@ use nalgebra::Vector2;
 
 mod astar;
 mod decimate;
+pub mod obstacles;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Pathfinder<F = ()> {
@@ -21,7 +22,7 @@ pub struct Pathfinder<F = ()> {
     pub is_safe: F,
 }
 
-impl<F: FnMut(Vector2<f64>) -> bool> Pathfinder<F> {
+impl<F: FnMut(Vector2<f64>, Vector2<f64>) -> bool> Pathfinder<F> {
     pub fn new(map_dimension: Vector2<f64>, step_size: f64, is_safe: F) -> Self {
         Self {
             map_dimension,
@@ -40,7 +41,7 @@ impl<F: FnMut(Vector2<f64>) -> bool> Pathfinder<F> {
             self.step_size,
             &mut self.is_safe,
         );
-        decimate::decimate(&mut path, self.step_size, &mut self.is_safe);
+        decimate::decimate(&mut path, &mut self.is_safe);
         path
     }
 }
@@ -59,7 +60,7 @@ impl Pathfinder<()> {
         &mut self,
         start: Vector2<f64>,
         goal: Vector2<f64>,
-        mut is_safe: impl FnMut(Vector2<f64>) -> bool,
+        mut is_safe: impl FnMut(Vector2<f64>, Vector2<f64>) -> bool,
     ) -> Vec<Vector2<f64>> {
         let mut path = astar::astar(
             start,
@@ -69,7 +70,7 @@ impl Pathfinder<()> {
             self.step_size,
             &mut is_safe,
         );
-        decimate::decimate(&mut path, self.step_size, &mut is_safe);
+        decimate::decimate(&mut path, &mut is_safe);
         path
     }
 }
