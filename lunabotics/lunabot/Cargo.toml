@@ -22,7 +22,6 @@ common = { path = "../common" }
 pathfinding = { path = "../pathfinding" }
 nalgebra = { workspace = true }
 k = { workspace = true }
-regex = { workspace = true }
 # indexmap = "2.2.6"
 fxhash = { workspace = true }
 fitter = { workspace = true }

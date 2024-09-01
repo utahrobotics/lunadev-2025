@@ -2435,7 +2435,6 @@ dependencies = [
  "k",
  "nalgebra 0.32.5",
  "pathfinding",
- "regex",
  "serde",
  "spin_sleep",
  "urobotics",

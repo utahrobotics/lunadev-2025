@@ -1,6 +1,8 @@
 #![feature(result_flattening, deadline_api, never_type)]
 
 use std::{
+    cmp::Ordering,
+    collections::VecDeque,
     fs::File,
     net::SocketAddrV4,
     path::Path,
@@ -11,7 +13,6 @@ use std::{
 
 use bonsai_bt::{Behavior::*, Event, Status, UpdateArgs, BT};
 use common::{lunasim::FromLunasim, FromLunabase, FromLunabot};
-use regex::bytes::Regex;
 use serde::{Deserialize, Serialize};
 use setup::Blackboard;
 use spin_sleep::SpinSleeper;
@@ -284,18 +285,22 @@ impl Application for LunasimbotApp {
 
                 handle.spawn(async move {
                     {
-                        let mut bytes = Vec::with_capacity(256);
+                        let mut bytes = VecDeque::with_capacity(7);
                         let mut buf = [0u8];
-                        let regex = Regex::new("READY\n").unwrap();
                         loop {
                             match stdout.read_exact(&mut buf).await {
                                 Ok(0) => unreachable!("godot program should not exit"),
                                 Ok(_) => {
-                                    bytes.push(buf[0]);
+                                    bytes.push_back(buf[0]);
                                 }
                                 Err(e) => error!(target: "lunasim", "Faced the following error while reading stdout: {e}"),
                             }
-                            if let Some(_) = regex.find(&bytes) {
+                            match bytes.len().cmp(&6) {
+                                Ordering::Equal => {}
+                                Ordering::Greater => {bytes.pop_front();}
+                                Ordering::Less => continue,
+                            }
+                            if bytes == b"READY\n" {
                                 break;
                             }
                         }
