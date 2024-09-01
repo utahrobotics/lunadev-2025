@@ -11,6 +11,7 @@ use std::{
 
 use bonsai_bt::{Behavior::*, Event, Status, UpdateArgs, BT};
 use common::{lunasim::FromLunasim, FromLunabase, FromLunabot};
+use regex::bytes::Regex;
 use serde::{Deserialize, Serialize};
 use setup::Blackboard;
 use spin_sleep::SpinSleeper;
@@ -23,6 +24,7 @@ use urobotics::{
         self,
         io::{AsyncReadExt, AsyncWriteExt},
         process::{ChildStdin, Command},
+        runtime::Handle,
     },
     video::info::list_media_input,
     BlockOn,
@@ -252,7 +254,7 @@ impl Application for LunasimbotApp {
                     }}
                 }
 
-                let handle = get_tokio_handle();
+                let handle = Handle::current();
                 handle.spawn(async move {
                     let mut bytes = Vec::with_capacity(1024);
                     let mut buf = [0u8; 1024];
@@ -281,14 +283,22 @@ impl Application for LunasimbotApp {
                 let callbacks_ref = callbacks.get_ref();
 
                 handle.spawn(async move {
-                    if let Err(e) = tokio::io::copy(&mut (&mut stdout).take(76), &mut tokio::io::sink()).await {
-                        match e.kind() {
-                            std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::Other => {}
-                            _ => {
-                                error!(target: "lunasim", "Faced the following error while reading stdout: {e}");
+                    {
+                        let mut bytes = Vec::with_capacity(256);
+                        let mut buf = [0u8];
+                        let regex = Regex::new("READY\n").unwrap();
+                        loop {
+                            match stdout.read_exact(&mut buf).await {
+                                Ok(0) => unreachable!("godot program should not exit"),
+                                Ok(_) => {
+                                    bytes.push(buf[0]);
+                                }
+                                Err(e) => error!(target: "lunasim", "Faced the following error while reading stdout: {e}"),
+                            }
+                            if let Some(_) = regex.find(&bytes) {
+                                break;
                             }
                         }
-                        return;
                     }
                     let mut size_buf = [0u8; 4];
                     let mut bytes = Vec::with_capacity(1024);

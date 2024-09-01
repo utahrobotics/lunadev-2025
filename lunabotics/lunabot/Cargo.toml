@@ -4,7 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-urobotics = { workspace = true, features = ["serial", "camera", "python", "app", "video"]}
+urobotics = { workspace = true, features = [
+    "serial",
+    "camera",
+    "python",
+    "app",
+    "video",
+] }
 bonsai-bt = "0.6.3"
 serde = { workspace = true }
 spin_sleep = { workspace = true }
@@ -16,6 +22,7 @@ common = { path = "../common" }
 pathfinding = { path = "../pathfinding" }
 nalgebra = { workspace = true }
 k = { workspace = true }
+regex = { workspace = true }
 # indexmap = "2.2.6"
 fxhash = { workspace = true }
 fitter = { workspace = true }
