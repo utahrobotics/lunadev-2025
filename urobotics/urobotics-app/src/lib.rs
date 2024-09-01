@@ -59,7 +59,7 @@ impl Default for Applications {
         Self {
             name: "unnamed",
             description: "Lorem ipsum",
-            config_path: PathBuf::from("app_config.toml"),
+            config_path: PathBuf::from("app-config.toml"),
             log_path: PathBuf::from(".log"),
             functions: FxHashMap::default(),
             cpu_usage: Some(CpuUsage {

@@ -232,6 +232,7 @@ impl Application for LunasimbotApp {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
 
+        let _guard = get_tokio_handle().enter();
         let child;
         let (child_stdin, from_lunasim) = match cmd.spawn() {
             Ok(tmp) => {

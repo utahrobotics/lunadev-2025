@@ -13,7 +13,7 @@ cabinet/
 tree.txt
 
 *-gitignore
-/app_config.toml
+/app-config.toml
 rtp.sdp
 
 *-venv

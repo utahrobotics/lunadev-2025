@@ -24,7 +24,6 @@ impl AsyncTask for Temperature {
         let mut tasks = FuturesUnordered::new();
 
         for component in components.list_mut() {
-            println!("{}", component.label());
             if self
                 .ignore_component_temperature
                 .contains(component.label())
@@ -32,7 +31,6 @@ impl AsyncTask for Temperature {
                 continue;
             }
             component.refresh();
-            println!("{}", component.temperature());
             tasks.push(async {
                 let mut last_temp_check = Instant::now();
                 loop {
@@ -41,7 +39,6 @@ impl AsyncTask for Temperature {
                         continue;
                     }
                     component.refresh();
-                    println!("{}", component.temperature());
                     let temp = component.temperature();
                     if temp >= self.temperature_warning_threshold {
                         log::warn!("{} at {temp:.1} °C", component.label());
