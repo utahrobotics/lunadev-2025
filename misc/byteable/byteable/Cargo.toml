@@ -7,6 +7,9 @@ edition = "2021"
 byteable-core = { path = "../byteable-core" }
 byteable-derive = { path = "../byteable-derive", optional = true }
 static_assertions = { workspace = true }
+bincode = { workspace = true, optional = true }
+bitcode = { workspace = true, optional = true }
+serde = { workspace = true }
 
 [features]
 default = ["derive"]
