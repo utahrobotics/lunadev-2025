@@ -1,0 +1,13 @@
+[package]
+name = "byteable"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+byteable-core = { path = "../byteable-core" }
+byteable-derive = { path = "../byteable-derive", optional = true }
+static_assertions = { workspace = true }
+
+[features]
+default = ["derive"]
+derive = ["byteable-derive"]

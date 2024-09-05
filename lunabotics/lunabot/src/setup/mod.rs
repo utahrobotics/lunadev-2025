@@ -26,9 +26,9 @@ use cakap::{CakapSender, CakapSocket};
 use crate::{
     localization::{Localizer, LocalizerRef},
     run::RunState,
-    utils::Recycler,
     LunabotApp, RunMode,
 };
+use byteable::Recycler;
 
 pub(super) fn setup(
     bb: &mut Option<Blackboard>,
