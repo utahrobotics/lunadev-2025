@@ -9,8 +9,9 @@ byteable-derive = { path = "../byteable-derive", optional = true }
 static_assertions = { workspace = true }
 bincode = { workspace = true, optional = true }
 bitcode = { workspace = true, optional = true }
-serde = { workspace = true }
+serde = { workspace = true, optional = true }
 
 [features]
 default = ["derive"]
 derive = ["byteable-derive"]
+bincode = ["serde", "dep:bincode"]

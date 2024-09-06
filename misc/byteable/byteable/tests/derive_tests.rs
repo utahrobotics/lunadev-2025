@@ -1,6 +1,8 @@
-use byteable::{EmptyVec, FillByteVec, IntoBytes};
+use byteable::{
+    EmptyVec, FillByteVec, FillByteVecBitcode, IntoBytes, IntoBytesSlice, IntoBytesSliceBitcode,
+};
 
-#[derive(IntoBytes)]
+#[derive(IntoBytes, IntoBytesSlice)]
 struct FourZeroes;
 
 impl FillByteVec for FourZeroes {
@@ -16,7 +18,7 @@ fn test_four_zeroes() {
     assert_eq!(&[0, 0, 0, 0], src.to_bytes().as_slice());
 }
 
-#[derive(IntoBytes)]
+#[derive(IntoBytes, IntoBytesSlice)]
 struct FourEights;
 
 impl FillByteVec for FourEights {
@@ -38,4 +40,37 @@ fn test_eight_then_zero() {
     assert_eq!(&[8, 8, 8, 8], src.to_bytes().as_slice());
     let src = FourZeroes;
     assert_eq!(&[0, 0, 0, 0], src.to_bytes().as_slice());
+}
+
+#[derive(
+    bitcode::Decode,
+    bitcode::Encode,
+    FillByteVecBitcode,
+    IntoBytes,
+    IntoBytesSliceBitcode,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Debug,
+)]
+struct BitCoded(i32);
+
+#[test]
+fn test_bitcoded_01() {
+    let src = BitCoded(2421);
+    src.into_bytes_slice(|bytes| {
+        assert_eq!(src, bitcode::decode(bytes).unwrap());
+    });
+}
+
+#[test]
+fn test_bitcoded_nested() {
+    let src = BitCoded(2421);
+    src.into_bytes_slice(|bytes| {
+        src.into_bytes_slice(|bytes| {
+            assert_eq!(src, bitcode::decode(bytes).unwrap());
+        });
+        assert_eq!(src, bitcode::decode(bytes).unwrap());
+    });
 }

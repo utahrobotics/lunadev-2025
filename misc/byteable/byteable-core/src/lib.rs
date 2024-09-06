@@ -76,7 +76,7 @@ impl<T> Recycler<T> {
         }
     }
 
-    pub fn associate(&self, value: T) -> RecycleGuard<T> {
+    pub fn wrap(&self, value: T) -> RecycleGuard<T> {
         RecycleGuard {
             value: Some(value),
             queue: Some(self.queue.clone()),
@@ -92,7 +92,7 @@ impl<T> RecycleGuard<T> {
         }
     }
 
-    pub fn disassociate(mut self) -> T {
+    pub fn unwrap(mut self) -> T {
         self.queue = None;
         self.value.take().unwrap()
     }
@@ -144,15 +144,16 @@ pub trait FillByteVec {
 
 pub trait IntoBytes {
     fn to_bytes_vec(&self) -> Vec<u8> {
-        RecycleGuard::disassociate(self.to_bytes())
+        RecycleGuard::unwrap(self.to_bytes())
     }
     fn to_bytes_boxed(&self) -> Box<[u8]> {
         self.to_bytes_vec().into_boxed_slice()
     }
-    fn to_bytes_slice(&self, f: impl FnOnce(&[u8])) {
-        f(&self.to_bytes());
-    }
     fn to_bytes(&self) -> RecycleGuard<Vec<u8>>;
+}
+
+pub trait IntoBytesSlice {
+    fn into_bytes_slice<T>(&self, f: impl FnOnce(&[u8]) -> T) -> T;
 }
 
 macro_rules! impl_int {
@@ -163,6 +164,12 @@ macro_rules! impl_int {
             fn fill_bytes(&self, vec: EmptyVec<u8>) {
                 let vec: &mut Vec<u8> = vec.into();
                 vec.extend_from_slice(&self.to_ne_bytes());
+            }
+        }
+
+        impl IntoBytesSlice for $int {
+            fn into_bytes_slice<T>(&self, f: impl FnOnce(&[u8]) -> T) -> T {
+                f(&self.to_ne_bytes())
             }
         }
 
