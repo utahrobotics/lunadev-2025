@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use byteable::IntoBytesSlice;
 use common::lunasim::FromLunasimbot;
 use crossbeam::atomic::AtomicCell;
 use k::{Chain, Isometry3, UnitQuaternion, Vector3};
@@ -127,7 +128,7 @@ impl SyncTask for Localizer {
                     angle: angle as f32,
                     origin,
                 }
-                .encode(|bytes| {
+                .into_bytes_slice(|bytes| {
                     lunasim_stdin.write(bytes);
                 });
             }

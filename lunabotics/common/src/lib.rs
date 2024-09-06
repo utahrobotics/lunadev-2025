@@ -1,14 +1,11 @@
-use std::{cell::RefCell, io::Write};
+use std::io::Write;
 
-use bitcode::{Buffer, Decode, Encode};
+use bitcode::{Decode, Encode};
+use byteable::{FillByteVecBitcode, IntoBytes, IntoBytesSlice, IntoBytesSliceBitcode};
 
 pub mod lunasim;
 
-thread_local! {
-    static BITCODE_BUFFER: RefCell<Buffer> = RefCell::new(Buffer::default());
-}
-
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug, Encode, Decode, FillByteVecBitcode, IntoBytes, IntoBytesSliceBitcode)]
 pub enum FromLunabase {
     // Pong,
     ContinueMission,
@@ -22,17 +19,18 @@ impl TryFrom<&[u8]> for FromLunabase {
     type Error = bitcode::Error;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        BITCODE_BUFFER.with_borrow_mut(|buf| buf.decode(value))
+        __FromLunabase_BUFFER.with_borrow_mut(|queue| {
+            if queue.is_empty() {
+                queue.push_back(Default::default());
+            }
+            queue.front_mut().unwrap().decode(value)
+        })
     }
 }
 
 impl FromLunabase {
-    pub fn encode<T>(&self, f: impl FnOnce(&[u8]) -> T) -> T {
-        BITCODE_BUFFER.with_borrow_mut(|buf| f(buf.encode(self)))
-    }
-
     fn write_code(&self, mut w: impl Write) -> std::io::Result<()> {
-        self.encode(|bytes| {
+        self.into_bytes_slice(|bytes| {
             write!(w, "{self:?} = 0x")?;
             for b in bytes {
                 write!(w, "{b:x}")?;
@@ -52,7 +50,7 @@ impl FromLunabase {
     }
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug, Encode, Decode, FillByteVecBitcode, IntoBytes, IntoBytesSliceBitcode)]
 pub enum FromLunabot {
     Ping,
 }
@@ -61,17 +59,18 @@ impl TryFrom<&[u8]> for FromLunabot {
     type Error = bitcode::Error;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        BITCODE_BUFFER.with_borrow_mut(|buf| buf.decode(value))
+        __FromLunabot_BUFFER.with_borrow_mut(|queue| {
+            if queue.is_empty() {
+                queue.push_back(Default::default());
+            }
+            queue.front_mut().unwrap().decode(value)
+        })
     }
 }
 
 impl FromLunabot {
-    pub fn encode<T>(&self, f: impl FnOnce(&[u8]) -> T) -> T {
-        BITCODE_BUFFER.with_borrow_mut(|buf| f(buf.encode(self)))
-    }
-
     fn write_code(&self, mut w: impl Write) -> std::io::Result<()> {
-        self.encode(|bytes| {
+        self.into_bytes_slice(|bytes| {
             write!(w, "{self:?} = 0x")?;
             for b in bytes {
                 write!(w, "{b:x}")?;

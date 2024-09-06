@@ -28,7 +28,7 @@ use crate::{
     run::RunState,
     LunabotApp, RunMode,
 };
-use byteable::Recycler;
+use byteable::{IntoBytesSlice, Recycler};
 
 pub(super) fn setup(
     bb: &mut Option<Blackboard>,
@@ -205,13 +205,13 @@ impl Blackboard {
                     left: left as f32,
                     right: right as f32,
                 }
-                .encode(|bytes| {
+                .into_bytes_slice(|bytes| {
                     lunasim_stdin.write(bytes);
                 });
             }));
             raw_pcl_callbacks_ref.add_dyn_fn(Box::new(move |point_cloud| {
                 FromLunasimbot::PointCloud(point_cloud.iter().map(|p| [p.x, p.y, p.z]).collect())
-                    .encode(|bytes| {
+                    .into_bytes_slice(|bytes| {
                         lunasim_stdin2.write(bytes);
                     });
             }));
@@ -263,7 +263,7 @@ impl Blackboard {
         self.ping_timer -= delta;
         if self.ping_timer <= 0.0 {
             self.ping_timer = PING_DELAY;
-            FromLunabot::Ping.encode(|bytes| {
+            FromLunabot::Ping.into_bytes_slice(|bytes| {
                 let _ = self.get_lunabase_conn().send_unreliable(bytes);
             })
         }

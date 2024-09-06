@@ -13,3 +13,4 @@ common = { path = "../common" }
 cakap = { workspace = true }
 tasker = { workspace = true }
 log = { workspace = true }
+byteable = { workspace = true }

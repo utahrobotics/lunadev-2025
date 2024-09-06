@@ -7,6 +7,9 @@ use crossbeam::queue::SegQueue;
 use godot::{classes::Engine, prelude::*};
 use log::Log;
 use tasker::BlockOn;
+
+use byteable::IntoBytesSlice;
+
 struct LunabaseLib;
 
 #[gdextension]
@@ -139,7 +142,7 @@ impl INode for LunabotConn {
             inner.steering_timer -= delta;
             if inner.steering_timer <= 0.0 {
                 inner.steering_timer = STEERING_DELAY;
-                FromLunabase::Steering(inner.steering).encode(|bytes| {
+                FromLunabase::Steering(inner.steering).into_bytes_slice(|bytes| {
                     inner.lunabase_conn.send_unreliable(bytes).block_on();
                 });
             }
@@ -164,7 +167,7 @@ impl INode for LunabotConn {
 impl LunabotConn {
     fn send_reliable(&self, msg: &FromLunabase) {
         if let Some(inner) = &self.inner {
-            msg.encode(|bytes| {
+            msg.into_bytes_slice(|bytes| {
                 let mut vec = inner.lunabase_conn.get_recycled_byte_vecs().get_vec();
                 vec.extend_from_slice(bytes);
                 inner.lunabase_conn.send_reliable(vec);

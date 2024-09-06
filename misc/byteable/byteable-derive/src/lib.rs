@@ -17,6 +17,8 @@ pub fn into_bytes(input: TokenStream) -> TokenStream {
         byteable::assert_impl_all!(#ident: byteable::FillByteVec);
         impl byteable::IntoBytes for #ident {
             fn to_bytes(&self) -> byteable::RecycleGuard<Vec<u8>> {
+                use byteable::FillByteVec;
+
                 thread_local! {
                     static RECYCLER: byteable::Recycler<Vec<u8>> = byteable::Recycler::default();
                 }
@@ -54,7 +56,7 @@ pub fn into_bytes_bincode(input: TokenStream) -> TokenStream {
         impl byteable::FillByteVec for #ident {
             const SIZE_HINT: usize = 0;
 
-            fn fill_bytes(&self, vec: EmptyVec<u8>) {
+            fn fill_bytes(&self, vec: byteable::EmptyVec<u8>) {
                 let vec: &mut Vec<u8> = vec.into();
                 byteable::bincode::serialize_into(vec, self).expect("Failed to serialize");
             }
@@ -91,7 +93,7 @@ pub fn fill_byte_vec_bitcode(input: TokenStream) -> TokenStream {
         impl byteable::FillByteVec for #ident {
             const SIZE_HINT: usize = 0;
 
-            fn fill_bytes(&self, vec: EmptyVec<u8>) {
+            fn fill_bytes(&self, vec: byteable::EmptyVec<u8>) {
                 let vec: &mut Vec<u8> = vec.into();
                 #buffer_ident.with_borrow_mut(|queue| {
                     if queue.is_empty() {

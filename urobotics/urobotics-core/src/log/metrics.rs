@@ -53,7 +53,7 @@ impl AsyncTask for Temperature {
                 std::future::pending::<()>().await;
                 unreachable!()
             }
-            Some(x) => x,
+            Some(_) => unreachable!(),
         }
     }
 }

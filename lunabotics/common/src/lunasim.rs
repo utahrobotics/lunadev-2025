@@ -1,8 +1,7 @@
 use bitcode::{Decode, Encode};
+use byteable::{FillByteVecBitcode, IntoBytes, IntoBytesSliceBitcode};
 
-use crate::BITCODE_BUFFER;
-
-#[derive(Debug, Encode, Decode, Clone)]
+#[derive(Debug, Encode, Decode, Clone, FillByteVecBitcode, IntoBytesSliceBitcode, IntoBytes)]
 pub enum FromLunasim {
     Accelerometer {
         id: usize,
@@ -25,17 +24,16 @@ impl TryFrom<&[u8]> for FromLunasim {
     type Error = bitcode::Error;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        BITCODE_BUFFER.with_borrow_mut(|buf| buf.decode(value))
+        __FromLunasim_BUFFER.with_borrow_mut(|queue| {
+            if queue.is_empty() {
+                queue.push_back(Default::default());
+            }
+            queue.front_mut().unwrap().decode(value)
+        })
     }
 }
 
-impl FromLunasim {
-    pub fn encode<T>(&self, f: impl FnOnce(&[u8]) -> T) -> T {
-        BITCODE_BUFFER.with_borrow_mut(|buf| f(buf.encode(self)))
-    }
-}
-
-#[derive(Debug, Encode, Decode, Clone)]
+#[derive(Debug, Encode, Decode, Clone, FillByteVecBitcode, IntoBytesSliceBitcode, IntoBytes)]
 pub enum FromLunasimbot {
     PointCloud(Box<[[f32; 3]]>),
     Isometry {
@@ -53,12 +51,11 @@ impl TryFrom<&[u8]> for FromLunasimbot {
     type Error = bitcode::Error;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        BITCODE_BUFFER.with_borrow_mut(|buf| buf.decode(value))
-    }
-}
-
-impl FromLunasimbot {
-    pub fn encode<T>(&self, f: impl FnOnce(&[u8]) -> T) -> T {
-        BITCODE_BUFFER.with_borrow_mut(|buf| f(buf.encode(self)))
+        __FromLunasimbot_BUFFER.with_borrow_mut(|queue| {
+            if queue.is_empty() {
+                queue.push_back(Default::default());
+            }
+            queue.front_mut().unwrap().decode(value)
+        })
     }
 }

@@ -3,6 +3,7 @@ use std::{
     sync::{mpsc::Sender, Arc},
 };
 
+use byteable::IntoBytesSlice;
 use common::lunasim::{FromLunasim, FromLunasimbot};
 use crossbeam::queue::SegQueue;
 use godot::{
@@ -98,7 +99,7 @@ impl INode for Lunasim {
                     let Ok(msg) = to_lunasimbot_rx.recv() else {
                         break;
                     };
-                    if let Err(e) = msg.encode(|bytes| {
+                    if let Err(e) = msg.into_bytes_slice(|bytes| {
                         if bytes.len() > u32::MAX as usize {
                             godot_error!("Message is too large");
                             return Ok(());
