@@ -23,7 +23,7 @@ members = [
     "misc/k",
     "misc/byteable/byteable-core",
     "misc/byteable/byteable-derive",
-    "misc/byteable/byteable",
+    "misc/byteable/byteable", "lunabotics/heightmap",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]
