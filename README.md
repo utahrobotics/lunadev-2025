@@ -50,7 +50,7 @@ If you need a display soon, please let me know as there are temporary solutions.
 
 The following files/folders are not provided in this repository and you may need to generate some of them yourself. However, most will be auto-generated.
 
-1. [app_config.toml](https://github.com/utahrobotics/lunadev-2024/tree/main/examples/app_config.toml) - This file needs to be in the top-most directory and is *not* auto-generated. An example file can be found in the `examples` folder
+1. [app-config.toml](https://github.com/utahrobotics/lunadev-2024/tree/main/examples/app-config.toml) - This file needs to be in the top-most directory and is *not* auto-generated. An example file can be found in the `examples` folder
 2. urobotics-venv - A Python Virtual Environment that is used for Python interop
 3. cabinet - Logging folder that is auto-generated everytime a [urobotics-app](https://github.com/utahrobotics/lunadev-2025/tree/main/urobotics/urobotics-app) is executed
 
