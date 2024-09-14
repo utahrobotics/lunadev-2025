@@ -11,7 +11,7 @@ urobotics-py = { workspace = true }
 urobotics-app = { workspace = true, optional = true }
 urobotics-video = { workspace = true, optional = true }
 image = { workspace = true }
-nokhwa = { version = "0.10", features = ["input-native"] }
+nokhwa = { version = "0.10.4", features = ["input-native"], git = "https://github.com/kendfrey/nokhwa.git", branch = "0.10" }
 serde = { workspace = true }
 fxhash = { workspace = true }
 unfmt = { workspace = true }
