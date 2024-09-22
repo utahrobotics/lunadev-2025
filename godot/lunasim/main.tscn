@@ -1,4 +1,4 @@
-[gd_scene load_steps=26 format=3 uid="uid://bxmnthetrtkso"]
+[gd_scene load_steps=23 format=3 uid="uid://bxmnthetrtkso"]
 
 [ext_resource type="PackedScene" uid="uid://leqgym66qbuo" path="res://robot.tscn" id="1_y4wm8"]
 [ext_resource type="PackedScene" uid="uid://y0gvb4s2mi2x" path="res://apriltag.tscn" id="2_nhvh2"]
@@ -239,30 +239,10 @@ func _on_text_submitted(new_text: String) -> void:
 		push_error(\"Not a valid explicit tag translation deviation\")
 "
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ra6ev"]
-transparency = 1
-cull_mode = 2
-shading_mode = 0
-texture_filter = 0
-
-[sub_resource type="PlaneMesh" id="PlaneMesh_4o4e5"]
-size = Vector2(4, 8)
-
-[sub_resource type="GDScript" id="GDScript_wsib4"]
-script/source = "extends MeshInstance3D
-
-
-func _ready() -> void:
-	var image := Image.create_empty(64, 128, false, Image.FORMAT_RGB8)
-	material_override.albedo_texture = ImageTexture.create_from_image(image)
-	LunasimNode.heightmap_texture = material_override.albedo_texture
-"
-
 [node name="Node3D" type="Node3D"]
 script = SubResource("GDScript_lj4gt")
 
 [node name="Floor" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0, 0.5)
 collision_mask = 0
 script = SubResource("GDScript_x4vum")
 
@@ -273,6 +253,7 @@ shape = SubResource("HeightMapShape3D_s2y32")
 material_override = SubResource("StandardMaterial3D_501rf")
 
 [node name="Walls" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -0.5)
 collision_layer = 3
 collision_mask = 0
 
@@ -313,6 +294,10 @@ layers = 3
 mesh = SubResource("PlaneMesh_reayg")
 
 [node name="Robot" parent="." instance=ExtResource("1_y4wm8")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.459583, 0, -0.502181)
+
+[node name="OriginOnly" parent="Robot" index="0"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.459583, 0, -0.502181)
 
 [node name="ExternalView" parent="Robot/OriginOnly/CameraPivot" index="0"]
 remote_path = NodePath("../../../../CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport/ExternalCamera")
@@ -323,6 +308,9 @@ script = null
 
 [node name="RearCamera" parent="Robot" index="3"]
 remote_path = NodePath("../../CanvasLayer/TabContainer/RearCamera/AspectRatioContainer/SubviewportContainer/SubViewport/RearCamera")
+
+[node name="RaycastOrigin" parent="Robot" index="10"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.459583, 0, -0.502181)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_4hw3w")
@@ -337,15 +325,15 @@ explicit = true
 [node name="Rocks" type="Node" parent="."]
 
 [node name="Rock" type="Node3D" parent="Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.187387, 2.20208, -1.0874)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.861442, 2.20208, -1.0874)
 script = ExtResource("3_5i5qc")
 
 [node name="Rock2" type="Node3D" parent="Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.647925, 2.20208, -1.0874)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.32198, 2.20208, -1.0874)
 script = ExtResource("3_5i5qc")
 
 [node name="Rock3" type="Node3D" parent="Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.04411, 2.20208, -1.0874)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.71816, 2.20208, -1.0874)
 script = ExtResource("3_5i5qc")
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
@@ -378,7 +366,7 @@ size = Vector2i(1132, 597)
 render_target_update_mode = 4
 
 [node name="ExternalCamera" type="Camera3D" parent="CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport"]
-transform = Transform3D(0.283078, -0.220396, 0.93343, -1.77252e-08, 0.973239, 0.229795, -0.959097, -0.0650499, 0.275503, 3.23287, 1.29588, 0.954185)
+transform = Transform3D(0.283078, -0.220396, 0.93343, -1.77252e-08, 0.973239, 0.229795, -0.959097, -0.0650499, 0.275503, 2.77329, 1.29588, 0.452005)
 
 [node name="DepthCamera1" type="MarginContainer" parent="CanvasLayer/TabContainer"]
 visible = false
@@ -403,7 +391,7 @@ size = Vector2i(2, 2)
 render_target_update_mode = 0
 
 [node name="DepthCamera" type="Camera3D" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport"]
-transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, 0, 0.572526, -0.298189)
+transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, -0.459583, 0.572526, -0.80037)
 cull_mask = 1048571
 fov = 120.0
 script = ExtResource("3_n7k3i")
@@ -431,7 +419,7 @@ size = Vector2i(2, 2)
 render_target_update_mode = 0
 
 [node name="RearCamera" type="Camera3D" parent="CanvasLayer/TabContainer/RearCamera/AspectRatioContainer/SubviewportContainer/SubViewport"]
-transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, 0, 0.572526, 0.248651)
+transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, -0.459583, 0.572526, -0.25353)
 cull_mask = 1048571
 fov = 120.0
 script = ExtResource("3_n7k3i")
@@ -535,12 +523,6 @@ layout_mode = 2
 focus_mode = 1
 text = "0.0"
 script = SubResource("GDScript_f6nnu")
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 2.57404, -3.5)
-material_override = SubResource("StandardMaterial3D_ra6ev")
-mesh = SubResource("PlaneMesh_4o4e5")
-script = SubResource("GDScript_wsib4")
 
 [connection signal="fov_changed" from="Robot/OriginOnly/CameraPivot" to="CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport/ExternalCamera" method="set_fov"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit" to="CanvasLayer/Control/VBoxContainer/LineEdit" method="_on_text_submitted"]

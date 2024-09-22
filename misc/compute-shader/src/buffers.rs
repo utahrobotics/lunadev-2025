@@ -748,13 +748,17 @@ impl<T: BufferSized + ?Sized> GpuBuffer<T> {
         });
 
         command_encoder.copy_buffer_to_buffer(&self.buffer, 0, read_buffer, 0, self.size.size());
+        let idx = queue.submit(std::iter::once(command_encoder.finish()));
+        let _ = tokio::task::spawn_blocking(|| {
+            device.poll(wgpu::MaintainBase::WaitForSubmissionIndex(idx));
+        })
+        .await;
 
         let slice = read_buffer.slice(0..self.size.size());
         let (sender, receiver) = oneshot::channel::<()>();
         slice.map_async(MapMode::Read, move |_| {
             let _sender = sender;
         });
-        queue.submit(std::iter::once(command_encoder.finish()));
         let _ = receiver.await;
         let view = slice.get_mapped_range();
         BytesReadGuard {

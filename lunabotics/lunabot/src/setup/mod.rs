@@ -215,7 +215,12 @@ impl Blackboard {
                 
                 tokio::spawn(async move {
                     heightmapper.call(&*point_cloud_buffer).await;
-                    heightmap_callbacks.call(&heightmapper.read_heightmap().await);
+                    {
+                        let heightmap = heightmapper.read_heightmap().await;
+                        block_in_place(|| {
+                            heightmap_callbacks.call(&heightmap);
+                        });
+                    }
                     heightmapper_cell.store(Some((heightmapper, point_cloud_buffer, heightmap_callbacks)));
                 });
             }
