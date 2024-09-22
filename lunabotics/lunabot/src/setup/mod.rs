@@ -1,6 +1,8 @@
 use bonsai_bt::Status;
 use common::{lunasim::FromLunasimbot, FromLunabase, FromLunabot};
+use crossbeam::atomic::AtomicCell;
 use fitter::utils::CameraProjection;
+use heightmap::HeightMapper;
 use k::{Chain, Isometry3, UnitQuaternion};
 use nalgebra::{UnitVector3, Vector2, Vector3, Vector4};
 use urobotics::{
@@ -8,17 +10,12 @@ use urobotics::{
     define_callbacks, fn_alias, get_tokio_handle,
     log::{error, info},
     task::SyncTask,
-    tokio::task::block_in_place,
+    tokio::{self, task::block_in_place},
     BlockOn,
 };
 
 use std::{
-    cmp::Reverse,
-    collections::BinaryHeap,
-    net::SocketAddr,
-    ops::ControlFlow,
-    sync::{mpsc, Arc},
-    time::{Duration, Instant},
+    cell::UnsafeCell, cmp::Reverse, collections::BinaryHeap, net::SocketAddr, ops::ControlFlow, sync::{mpsc, Arc}, time::{Duration, Instant}
 };
 
 use cakap::{CakapSender, CakapSocket};
@@ -117,13 +114,14 @@ impl Blackboard {
         let raw_pcl_callbacks_ref = raw_pcl_callbacks.get_ref();
 
         let mut drive_callbacks = DriveCallbacks::default();
-        let lunasim_stdin = match &*lunabot_app.run_mode {
+        let (heightmapper, lunasim_stdin) = match &*lunabot_app.run_mode {
             RunMode::Simulation {
                 lunasim_stdin,
                 from_lunasim,
             } => {
+                let projection_size = Vector2::new(36, 24);
                 let depth_project =
-                    Arc::new(CameraProjection::new(10.392, Vector2::new(36, 24), 0.01).block_on()?);
+                    Arc::new(CameraProjection::new(10.392, projection_size, 0.01).block_on()?);
 
                 let camera_link = robot_chain.find_link("depth_camera_link").unwrap().clone();
                 let points_buffer_recycler = Recycler::<Box<[Vector4<f32>]>>::default();
@@ -193,9 +191,12 @@ impl Blackboard {
                     }
                 });
 
-                Some(lunasim_stdin.clone())
+                let heightmapper = HeightMapper::new(Vector2::new(128, 64), 0.01, projection_size).block_on().unwrap();
+                (heightmapper, Some(lunasim_stdin.clone()))
             }
-            RunMode::Production => None,
+            RunMode::Production => {
+                todo!()
+            }
         };
 
         if let Some(lunasim_stdin) = lunasim_stdin.clone() {
@@ -216,6 +217,20 @@ impl Blackboard {
                     });
             }));
         }
+        
+        let heightmapper_cell = Arc::new(AtomicCell::new(Some((heightmapper, Vec::new()))));
+        raw_pcl_callbacks_ref.add_dyn_fn(Box::new(move |point_cloud| {
+            if let Some((mut heightmapper, mut point_cloud_buffer)) = heightmapper_cell.take() {
+                point_cloud_buffer.clear();
+                point_cloud_buffer.extend_from_slice(point_cloud);
+                let heightmapper_cell = heightmapper_cell.clone();
+                
+                tokio::spawn(async move {
+                    heightmapper.call(&*point_cloud_buffer).await;
+                    heightmapper_cell.store(Some((heightmapper, point_cloud_buffer)));
+                });
+            }
+        }));
 
         let localizer = Localizer {
             robot_chain: robot_chain.clone(),

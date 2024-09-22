@@ -1,27 +1,31 @@
 
+use std::future::Future;
+
 use compute_shader::{buffers::{BufferSource, BufferType, GpuBuffer, HostReadWrite, HostWriteOnly, ReadGuard, ShaderReadOnly, ShaderReadWrite}, wgpu, Compute};
 use nalgebra::{Vector2, Vector4};
 
-type HeightMapShader = Compute<(
+type HeightMapBuffers = (
     // In the shader code, the type is atomic<u32>, but in the shader f32s are bitcasted to u32s so that they can be atomically updated
     BufferType<[f32], HostReadWrite, ShaderReadWrite>,
     BufferType<[Vector4<f32>], HostWriteOnly, ShaderReadOnly>,
     BufferType<[f32], HostWriteOnly, ShaderReadOnly>,
-)>;
+);
+type HeightMapShader = Compute<HeightMapBuffers>;
 
 pub struct HeightMapper {
     heightmap_size: Vector2<u32>,
     heightmap: GpuBuffer<[f32]>,
     heightmap_shader: HeightMapShader,
+    tri_count: u32
 }
 
 impl HeightMapper {
     pub async fn new(
         heightmap_size: Vector2<u32>,
         cell_size: f32,
-        projection_size: Vector2<usize>
+        projection_size: Vector2<u32>
     ) -> anyhow::Result<Self> {
-        let cell_count = heightmap_size.x * heightmap_size.y;
+        let cell_count = heightmap_size.x as usize * heightmap_size.y as usize;
         let point_count = projection_size.x * projection_size.y;
         let shader = format!(
             r#"
@@ -53,15 +57,15 @@ fn main(
 ) {{
     let heightmap_x = f32(workgroup_id.x) * CELL_SIZE;
     let heightmap_y = f32(workgroup_id.y) * CELL_SIZE;
-    let heightmap_index = heightmap_y * HEIGHTMAP_WIDTH + heightmap_x;
+    let heightmap_index = workgroup_id.y * HEIGHTMAP_WIDTH + workgroup_id.x;
     let tri_index = workgroup_id.z;
     let half_layer_index = tri_index / (PROJECTION_WIDTH - 1);
     let layer_index = half_layer_index / 2;
     let projection_x = tri_index % (PROJECTION_WIDTH - 1);
     let v1_index = layer_index * PROJECTION_WIDTH + projection_x;
-    let v1: vec4<f32>;
-    let v2: vec4<f32>;
-    let v3: vec4<f32>;
+    var v1: vec4<f32>;
+    var v2: vec4<f32>;
+    var v3: vec4<f32>;
     
     if half_layer_index % 2 == 0 {{
         v1 = points[v1_index];
@@ -109,25 +113,25 @@ fn main(
                 label: Some("HeightMapShader"),
                 source: wgpu::ShaderSource::Wgsl(shader.into()),
             },
-            BufferType::new_dyn(cell_count as usize),
-            BufferType::new_dyn(point_count),
-            BufferType::new_dyn(cell_count as usize),
+            BufferType::new_dyn(cell_count),
+            BufferType::new_dyn(point_count as usize),
+            BufferType::new_dyn(cell_count),
         )
         .await?;
 
         Ok(Self {
             heightmap_shader,
             heightmap_size,
-            heightmap: GpuBuffer::<[f32]>::zeroed(cell_count as usize).await?,
+            heightmap: GpuBuffer::<[f32]>::zeroed(cell_count).await?,
+            tri_count: 2 * (projection_size.x - 1) * (projection_size.y - 1)
         })
     }
     
-    pub async fn process(&mut self, points: impl BufferSource<[Vector4<f32>]>) {
+    pub fn call<'a>(&'a mut self, points: impl BufferSource<[Vector4<f32>]>) -> impl Future<Output=()> + 'a {
         self.heightmap_shader
             .new_pass(&self.heightmap, points, &self.heightmap)
-            .workgroups_count(self.heightmap_size.x, self.heightmap_size.y, 1)
+            .workgroups_count(self.heightmap_size.x, self.heightmap_size.y, self.tri_count)
             .call(&mut self.heightmap, (), ())
-            .await
     }
     
     pub async fn read_heightmap(&mut self) -> ReadGuard<[f32]> {

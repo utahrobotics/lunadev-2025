@@ -2423,6 +2423,7 @@ dependencies = [
  "crossbeam",
  "fitter",
  "fxhash",
+ "heightmap",
  "k",
  "nalgebra 0.32.6",
  "pathfinding",

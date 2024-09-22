@@ -26,3 +26,4 @@ k = { workspace = true }
 fxhash = { workspace = true }
 fitter = { workspace = true }
 byteable = { workspace = true }
+heightmap = { path = "../heightmap" }
