@@ -1,4 +1,4 @@
-[gd_scene load_steps=23 format=3 uid="uid://bxmnthetrtkso"]
+[gd_scene load_steps=26 format=3 uid="uid://bxmnthetrtkso"]
 
 [ext_resource type="PackedScene" uid="uid://leqgym66qbuo" path="res://robot.tscn" id="1_y4wm8"]
 [ext_resource type="PackedScene" uid="uid://y0gvb4s2mi2x" path="res://apriltag.tscn" id="2_nhvh2"]
@@ -237,6 +237,25 @@ func _on_text_submitted(new_text: String) -> void:
 	else:
 		text = \"0\"
 		push_error(\"Not a valid explicit tag translation deviation\")
+"
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ra6ev"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+texture_filter = 0
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_4o4e5"]
+size = Vector2(4, 8)
+
+[sub_resource type="GDScript" id="GDScript_wsib4"]
+script/source = "extends MeshInstance3D
+
+
+func _ready() -> void:
+	var image := Image.create_empty(64, 128, false, Image.FORMAT_RGB8)
+	material_override.albedo_texture = ImageTexture.create_from_image(image)
+	LunasimNode.heightmap_texture = material_override.albedo_texture
 "
 
 [node name="Node3D" type="Node3D"]
@@ -516,6 +535,12 @@ layout_mode = 2
 focus_mode = 1
 text = "0.0"
 script = SubResource("GDScript_f6nnu")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 2.57404, -3.5)
+material_override = SubResource("StandardMaterial3D_ra6ev")
+mesh = SubResource("PlaneMesh_4o4e5")
+script = SubResource("GDScript_wsib4")
 
 [connection signal="fov_changed" from="Robot/OriginOnly/CameraPivot" to="CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport/ExternalCamera" method="set_fov"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit" to="CanvasLayer/Control/VBoxContainer/LineEdit" method="_on_text_submitted"]

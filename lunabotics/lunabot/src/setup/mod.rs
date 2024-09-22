@@ -15,7 +15,7 @@ use urobotics::{
 };
 
 use std::{
-    cell::UnsafeCell, cmp::Reverse, collections::BinaryHeap, net::SocketAddr, ops::ControlFlow, sync::{mpsc, Arc}, time::{Duration, Instant}
+    cmp::Reverse, collections::BinaryHeap, net::SocketAddr, ops::ControlFlow, sync::{mpsc, Arc}, time::{Duration, Instant}
 };
 
 use cakap::{CakapSender, CakapSocket};
@@ -59,6 +59,10 @@ fn_alias! {
     type PointCloudCallbacksRef = CallbacksRef(&[Vector4<f32>]) + Send + Sync
 }
 define_callbacks!(PointCloudCallbacks => Fn(point_cloud: &[Vector4<f32>]) + Send + Sync);
+fn_alias! {
+    type HeightMapCallbacksRef = CallbacksRef(&[f32]) + Send + Sync
+}
+define_callbacks!(HeightMapCallbacks => Fn(heightmap: &[f32]) + Send + Sync);
 
 pub struct Blackboard {
     special_instants: BinaryHeap<Reverse<Instant>>,
@@ -191,13 +195,31 @@ impl Blackboard {
                     }
                 });
 
-                let heightmapper = HeightMapper::new(Vector2::new(128, 64), 0.01, projection_size).block_on().unwrap();
+                let heightmapper = HeightMapper::new(Vector2::new(64, 128), 0.0625, projection_size).block_on().unwrap();
                 (heightmapper, Some(lunasim_stdin.clone()))
             }
             RunMode::Production => {
                 todo!()
             }
         };
+        
+        let heightmap_callbacks = HeightMapCallbacks::default();
+        let heightmap_callbacks_ref = heightmap_callbacks.get_ref();
+        let heightmapper_cell = Arc::new(AtomicCell::new(Some((heightmapper, Vec::new(), heightmap_callbacks))));
+        
+        raw_pcl_callbacks_ref.add_dyn_fn(Box::new(move |point_cloud| {
+            if let Some((mut heightmapper, mut point_cloud_buffer, mut heightmap_callbacks)) = heightmapper_cell.take() {
+                point_cloud_buffer.clear();
+                point_cloud_buffer.extend_from_slice(point_cloud);
+                let heightmapper_cell = heightmapper_cell.clone();
+                
+                tokio::spawn(async move {
+                    heightmapper.call(&*point_cloud_buffer).await;
+                    heightmap_callbacks.call(&heightmapper.read_heightmap().await);
+                    heightmapper_cell.store(Some((heightmapper, point_cloud_buffer, heightmap_callbacks)));
+                });
+            }
+        }));
 
         if let Some(lunasim_stdin) = lunasim_stdin.clone() {
             let lunasim_stdin2 = lunasim_stdin.clone();
@@ -207,30 +229,24 @@ impl Blackboard {
                     right: right as f32,
                 }
                 .into_bytes_slice(|bytes| {
-                    lunasim_stdin.write(bytes);
+                    lunasim_stdin2.write(bytes);
                 });
             }));
+            let lunasim_stdin2 = lunasim_stdin.clone();
             raw_pcl_callbacks_ref.add_dyn_fn(Box::new(move |point_cloud| {
                 FromLunasimbot::PointCloud(point_cloud.iter().map(|p| [p.x, p.y, p.z]).collect())
                     .into_bytes_slice(|bytes| {
                         lunasim_stdin2.write(bytes);
                     });
             }));
+            let lunasim_stdin2 = lunasim_stdin.clone();
+            heightmap_callbacks_ref.add_dyn_fn(Box::new(move |heightmap| {
+                FromLunasimbot::HeightMap(heightmap.to_vec().into_boxed_slice())
+                    .into_bytes_slice(|bytes| {
+                        lunasim_stdin2.write(bytes);
+                    });
+            }));
         }
-        
-        let heightmapper_cell = Arc::new(AtomicCell::new(Some((heightmapper, Vec::new()))));
-        raw_pcl_callbacks_ref.add_dyn_fn(Box::new(move |point_cloud| {
-            if let Some((mut heightmapper, mut point_cloud_buffer)) = heightmapper_cell.take() {
-                point_cloud_buffer.clear();
-                point_cloud_buffer.extend_from_slice(point_cloud);
-                let heightmapper_cell = heightmapper_cell.clone();
-                
-                tokio::spawn(async move {
-                    heightmapper.call(&*point_cloud_buffer).await;
-                    heightmapper_cell.store(Some((heightmapper, point_cloud_buffer)));
-                });
-            }
-        }));
 
         let localizer = Localizer {
             robot_chain: robot_chain.clone(),

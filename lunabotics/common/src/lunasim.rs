@@ -36,6 +36,7 @@ impl TryFrom<&[u8]> for FromLunasim {
 #[derive(Debug, Encode, Decode, Clone, FillByteVecBitcode, IntoBytesSliceBitcode, IntoBytes)]
 pub enum FromLunasimbot {
     PointCloud(Box<[[f32; 3]]>),
+    HeightMap(Box<[f32]>),
     Isometry {
         axis: [f32; 3],
         angle: f32,

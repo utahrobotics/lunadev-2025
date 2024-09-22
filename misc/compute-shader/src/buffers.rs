@@ -749,7 +749,7 @@ impl<T: BufferSized + ?Sized> GpuBuffer<T> {
 
         command_encoder.copy_buffer_to_buffer(&self.buffer, 0, read_buffer, 0, self.size.size());
 
-        let slice = self.buffer.slice(0..self.size.size());
+        let slice = read_buffer.slice(0..self.size.size());
         let (sender, receiver) = oneshot::channel::<()>();
         slice.map_async(MapMode::Read, move |_| {
             let _sender = sender;
@@ -759,7 +759,7 @@ impl<T: BufferSized + ?Sized> GpuBuffer<T> {
         let view = slice.get_mapped_range();
         BytesReadGuard {
             view: Some(view),
-            buffer: &self.buffer,
+            buffer: read_buffer,
         }
     }
 
@@ -952,7 +952,7 @@ impl<'a> Drop for BytesWriteGuard<'a> {
             let _ = self.flush();
         }
         self.view = None;
-        self.buffer.unmap();
+        self.write_buffer.unmap();
     }
 }
 
