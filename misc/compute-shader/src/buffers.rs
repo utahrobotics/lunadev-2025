@@ -477,7 +477,7 @@ impl<T: bytemuck::Pod> BufferDestination<T> for &mut T {
                 })
         };
 
-        command_encoder.copy_buffer_to_buffer(&src_buffer, 0, &buffer, 0, size_of::<T>() as u64);
+        command_encoder.copy_buffer_to_buffer(src_buffer, 0, &buffer, 0, size_of::<T>() as u64);
 
         buffer
     }
@@ -552,7 +552,7 @@ impl<T: bytemuck::Pod> BufferDestination<[T]> for &mut [T] {
                 })
         };
 
-        command_encoder.copy_buffer_to_buffer(&src_buffer, 0, &buffer, 0, size);
+        command_encoder.copy_buffer_to_buffer(src_buffer, 0, &buffer, 0, size);
 
         Some(buffer)
     }
@@ -653,7 +653,7 @@ impl<T: ?Sized> BufferDestination<T> for () {
     }
 }
 
-/// An Opaque Buffer is a buffer that cannot be read or written to outside of a shader.
+/// A GPU Buffer is a buffer that cannot be read or written to outside of a shader.
 ///
 /// This is useful for when you want to pass data between shaders but don't need to read or write to it on the host.
 /// If you do need to access the data, you can copy to and from this buffer with another buffer that has your desired access.
@@ -700,7 +700,7 @@ impl<T: ?Sized + BufferSized + 'static> BufferDestination<T> for &mut GpuBuffer<
         if self.size.size() == 0 {
             return;
         }
-        command_encoder.copy_buffer_to_buffer(&src_buffer, 0, &self.buffer, 0, self.size.size());
+        command_encoder.copy_buffer_to_buffer(src_buffer, 0, &self.buffer, 0, self.size.size());
     }
 
     async fn from_buffer(
