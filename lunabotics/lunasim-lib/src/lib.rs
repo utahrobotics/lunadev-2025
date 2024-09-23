@@ -7,7 +7,7 @@ use byteable::IntoBytesSlice;
 use common::lunasim::{FromLunasim, FromLunasimbot};
 use crossbeam::queue::SegQueue;
 use godot::{
-    classes::{image::Format, Engine, Image, ImageTexture},
+    classes::Engine,
     global::{randf_range, randfn},
     prelude::*,
 };
@@ -37,10 +37,7 @@ struct Lunasim {
     explicit_apriltag_rotation_deviation: f64,
     #[var]
     explicit_apriltag_translation_deviation: f64,
-    #[var]
-    heightmap_texture: Option<Gd<ImageTexture>>,
     
-    heightmap_image: Option<Gd<Image>>,
     shared: Arc<LunasimShared>,
     base: Base<Node>,
 }
@@ -123,8 +120,6 @@ impl INode for Lunasim {
             depth_deviation: 0.0,
             explicit_apriltag_rotation_deviation: 0.0,
             explicit_apriltag_translation_deviation: 0.0,
-            heightmap_texture: None,
-            heightmap_image: None,
             shared,
             base,
         }
@@ -164,39 +159,11 @@ impl INode for Lunasim {
                     self.base_mut()
                         .emit_signal("drive".into(), &[left.to_variant(), right.to_variant()]);
                 }
-                FromLunasimbot::HeightMap(map) => if let Some(heightmap_texture) = &mut self.heightmap_texture {
-                    let bytes: PackedByteArray = map.iter()
-                        .copied()
-                        .flat_map(|mut height| {
-                            if height < 0.0 {
-                                height *= -1.0;
-                                if height > 0.6 {
-                                    height = 0.6;
-                                }
-                                let factor = (255.0 * height / 0.6).round() as u8;
-                                [factor, 0u8, 0u8, factor]
-                            } else {
-                                if height > 1.0 {
-                                    height = 1.0;
-                                }
-                                let factor = (255.0 * height / 1.0).round() as u8;
-                                [0u8, 0u8, factor, factor]
-                            }
-                        })
-                        .collect();
-                    
-                    let image = match &mut self.heightmap_image {
-                        Some(image) => {
-                            image.set_data(64, 128, false, Format::RGB8, &bytes);
-                            image
-                        }
-                        None => {
-                            self.heightmap_image = Image::create_from_data(64, 128, false, Format::RGB8, &bytes);
-                            self.heightmap_image.as_ref().unwrap()
-                        }
-                    };
-                    
-                    heightmap_texture.update(image);
+                FromLunasimbot::HeightMap(heights) => {
+                    let heights: PackedFloat32Array = Box::into_iter(heights).collect();
+
+                    self.base_mut()
+                        .emit_signal("heightmap".into(), &[heights.to_variant()]);
                 }
                 
             }
@@ -227,6 +194,8 @@ fn rand_vec(deviation: f64) -> Vector3 {
 impl Lunasim {
     #[signal]
     fn fitted_points(points: Vec<Vector3>);
+    #[signal]
+    fn heightmap(heights: PackedFloat32Array);
     #[signal]
     fn transform(transform: Transform3D);
     #[signal]

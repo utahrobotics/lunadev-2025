@@ -1,4 +1,4 @@
-[gd_scene load_steps=23 format=3 uid="uid://bxmnthetrtkso"]
+[gd_scene load_steps=27 format=3 uid="uid://bxmnthetrtkso"]
 
 [ext_resource type="PackedScene" uid="uid://leqgym66qbuo" path="res://robot.tscn" id="1_y4wm8"]
 [ext_resource type="PackedScene" uid="uid://y0gvb4s2mi2x" path="res://apriltag.tscn" id="2_nhvh2"]
@@ -89,6 +89,39 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	thr.wait_to_finish()
+"
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wujp8"]
+shading_mode = 0
+albedo_color = Color(0.904334, 0.364874, 0.918573, 1)
+use_point_size = true
+point_size = 5.0
+
+[sub_resource type="PointMesh" id="PointMesh_fxwe8"]
+material = SubResource("StandardMaterial3D_wujp8")
+
+[sub_resource type="MultiMesh" id="MultiMesh_yaeoc"]
+transform_format = 1
+mesh = SubResource("PointMesh_fxwe8")
+
+[sub_resource type="GDScript" id="GDScript_03k1a"]
+script/source = "extends MultiMeshInstance3D
+
+
+const CELL_SIZE := 0.0625
+
+
+func _ready() -> void:
+	var mesh: MultiMesh = multimesh
+	mesh.instance_count = 8192
+	LunasimNode.heightmap.connect(
+		func(heights: PackedFloat32Array):
+			var i := 0
+			for z in range(128):
+				for x in range(64):
+					mesh.set_instance_transform(i, Transform3D(Basis(), Vector3(-x * CELL_SIZE, heights[i], -z * CELL_SIZE)))
+					i += 1
+	)
 "
 
 [sub_resource type="HeightMapShape3D" id="HeightMapShape3D_s2y32"]
@@ -245,6 +278,12 @@ script = SubResource("GDScript_lj4gt")
 [node name="Floor" type="StaticBody3D" parent="."]
 collision_mask = 0
 script = SubResource("GDScript_x4vum")
+
+[node name="HeightMap" type="MultiMeshInstance3D" parent="Floor"]
+top_level = true
+layers = 4
+multimesh = SubResource("MultiMesh_yaeoc")
+script = SubResource("GDScript_03k1a")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
 shape = SubResource("HeightMapShape3D_s2y32")

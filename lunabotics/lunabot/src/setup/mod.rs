@@ -195,7 +195,7 @@ impl Blackboard {
                     }
                 });
 
-                let heightmapper = HeightMapper::new(Vector2::new(64, 128), 0.0625, projection_size).block_on().unwrap();
+                let heightmapper = HeightMapper::new(Vector2::new(64, 128), -0.0625, projection_size).block_on().unwrap();
                 (heightmapper, Some(lunasim_stdin.clone()))
             }
             RunMode::Production => {
