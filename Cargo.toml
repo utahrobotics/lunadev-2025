@@ -93,5 +93,11 @@ byteable = { path = "misc/byteable/byteable" }
 [profile.dev.package.lunabot]
 opt-level = 3
 
+[profile.dev.package.lunasim-lib]
+opt-level = 3
+
+[profile.dev.package.lunabase-lib]
+opt-level = 3
+
 [profile.release.package.lunabot]
 debug = true

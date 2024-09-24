@@ -15,7 +15,12 @@ use urobotics::{
 };
 
 use std::{
-    cmp::Reverse, collections::BinaryHeap, net::SocketAddr, ops::ControlFlow, sync::{mpsc, Arc}, time::{Duration, Instant}
+    cmp::Reverse,
+    collections::BinaryHeap,
+    net::SocketAddr,
+    ops::ControlFlow,
+    sync::{mpsc, Arc},
+    time::{Duration, Instant},
 };
 
 use cakap::{CakapSender, CakapSocket};
@@ -195,24 +200,33 @@ impl Blackboard {
                     }
                 });
 
-                let heightmapper = HeightMapper::new(Vector2::new(64, 128), -0.0625, projection_size).block_on().unwrap();
+                let heightmapper =
+                    HeightMapper::new(Vector2::new(64, 128), -0.0625, projection_size)
+                        .block_on()
+                        .unwrap();
                 (heightmapper, Some(lunasim_stdin.clone()))
             }
             RunMode::Production => {
                 todo!()
             }
         };
-        
+
         let heightmap_callbacks = HeightMapCallbacks::default();
         let heightmap_callbacks_ref = heightmap_callbacks.get_ref();
-        let heightmapper_cell = Arc::new(AtomicCell::new(Some((heightmapper, Vec::new(), heightmap_callbacks))));
-        
+        let heightmapper_cell = Arc::new(AtomicCell::new(Some((
+            heightmapper,
+            Vec::new(),
+            heightmap_callbacks,
+        ))));
+
         raw_pcl_callbacks_ref.add_dyn_fn(Box::new(move |point_cloud| {
-            if let Some((mut heightmapper, mut point_cloud_buffer, mut heightmap_callbacks)) = heightmapper_cell.take() {
+            if let Some((mut heightmapper, mut point_cloud_buffer, mut heightmap_callbacks)) =
+                heightmapper_cell.take()
+            {
                 point_cloud_buffer.clear();
                 point_cloud_buffer.extend_from_slice(point_cloud);
                 let heightmapper_cell = heightmapper_cell.clone();
-                
+
                 tokio::spawn(async move {
                     heightmapper.call(&*point_cloud_buffer).await;
                     {
@@ -221,7 +235,11 @@ impl Blackboard {
                             heightmap_callbacks.call(&heightmap);
                         });
                     }
-                    heightmapper_cell.store(Some((heightmapper, point_cloud_buffer, heightmap_callbacks)));
+                    heightmapper_cell.store(Some((
+                        heightmapper,
+                        point_cloud_buffer,
+                        heightmap_callbacks,
+                    )));
                 });
             }
         }));
@@ -246,10 +264,11 @@ impl Blackboard {
             }));
             let lunasim_stdin2 = lunasim_stdin.clone();
             heightmap_callbacks_ref.add_dyn_fn(Box::new(move |heightmap| {
-                FromLunasimbot::HeightMap(heightmap.to_vec().into_boxed_slice())
-                    .into_bytes_slice(|bytes| {
+                FromLunasimbot::HeightMap(heightmap.to_vec().into_boxed_slice()).into_bytes_slice(
+                    |bytes| {
                         lunasim_stdin2.write(bytes);
-                    });
+                    },
+                );
             }));
         }
 

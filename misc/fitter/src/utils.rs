@@ -38,7 +38,7 @@ impl CameraProjection {
         self.point_buffers.push(point_buffer);
         result
     }
-    
+
     pub async fn project_buffer<T>(&self, depths: &[u32], camera_isometry: Isometry3<f32>, buf: T)
     where
         T: BufferDestination<[Vector4<f32>]>,

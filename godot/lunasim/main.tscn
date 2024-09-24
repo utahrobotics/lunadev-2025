@@ -1,9 +1,10 @@
-[gd_scene load_steps=27 format=3 uid="uid://bxmnthetrtkso"]
+[gd_scene load_steps=29 format=3 uid="uid://bxmnthetrtkso"]
 
 [ext_resource type="PackedScene" uid="uid://leqgym66qbuo" path="res://robot.tscn" id="1_y4wm8"]
 [ext_resource type="PackedScene" uid="uid://y0gvb4s2mi2x" path="res://apriltag.tscn" id="2_nhvh2"]
 [ext_resource type="Script" path="res://rocks/rock.gd" id="3_5i5qc"]
 [ext_resource type="Script" path="res://robo_camera.gd" id="3_n7k3i"]
+[ext_resource type="Script" path="res://control_3d.gd" id="5_l5im3"]
 
 [sub_resource type="GDScript" id="GDScript_lj4gt"]
 script/source = "extends Node3D
@@ -11,6 +12,39 @@ script/source = "extends Node3D
 
 func _ready() -> void:
 	get_viewport().disable_3d = true
+"
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wujp8"]
+shading_mode = 0
+albedo_color = Color(0.904334, 0.364874, 0.918573, 1)
+use_point_size = true
+point_size = 5.0
+
+[sub_resource type="PointMesh" id="PointMesh_fxwe8"]
+material = SubResource("StandardMaterial3D_wujp8")
+
+[sub_resource type="MultiMesh" id="MultiMesh_yaeoc"]
+transform_format = 1
+mesh = SubResource("PointMesh_fxwe8")
+
+[sub_resource type="GDScript" id="GDScript_03k1a"]
+script/source = "extends MultiMeshInstance3D
+
+
+const CELL_SIZE := 0.0625
+
+
+func _ready() -> void:
+	var mesh: MultiMesh = multimesh
+	mesh.instance_count = 8192
+	LunasimNode.heightmap.connect(
+		func(heights: PackedFloat32Array):
+			var i := 0
+			for z in range(128):
+				for x in range(64):
+					mesh.set_instance_transform(i, Transform3D(Basis(), Vector3(-x * CELL_SIZE, heights[i], -z * CELL_SIZE)))
+					i += 1
+	)
 "
 
 [sub_resource type="GDScript" id="GDScript_x4vum"]
@@ -89,39 +123,6 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	thr.wait_to_finish()
-"
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wujp8"]
-shading_mode = 0
-albedo_color = Color(0.904334, 0.364874, 0.918573, 1)
-use_point_size = true
-point_size = 5.0
-
-[sub_resource type="PointMesh" id="PointMesh_fxwe8"]
-material = SubResource("StandardMaterial3D_wujp8")
-
-[sub_resource type="MultiMesh" id="MultiMesh_yaeoc"]
-transform_format = 1
-mesh = SubResource("PointMesh_fxwe8")
-
-[sub_resource type="GDScript" id="GDScript_03k1a"]
-script/source = "extends MultiMeshInstance3D
-
-
-const CELL_SIZE := 0.0625
-
-
-func _ready() -> void:
-	var mesh: MultiMesh = multimesh
-	mesh.instance_count = 8192
-	LunasimNode.heightmap.connect(
-		func(heights: PackedFloat32Array):
-			var i := 0
-			for z in range(128):
-				for x in range(64):
-					mesh.set_instance_transform(i, Transform3D(Basis(), Vector3(-x * CELL_SIZE, heights[i], -z * CELL_SIZE)))
-					i += 1
-	)
 "
 
 [sub_resource type="HeightMapShape3D" id="HeightMapShape3D_s2y32"]
@@ -272,65 +273,99 @@ func _on_text_submitted(new_text: String) -> void:
 		push_error(\"Not a valid explicit tag translation deviation\")
 "
 
+[sub_resource type="GDScript" id="GDScript_6xoh2"]
+script/source = "extends Button
+
+
+@onready var arena: Node3D = $\"../../../../Arena\"
+
+
+func _on_pressed() -> void:
+	if arena.visible:
+		text = \"SHOW\"
+	else:
+		text = \"HIDE\"
+	arena.visible = !arena.visible
+"
+
 [node name="Node3D" type="Node3D"]
 script = SubResource("GDScript_lj4gt")
 
-[node name="Floor" type="StaticBody3D" parent="."]
-collision_mask = 0
-script = SubResource("GDScript_x4vum")
-
-[node name="HeightMap" type="MultiMeshInstance3D" parent="Floor"]
+[node name="HeightMap" type="MultiMeshInstance3D" parent="."]
 top_level = true
 layers = 4
 multimesh = SubResource("MultiMesh_yaeoc")
 script = SubResource("GDScript_03k1a")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
+[node name="Arena" type="Node3D" parent="."]
+
+[node name="Floor" type="StaticBody3D" parent="Arena"]
+collision_mask = 0
+script = SubResource("GDScript_x4vum")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Arena/Floor"]
 shape = SubResource("HeightMapShape3D_s2y32")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Arena/Floor"]
 material_override = SubResource("StandardMaterial3D_501rf")
 
-[node name="Walls" type="StaticBody3D" parent="."]
+[node name="Walls" type="StaticBody3D" parent="Arena"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -0.5)
 collision_layer = 3
 collision_mask = 0
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Walls"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Arena/Walls"]
 transform = Transform3D(-4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, 0, 1, -4.5, 1, -3.5)
 shape = SubResource("BoxShape3D_cjilj")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Walls/CollisionShape3D"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Arena/Walls/CollisionShape3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.58932e-08, 1, 0)
 layers = 3
 mesh = SubResource("PlaneMesh_twbw0")
 
-[node name="CollisionShape3D4" type="CollisionShape3D" parent="Walls"]
+[node name="HideButtonMarker" type="Marker3D" parent="Arena/Walls/CollisionShape3D/MeshInstance3D"]
+transform = Transform3D(1, 8.74228e-08, 3.82137e-15, 8.74228e-08, -1, -8.74228e-08, -3.82137e-15, 8.74228e-08, -1, -1, 0, 4)
+
+[node name="CollisionShape3D4" type="CollisionShape3D" parent="Arena/Walls"]
 transform = Transform3D(4.37114e-08, -1, -8.74228e-08, -1, -4.37114e-08, 0, -3.82137e-15, 8.74228e-08, -1, 1.5, 1, -3.5)
 shape = SubResource("BoxShape3D_cjilj")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Walls/CollisionShape3D4"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Arena/Walls/CollisionShape3D4"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.58932e-08, 1, 0)
 layers = 3
 mesh = SubResource("PlaneMesh_twbw0")
 
-[node name="CollisionShape3D2" type="CollisionShape3D" parent="Walls"]
+[node name="CollisionShape3D2" type="CollisionShape3D" parent="Arena/Walls"]
 transform = Transform3D(1.91069e-15, -4.37114e-08, 1, -1, -4.37114e-08, 0, 4.37114e-08, -1, -4.37114e-08, -1.5, 1, 1.5)
 shape = SubResource("BoxShape3D_lb8fb")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Walls/CollisionShape3D2"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Arena/Walls/CollisionShape3D2"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 layers = 3
 mesh = SubResource("PlaneMesh_reayg")
 
-[node name="CollisionShape3D3" type="CollisionShape3D" parent="Walls"]
+[node name="CollisionShape3D3" type="CollisionShape3D" parent="Arena/Walls"]
 transform = Transform3D(-5.73206e-15, 1.31134e-07, -1, -1, -4.37114e-08, 0, -4.37114e-08, 1, 1.31134e-07, -1.5, 1, -8.5)
 shape = SubResource("BoxShape3D_lb8fb")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Walls/CollisionShape3D3"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Arena/Walls/CollisionShape3D3"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 layers = 3
 mesh = SubResource("PlaneMesh_reayg")
+
+[node name="Rocks" type="Node3D" parent="Arena"]
+
+[node name="Rock" type="Node3D" parent="Arena/Rocks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.861442, 2.20208, -1.0874)
+script = ExtResource("3_5i5qc")
+
+[node name="Rock2" type="Node3D" parent="Arena/Rocks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.32198, 2.20208, -1.0874)
+script = ExtResource("3_5i5qc")
+
+[node name="Rock3" type="Node3D" parent="Arena/Rocks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.71816, 2.20208, -1.0874)
+script = ExtResource("3_5i5qc")
 
 [node name="Robot" parent="." instance=ExtResource("1_y4wm8")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.459583, 0, -0.502181)
@@ -360,20 +395,6 @@ transform = Transform3D(0.926909, 0.34775, -0.141101, 0.330633, -0.57883, 0.7454
 [node name="Apriltag" parent="." instance=ExtResource("2_nhvh2")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.610044, 0.50416)
 explicit = true
-
-[node name="Rocks" type="Node" parent="."]
-
-[node name="Rock" type="Node3D" parent="Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.861442, 2.20208, -1.0874)
-script = ExtResource("3_5i5qc")
-
-[node name="Rock2" type="Node3D" parent="Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.32198, 2.20208, -1.0874)
-script = ExtResource("3_5i5qc")
-
-[node name="Rock3" type="Node3D" parent="Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.71816, 2.20208, -1.0874)
-script = ExtResource("3_5i5qc")
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
 
@@ -405,7 +426,7 @@ size = Vector2i(1132, 597)
 render_target_update_mode = 4
 
 [node name="ExternalCamera" type="Camera3D" parent="CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport"]
-transform = Transform3D(0.283078, -0.220396, 0.93343, -1.77252e-08, 0.973239, 0.229795, -0.959097, -0.0650499, 0.275503, 2.77329, 1.29588, 0.452005)
+transform = Transform3D(0.283078, -0.220396, 0.93343, -1.77252e-08, 0.973239, 0.229795, -0.959097, -0.0650499, 0.275503, 2.77329, 1.29588, 0.452004)
 
 [node name="DepthCamera1" type="MarginContainer" parent="CanvasLayer/TabContainer"]
 visible = false
@@ -563,11 +584,29 @@ focus_mode = 1
 text = "0.0"
 script = SubResource("GDScript_f6nnu")
 
+[node name="Control3D" type="Control" parent="CanvasLayer/Control" node_paths=PackedStringArray("node3d", "camera")]
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("5_l5im3")
+node3d = NodePath("../../../Arena/Walls/CollisionShape3D/MeshInstance3D/HideButtonMarker")
+camera = NodePath("../../TabContainer/ExternalView/SubviewportContainer/SubViewport/ExternalCamera")
+
+[node name="Button" type="Button" parent="CanvasLayer/Control/Control3D"]
+layout_mode = 0
+offset_left = -22.0
+offset_top = -14.0
+offset_right = 24.0
+offset_bottom = 17.0
+text = "HIDE"
+script = SubResource("GDScript_6xoh2")
+
 [connection signal="fov_changed" from="Robot/OriginOnly/CameraPivot" to="CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport/ExternalCamera" method="set_fov"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit" to="CanvasLayer/Control/VBoxContainer/LineEdit" method="_on_text_submitted"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit2" to="CanvasLayer/Control/VBoxContainer/LineEdit2" method="_on_text_submitted"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit3" to="CanvasLayer/Control/VBoxContainer/LineEdit3" method="_on_text_submitted"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit4" to="CanvasLayer/Control/VBoxContainer/LineEdit4" method="_on_text_submitted"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit5" to="CanvasLayer/Control/VBoxContainer/LineEdit5" method="_on_text_submitted"]
+[connection signal="pressed" from="CanvasLayer/Control/Control3D/Button" to="CanvasLayer/Control/Control3D/Button" method="_on_pressed"]
 
 [editable path="Robot"]

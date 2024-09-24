@@ -2,7 +2,8 @@ use std::future::Future;
 
 use compute_shader::{
     buffers::{
-        BufferDestination, BufferSource, BufferType, GpuBuffer, HostReadWrite, HostWriteOnly, ReadGuard, ShaderReadOnly, ShaderReadWrite
+        BufferSource, BufferType, GpuBuffer, HostReadWrite, HostWriteOnly, ReadGuard,
+        ShaderReadOnly, ShaderReadWrite,
     },
     wgpu, Compute,
 };

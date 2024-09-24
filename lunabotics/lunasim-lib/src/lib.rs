@@ -37,7 +37,7 @@ struct Lunasim {
     explicit_apriltag_rotation_deviation: f64,
     #[var]
     explicit_apriltag_translation_deviation: f64,
-    
+
     shared: Arc<LunasimShared>,
     base: Base<Node>,
 }
@@ -165,7 +165,6 @@ impl INode for Lunasim {
                     self.base_mut()
                         .emit_signal("heightmap".into(), &[heights.to_variant()]);
                 }
-                
             }
         }
     }
