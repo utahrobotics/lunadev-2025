@@ -23,7 +23,7 @@ members = [
     "misc/k",
     "misc/byteable/byteable-core",
     "misc/byteable/byteable-derive",
-    "misc/byteable/byteable", "lunabotics/heightmap",
+    "misc/byteable/byteable", "lunabotics/heightmap", "misc/luna-bt",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]
@@ -89,6 +89,7 @@ tasker = { path = "misc/tasker" }
 cakap = { path = "lunabotics/cakap" }
 lunabase-lib = { path = "lunabotics/lunabase-lib" }
 byteable = { path = "misc/byteable/byteable" }
+luna-bt = { path = "misc/luna-bt" }
 
 [profile.dev.package.lunabot]
 opt-level = 3
