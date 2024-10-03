@@ -370,11 +370,11 @@ impl<'a, B> Behaviour<'a, B> {
         }
     }
 
-    pub fn exit(status: Status) -> Self {
+    pub const fn exit(status: Status) -> Self {
         Self::Exit(status)
     }
 
-    pub fn constant(status: Status) -> Self {
+    pub const fn constant(status: Status) -> Self {
         Self::Constant(status)
     }
 }

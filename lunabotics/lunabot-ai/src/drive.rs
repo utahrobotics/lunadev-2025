@@ -16,7 +16,8 @@ pub trait DriveComponent {
     /// Drives across the given path.
     ///
     /// The returned future will resolve when the path has been traversed and when
-    /// the future is dropped, the robot must stop.
+    /// the future is dropped, the robot must stop. If `Err` is returned, `had_drive_error`
+    /// will return `true`.
     fn traverse_path(
         &mut self,
         path: &[Vector2<f64>],
@@ -24,10 +25,14 @@ pub trait DriveComponent {
 
     /// Drives the robot manually.
     ///
-    /// Awaiting the returned future should *not* be necessary to issue the steering
-    /// and should only be used to wait for a result from the underlying drive implementation.
+    /// If an error was asyncronously encountered, `had_drive_error` will return `true`.
     fn manual_drive(
         &mut self,
         steering: Steering,
-    ) -> impl Future<Output = Result<(), FailedToDrive>>;
+    );
+    
+    /// Returns `true` if an error was encountered while driving.
+    /// 
+    /// Calling this method will reset the error flag.
+    fn had_drive_error(&mut self) -> bool;
 }

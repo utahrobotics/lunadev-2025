@@ -28,17 +28,52 @@ impl<D, P, O, T, F> From<F> for LunabotAI<F, D, P, O, T> {
     }
 }
 
-pub struct LunabotBlackboard<D, P, O, T> {
+pub struct LunabotInterfaces<D, P, O, T> {
     pub drive: D,
     pub pathfinder: P,
     pub get_isometry: O,
     pub teleop: T,
 }
 
-impl<D, P, O: Fn() -> Isometry3<f64>, T> LunabotBlackboard<D, P, O, T> {
-    #[allow(dead_code)]
-    fn get_isometry(&self) -> Isometry3<f64> {
-        (self.get_isometry)()
+enum AutonomyStage {
+    TraverseObstacles,
+    Dig,
+    Dump
+}
+
+enum Autonomy {
+    FullAutonomy(AutonomyStage),
+    PartialAutonomy(AutonomyStage)
+}
+
+struct LunabotBlackboard<D, P, O, T> {
+    drive: D,
+    pathfinder: P,
+    get_isometry: O,
+    teleop: T,
+    autonomy_stage: Autonomy
+}
+
+impl<D, P, O, T> From<LunabotInterfaces<D, P, O, T>> for LunabotBlackboard<D, P, O, T> {
+    fn from(value: LunabotInterfaces<D, P, O, T>) -> Self {
+        Self {
+            drive: value.drive,
+            pathfinder: value.pathfinder,
+            get_isometry: value.get_isometry,
+            teleop: value.teleop,
+            autonomy_stage: Autonomy::PartialAutonomy(AutonomyStage::TraverseObstacles)
+        }
+    }
+}
+
+impl<D, P, O, T> From<LunabotBlackboard<D, P, O, T>> for LunabotInterfaces<D, P, O, T> {
+    fn from(value: LunabotBlackboard<D, P, O, T>) -> Self {
+        Self {
+            drive: value.drive,
+            pathfinder: value.pathfinder,
+            get_isometry: value.get_isometry,
+            teleop: value.teleop
+        }
     }
 }
 
@@ -48,7 +83,7 @@ where
     P: Pathfinder,
     O: Fn() -> Isometry3<f64>,
     T: TeleOp,
-    F: FnMut(Option<LunabotBlackboard<D, P, O, T>>) -> LunabotBlackboard<D, P, O, T> + UnwindSafe,
+    F: FnMut(Option<LunabotInterfaces<D, P, O, T>>) -> LunabotInterfaces<D, P, O, T> + UnwindSafe,
     Self: Send + 'static,
     for<'a> &'a mut Option<LunabotBlackboard<D, P, O, T>>: UnwindSafe,
 {
@@ -76,7 +111,7 @@ where
                                 [
                                     Behaviour::invert(Behaviour::action_catch_panic(
                                         move |bb: &mut Option<LunabotBlackboard<D, P, O, T>>| {
-                                            *bb = Some((self.make_blackboard)(bb.take()));
+                                            *bb = Some((self.make_blackboard)(bb.take().map(Into::into)).into());
                                             OK
                                         },
                                         |info| {
@@ -131,16 +166,7 @@ where
                 //
                 // If run fails/panics, log it but replace the fail with OK so the loop continues.
                 Behaviour::if_else(
-                    Behaviour::action_catch_panic(
-                        |bb: &mut Option<LunabotBlackboard<D, P, O, T>>| {
-                            let bb_mut = bb.as_mut().expect("Blackboard should be initialized");
-                            run::run(bb_mut)
-                        },
-                        |info| {
-                            error!("Run panicked");
-                            Some(info)
-                        },
-                    ),
+                    run::run(),
                     Behaviour::Constant(OK),
                     Behaviour::action(|_| {
                         error!("Run behaviour tree failed");
