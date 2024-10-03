@@ -27,3 +27,4 @@ fxhash = { workspace = true }
 fitter = { workspace = true }
 byteable = { workspace = true }
 heightmap = { path = "../heightmap" }
+lunabot-ai = { path = "../lunabot-ai" }

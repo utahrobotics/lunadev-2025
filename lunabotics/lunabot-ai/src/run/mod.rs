@@ -1,10 +1,14 @@
 use common::FromLunabase;
 use log::{error, warn};
-use luna_bt::{Behaviour, ERR, OK};
+use luna_bt::{status, Behaviour, ERR, OK};
 use nalgebra::Isometry3;
 use tasker::BlockOn;
 
 use crate::{Autonomy, AutonomyStage, DriveComponent, LunabotBlackboard, Pathfinder, TeleOp};
+
+mod traverse_obstacles;
+mod dig;
+mod dump;
 
 pub fn run<D, P, O, T>() -> Behaviour<'static, Option<LunabotBlackboard<D, P, O, T>>>
 where
@@ -30,7 +34,7 @@ where
                                     break ERR;
                                 }
                             }
-                            FromLunabase::TraverseObstacles => bb.autonomy_stage = Autonomy::PartialAutonomy(AutonomyStage::TraverseObstacles),
+                            FromLunabase::TraverseObstacles => bb.autonomy = Autonomy::PartialAutonomy(AutonomyStage::TraverseObstacles),
                             FromLunabase::SoftStop => {
                                 warn!("Triggering Software Stop. This will show up as run failing.");
                                 break ERR;
@@ -46,11 +50,23 @@ where
                     Some(info)
                 }
             ),
-            Behaviour::sequence(
+            Behaviour::while_loop(
+                Behaviour::action(|bb: &mut Option<LunabotBlackboard<D, P, O, T>>| {
+                    let Some(bb) = bb else {
+                        error!("Blackboard is missing in autonomy");
+                        return ERR;
+                    };
+                    
+                    status(bb.autonomy != Autonomy::None)
+                }),
                 [
-                    // Behaviour::action(|bb: &mut LunabotBlackboard<D, P, O, T>| {
-                    //     OK
-                    // })
+                    Behaviour::select(
+                        [
+                            traverse_obstacles::traverse_obstacles(),
+                            dig::dig(),
+                            dump::dump()
+                        ]
+                    )
                 ]
             )
         ]

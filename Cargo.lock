@@ -2429,6 +2429,7 @@ dependencies = [
  "fxhash",
  "heightmap",
  "k",
+ "lunabot-ai",
  "nalgebra 0.32.6",
  "pathfinding",
  "serde",

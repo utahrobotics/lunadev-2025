@@ -3,7 +3,6 @@ use std::{
     borrow::Cow,
     marker::PhantomData,
     panic::{catch_unwind, AssertUnwindSafe, UnwindSafe},
-    sync::{atomic::AtomicUsize, Mutex},
 };
 
 pub type Status = Result<(), ()>;

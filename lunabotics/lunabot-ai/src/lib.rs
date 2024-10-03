@@ -35,15 +35,18 @@ pub struct LunabotInterfaces<D, P, O, T> {
     pub teleop: T,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum AutonomyStage {
     TraverseObstacles,
     Dig,
     Dump
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum Autonomy {
     FullAutonomy(AutonomyStage),
-    PartialAutonomy(AutonomyStage)
+    PartialAutonomy(AutonomyStage),
+    None
 }
 
 struct LunabotBlackboard<D, P, O, T> {
@@ -51,7 +54,7 @@ struct LunabotBlackboard<D, P, O, T> {
     pathfinder: P,
     get_isometry: O,
     teleop: T,
-    autonomy_stage: Autonomy
+    autonomy: Autonomy
 }
 
 impl<D, P, O, T> From<LunabotInterfaces<D, P, O, T>> for LunabotBlackboard<D, P, O, T> {
@@ -61,7 +64,7 @@ impl<D, P, O, T> From<LunabotInterfaces<D, P, O, T>> for LunabotBlackboard<D, P,
             pathfinder: value.pathfinder,
             get_isometry: value.get_isometry,
             teleop: value.teleop,
-            autonomy_stage: Autonomy::PartialAutonomy(AutonomyStage::TraverseObstacles)
+            autonomy: Autonomy::PartialAutonomy(AutonomyStage::TraverseObstacles)
         }
     }
 }
