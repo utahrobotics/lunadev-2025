@@ -18,6 +18,10 @@ pub fn status(status: bool) -> Status {
 pub enum Behaviour<'a, B> {
     /// A function that takes a mutable reference to the blackboard and returns a status
     Action(Action<'a, B>),
+    /// A function that takes a mutable reference to the blackboard and returns nothing.
+    ///
+    /// `OK` is always returned.
+    InfallibleAction(Box<dyn FnMut(&mut B) + 'a>),
     /// Runs `ok` if `condition` returns `OK`, otherwise runs `err`.
     If {
         condition: Box<Self>,
@@ -35,28 +39,25 @@ pub enum Behaviour<'a, B> {
     Select(Vec<Self>),
     /// Runs behaviors sequentially, exiting early if one fails
     Sequence(Vec<Self>),
-    /// Runs a behavior, but always returns success
-    AlwaysSucceed(Box<Self>),
-    /// Runs a behavior, but always returns failure
-    AlwaysFail(Box<Self>),
+    /// Runs a behavior, but ignores its status
+    Ignore(Box<Self>, Status),
     /// Inverts the result of a behavior
     Invert(Box<Self>),
     /// Runs a behavior, but runs a behaviour if it succeeds, then exits the Behavior Tree with the status of `succeeded`
     NeverSucceed {
         behavior: Box<Self>,
-        succeeded: Action<'a, B>
+        succeeded: Action<'a, B>,
     },
     /// Runs a behavior, but runs a behaviour if it fails, then exits the Behavior Tree with the status of `failed`
     NeverFail {
         behavior: Box<Self>,
-        failed: Action<'a, B>
+        failed: Action<'a, B>,
     },
     /// Exits the Behavior Tree with the given status
     Exit(Status),
     /// Returns the given status
-    Constant(Status)
+    Constant(Status),
 }
-
 
 enum ReturnStatus {
     Normal(Status),
@@ -65,15 +66,14 @@ enum ReturnStatus {
 
 trait BehaviorTracer<B> {
     fn push(&mut self, name: Cow<'static, str>, bb: &B);
-    
+
     fn pop(&mut self, bb: &B);
 }
-
 
 struct SimpleTracer<B, F> {
     stack: Vec<Cow<'static, str>>,
     trace_fn: F,
-    _phantom: PhantomData<fn() -> B>
+    _phantom: PhantomData<fn() -> B>,
 }
 
 impl<B, F: FnMut(&B, &[Cow<'static, str>])> BehaviorTracer<B> for SimpleTracer<B, F> {
@@ -87,14 +87,9 @@ impl<B, F: FnMut(&B, &[Cow<'static, str>])> BehaviorTracer<B> for SimpleTracer<B
     }
 }
 
-
 impl<B> BehaviorTracer<B> for () {
-    fn push(&mut self, _name: Cow<'static, str>, _bb: &B) {
-        
-    }
-    fn pop(&mut self, _bb: &B) {
-        
-    }
+    fn push(&mut self, _name: Cow<'static, str>, _bb: &B) {}
+    fn pop(&mut self, _bb: &B) {}
 }
 
 impl<'a, B> Behaviour<'a, B> {
@@ -104,8 +99,12 @@ impl<'a, B> Behaviour<'a, B> {
             ReturnStatus::Exit(x) => x,
         }
     }
-    
-    pub fn run_traced(&mut self, blackboard: &mut B, trace_fn: impl FnMut(&B, &[Cow<'static, str>])) -> Status {
+
+    pub fn run_traced(
+        &mut self,
+        blackboard: &mut B,
+        trace_fn: impl FnMut(&B, &[Cow<'static, str>]),
+    ) -> Status {
         let mut tracer = SimpleTracer {
             stack: Vec::new(),
             trace_fn,
@@ -116,15 +115,19 @@ impl<'a, B> Behaviour<'a, B> {
             ReturnStatus::Exit(x) => x,
         }
     }
-    
-    fn run_inner(&mut self, blackboard: &mut B, trace_stack: &mut impl BehaviorTracer<B>) -> ReturnStatus {
+
+    fn run_inner(
+        &mut self,
+        blackboard: &mut B,
+        trace_stack: &mut impl BehaviorTracer<B>,
+    ) -> ReturnStatus {
         macro_rules! unwrap {
             ($val: expr) => {
                 match $val {
                     ReturnStatus::Normal(x) => x,
                     ReturnStatus::Exit(x) => return ReturnStatus::Exit(x),
                 }
-            }
+            };
         }
         match self {
             Behaviour::Action(action) => {
@@ -132,6 +135,12 @@ impl<'a, B> Behaviour<'a, B> {
                 let result = action(blackboard);
                 trace_stack.pop(blackboard);
                 ReturnStatus::Normal(result)
+            }
+            Behaviour::InfallibleAction(action) => {
+                trace_stack.push("InfallibleAction".into(), blackboard);
+                action(blackboard);
+                trace_stack.pop(blackboard);
+                ReturnStatus::Normal(OK)
             }
             Behaviour::If { condition, ok, err } => {
                 trace_stack.push("If".into(), blackboard);
@@ -147,7 +156,11 @@ impl<'a, B> Behaviour<'a, B> {
                 trace_stack.pop(blackboard);
                 result
             }
-            Behaviour::While { condition, body, pedantic } => {
+            Behaviour::While {
+                condition,
+                body,
+                pedantic,
+            } => {
                 if *pedantic {
                     loop {
                         for (i, behavior) in body.iter_mut().enumerate() {
@@ -207,17 +220,11 @@ impl<'a, B> Behaviour<'a, B> {
                 }
                 ReturnStatus::Normal(OK)
             }
-            Behaviour::AlwaysSucceed(behavior) => {
-                trace_stack.push("AlwaysSucceed".into(), blackboard);
+            Behaviour::Ignore(behavior, replace) => {
+                trace_stack.push("Ignore".into(), blackboard);
                 let _ = unwrap!(behavior.run_inner(blackboard, trace_stack));
                 trace_stack.pop(blackboard);
-                ReturnStatus::Normal(OK)
-            }
-            Behaviour::AlwaysFail(behavior) => {
-                trace_stack.push("AlwaysFail".into(), blackboard);
-                let _ = unwrap!(behavior.run_inner(blackboard, trace_stack));
-                trace_stack.pop(blackboard);
-                ReturnStatus::Normal(ERR)
+                ReturnStatus::Normal(*replace)
             }
             Behaviour::Invert(behavior) => {
                 trace_stack.push("Invert".into(), blackboard);
@@ -229,7 +236,10 @@ impl<'a, B> Behaviour<'a, B> {
                 trace_stack.pop(blackboard);
                 result
             }
-            Behaviour::NeverSucceed { behavior, succeeded } => {
+            Behaviour::NeverSucceed {
+                behavior,
+                succeeded,
+            } => {
                 trace_stack.push("NeverSucceed".into(), blackboard);
                 if unwrap!(behavior.run_inner(blackboard, trace_stack)).is_ok() {
                     trace_stack.pop(blackboard);
@@ -262,55 +272,81 @@ impl<'a, B> Behaviour<'a, B> {
             }
         }
     }
-    
+
     pub fn action(action: impl FnMut(&mut B) -> Status + 'a) -> Self {
         Self::Action(Box::new(action))
     }
-    
+
     pub fn if_else(condition: Self, ok: Self, err: Self) -> Self {
-        Self::If { condition: Box::new(condition), ok: Box::new(ok), err: Box::new(err) }
+        Self::If {
+            condition: Box::new(condition),
+            ok: Box::new(ok),
+            err: Box::new(err),
+        }
     }
-    
-    pub fn while_loop(condition: impl Into<Box<Self>>, body: impl IntoIterator<Item=Self>) -> Self {
-        Self::While { condition: condition.into(), body: body.into_iter().collect(), pedantic: false }
+
+    pub fn while_loop(
+        condition: impl Into<Box<Self>>,
+        body: impl IntoIterator<Item = Self>,
+    ) -> Self {
+        Self::While {
+            condition: condition.into(),
+            body: body.into_iter().collect(),
+            pedantic: false,
+        }
     }
-    
-    pub fn while_loop_pedantic(condition: impl Into<Box<Self>>, body: impl IntoIterator<Item=Self>) -> Self {
-        Self::While { condition: condition.into(), body: body.into_iter().collect(), pedantic: true }
+
+    pub fn while_loop_pedantic(
+        condition: impl Into<Box<Self>>,
+        body: impl IntoIterator<Item = Self>,
+    ) -> Self {
+        Self::While {
+            condition: condition.into(),
+            body: body.into_iter().collect(),
+            pedantic: true,
+        }
     }
-    
-    pub fn select(behaviors: impl IntoIterator<Item=Self>) -> Self {
+
+    pub fn select(behaviors: impl IntoIterator<Item = Self>) -> Self {
         Self::Select(behaviors.into_iter().collect())
     }
-    
-    pub fn sequence(behaviors: impl IntoIterator<Item=Self>) -> Self {
+
+    pub fn sequence(behaviors: impl IntoIterator<Item = Self>) -> Self {
         Self::Sequence(behaviors.into_iter().collect())
     }
-    
-    pub fn always_succeed(behavior: impl Into<Box<Self>>) -> Self {
-        Self::AlwaysSucceed(behavior.into())
+
+    pub fn ignore(behavior: impl Into<Box<Self>>, with: Status) -> Self {
+        Self::Ignore(behavior.into(), with)
     }
-    
-    pub fn always_fail(behavior: impl Into<Box<Self>>) -> Self {
-        Self::AlwaysFail(behavior.into())
-    }
-    
+
     pub fn invert(behavior: impl Into<Box<Self>>) -> Self {
         Self::Invert(behavior.into())
     }
-    
-    pub fn never_succeed(behavior: impl Into<Box<Self>>, succeeded: impl Fn(&mut B) -> Status + 'a) -> Self {
-        Self::NeverSucceed { behavior: behavior.into(), succeeded: Box::new(succeeded) }
+
+    pub fn never_succeed(
+        behavior: impl Into<Box<Self>>,
+        succeeded: impl Fn(&mut B) -> Status + 'a,
+    ) -> Self {
+        Self::NeverSucceed {
+            behavior: behavior.into(),
+            succeeded: Box::new(succeeded),
+        }
     }
-    
-    pub fn never_fail(behavior: impl Into<Box<Self>>, failed: impl Fn(&mut B) -> Status + 'a) -> Self {
-        Self::NeverFail { behavior: behavior.into(), failed: Box::new(failed) }
+
+    pub fn never_fail(
+        behavior: impl Into<Box<Self>>,
+        failed: impl Fn(&mut B) -> Status + 'a,
+    ) -> Self {
+        Self::NeverFail {
+            behavior: behavior.into(),
+            failed: Box::new(failed),
+        }
     }
-    
+
     pub fn exit(status: Status) -> Self {
         Self::Exit(status)
     }
-    
+
     pub fn constant(status: Status) -> Self {
         Self::Constant(status)
     }
@@ -319,45 +355,43 @@ impl<'a, B> Behaviour<'a, B> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn simple_sum() {
         let mut sum = 0usize;
         Behaviour::while_loop(
-                Behaviour::action(|sum| status(*sum < 10)),
-                [
-                    Behaviour::action(|sum| {
-                        *sum += 1;
-                        OK
-                    })
-                ]
-            )
-            .run(&mut sum)
-            .unwrap();
-        
+            Behaviour::action(|sum| status(*sum < 10)),
+            [Behaviour::action(|sum| {
+                *sum += 1;
+                OK
+            })],
+        )
+        .run(&mut sum)
+        .unwrap();
+
         assert_eq!(sum, 10);
     }
-    
+
     #[test]
     fn early_exit_sum() {
         let mut sum = 0usize;
         Behaviour::while_loop(
-                Behaviour::action(|sum| status(*sum < 10)),
-                [
-                    Behaviour::action(|sum| {
-                        *sum += 1;
-                        OK
-                    }),
-                    Behaviour::if_else(
-                        Behaviour::action(|sum| status(*sum == 7)),
-                        Behaviour::exit(OK),
-                        Behaviour::constant(OK)
-                    )
-                ]
-            )
-            .run(&mut sum)
-            .unwrap();
-            
+            Behaviour::action(|sum| status(*sum < 10)),
+            [
+                Behaviour::action(|sum| {
+                    *sum += 1;
+                    OK
+                }),
+                Behaviour::if_else(
+                    Behaviour::action(|sum| status(*sum == 7)),
+                    Behaviour::exit(OK),
+                    Behaviour::constant(OK),
+                ),
+            ],
+        )
+        .run(&mut sum)
+        .unwrap();
+
         assert_eq!(sum, 7);
     }
 }

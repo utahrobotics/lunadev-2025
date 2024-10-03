@@ -2437,6 +2437,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "lunabot-ai"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "log",
+ "luna-bt",
+ "nalgebra 0.32.6",
+ "tasker",
+]
+
+[[package]]
 name = "lunasim-lib"
 version = "0.1.0"
 dependencies = [
