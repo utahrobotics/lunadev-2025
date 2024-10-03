@@ -21,10 +21,13 @@ pub trait DriveComponent {
         &mut self,
         path: &[Vector2<f64>],
     ) -> impl Future<Output = Result<(), FailedToDrive>>;
-    
+
     /// Drives the robot manually.
-    /// 
+    ///
     /// Awaiting the returned future should *not* be necessary to issue the steering
     /// and should only be used to wait for a result from the underlying drive implementation.
-    fn manual_drive(&mut self, steering: Steering) -> impl Future<Output = Result<(), FailedToDrive>>;
+    fn manual_drive(
+        &mut self,
+        steering: Steering,
+    ) -> impl Future<Output = Result<(), FailedToDrive>>;
 }

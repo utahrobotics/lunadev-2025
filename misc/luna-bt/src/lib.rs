@@ -1,4 +1,10 @@
-use std::{borrow::Cow, marker::PhantomData};
+use std::{
+    any::Any,
+    borrow::Cow,
+    marker::PhantomData,
+    panic::{catch_unwind, AssertUnwindSafe, UnwindSafe},
+    sync::{atomic::AtomicUsize, Mutex},
+};
 
 pub type Status = Result<(), ()>;
 pub const OK: Status = Ok(());
@@ -275,6 +281,27 @@ impl<'a, B> Behaviour<'a, B> {
 
     pub fn action(action: impl FnMut(&mut B) -> Status + 'a) -> Self {
         Self::Action(Box::new(action))
+    }
+
+    pub fn action_catch_panic<F, F2>(mut action: F, mut on_panic: F2) -> Self
+    where
+        F: FnMut(&mut B) -> Status + UnwindSafe + 'a,
+        F2: FnMut(Box<dyn Any + Send>) -> Option<Box<dyn Any + Send>> + 'a,
+    {
+        Self::Action(Box::new(move |bb| {
+            match catch_unwind(AssertUnwindSafe(|| action(bb))) {
+                Ok(x) => x,
+                Err(e) => {
+                    if let Some(e) = on_panic(e) {
+                        // Safely drop the info in another thread as it may panic when dropped
+                        std::thread::spawn(move || {
+                            drop(e);
+                        });
+                    }
+                    ERR
+                }
+            }
+        }))
     }
 
     pub fn if_else(condition: Self, ok: Self, err: Self) -> Self {

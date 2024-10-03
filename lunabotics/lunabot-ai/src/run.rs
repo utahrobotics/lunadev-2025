@@ -10,10 +10,5 @@ where
     O: Fn() -> Isometry3<f64>,
     T: TeleOp,
 {
-    Behaviour::while_loop(
-        Behaviour::constant(OK),
-        [
-            
-        ]
-    ).run(bb)
+    Behaviour::while_loop(Behaviour::constant(OK), []).run(bb)
 }
