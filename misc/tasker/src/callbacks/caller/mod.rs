@@ -281,6 +281,11 @@ impl<A: ?Sized, B: ?Sized> CallbacksRef<A, B> {
         }
     }
 }
+impl<A: ?Sized, B: ?Sized> Clone for CallbacksRef<A, B> {
+    fn clone(&self) -> Self {
+        Self { incoming: self.incoming.clone() }
+    }
+}
 
 macro_rules! dyn_ref_impl {
     ($($extra: tt)*) => {

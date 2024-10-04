@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, panic::UnwindSafe};
 
 use common::FromLunabase;
-pub use drive::DriveComponent;
+pub use drive::{DriveComponent, FailedToDrive};
 use log::{error, warn};
 use luna_bt::{Behaviour, ERR, OK};
 use nalgebra::Isometry3;
@@ -86,7 +86,7 @@ where
     P: Pathfinder,
     O: Fn() -> Isometry3<f64>,
     T: TeleOp,
-    F: FnMut(Option<LunabotInterfaces<D, P, O, T>>) -> LunabotInterfaces<D, P, O, T> + UnwindSafe,
+    F: FnMut(Option<LunabotInterfaces<D, P, O, T>>) -> Result<LunabotInterfaces<D, P, O, T>, ()> + UnwindSafe,
     Self: Send + 'static,
     for<'a> &'a mut Option<LunabotBlackboard<D, P, O, T>>: UnwindSafe,
 {
@@ -114,7 +114,7 @@ where
                                 [
                                     Behaviour::invert(Behaviour::action_catch_panic(
                                         move |bb: &mut Option<LunabotBlackboard<D, P, O, T>>| {
-                                            *bb = Some((self.make_blackboard)(bb.take().map(Into::into)).into());
+                                            *bb = Some((self.make_blackboard)(bb.take().map(Into::into))?.into());
                                             OK
                                         },
                                         |info| {
@@ -167,7 +167,7 @@ where
                 ),
                 // Run
                 //
-                // If run fails/panics, log it but replace the fail with OK so the loop continues.
+                // If run fails, log it but replace the fail with OK so the loop continues.
                 Behaviour::if_else(
                     run::run(),
                     Behaviour::Constant(OK),

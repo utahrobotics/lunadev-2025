@@ -9,8 +9,7 @@ use spin_sleep::SpinSleeper;
 use urobotics::task::SyncTask;
 
 use crate::{
-    utils::{lerp_value, swing_twist_decomposition},
-    LunasimStdin,
+    sim::LunasimStdin, utils::{lerp_value, swing_twist_decomposition}
 };
 
 const ACCELEROMETER_LERP_SPEED: f64 = 150.0;

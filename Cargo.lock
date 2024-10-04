@@ -430,17 +430,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d8c1fef690941d3e7788d328517591fecc684c084084702d6ff1641e993699a"
 
 [[package]]
-name = "bonsai-bt"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63e21b398f6e47f95df92b1eadcc1d164ce2725b211a7f338fceac4b1a0306ed"
-dependencies = [
- "petgraph",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "bstr"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2419,7 +2408,6 @@ name = "lunabot"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bonsai-bt",
  "byteable",
  "cakap",
  "common",
