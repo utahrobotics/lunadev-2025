@@ -5,6 +5,15 @@ use byteable::{FillByteVecBitcode, IntoBytes, IntoBytesSlice, IntoBytesSliceBitc
 
 pub mod lunasim;
 
+#[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]
+pub enum LunabotStage {
+    Manual,
+    SoftStop,
+    TraverseObstacles,
+    Dig,
+    Dump,
+}
+
 #[derive(Debug, Encode, Decode, FillByteVecBitcode, IntoBytes, IntoBytesSliceBitcode)]
 pub enum FromLunabase {
     // Pong,
@@ -52,7 +61,7 @@ impl FromLunabase {
 
 #[derive(Debug, Encode, Decode, FillByteVecBitcode, IntoBytes, IntoBytesSliceBitcode)]
 pub enum FromLunabot {
-    Ping,
+    Ping(LunabotStage),
 }
 
 impl TryFrom<&[u8]> for FromLunabot {
@@ -80,7 +89,11 @@ impl FromLunabot {
     }
 
     pub fn write_code_sheet(mut w: impl Write) -> std::io::Result<()> {
-        FromLunabot::Ping.write_code(&mut w)?;
+        FromLunabot::Ping(LunabotStage::Manual).write_code(&mut w)?;
+        FromLunabot::Ping(LunabotStage::SoftStop).write_code(&mut w)?;
+        FromLunabot::Ping(LunabotStage::TraverseObstacles).write_code(&mut w)?;
+        FromLunabot::Ping(LunabotStage::Dig).write_code(&mut w)?;
+        FromLunabot::Ping(LunabotStage::Dump).write_code(&mut w)?;
         Ok(())
     }
 }

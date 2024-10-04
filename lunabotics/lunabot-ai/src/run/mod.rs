@@ -1,14 +1,17 @@
-use common::FromLunabase;
+use common::{FromLunabase, LunabotStage};
 use log::{error, warn};
 use luna_bt::{status, Behaviour, ERR, OK};
 use nalgebra::Isometry3;
 use tasker::BlockOn;
 
-use crate::{Autonomy, AutonomyStage, DriveComponent, LunabotBlackboard, PathfinderComponent, TeleOpComponent};
+use crate::{
+    Autonomy, AutonomyStage, DriveComponent, LunabotBlackboard, PathfinderComponent,
+    TeleOpComponent,
+};
 
-mod traverse_obstacles;
 mod dig;
 mod dump;
+mod traverse_obstacles;
 
 pub fn run<D, P, O, T>() -> Behaviour<'static, Option<LunabotBlackboard<D, P, O, T>>>
 where
@@ -26,6 +29,7 @@ where
                         error!("Blackboard is missing in manual control");
                         return ERR;
                     };
+                    bb.teleop.set_lunabot_stage(LunabotStage::Manual);
                     loop {
                         match bb.teleop.from_lunabase().block_on() {
                             FromLunabase::Steering(steering) => {
@@ -34,9 +38,14 @@ where
                                     break ERR;
                                 }
                             }
-                            FromLunabase::TraverseObstacles => bb.autonomy = Autonomy::PartialAutonomy(AutonomyStage::TraverseObstacles),
+                            FromLunabase::TraverseObstacles => {
+                                bb.autonomy =
+                                    Autonomy::PartialAutonomy(AutonomyStage::TraverseObstacles)
+                            }
                             FromLunabase::SoftStop => {
-                                warn!("Triggering Software Stop. This will show up as run failing.");
+                                warn!(
+                                    "Triggering Software Stop. This will show up as run failing."
+                                );
                                 break ERR;
                             }
                             m => {
@@ -48,7 +57,7 @@ where
                 |info| {
                     error!("Panic in manual control");
                     Some(info)
-                }
+                },
             ),
             Behaviour::while_loop(
                 Behaviour::action(|bb: &mut Option<LunabotBlackboard<D, P, O, T>>| {
@@ -56,19 +65,15 @@ where
                         error!("Blackboard is missing in autonomy");
                         return ERR;
                     };
-                    
+
                     status(bb.autonomy != Autonomy::None)
                 }),
-                [
-                    Behaviour::select(
-                        [
-                            traverse_obstacles::traverse_obstacles(),
-                            dig::dig(),
-                            dump::dump()
-                        ]
-                    )
-                ]
-            )
-        ]
+                [Behaviour::select([
+                    traverse_obstacles::traverse_obstacles(),
+                    dig::dig(),
+                    dump::dump(),
+                ])],
+            ),
+        ],
     )
 }

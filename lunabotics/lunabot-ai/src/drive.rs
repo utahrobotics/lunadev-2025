@@ -26,13 +26,10 @@ pub trait DriveComponent {
     /// Drives the robot manually.
     ///
     /// If an error was asyncronously encountered, `had_drive_error` will return `true`.
-    fn manual_drive(
-        &mut self,
-        steering: Steering,
-    );
-    
+    fn manual_drive(&mut self, steering: Steering);
+
     /// Returns `true` if an error was encountered while driving.
-    /// 
+    ///
     /// Calling this method will reset the error flag.
     fn had_drive_error(&mut self) -> bool;
 }

@@ -1,10 +1,6 @@
 #![feature(result_flattening, deadline_api, never_type)]
 
-use std::{
-    fs::File,
-    net::SocketAddrV4,
-    path::Path, sync::Arc,
-};
+use std::{fs::File, net::SocketAddrV4, path::Path, sync::Arc};
 
 use common::{FromLunabase, FromLunabot};
 use k::Chain;
@@ -12,21 +8,24 @@ use nalgebra::Vector4;
 use serde::{Deserialize, Serialize};
 use sim::LunasimbotApp;
 use urobotics::{
-    app::{adhoc_app, application, Application}, camera, define_callbacks, fn_alias, log::{error, warn}, python, serial, tokio::{
-        self,
-    }, video::info::list_media_input, BlockOn
+    app::{adhoc_app, application, Application},
+    camera, define_callbacks, fn_alias,
+    log::{error, warn},
+    python, serial,
+    tokio::{self},
+    video::info::list_media_input,
+    BlockOn,
 };
 
-mod localization;
 mod interfaces;
-mod utils;
+mod localization;
 mod sim;
+mod utils;
 
 fn_alias! {
     type PointCloudCallbacksRef = CallbacksRef(&[Vector4<f32>]) + Send + Sync
 }
 define_callbacks!(PointCloudCallbacks => Fn(point_cloud: &[Vector4<f32>]) + Send + Sync);
-
 
 fn wait_for_ctrl_c() {
     match tokio::signal::ctrl_c().block_on() {
@@ -38,7 +37,7 @@ fn wait_for_ctrl_c() {
             loop {
                 std::thread::park();
             }
-        },
+        }
     }
 }
 

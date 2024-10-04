@@ -9,7 +9,8 @@ use spin_sleep::SpinSleeper;
 use urobotics::{log::error, task::SyncTask};
 
 use crate::{
-    sim::LunasimStdin, utils::{lerp_value, swing_twist_decomposition}
+    sim::LunasimStdin,
+    utils::{lerp_value, swing_twist_decomposition},
 };
 
 const ACCELEROMETER_LERP_SPEED: f64 = 150.0;
@@ -71,13 +72,27 @@ impl SyncTask for Localizer {
             let mut isometry = self.robot_chain.origin();
 
             'check: {
-                if isometry.translation.x.is_nan() || isometry.translation.y.is_nan() || isometry.translation.z.is_nan() {
+                if isometry.translation.x.is_nan()
+                    || isometry.translation.y.is_nan()
+                    || isometry.translation.z.is_nan()
+                {
                     error!("Robot origin is NaN");
-                } else if isometry.translation.x.is_infinite() || isometry.translation.y.is_infinite() || isometry.translation.z.is_infinite() {
+                } else if isometry.translation.x.is_infinite()
+                    || isometry.translation.y.is_infinite()
+                    || isometry.translation.z.is_infinite()
+                {
                     error!("Robot origin is infinite");
-                } else if isometry.rotation.w.is_nan() || isometry.rotation.i.is_nan() || isometry.rotation.j.is_nan() || isometry.rotation.k.is_nan() {
+                } else if isometry.rotation.w.is_nan()
+                    || isometry.rotation.i.is_nan()
+                    || isometry.rotation.j.is_nan()
+                    || isometry.rotation.k.is_nan()
+                {
                     error!("Robot rotation is NaN");
-                } else if isometry.rotation.w.is_infinite() || isometry.rotation.i.is_infinite() || isometry.rotation.j.is_infinite() || isometry.rotation.k.is_infinite() {
+                } else if isometry.rotation.w.is_infinite()
+                    || isometry.rotation.i.is_infinite()
+                    || isometry.rotation.j.is_infinite()
+                    || isometry.rotation.k.is_infinite()
+                {
                     error!("Robot rotation is infinite");
                 } else {
                     break 'check;

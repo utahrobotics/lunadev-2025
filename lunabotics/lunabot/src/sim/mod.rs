@@ -1,18 +1,41 @@
-use std::{cmp::Ordering, collections::VecDeque, process::Stdio, sync::{Arc, Mutex}};
+use std::{
+    cmp::Ordering,
+    collections::VecDeque,
+    process::Stdio,
+    sync::{Arc, Mutex},
+};
 
+use byteable::IntoBytesSlice;
 use byteable::Recycler;
 use common::lunasim::{FromLunasim, FromLunasimbot};
-use crossbeam::atomic::AtomicCell;
 use fitter::utils::CameraProjection;
-use heightmap::HeightMapper;
 use lunabot_ai::{LunabotAI, LunabotInterfaces};
-use nalgebra::{UnitVector3, Vector2, Vector4, Isometry3, UnitQuaternion, Vector3};
-use urobotics::{task::SyncTask, tokio::{self, task::block_in_place}};
+use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4};
 use serde::{Deserialize, Serialize};
-use urobotics::{app::Application, callbacks::caller::CallbacksStorage, define_callbacks, fn_alias, get_tokio_handle, log::{error, warn}, tokio::{io::{AsyncReadExt, AsyncWriteExt}, process::{ChildStdin, Command}, runtime::Handle}, BlockOn};
-use byteable::IntoBytesSlice;
+use urobotics::{
+    app::Application,
+    callbacks::caller::CallbacksStorage,
+    define_callbacks, fn_alias, get_tokio_handle,
+    log::{error, warn},
+    tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        process::{ChildStdin, Command},
+        runtime::Handle,
+    },
+    BlockOn,
+};
+use urobotics::{task::SyncTask, tokio::task::block_in_place};
 
-use crate::{create_robot_chain, interfaces::{drive::SimMotors, obstacles::heightmap::{HeightMapCallbacks, HeightMapPathfinder}, teleop::LunabaseConn}, localization::{Localizer, LocalizerRef}, log_teleop_messages, wait_for_ctrl_c, LunabotApp, PointCloudCallbacks};
+use crate::{
+    create_robot_chain,
+    interfaces::{
+        drive::SimMotors,
+        obstacles::heightmap::{heightmap_strategy, HeightMapPathfinder},
+        teleop::LunabaseConn,
+    },
+    localization::{Localizer, LocalizerRef},
+    log_teleop_messages, wait_for_ctrl_c, LunabotApp, PointCloudCallbacks,
+};
 
 fn_alias! {
     pub type FromLunasimRef = CallbacksRef(FromLunasim) + Send
@@ -57,7 +80,7 @@ impl Application for LunasimbotApp {
 
     fn run(mut self) {
         log_teleop_messages();
-        
+
         let mut cmd = if self.simulation_command.is_empty() {
             let mut cmd = Command::new("godot");
             cmd.args(["--path", "godot/lunasim"]);
@@ -183,10 +206,16 @@ impl Application for LunasimbotApp {
             robot_chain: robot_chain.clone(),
             lunasim_stdin: Some(lunasim_stdin.clone()),
             localizer_ref: localizer_ref.clone(),
-        }.spawn();
+        }
+        .spawn();
 
-        let depth_project =
-            Arc::new(CameraProjection::new(10.392, PROJECTION_SIZE, 0.01).block_on()?);
+        let depth_project = match CameraProjection::new(10.392, PROJECTION_SIZE, 0.01).block_on() {
+            Ok(x) => Some(Arc::new(x)),
+            Err(e) => {
+                error!("Failed to create camera projector: {e}");
+                None
+            }
+        };
 
         let camera_link = robot_chain.find_link("depth_camera_link").unwrap().clone();
         let points_buffer_recycler = Recycler::<Box<[Vector4<f32>]>>::default();
@@ -204,6 +233,14 @@ impl Application for LunasimbotApp {
         let raw_pcl_callbacks = Arc::new(PointCloudCallbacks::default());
         let raw_pcl_callbacks_ref = raw_pcl_callbacks.get_ref();
 
+        let lunasim_stdin2 = lunasim_stdin.clone();
+        raw_pcl_callbacks_ref.add_dyn_fn(Box::new(move |point_cloud| {
+            FromLunasimbot::PointCloud(point_cloud.iter().map(|p| [p.x, p.y, p.z]).collect())
+                .into_bytes_slice(|bytes| {
+                    lunasim_stdin2.write(bytes);
+                });
+        }));
+
         from_lunasim_ref.add_fn(move |msg| match msg {
             common::lunasim::FromLunasim::Accelerometer {
                 id: _,
@@ -220,6 +257,9 @@ impl Application for LunasimbotApp {
                 localizer_ref.set_angular_velocity(axis_angle(axis, angle));
             }
             common::lunasim::FromLunasim::DepthMap(depths) => {
+                let Some(depth_project) = &depth_project else {
+                    return;
+                };
                 let Some(camera_transform) = camera_link.world_transform() else {
                     return;
                 };
@@ -230,11 +270,7 @@ impl Application for LunasimbotApp {
 
                 get_tokio_handle().spawn(async move {
                     depth_project
-                        .project_buffer(
-                            &depths,
-                            camera_transform.cast(),
-                            &mut **points_buffer,
-                        )
+                        .project_buffer(&depths, camera_transform.cast(), &mut **points_buffer)
                         .await;
                     block_in_place(|| {
                         raw_pcl_callbacks.call_immut(&points_buffer);
@@ -259,59 +295,11 @@ impl Application for LunasimbotApp {
             }
         });
 
-        let heightmapper =
-            HeightMapper::new(Vector2::new(64, 128), -0.0625, PROJECTION_SIZE)
-                .block_on()
-                .unwrap();
-        
-        let heightmap_callbacks = HeightMapCallbacks::default();
-        let heightmap_callbacks_ref = heightmap_callbacks.get_ref();
-        let heightmapper_cell = Arc::new(AtomicCell::new(Some((
-            heightmapper,
-            Vec::new(),
-            heightmap_callbacks,
-        ))));
-
-        raw_pcl_callbacks_ref.add_dyn_fn(Box::new(move |point_cloud| {
-            if let Some((mut heightmapper, mut point_cloud_buffer, mut heightmap_callbacks)) =
-                heightmapper_cell.take()
-            {
-                point_cloud_buffer.clear();
-                point_cloud_buffer.extend_from_slice(point_cloud);
-                let heightmapper_cell = heightmapper_cell.clone();
-
-                tokio::spawn(async move {
-                    heightmapper.call(&*point_cloud_buffer).await;
-                    {
-                        let heightmap = heightmapper.read_heightmap().await;
-                        block_in_place(|| {
-                            heightmap_callbacks.call(&heightmap);
-                        });
-                    }
-                    heightmapper_cell.store(Some((
-                        heightmapper,
-                        point_cloud_buffer,
-                        heightmap_callbacks,
-                    )));
-                });
-            }
-        }));
-
-        let lunasim_stdin2 = lunasim_stdin.clone();
-        raw_pcl_callbacks_ref.add_dyn_fn(Box::new(move |point_cloud| {
-            FromLunasimbot::PointCloud(point_cloud.iter().map(|p| [p.x, p.y, p.z]).collect())
-                .into_bytes_slice(|bytes| {
-                    lunasim_stdin2.write(bytes);
-                });
-        }));
-        let lunasim_stdin2 = lunasim_stdin.clone();
-        heightmap_callbacks_ref.add_dyn_fn(Box::new(move |heightmap| {
-            FromLunasimbot::HeightMap(heightmap.to_vec().into_boxed_slice()).into_bytes_slice(
-                |bytes| {
-                    lunasim_stdin2.write(bytes);
-                },
-            );
-        }));
+        let heightmap = heightmap_strategy(
+            PROJECTION_SIZE,
+            &raw_pcl_callbacks_ref,
+            lunasim_stdin.clone(),
+        );
 
         LunabotAI::from(move |interfaces: Option<LunabotInterfaces<_, _, _, _>>| {
             if let Some(interfaces) = interfaces {
@@ -325,12 +313,13 @@ impl Application for LunasimbotApp {
                 teleop: LunabaseConn::new(self.app.lunabase_address).map_err(|e| {
                     error!("Failed to connect to lunabase: {e}");
                 })?,
-                pathfinder: HeightMapPathfinder::new(),
+                pathfinder: HeightMapPathfinder::new(heightmap.clone()),
                 drive: SimMotors::new(lunasim_stdin.clone(), from_lunasim_ref.clone()),
                 get_isometry: move || robot_chain.origin(),
             })
-        }).spawn();
-        
+        })
+        .spawn();
+
         wait_for_ctrl_c();
     }
 }

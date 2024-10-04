@@ -2,7 +2,7 @@
 use std::sync::{Arc, Once};
 
 use cakap::{CakapSender, CakapSocket};
-use common::{FromLunabase, FromLunabot, Steering};
+use common::{FromLunabase, FromLunabot, LunabotStage, Steering};
 use crossbeam::queue::SegQueue;
 use godot::{classes::Engine, prelude::*};
 use log::Log;
@@ -138,7 +138,7 @@ impl INode for LunabotConn {
     }
 
     fn process(&mut self, delta: f64) {
-        if let Some(inner) = &mut self.inner {
+        if let Some(mut inner) = self.inner.as_mut() {
             inner.steering_timer -= delta;
             if inner.steering_timer <= 0.0 {
                 inner.steering_timer = STEERING_DELAY;
@@ -152,7 +152,24 @@ impl INode for LunabotConn {
             while let Some(msg) = inner.shared.from_lunabot.pop() {
                 received = true;
                 match msg {
-                    FromLunabot::Ping => {}
+                    FromLunabot::Ping(stage) => {
+                        match stage {
+                            LunabotStage::Manual => {
+                                self.base_mut().emit_signal("entered_manual".into(), &[])
+                            }
+                            LunabotStage::SoftStop => {
+                                self.base_mut().emit_signal("entered_soft_stop".into(), &[])
+                            }
+                            LunabotStage::TraverseObstacles => self
+                                .base_mut()
+                                .emit_signal("entered_traverse_obstacles".into(), &[]),
+                            LunabotStage::Dig => self.base_mut().emit_signal("entered_dig".into(), &[]),
+                            LunabotStage::Dump => {
+                                self.base_mut().emit_signal("entered_dump".into(), &[])
+                            }
+                        };
+                        inner = self.inner.as_mut().unwrap();
+                    }
                 }
             }
 
@@ -180,6 +197,16 @@ impl LunabotConn {
 impl LunabotConn {
     #[signal]
     fn something_received(&self);
+    #[signal]
+    fn entered_manual(&self);
+    #[signal]
+    fn entered_soft_stop(&self);
+    #[signal]
+    fn entered_traverse_obstacles(&self);
+    #[signal]
+    fn entered_dig(&self);
+    #[signal]
+    fn entered_dump(&self);
 
     #[func]
     fn set_steering(&mut self, drive: f64, steering: f64) {

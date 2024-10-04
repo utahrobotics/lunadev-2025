@@ -1,8 +1,8 @@
 use std::{marker::PhantomData, panic::UnwindSafe};
 
-use common::FromLunabase;
+use common::{FromLunabase, LunabotStage};
 pub use drive::{DriveComponent, FailedToDrive};
-use log::{error, warn};
+use log::{error, info, warn};
 use luna_bt::{Behaviour, ERR, OK};
 use nalgebra::Isometry3;
 pub use pathfinding::PathfinderComponent;
@@ -39,14 +39,14 @@ pub struct LunabotInterfaces<D, P, O, T> {
 enum AutonomyStage {
     TraverseObstacles,
     Dig,
-    Dump
+    Dump,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Autonomy {
     FullAutonomy(AutonomyStage),
     PartialAutonomy(AutonomyStage),
-    None
+    None,
 }
 
 struct LunabotBlackboard<D, P, O, T> {
@@ -54,7 +54,7 @@ struct LunabotBlackboard<D, P, O, T> {
     pathfinder: P,
     get_isometry: O,
     teleop: T,
-    autonomy: Autonomy
+    autonomy: Autonomy,
 }
 
 impl<D, P, O, T> From<LunabotInterfaces<D, P, O, T>> for LunabotBlackboard<D, P, O, T> {
@@ -64,7 +64,7 @@ impl<D, P, O, T> From<LunabotInterfaces<D, P, O, T>> for LunabotBlackboard<D, P,
             pathfinder: value.pathfinder,
             get_isometry: value.get_isometry,
             teleop: value.teleop,
-            autonomy: Autonomy::PartialAutonomy(AutonomyStage::TraverseObstacles)
+            autonomy: Autonomy::PartialAutonomy(AutonomyStage::TraverseObstacles),
         }
     }
 }
@@ -75,7 +75,7 @@ impl<D, P, O, T> From<LunabotBlackboard<D, P, O, T>> for LunabotInterfaces<D, P,
             drive: value.drive,
             pathfinder: value.pathfinder,
             get_isometry: value.get_isometry,
-            teleop: value.teleop
+            teleop: value.teleop,
         }
     }
 }
@@ -86,7 +86,8 @@ where
     P: PathfinderComponent,
     O: Fn() -> Isometry3<f64>,
     T: TeleOpComponent,
-    F: FnMut(Option<LunabotInterfaces<D, P, O, T>>) -> Result<LunabotInterfaces<D, P, O, T>, ()> + UnwindSafe,
+    F: FnMut(Option<LunabotInterfaces<D, P, O, T>>) -> Result<LunabotInterfaces<D, P, O, T>, ()>
+        + UnwindSafe,
     Self: Send + 'static,
 {
     type Output = ();
@@ -97,73 +98,77 @@ where
             Behaviour::constant(OK),
             [
                 // Setup, Software Stop, loop
-                Behaviour::invert(
-                    Behaviour::while_loop(
-                        Behaviour::constant(OK),
-                        [
-                            // Setup
-                            //
-                            // Initialize the blackboard. The blackboard may already exist, so the
-                            // make_blackboard function can modify it if needed. If setup fails due
-                            // to a panic (or returns an ERR), two things can happen. If the blackboard
-                            // is not initialized, setup will be called again after a delay. Otherwise,
-                            // Software Stop will be triggered.
-                            Behaviour::invert(Behaviour::while_loop(
-                                Behaviour::constant(OK),
-                                [
-                                    Behaviour::invert(Behaviour::action_catch_panic(
-                                        move |bb: &mut Option<LunabotBlackboard<D, P, O, T>>| {
-                                            *bb = Some((self.make_blackboard)(bb.take().map(Into::into))?.into());
+                Behaviour::invert(Behaviour::while_loop(
+                    Behaviour::constant(OK),
+                    [
+                        // Setup
+                        //
+                        // Initialize the blackboard. The blackboard may already exist, so the
+                        // make_blackboard function can modify it if needed. If setup fails due
+                        // to a panic (or returns an ERR), two things can happen. If the blackboard
+                        // is not initialized, setup will be called again after a delay. Otherwise,
+                        // Software Stop will be triggered. When setup resolves, the blackboard must
+                        // be initialized.
+                        Behaviour::invert(Behaviour::while_loop(
+                            Behaviour::constant(OK),
+                            [
+                                Behaviour::invert(Behaviour::action_catch_panic(
+                                    move |bb: &mut Option<LunabotBlackboard<D, P, O, T>>| {
+                                        *bb = Some(
+                                            (self.make_blackboard)(bb.take().map(Into::into))?
+                                                .into(),
+                                        );
+                                        info!("Blackboard initialized");
+                                        OK
+                                    },
+                                    |info| {
+                                        error!("Setup panicked");
+                                        Some(info)
+                                    },
+                                )),
+                                Behaviour::action(
+                                    |bb: &mut Option<LunabotBlackboard<D, P, O, T>>| {
+                                        if bb.is_none() {
+                                            std::thread::sleep(std::time::Duration::from_secs(2));
                                             OK
-                                        },
-                                        |info| {
-                                            error!("Setup panicked");
-                                            Some(info)
-                                        },
-                                    )),
-                                    Behaviour::action(
-                                        |bb: &mut Option<LunabotBlackboard<D, P, O, T>>| {
-                                            if bb.is_none() {
-                                                std::thread::sleep(std::time::Duration::from_secs(
-                                                    2,
-                                                ));
-                                                OK
-                                            } else {
-                                                ERR
-                                            }
-                                        },
-                                    ),
-                                ],
-                            )),
-                            // Software Stop
-                            //
-                            // Wait for the operator to send a message indicating if it is safe
-                            // to continue the mission or if the blackboard needs to be re-initialized.
-                            // For now, the blackboard is dropped when re-initialization is requested,
-                            // but we could allow for partial re-initialization if needed in the future.
-                            Behaviour::invert(Behaviour::action_catch_panic(
-                                |bb: &mut Option<LunabotBlackboard<D, P, O, T>>| {
-                                    let bb_mut =
-                                        bb.as_mut().expect("Blackboard should be initialized");
-                                    loop {
-                                        match bb_mut.teleop.from_lunabase().block_on() {
-                                            FromLunabase::ContinueMission => break OK,
-                                            FromLunabase::TriggerSetup => {
-                                                *bb = None;
-                                                break ERR;
-                                            }
-                                            m => warn!("Unexpected message: {m:?}"),
+                                        } else {
+                                            ERR
                                         }
+                                    },
+                                ),
+                            ],
+                        )),
+                        // Software Stop
+                        //
+                        // Wait for the operator to send a message indicating if it is safe
+                        // to continue the mission or if the blackboard needs to be re-initialized.
+                        // For now, the blackboard is dropped when re-initialization is requested,
+                        // but we could allow for partial re-initialization if needed in the future.
+                        Behaviour::invert(Behaviour::action_catch_panic(
+                            |bb: &mut Option<LunabotBlackboard<D, P, O, T>>| {
+                                info!("Software Stop");
+                                let bb_mut = bb.as_mut().expect("Blackboard should be initialized");
+                                bb_mut.teleop.set_lunabot_stage(LunabotStage::SoftStop);
+
+                                loop {
+                                    match bb_mut.teleop.from_lunabase().block_on() {
+                                        FromLunabase::ContinueMission => break OK,
+                                        FromLunabase::TriggerSetup => {
+                                            *bb = None;
+                                            break ERR;
+                                        }
+                                        FromLunabase::Steering(_) => {}
+                                        m => warn!("Unexpected message: {m:?}"),
                                     }
-                                },
-                                |info| {
-                                    error!("Software stop panicked");
-                                    Some(info)
-                                },
-                            )),
-                        ],
-                    ),
-                ),
+                                }
+                            },
+                            |info| {
+                                error!("Software stop panicked");
+                                Some(info)
+                            },
+                        )),
+                    ],
+                )),
                 // Run
                 //
                 // If run fails, log it but replace the fail with OK so the loop continues.
