@@ -163,7 +163,9 @@ impl INode for LunabotConn {
                             LunabotStage::TraverseObstacles => self
                                 .base_mut()
                                 .emit_signal("entered_traverse_obstacles".into(), &[]),
-                            LunabotStage::Dig => self.base_mut().emit_signal("entered_dig".into(), &[]),
+                            LunabotStage::Dig => {
+                                self.base_mut().emit_signal("entered_dig".into(), &[])
+                            }
                             LunabotStage::Dump => {
                                 self.base_mut().emit_signal("entered_dump".into(), &[])
                             }
