@@ -6,7 +6,7 @@ use crossbeam::atomic::AtomicCell;
 use k::{Chain, Isometry3, UnitQuaternion, Vector3};
 use nalgebra::UnitVector3;
 use spin_sleep::SpinSleeper;
-use urobotics::task::SyncTask;
+use urobotics::{log::error, task::SyncTask};
 
 use crate::{
     sim::LunasimStdin, utils::{lerp_value, swing_twist_decomposition}
@@ -69,6 +69,22 @@ impl SyncTask for Localizer {
         loop {
             spin_sleeper.sleep(Duration::from_secs_f64(LOCALIZATION_DELTA));
             let mut isometry = self.robot_chain.origin();
+
+            'check: {
+                if isometry.translation.x.is_nan() || isometry.translation.y.is_nan() || isometry.translation.z.is_nan() {
+                    error!("Robot origin is NaN");
+                } else if isometry.translation.x.is_infinite() || isometry.translation.y.is_infinite() || isometry.translation.z.is_infinite() {
+                    error!("Robot origin is infinite");
+                } else if isometry.rotation.w.is_nan() || isometry.rotation.i.is_nan() || isometry.rotation.j.is_nan() || isometry.rotation.k.is_nan() {
+                    error!("Robot rotation is NaN");
+                } else if isometry.rotation.w.is_infinite() || isometry.rotation.i.is_infinite() || isometry.rotation.j.is_infinite() || isometry.rotation.k.is_infinite() {
+                    error!("Robot rotation is infinite");
+                } else {
+                    break 'check;
+                }
+                self.robot_chain.set_origin(Isometry3::identity());
+            }
+
             let mut down_axis = UnitVector3::new_unchecked(Vector3::new(0.0, -1.0, 0.0));
             let acceleration =
                 UnitVector3::new_normalize(isometry * self.localizer_ref.acceleration());

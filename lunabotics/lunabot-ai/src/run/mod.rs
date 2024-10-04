@@ -4,7 +4,7 @@ use luna_bt::{status, Behaviour, ERR, OK};
 use nalgebra::Isometry3;
 use tasker::BlockOn;
 
-use crate::{Autonomy, AutonomyStage, DriveComponent, LunabotBlackboard, Pathfinder, TeleOp};
+use crate::{Autonomy, AutonomyStage, DriveComponent, LunabotBlackboard, PathfinderComponent, TeleOpComponent};
 
 mod traverse_obstacles;
 mod dig;
@@ -13,9 +13,9 @@ mod dump;
 pub fn run<D, P, O, T>() -> Behaviour<'static, Option<LunabotBlackboard<D, P, O, T>>>
 where
     D: DriveComponent,
-    P: Pathfinder,
+    P: PathfinderComponent,
     O: Fn() -> Isometry3<f64>,
-    T: TeleOp,
+    T: TeleOpComponent,
 {
     Behaviour::while_loop(
         Behaviour::constant(OK),

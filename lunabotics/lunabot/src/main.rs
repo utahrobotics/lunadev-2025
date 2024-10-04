@@ -3,14 +3,16 @@
 use std::{
     fs::File,
     net::SocketAddrV4,
-    path::Path,
+    path::Path, sync::Arc,
 };
 
 use common::{FromLunabase, FromLunabot};
+use k::Chain;
+use nalgebra::Vector4;
 use serde::{Deserialize, Serialize};
 use sim::LunasimbotApp;
 use urobotics::{
-    app::{adhoc_app, application, Application}, camera, log::{error, warn}, python, serial, tokio::{
+    app::{adhoc_app, application, Application}, camera, define_callbacks, fn_alias, log::{error, warn}, python, serial, tokio::{
         self,
     }, video::info::list_media_input, BlockOn
 };
@@ -19,6 +21,11 @@ mod localization;
 mod interfaces;
 mod utils;
 mod sim;
+
+fn_alias! {
+    type PointCloudCallbacksRef = CallbacksRef(&[Vector4<f32>]) + Send + Sync
+}
+define_callbacks!(PointCloudCallbacks => Fn(point_cloud: &[Vector4<f32>]) + Send + Sync);
 
 
 fn wait_for_ctrl_c() {
@@ -48,6 +55,10 @@ fn log_teleop_messages() {
     {
         error!("Failed to write code sheet for FromLunabot: {e}");
     }
+}
+
+fn create_robot_chain() -> Arc<Chain<f64>> {
+    Arc::new(Chain::<f64>::from_urdf_file("urdf/lunabot.urdf").expect("Failed to load urdf"))
 }
 
 #[derive(Serialize, Deserialize)]

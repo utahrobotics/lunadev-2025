@@ -5,9 +5,9 @@ pub use drive::{DriveComponent, FailedToDrive};
 use log::{error, warn};
 use luna_bt::{Behaviour, ERR, OK};
 use nalgebra::Isometry3;
-pub use pathfinding::Pathfinder;
+pub use pathfinding::PathfinderComponent;
 use tasker::{task::SyncTask, BlockOn};
-pub use teleop::TeleOp;
+pub use teleop::TeleOpComponent;
 
 mod drive;
 mod pathfinding;
@@ -83,12 +83,11 @@ impl<D, P, O, T> From<LunabotBlackboard<D, P, O, T>> for LunabotInterfaces<D, P,
 impl<D, P, O, T, F> SyncTask for LunabotAI<F, D, P, O, T>
 where
     D: DriveComponent,
-    P: Pathfinder,
+    P: PathfinderComponent,
     O: Fn() -> Isometry3<f64>,
-    T: TeleOp,
+    T: TeleOpComponent,
     F: FnMut(Option<LunabotInterfaces<D, P, O, T>>) -> Result<LunabotInterfaces<D, P, O, T>, ()> + UnwindSafe,
     Self: Send + 'static,
-    for<'a> &'a mut Option<LunabotBlackboard<D, P, O, T>>: UnwindSafe,
 {
     type Output = ();
 

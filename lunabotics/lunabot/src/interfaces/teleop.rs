@@ -2,7 +2,7 @@ use std::net::{SocketAddr, SocketAddrV4};
 
 use cakap::{CakapSender, CakapSocket};
 use common::{FromLunabase, FromLunabot};
-use lunabot_ai::TeleOp;
+use lunabot_ai::TeleOpComponent;
 use urobotics::{callbacks::caller::try_drop_this_callback, log::{error, info}, tokio::sync::mpsc, BlockOn};
 use byteable::IntoBytes;
 
@@ -45,7 +45,7 @@ impl LunabaseConn {
     }
 }
 
-impl TeleOp for LunabaseConn {
+impl TeleOpComponent for LunabaseConn {
     async fn from_lunabase(&mut self) -> FromLunabase {
         self.receiver.recv().await.expect("Cakap thread closed")
     }
