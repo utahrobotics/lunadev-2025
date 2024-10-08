@@ -54,6 +54,6 @@ The following files/folders are not provided in this repository and you may need
 2. urobotics-venv - A Python Virtual Environment that is used for Python interop
 3. cabinet - Logging folder that is auto-generated everytime a [urobotics-app](https://github.com/utahrobotics/lunadev-2025/tree/main/urobotics/urobotics-app) is executed
 
-## Third Part Assets
+## Third Party Assets
 
 1. [Low Poly Rock Pack 001](https://emerald-eel-entertainment.itch.io/low-poly-rock-pack-001). Accessed Aug 26 2024. Used in Lunasim.
