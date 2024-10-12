@@ -1,11 +1,36 @@
-pub type Status = Result<(), ()>;
+#![feature(never_type)]
 
-pub trait Behavior<B> {
-    fn run(&mut self, blackboard: &mut B) -> Status;
+#[derive(Clone, Copy, Debug)]
+pub enum Status<T> {
+    Running(T),
+    Success,
+    Failure,
 }
 
-impl<F: FnMut(&mut B) -> Status, B> Behavior<B> for F {
-    fn run(&mut self, blackboard: &mut B) -> Status {
+impl<T> Status<T> {
+    pub fn is_ok(&self) -> bool {
+        match self {
+            Status::Running(_) => false,
+            Status::Success => true,
+            Status::Failure => false,
+        }
+    }
+
+    pub fn is_err(&self) -> bool {
+        match self {
+            Status::Running(_) => false,
+            Status::Success => false,
+            Status::Failure => true,
+        }
+    }
+}
+
+pub trait Behavior<B, T> {
+    fn run(&mut self, blackboard: &mut B) -> Status<T>;
+}
+
+impl<T, F: FnMut(&mut B) -> Status<T>, B> Behavior<B, T> for F {
+    fn run(&mut self, blackboard: &mut B) -> Status<T> {
         self(blackboard)
     }
 }
@@ -16,13 +41,13 @@ pub struct IfElse<A, B, C> {
     pub if_false: C,
 }
 
-impl<A, B, C, D> Behavior<D> for IfElse<A, B, C>
+impl<A, B, C, D, T> Behavior<D, T> for IfElse<A, B, C>
 where
-    A: Behavior<D>,
-    B: Behavior<D>,
-    C: Behavior<D>,
+    A: Behavior<D, T>,
+    B: Behavior<D, T>,
+    C: Behavior<D, T>,
 {
-    fn run(&mut self, blackboard: &mut D) -> Status {
+    fn run(&mut self, blackboard: &mut D) -> Status<T> {
         if self.condition.run(blackboard).is_ok() {
             self.if_true.run(blackboard)
         } else {
@@ -33,21 +58,26 @@ where
 
 pub struct Invert<A>(pub A);
 
-impl<A, B> Behavior<B> for Invert<A>
+impl<A, B, T> Behavior<B, T> for Invert<A>
 where
-    A: Behavior<B>,
+    A: Behavior<B, T>,
 {
-    fn run(&mut self, blackboard: &mut B) -> Status {
+    fn run(&mut self, blackboard: &mut B) -> Status<T> {
         match self.0.run(blackboard) {
-            Ok(_) => Err(()),
-            Err(_) => Ok(()),
+            Status::Failure => Status::Success,
+            Status::Success => Status::Failure,
+            Status::Running(t) => Status::Running(t),
         }
     }
 }
 
-impl<B> Behavior<B> for Status {
-    fn run(&mut self, _: &mut B) -> Status {
-        *self
+impl<B, T: Clone> Behavior<B, T> for Status<T> {
+    fn run(&mut self, _: &mut B) -> Status<T> {
+        match self {
+            Status::Running(x) => Status::Running(x.clone()),
+            Status::Success => Status::Success,
+            Status::Failure => Status::Failure,
+        }
     }
 }
 
@@ -58,18 +88,20 @@ pub struct WhileLoop<A, B> {
 
 macro_rules! impl_while {
     ($($name: ident $num: tt)+) => {
-        impl<A1, C1, $($name,)+> Behavior<C1> for WhileLoop<A1, ($($name,)+)>
+        impl<A1, C1, T, $($name,)+> Behavior<C1, T> for WhileLoop<A1, ($($name,)+)>
         where
-            A1: Behavior<C1>,
-            $($name: Behavior<C1>,)+
+            A1: Behavior<C1, T>,
+            $($name: Behavior<C1, T>,)+
         {
-            fn run(&mut self, blackboard: &mut C1) -> Status {
+            fn run(&mut self, blackboard: &mut C1) -> Status<T> {
                 while self.condition.run(blackboard).is_ok() {
                     $(
-                        self.body.$num.run(blackboard)?;
+                        if self.body.$num.run(blackboard).is_err() {
+                            return Status::Failure;
+                        }
                     )+
                 }
-                Ok(())
+                Status::Success
             }
         }
     }
@@ -85,15 +117,17 @@ pub struct Sequence<A> {
 
 macro_rules! impl_seq {
     ($($name: ident $num: tt)+) => {
-        impl<C1, $($name,)+> Behavior<C1> for Sequence<($($name,)+)>
+        impl<C1, T, $($name,)+> Behavior<C1, T> for Sequence<($($name,)+)>
         where
-            $($name: Behavior<C1>,)+
+            $($name: Behavior<C1, T>,)+
         {
-            fn run(&mut self, blackboard: &mut C1) -> Status {
+            fn run(&mut self, blackboard: &mut C1) -> Status<T> {
                 $(
-                    self.body.$num.run(blackboard)?;
+                    if self.body.$num.run(blackboard).is_err() {
+                        return Status::Failure;
+                    }
                 )+
-                Ok(())
+                Status::Success
             }
         }
     }
@@ -109,17 +143,17 @@ pub struct Select<A> {
 
 macro_rules! impl_sel {
     ($($name: ident $num: tt)+) => {
-        impl<C1, $($name,)+> Behavior<C1> for Select<($($name,)+)>
+        impl<C1, T, $($name,)+> Behavior<C1, T> for Select<($($name,)+)>
         where
-            $($name: Behavior<C1>,)+
+            $($name: Behavior<C1, T>,)+
         {
-            fn run(&mut self, blackboard: &mut C1) -> Status {
+            fn run(&mut self, blackboard: &mut C1) -> Status<T> {
                 $(
                     if self.body.$num.run(blackboard).is_ok() {
-                        return Ok(());
+                        return Status::Success;
                     }
                 )+
-                Err(())
+                Status::Failure
             }
         }
     }
@@ -130,11 +164,11 @@ impl_sel!(A 0 B 1);
 impl_sel!(A 0 B 1 C 2);
 
 /// Returns `OK` if `status` is `true`, otherwise returns `ERR`.
-pub fn status(status: bool) -> Status {
+pub fn status<T>(status: bool) -> Status<T> {
     if status {
-        Ok(())
+        Status::Success
     } else {
-        Err(())
+        Status::Failure
     }
 }
 
@@ -145,15 +179,16 @@ mod tests {
     #[test]
     fn test_sum() {
         let mut sum = 0;
-        WhileLoop {
-            condition: |sum: &mut usize| status(*sum < 10),
+        let is_ok = WhileLoop {
+            condition: |sum: &mut usize| status::<()>(*sum < 10),
             body: (|sum: &mut usize| {
                 *sum += 1;
-                Ok(())
+                Status::Success
             },),
         }
         .run(&mut sum)
-        .unwrap();
+        .is_ok();
+        assert!(is_ok);
         assert_eq!(sum, 10);
     }
 }

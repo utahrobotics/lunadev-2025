@@ -4,7 +4,7 @@ use std::{
 };
 
 use byteable::IntoBytes;
-use cakap::{CakapSender, CakapSocket};
+use cakap2::{CakapSender, CakapSocket};
 use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
 use lunabot_ai::TeleOpComponent;

@@ -86,7 +86,7 @@ urobotics-camera = { path = "urobotics/urobotics-camera" }
 urobotics-py = { path = "urobotics/urobotics-py" }
 urobotics-realsense = { path = "urobotics/urobotics-realsense" }
 tasker = { path = "misc/tasker" }
-cakap = { path = "lunabotics/cakap" }
+cakap2 = { path = "misc/cakap2" }
 lunabase-lib = { path = "lunabotics/lunabase-lib" }
 byteable = { path = "misc/byteable/byteable" }
 luna-bt = { path = "misc/luna-bt" }

@@ -1,3 +1,20 @@
+//! A simple, sans-io, handshakeless, networking protocol that multiplexes unreliable, reliable, and eventually reliable
+//! communication over a single, unreliable transport layer. This protocol is connectionless and inherits
+//! the ordering guarantees of the transport layer. For example, if the transport layer is UDP, then the
+//! protocol will be unordered as well. If the transport layer is something like a WebRTC ordered and unreliable
+//! data channel, then this protocol will be ordered as well.
+//!
+//! # Usage
+//! This crate provides just the state machine for the protocol without any I/O. To use it, you must create
+//! an event loop for each unique connection and poll the state machine with incoming events. The state machine
+//! will then produce a [`RecommendedAction`] that you should take.
+//!
+//! # Security
+//! Since this protocol is handshakeless and connectionless, it is vulnerable to abuse. This protocol is not intended
+//! to be used on the open internet in production, but rather in a controlled environment without bad actors. The Utah
+//! Student Robotics club uses this protocol to communicate between an operator and a robot in a network with no other
+//! clients.
+
 use std::{
     collections::VecDeque,
     num::NonZeroU64,
@@ -38,6 +55,17 @@ pub struct PeerStateMachine {
 }
 
 impl PeerStateMachine {
+    /// Creates a new [`PeerStateMachine`] with the given retransmission duration and maximum received set size.
+    ///
+    /// The retransmission duration is the amount of time to wait before retransmitting a packet that has not been
+    /// acknowledged. The maximum received set size should be proportional to the number of reliable packets sent per second,
+    /// and varies based on the unreliability of the transport layer. If you are intending on sending many reliable packets
+    /// over a very unreliable transport layer, you should set this to a higher value, which comes at the cost of approximately
+    /// 32 bytes per unit. That is, if `max_received_set_size` is 100, then the received set will consume approximately up to 3200 bytes.
+    /// Setting this value too low may cause this peer to acknowledge reliable packets that have already been received (thus handling
+    /// them twice).
+    ///
+    /// The returned [`RecommendedAction`] is a request to send the first packet to the peer. This is necessary to establish the
     pub fn new(
         retransmission_duration: Duration,
         max_received_set_size: usize,

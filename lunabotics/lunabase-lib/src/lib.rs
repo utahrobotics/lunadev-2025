@@ -1,7 +1,7 @@
 #![feature(backtrace_frames)]
 use std::sync::{Arc, Once};
 
-use cakap::{CakapSender, CakapSocket};
+use cakap2::{CakapSender, CakapSocket};
 use common::{FromLunabase, FromLunabot, LunabotStage, Steering};
 use crossbeam::queue::SegQueue;
 use godot::{classes::Engine, prelude::*};

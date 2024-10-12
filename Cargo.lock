@@ -2414,7 +2414,7 @@ name = "lunabase-lib"
 version = "0.1.0"
 dependencies = [
  "byteable",
- "cakap",
+ "cakap2",
  "common",
  "crossbeam",
  "godot",
@@ -2428,7 +2428,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "byteable",
- "cakap",
+ "cakap2",
  "common",
  "compute-shader",
  "crossbeam",

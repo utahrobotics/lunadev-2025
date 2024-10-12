@@ -13,7 +13,7 @@ urobotics = { workspace = true, features = [
 ] }
 serde = { workspace = true }
 spin_sleep = { workspace = true }
-cakap = { workspace = true }
+cakap2 = { workspace = true }
 anyhow = { workspace = true }
 crossbeam = { workspace = true }
 compute-shader = { workspace = true }
