@@ -1,4 +1,5 @@
 use std::{
+    fmt::Debug,
     num::NonZeroU64,
     ops::{Deref, DerefMut},
     sync::{atomic::Ordering, Arc},
@@ -20,7 +21,7 @@ pub(crate) struct BorrowedBytes {
 
 impl BorrowedBytes {
     /// Create a new `BorrowedBytes` from a buffer and a function that will be called when the buffer is no longer needed.
-    fn new<F, T>(buffer: T, done: F) -> Self
+    pub(crate) fn new<F, T>(buffer: T, done: F) -> Self
     where
         T: AsMut<[u8]> + Send + 'static,
         F: FnOnce(T) + Send + 'static,
@@ -31,7 +32,10 @@ impl BorrowedBytes {
             pointer: SendSlice(pointer),
             return_fn: Box::new(|void| unsafe {
                 let value = Box::from_raw(void.cast::<T>());
-                done(*value)
+                let mut value = *value;
+                value.as_mut().iter_mut().for_each(|x| *x = 0);
+
+                done(value)
             }),
             buffer: SendVoid((buffer as *mut T).cast()),
         }
@@ -71,6 +75,14 @@ impl DerefMut for BorrowedBytes {
         unsafe { &mut *self.pointer.0 }
     }
 }
+
+impl PartialEq for BorrowedBytes {
+    fn eq(&self, other: &Self) -> bool {
+        self.deref() == other.deref()
+    }
+}
+
+impl Eq for BorrowedBytes {}
 
 pub(crate) enum OutgoingDataInner {
     /// This packet of data will be transmitted repeatedly until the client acknowledges.
@@ -120,7 +132,8 @@ impl ReliableBuilder {
     /// Sends the given bytes unreliably.
     ///
     /// The last 8 bytes of the given message will be overwritten with zeroes, so leave space for that.
-    /// If there is not enough space to accommodate that, the bytes will be returned.
+    /// If the given bytes are shorter than 9, the bytes will be returned. This means packets cannot
+    /// have a zero-sized payload.
     pub fn new_unreliable<T, F>(&self, mut bytes: T, done: F) -> Result<OutgoingData, T>
     where
         T: AsMut<[u8]> + Send + 'static,
@@ -129,7 +142,7 @@ impl ReliableBuilder {
         let bytes_mut = bytes.as_mut();
         let len = bytes_mut.len();
 
-        if len < 8 || len > self.shared.max_packet_size {
+        if len < 9 || len > self.shared.max_packet_size {
             return Err(bytes);
         }
         bytes_mut[len - 8..].copy_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0]);
@@ -142,7 +155,8 @@ impl ReliableBuilder {
     /// Sends the given bytes reliably.
     ///
     /// The last 8 bytes of the given message will be overwritten with a reliable index, so leave space for that.
-    /// If there is not enough space to accommodate that, the bytes will be returned.
+    /// If the given bytes are shorter than 9, the bytes will be returned. This means packets cannot
+    /// have a zero-sized payload.
     ///
     /// # Safety
     /// Strictly speaking, undefined behavior can occur if this method is called 2^63 - 1 times per struct due to overflow.
@@ -159,7 +173,7 @@ impl ReliableBuilder {
         let bytes_mut = bytes.as_mut();
         let len = bytes_mut.len();
 
-        if len < 8 || len > self.shared.max_packet_size {
+        if len < 9 || len > self.shared.max_packet_size {
             return Err(bytes);
         }
 
@@ -202,5 +216,30 @@ impl<'a> Deref for HotPacket<'a> {
             HotPacketInner::Borrowed(buf) => buf,
             HotPacketInner::Owned(buf) => buf,
         }
+    }
+}
+
+impl<'a> PartialEq for HotPacket<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        match &self.inner {
+            HotPacketInner::Borrowed(buf) => match &other.inner {
+                HotPacketInner::Borrowed(other_buf) => *buf == *other_buf,
+                HotPacketInner::Owned(other_buf) => **buf == *other_buf,
+            },
+            HotPacketInner::Owned(buf) => match &other.inner {
+                HotPacketInner::Borrowed(other_buf) => *buf == **other_buf,
+                HotPacketInner::Owned(other_buf) => *buf == *other_buf,
+            },
+        }
+    }
+}
+
+impl<'a> Eq for HotPacket<'a> {}
+
+impl<'a> Debug for HotPacket<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HotPacket")
+            .field("data", &self.deref())
+            .finish()
     }
 }

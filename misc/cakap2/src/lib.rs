@@ -4,6 +4,7 @@ use std::{
     num::NonZeroU64,
     sync::{atomic::AtomicU64, Arc},
     time::{Duration, Instant},
+    u64,
 };
 
 use fxhash::FxHashMap;
@@ -35,23 +36,32 @@ pub struct PeerStateMachine {
     max_received_set_size: usize,
 }
 
-impl Default for PeerStateMachine {
-    fn default() -> Self {
-        Self {
-            shared: Arc::new(Shared {
-                reliable_index: AtomicU64::new(1),
-                max_packet_size: 1400,
-            }),
-            retransmission_duration: Default::default(),
-            retransmission_map: Default::default(),
-            retransmission_queue: Default::default(),
-            received_set: Default::default(),
-            max_received_set_size: 256,
-        }
-    }
-}
-
 impl PeerStateMachine {
+    pub fn new(
+        retransmission_duration: Duration,
+        max_received_set_size: usize,
+    ) -> (Self, RecommendedAction<'static, 'static>) {
+        (
+            Self {
+                retransmission_duration,
+                max_received_set_size,
+                shared: Arc::new(Shared {
+                    reliable_index: AtomicU64::new(1),
+                    max_packet_size: 1400,
+                }),
+                retransmission_map: Default::default(),
+                retransmission_queue: Default::default(),
+                received_set: Default::default(),
+            },
+            RecommendedAction::SendData(HotPacket {
+                inner: HotPacketInner::Owned(BorrowedBytes::new(
+                    (!(1u64 << 63)).to_be_bytes(),
+                    |_| {},
+                )),
+            }),
+        )
+    }
+
     pub fn get_reliable_builder(&self) -> ReliableBuilder {
         ReliableBuilder {
             shared: self.shared.clone(),
@@ -65,9 +75,28 @@ impl PeerStateMachine {
                     return RecommendedAction::HandleError(Error::PacketTooSmall);
                 }
 
-                let index = u64::from_le_bytes(data[data.len() - 8..].try_into().unwrap());
+                let index = u64::from_be_bytes(data[data.len() - 8..].try_into().unwrap());
 
-                if let Some(index) = NonZeroU64::new(index) {
+                if index == !(1 << 63) {
+                    // The maximum safe index is 2^63 - 1
+                    if data.len() != 8 {
+                        return RecommendedAction::HandleError(Error::InvalidPacket);
+                    }
+                    // An empty packet with the max index is a request to clear the received set
+                    // This is important if the peer forgets their reliable index, which could
+                    // cause new reliable messages from them to be ignored by us as they would
+                    // be considered duplicates.
+                    // The max index is the least likely index to be in the `received_set`, so
+                    // it is a good choice for this purpose.
+                    self.received_set.clear();
+                    return RecommendedAction::SendData(HotPacket {
+                        inner: HotPacketInner::Owned(BorrowedBytes::new(
+                            u64::MAX.to_be_bytes(),
+                            |_| {},
+                        )),
+                    });
+                } else if let Some(index) = NonZeroU64::new(index) {
+                    // A reliable packet from peer
                     let msb = index.get() >> 63;
                     if msb == 0 {
                         // New packet from peer
@@ -105,6 +134,10 @@ impl PeerStateMachine {
                     );
                     debug_assert!(option.is_none());
                     self.retransmission_queue.push_back(index);
+
+                    return RecommendedAction::SendData(HotPacket {
+                        inner: HotPacketInner::Borrowed(&self.retransmission_map.get(&index).unwrap().data),
+                    })
                 }
                 OutgoingDataInner::CancelAllReliable => {
                     self.retransmission_map.clear();
@@ -145,7 +178,7 @@ impl PeerStateMachine {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Error {
     /// A packet from the peer was too small to be processed.
     PacketTooSmall,
@@ -167,6 +200,7 @@ impl Display for Error {
 
 impl std::error::Error for Error {}
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum RecommendedAction<'a, 'b> {
     /// Wait indefinitely until data from the peer is received, or there is data to send.
     WaitForData,
@@ -212,5 +246,89 @@ impl<'a> Default for Event<'a> {
 impl<'a> From<OutgoingData> for Event<'a> {
     fn from(value: OutgoingData) -> Self {
         Self::DataToSend(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn send_unreliable_1() {
+        let (mut state_machine, _) = PeerStateMachine::new(Duration::from_millis(100), 256);
+        let reliable_builder = state_machine.get_reliable_builder();
+        let outgoing_data = reliable_builder
+            .new_unreliable([217, 0, 0, 0, 0, 0, 0, 0, 0], |_| {})
+            .unwrap();
+        let event = Event::DataToSend(outgoing_data);
+        let action = state_machine.poll(event, Instant::now());
+
+        assert_eq!(
+            action,
+            RecommendedAction::SendData(HotPacket {
+                inner: HotPacketInner::Owned(BorrowedBytes::new(
+                    [217, 0, 0, 0, 0, 0, 0, 0, 0],
+                    |_| {}
+                )),
+            })
+        );
+
+        let (mut other_state_machine, _) = PeerStateMachine::new(Duration::from_millis(100), 256);
+        let event = Event::IncomingData(&[217, 0, 0, 0, 0, 0, 0, 0, 0]);
+        let action = other_state_machine.poll(event, Instant::now());
+
+        assert_eq!(action, RecommendedAction::HandleData(&[217]));
+    }
+
+    #[test]
+    fn send_reliable_1() {
+        let (mut state_machine, _) = PeerStateMachine::new(Duration::from_millis(100), 256);
+        let reliable_builder = state_machine.get_reliable_builder();
+        let (outgoing_data, reliable_index) = reliable_builder
+            .new_reliable([15, 0, 0, 0, 0, 0, 0, 0, 0], |_| {})
+            .unwrap();
+
+        assert_eq!(reliable_index.0.get(), 1);
+
+        let event = Event::DataToSend(outgoing_data);
+        let action = state_machine.poll(event, Instant::now());
+
+        // `state_machine` sends a reliable packet
+        assert_eq!(
+            action,
+            RecommendedAction::SendData(HotPacket {
+                inner: HotPacketInner::Owned(BorrowedBytes::new(
+                    [15, 0, 0, 0, 0, 0, 0, 0, 1],
+                    |_| {}
+                )),
+            })
+        );
+
+        let (mut other_state_machine, _) = PeerStateMachine::new(Duration::from_millis(100), 256);
+        // `other_state_machine` receives the reliable packet
+        let event = Event::IncomingData(&[15, 0, 0, 0, 0, 0, 0, 0, 1]);
+        let action = other_state_machine.poll(event, Instant::now());
+
+        // `other_state_machine` sends an acknowledgement
+        let to_send = (1u64 + (1 << 63)).to_be_bytes();
+        assert_eq!(
+            action,
+            RecommendedAction::HandleDataAndSend {
+                received: &[15],
+                to_send
+            }
+        );
+
+        let action = state_machine.poll(Event::NoEvent, Instant::now());
+
+        // State machine waits for the acknowledgement
+        let RecommendedAction::WaitForDuration(duration) = action else { panic!("Not WaitForDuration") };
+        assert!(duration.as_millis() > 98);
+
+        // `state_machine` receives the acknowledgement
+        let event = Event::IncomingData(&to_send);
+        let action = state_machine.poll(event, Instant::now());
+
+        assert_eq!(action, RecommendedAction::WaitForData);
     }
 }
