@@ -6,17 +6,18 @@ use std::{
     u64,
 };
 
-use error::Error;
+use error::CakapError;
 use fxhash::FxHashMap;
 use indexmap::IndexSet;
 use packet::{
-    BorrowedBytes, HotPacket, HotPacketInner, OutgoingData, OutgoingDataInner, PacketBuilder,
-    ReliableIndex,
+    Action, HotPacket, HotPacketInner, PacketBuilder, ReliableIndex, ReliablePacket,
+    UnreliablePacket,
 };
 
 pub mod error;
 pub mod packet;
 
+#[derive(Debug)]
 pub struct Shared {
     reliable_index: AtomicU64,
     max_packet_size: usize,
@@ -24,7 +25,7 @@ pub struct Shared {
 
 struct Retransmit {
     send_at: Instant,
-    data: BorrowedBytes,
+    data: Box<[u8]>,
 }
 
 pub struct PeerStateMachine {
@@ -66,7 +67,7 @@ impl PeerStateMachine {
     }
 
     /// Digests the given [`Event`] according to the given [`Instant`] and produces a [`RecommendedAction`] that should be taken.
-    /// 
+    ///
     /// Strictly speaking, `now` does not need to be the same [`Instant`] across all calls to `poll`. However, it must
     /// be monotonic across all instances used. Essentially, you can pass a different [`Instant`] to a successive call
     /// to `poll` as it represents a point in the future (you can skip time forward, but not backward).
@@ -74,7 +75,7 @@ impl PeerStateMachine {
         match event {
             Event::IncomingData(data) => {
                 if data.len() < 8 {
-                    return RecommendedAction::HandleError(Error::PacketTooSmall);
+                    return RecommendedAction::HandleError(CakapError::PacketTooSmall);
                 }
 
                 let index = u64::from_be_bytes(data[data.len() - 8..].try_into().unwrap());
@@ -82,9 +83,9 @@ impl PeerStateMachine {
                 if index == !(1 << 63) {
                     // The maximum safe index is 2^63 - 1
                     if data.len() != 8 {
-                        return RecommendedAction::HandleError(Error::InvalidPacket);
+                        return RecommendedAction::HandleError(CakapError::InvalidPacket);
                     }
-                    // An empty packet with the max index is a request to clear the received set
+                    // An empty packet with the max index is a request to clear the received set.
                     // This is important if the peer forgets their reliable index, which could
                     // cause new reliable messages from them to be ignored by us as they would
                     // be considered duplicates.
@@ -112,7 +113,6 @@ impl PeerStateMachine {
                             };
                         } else {
                             // Duplicate packet from peer, just acknowledge
-
                             return RecommendedAction::SendData(HotPacket {
                                 inner: HotPacketInner::Index(reply_index.get().to_be_bytes()),
                             });
@@ -121,7 +121,7 @@ impl PeerStateMachine {
                         // Acknowledgement from peer
                         let true_index = index.get() & !(1 << 63);
                         let Some(true_index) = NonZeroU64::new(true_index) else {
-                            return RecommendedAction::HandleError(Error::InvalidPacket);
+                            return RecommendedAction::HandleError(CakapError::InvalidPacket);
                         };
                         self.retransmission_map.remove(&true_index);
                     }
@@ -130,8 +130,9 @@ impl PeerStateMachine {
                     return RecommendedAction::HandleData(&data[0..data.len() - 8]);
                 }
             }
-            Event::DataToSend(outgoing_data) => match outgoing_data.inner {
-                OutgoingDataInner::Reliable { data, index } => {
+            Event::Action(action) => match action {
+                Action::SendReliable(ReliablePacket { index, data }) => {
+                    let index = index.0;
                     let option = self.retransmission_map.insert(
                         index,
                         Retransmit {
@@ -143,19 +144,21 @@ impl PeerStateMachine {
                     self.retransmission_queue.push_back(index);
 
                     return RecommendedAction::SendData(HotPacket {
-                        inner: HotPacketInner::Borrowed(&self.retransmission_map.get(&index).unwrap().data),
-                    })
+                        inner: HotPacketInner::Borrowed(
+                            &self.retransmission_map.get(&index).unwrap().data,
+                        ),
+                    });
                 }
-                OutgoingDataInner::CancelAllReliable => {
+                Action::CancelReliable(ReliableIndex(index)) => {
+                    self.retransmission_map.remove(&index);
+                }
+                Action::CancelAllReliable => {
                     self.retransmission_map.clear();
                     self.retransmission_queue.clear();
                 }
-                OutgoingDataInner::CancelReliable(ReliableIndex(index)) => {
-                    self.retransmission_map.remove(&index);
-                }
-                OutgoingDataInner::Unreliable(borrowed_bytes) => {
+                Action::SendUnreliable(UnreliablePacket { data }) => {
                     return RecommendedAction::SendData(HotPacket {
-                        inner: HotPacketInner::Owned(borrowed_bytes),
+                        inner: HotPacketInner::Owned(data),
                     })
                 }
             },
@@ -185,7 +188,6 @@ impl PeerStateMachine {
     }
 }
 
-
 #[derive(Debug, PartialEq, Eq)]
 pub enum RecommendedAction<'a, 'b> {
     /// Wait indefinitely until data from the peer is received, or there is data to send.
@@ -199,7 +201,7 @@ pub enum RecommendedAction<'a, 'b> {
     WaitForDuration(Duration),
     /// Handle the given error (by logging or otherwise) and poll the state machine again
     /// with `NoEvent`.
-    HandleError(Error),
+    HandleError(CakapError),
     /// Handle the given data from the peer.
     HandleData(&'b [u8]),
     /// Handle `received` from the peer, and send `to_send` to the peer.
@@ -211,11 +213,21 @@ pub enum RecommendedAction<'a, 'b> {
     SendData(HotPacket<'a>),
 }
 
+impl<'a, 'b> RecommendedAction<'a, 'b> {
+    #[cfg(test)]
+    fn get_hot_packet(&self) -> &HotPacket<'a> {
+        match self {
+            Self::SendData(hot_packet) => hot_packet,
+            _ => panic!("Expected SendData, got {:?}", self),
+        }
+    }
+}
+
 pub enum Event<'a> {
     /// A whole packet of data, with no padding bytes or otherwise empty space.
     IncomingData(&'a [u8]),
-    /// Data to be sent to the connected peer.
-    DataToSend(OutgoingData),
+    /// An [`Action`] to perform.
+    Action(Action),
     /// A [`HotPacket`] was confirmed to be sent.
     HotPacketSent,
     /// No data received, to be sent, or was sent. Usually used when some duration of time has passed,
@@ -229,14 +241,16 @@ impl<'a> Default for Event<'a> {
     }
 }
 
-impl<'a> From<OutgoingData> for Event<'a> {
-    fn from(value: OutgoingData) -> Self {
-        Self::DataToSend(value)
+impl<'a> From<Action> for Event<'a> {
+    fn from(value: Action) -> Self {
+        Self::Action(value)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Deref;
+
     use super::*;
 
     #[test]
@@ -244,23 +258,21 @@ mod tests {
         let (mut state_machine, _) = PeerStateMachine::new(Duration::from_millis(100), 256);
         let reliable_builder = state_machine.get_packet_builder();
         let outgoing_data = reliable_builder
-            .new_unreliable([217, 0, 0, 0, 0, 0, 0, 0, 0], |_| {})
+            .new_unreliable([217].into_iter().collect())
             .unwrap();
-        let event = Event::DataToSend(outgoing_data);
+        let event = Event::Action(outgoing_data.into());
         let action = state_machine.poll(event, Instant::now());
 
         // `state_machine` sends a reliable packet
         assert_eq!(
-            action,
-            RecommendedAction::SendData(HotPacket {
-                inner: HotPacketInner::Owned(BorrowedBytes::new(
-                    [217, 0, 0, 0, 0, 0, 0, 0, 0],
-                    |_| {}
-                )),
-            })
+            action.get_hot_packet().deref(),
+            [217, 0, 0, 0, 0, 0, 0, 0, 0]
         );
         // `state_machine` is notified that the packet is sent
-        assert_eq!(state_machine.poll(Event::HotPacketSent, Instant::now()), RecommendedAction::WaitForData);
+        assert_eq!(
+            state_machine.poll(Event::HotPacketSent, Instant::now()),
+            RecommendedAction::WaitForData
+        );
 
         let (mut other_state_machine, _) = PeerStateMachine::new(Duration::from_millis(100), 256);
         // `other_state_machine` receives the unreliable packet
@@ -275,28 +287,25 @@ mod tests {
     fn send_reliable_1() {
         let (mut state_machine, _) = PeerStateMachine::new(Duration::from_millis(100), 256);
         let reliable_builder = state_machine.get_packet_builder();
-        let (outgoing_data, reliable_index) = reliable_builder
-            .new_reliable([15, 0, 0, 0, 0, 0, 0, 0, 0], |_| {})
+        let outgoing_data = reliable_builder
+            .new_reliable([15].into_iter().collect())
             .unwrap();
 
-        assert_eq!(reliable_index.0.get(), 1);
+        assert_eq!(outgoing_data.get_index().0.get(), 1);
 
-        let event = Event::DataToSend(outgoing_data);
+        let event = Event::Action(outgoing_data.into());
         let action = state_machine.poll(event, Instant::now());
 
         // `state_machine` sends a reliable packet
         assert_eq!(
-            action,
-            RecommendedAction::SendData(HotPacket {
-                inner: HotPacketInner::Owned(BorrowedBytes::new(
-                    [15, 0, 0, 0, 0, 0, 0, 0, 1],
-                    |_| {}
-                )),
-            })
+            action.get_hot_packet().deref(),
+            [15, 0, 0, 0, 0, 0, 0, 0, 1],
         );
         // `state_machine` is notified that the packet is sent
         let action = state_machine.poll(Event::HotPacketSent, Instant::now());
-        let RecommendedAction::WaitForDuration(duration) = action else { panic!("Not WaitForDuration") };
+        let RecommendedAction::WaitForDuration(duration) = action else {
+            panic!("Not WaitForDuration")
+        };
         assert!(duration.as_millis() > 98);
 
         let (mut other_state_machine, _) = PeerStateMachine::new(Duration::from_millis(100), 256);
@@ -315,11 +324,16 @@ mod tests {
         );
 
         // `other_state_machine` is notified that the packet is sent
-        assert_eq!(other_state_machine.poll(Event::HotPacketSent, Instant::now()), RecommendedAction::WaitForData);
+        assert_eq!(
+            other_state_machine.poll(Event::HotPacketSent, Instant::now()),
+            RecommendedAction::WaitForData
+        );
 
         // `state_machine` waits for data
         let action = state_machine.poll(Event::HotPacketSent, Instant::now());
-        let RecommendedAction::WaitForDuration(duration) = action else { panic!("Not WaitForDuration") };
+        let RecommendedAction::WaitForDuration(duration) = action else {
+            panic!("Not WaitForDuration")
+        };
         assert!(duration.as_millis() > 98);
 
         // `state_machine` receives the acknowledgement
@@ -333,28 +347,25 @@ mod tests {
     fn send_reliable_2() {
         let (mut state_machine, _) = PeerStateMachine::new(Duration::from_millis(100), 256);
         let reliable_builder = state_machine.get_packet_builder();
-        let (outgoing_data, reliable_index) = reliable_builder
-            .new_reliable([15, 0, 0, 0, 0, 0, 0, 0, 0], |_| {})
+        let outgoing_data = reliable_builder
+            .new_reliable([15].into_iter().collect())
             .unwrap();
 
-        assert_eq!(reliable_index.0.get(), 1);
+        assert_eq!(outgoing_data.get_index().0.get(), 1);
 
-        let event = Event::DataToSend(outgoing_data);
+        let event = Event::Action(outgoing_data.into());
         let action = state_machine.poll(event, Instant::now());
 
         // `state_machine` sends a reliable packet
         assert_eq!(
-            action,
-            RecommendedAction::SendData(HotPacket {
-                inner: HotPacketInner::Owned(BorrowedBytes::new(
-                    [15, 0, 0, 0, 0, 0, 0, 0, 1],
-                    |_| {}
-                )),
-            })
+            action.get_hot_packet().deref(),
+            [15, 0, 0, 0, 0, 0, 0, 0, 1],
         );
         // `state_machine` is notified that the packet is sent
         let action = state_machine.poll(Event::HotPacketSent, Instant::now());
-        let RecommendedAction::WaitForDuration(duration) = action else { panic!("Not WaitForDuration") };
+        let RecommendedAction::WaitForDuration(duration) = action else {
+            panic!("Not WaitForDuration")
+        };
         assert!(duration.as_millis() > 98);
 
         let (mut other_state_machine, _) = PeerStateMachine::new(Duration::from_millis(100), 256);
@@ -373,24 +384,32 @@ mod tests {
         );
 
         // `other_state_machine` is notified that the packet is sent
-        assert_eq!(other_state_machine.poll(Event::HotPacketSent, Instant::now()), RecommendedAction::WaitForData);
+        assert_eq!(
+            other_state_machine.poll(Event::HotPacketSent, Instant::now()),
+            RecommendedAction::WaitForData
+        );
 
         // `state_machine` waits for data
         let action = state_machine.poll(Event::HotPacketSent, Instant::now());
-        let RecommendedAction::WaitForDuration(duration) = action else { panic!("Not WaitForDuration") };
+        let RecommendedAction::WaitForDuration(duration) = action else {
+            panic!("Not WaitForDuration")
+        };
         assert!(duration.as_millis() > 98);
 
         // 'state_machine' retransmits after some time
-        let action = state_machine.poll(Event::HotPacketSent, Instant::now() + Duration::from_millis(100));
+        let action = state_machine.poll(
+            Event::HotPacketSent,
+            Instant::now() + Duration::from_millis(100),
+        );
         assert_eq!(
-            action,
-            RecommendedAction::SendData(HotPacket {
-                inner: HotPacketInner::Owned(BorrowedBytes::new([15, 0, 0, 0, 0, 0, 0, 0, 1], |_| {}))
-            })
+            action.get_hot_packet().deref(),
+            [15, 0, 0, 0, 0, 0, 0, 0, 1],
         );
         // `state_machine` is notified that the packet is sent
         let action = state_machine.poll(Event::HotPacketSent, Instant::now());
-        let RecommendedAction::WaitForDuration(duration) = action else { panic!("Not WaitForDuration") };
+        let RecommendedAction::WaitForDuration(duration) = action else {
+            panic!("Not WaitForDuration")
+        };
         assert!(duration.as_millis() > 98);
 
         // `other_state_machine` receives the data
@@ -398,12 +417,7 @@ mod tests {
         let action = other_state_machine.poll(event, Instant::now());
 
         // `other_state_machine` sends an acknowledgement without handling the data
-        assert_eq!(
-            action,
-            RecommendedAction::SendData(HotPacket {
-                inner: HotPacketInner::Owned(BorrowedBytes::new(to_send, |_| {}))
-            })
-        );
+        assert_eq!(action.get_hot_packet().deref(), to_send);
 
         // `state_machine` receives the acknowledgement
         let event = Event::IncomingData(&to_send);
