@@ -535,6 +535,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cakap2"
+version = "0.1.0"
+dependencies = [
+ "fxhash",
+ "indexmap",
+]
+
+[[package]]
 name = "calloop"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
