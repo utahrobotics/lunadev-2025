@@ -40,14 +40,6 @@ impl BorrowedBytes {
             buffer: SendVoid((buffer as *mut T).cast()),
         }
     }
-
-    // /// Create a new `BorrowedBytes` from a buffer that will not be returned.
-    // fn take<T>(buffer: T) -> Self
-    // where
-    //     T: AsMut<[u8]> + Send + 'static
-    // {
-    //     Self::new(buffer, |_| {})
-    // }
 }
 
 impl Drop for BorrowedBytes {
@@ -103,16 +95,29 @@ pub(crate) enum OutgoingDataInner {
     Unreliable(BorrowedBytes),
 }
 
+/// A packet intended to be sent to the peer.
+/// 
+/// Before sending, the packet should be digested by the state machine,
+/// which will determine the next steps.
 pub struct OutgoingData {
     pub(crate) inner: OutgoingDataInner,
 }
 
 impl OutgoingData {
+    /// Cancel the reliable packet with the given index.
+    /// 
+    /// This prevents the packet from being retransmitted,
+    /// but it does not guarantee that the packet will not be received
+    /// if it is already in transit. Cancelling an already acknowledged
+    /// packet will have no effect.
     pub fn cancel_reliable(index: ReliableIndex) -> Self {
         OutgoingData {
             inner: OutgoingDataInner::CancelReliable(index),
         }
     }
+    /// Cancel all reliable packets.
+    /// 
+    /// This has the same guarantees as [`Self::cancel_reliable`].
     pub fn cancel_all_reliable() -> Self {
         OutgoingData {
             inner: OutgoingDataInner::CancelAllReliable,
@@ -123,12 +128,13 @@ impl OutgoingData {
 #[derive(Clone, Copy, Debug)]
 pub struct ReliableIndex(pub(crate) NonZeroU64);
 
+/// Used to create reliable and unreliable packets.
 #[derive(Clone)]
-pub struct ReliableBuilder {
+pub struct PacketBuilder {
     pub(crate) shared: Arc<Shared>,
 }
 
-impl ReliableBuilder {
+impl PacketBuilder {
     /// Sends the given bytes unreliably.
     ///
     /// The last 8 bytes of the given message will be overwritten with zeroes, so leave space for that.
@@ -159,7 +165,7 @@ impl ReliableBuilder {
     /// have a zero-sized payload.
     ///
     /// # Safety
-    /// Strictly speaking, undefined behavior can occur if this method is called 2^63 - 1 times per struct due to overflow.
+    /// Strictly speaking, unexpected behavior can occur if this method is called 2^63 - 1 times per struct due to overflow.
     /// However, this is hopefully not a practical concern.
     pub fn new_reliable<T, F>(
         &self,
@@ -180,7 +186,7 @@ impl ReliableBuilder {
         let reliable_index = self.shared.reliable_index.fetch_add(1, Ordering::Relaxed);
 
         bytes_mut[len - 8..].copy_from_slice(&reliable_index.to_be_bytes());
-        let reliable_index = unsafe { NonZeroU64::new_unchecked(reliable_index) };
+        let reliable_index = NonZeroU64::new(reliable_index).expect("Reliable Index has overflowed. Consider reconstructing the state machine earlier to avoid this");
 
         Ok((
             OutgoingData {
@@ -197,11 +203,12 @@ impl ReliableBuilder {
 pub(crate) enum HotPacketInner<'a> {
     Borrowed(&'a BorrowedBytes),
     Owned(BorrowedBytes),
+    Index([u8; 8]),
 }
 
 /// A packet of data that the state machine has determined needs to be sent immediately.
 ///
-/// [`OutgoingData`] represents a request to send data that the state machine digests.
+/// [`OutgoingData`] represents an intent to send data, that the state machine digests.
 /// The state machine then produces [`HotPacket`]s at the appropriate time. When the packet
 /// has been sent, the state machine should be notified.
 pub struct HotPacket<'a> {
@@ -215,22 +222,24 @@ impl<'a> Deref for HotPacket<'a> {
         match &self.inner {
             HotPacketInner::Borrowed(buf) => buf,
             HotPacketInner::Owned(buf) => buf,
+            HotPacketInner::Index(buf) => buf,
         }
     }
 }
 
 impl<'a> PartialEq for HotPacket<'a> {
     fn eq(&self, other: &Self) -> bool {
-        match &self.inner {
-            HotPacketInner::Borrowed(buf) => match &other.inner {
-                HotPacketInner::Borrowed(other_buf) => *buf == *other_buf,
-                HotPacketInner::Owned(other_buf) => **buf == *other_buf,
-            },
-            HotPacketInner::Owned(buf) => match &other.inner {
-                HotPacketInner::Borrowed(other_buf) => *buf == **other_buf,
-                HotPacketInner::Owned(other_buf) => *buf == *other_buf,
-            },
-        }
+        let self_bytes = match &self.inner {
+            HotPacketInner::Borrowed(buf) => *buf,
+            HotPacketInner::Owned(buf) => buf.deref(),
+            HotPacketInner::Index(buf) => buf,
+        };
+        let other_bytes = match &other.inner {
+            HotPacketInner::Borrowed(buf) => *buf,
+            HotPacketInner::Owned(buf) => buf.deref(),
+            HotPacketInner::Index(buf) => buf,
+        };
+        self_bytes == other_bytes
     }
 }
 
