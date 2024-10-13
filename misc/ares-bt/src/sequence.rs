@@ -75,6 +75,15 @@ impl_seq!(1 A 0);
 impl_seq!(2 A 0 B 1);
 impl_seq!(3 A 0 B 1 C 2);
 
+impl<A> Sequence<A> {
+    pub fn new(body: A) -> Self {
+        Self {
+            body,
+            index: 0
+        }
+    }
+}
+
 pub struct Select<A> {
     pub body: A,
     index: usize
@@ -149,3 +158,12 @@ macro_rules! impl_sel {
 impl_sel!(1 A 0);
 impl_sel!(2 A 0 B 1);
 impl_sel!(3 A 0 B 1 C 2);
+
+impl<A> Select<A> {
+    pub fn new(body: A) -> Self {
+        Self {
+            body,
+            index: 0
+        }
+    }
+}

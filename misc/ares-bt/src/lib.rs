@@ -122,23 +122,22 @@ pub fn status<T>(status: bool) -> Status<T> {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[cfg(test)]
+mod tests {
+    use looping::WhileLoop;
 
-//     #[test]
-//     fn test_sum() {
-//         let mut sum = 0;
-//         let is_ok = WhileLoop {
-//             condition: |sum: &mut usize| status::<()>(*sum < 10),
-//             body: (|sum: &mut usize| {
-//                 *sum += 1;
-//                 Status::Success
-//             },),
-//         }
-//         .run(&mut sum)
-//         .is_ok();
-//         assert!(is_ok);
-//         assert_eq!(sum, 10);
-//     }
-// }
+    use super::*;
+
+    #[test]
+    fn test_sum() {
+        let mut sum = 0;
+        let is_ok = WhileLoop::new(|sum: &mut usize| status::<()>(*sum < 10), |sum: &mut usize| {
+            *sum += 1;
+            InfallibleStatus::Success
+        })
+        .run_infallible(&mut sum)
+        .is_ok();
+        assert!(is_ok);
+        assert_eq!(sum, 10);
+    }
+}

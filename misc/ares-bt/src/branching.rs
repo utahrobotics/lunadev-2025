@@ -1,4 +1,4 @@
-use crate::{Behavior, InfallibleBehavior, InfallibleStatus, Status};
+use crate::{Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, Status};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum IfElseState {
@@ -47,6 +47,110 @@ where
     }
 }
 
+impl<A, B, C, D, T> InfallibleBehavior<D, T> for IfElse<A, B, C>
+where
+    A: Behavior<D, T>,
+    B: InfallibleBehavior<D, T>,
+    C: InfallibleBehavior<D, T>,
+{
+    fn run_infallible(&mut self, blackboard: &mut D) -> InfallibleStatus<T> {
+        let result = match self.state {
+            IfElseState::Condition => {
+                match self.condition.run(blackboard) {
+                    Status::Running(t) => return InfallibleStatus::Running(t),
+                    Status::Success => {
+                        self.state = IfElseState::IfTrue;
+                        self.if_true.run_infallible(blackboard)
+                    }
+                    Status::Failure => {
+                        self.state = IfElseState::IfFalse;
+                        self.if_false.run_infallible(blackboard)
+                    }
+                }
+            }
+            IfElseState::IfTrue => self.if_true.run_infallible(blackboard),
+            IfElseState::IfFalse => self.if_false.run_infallible(blackboard),
+        };
+        
+        if !result.is_running() {
+            self.state = IfElseState::Condition;
+        }
+        
+        result
+    }
+}
+
+impl<A, B, C, D, T> FallibleBehavior<D, T> for IfElse<A, B, C>
+where
+    A: Behavior<D, T>,
+    B: FallibleBehavior<D, T>,
+    C: FallibleBehavior<D, T>,
+{
+    fn run_fallible(&mut self, blackboard: &mut D) -> FallibleStatus<T> {
+        let result = match self.state {
+            IfElseState::Condition => {
+                match self.condition.run(blackboard) {
+                    Status::Running(t) => return FallibleStatus::Running(t),
+                    Status::Success => {
+                        self.state = IfElseState::IfTrue;
+                        self.if_true.run_fallible(blackboard)
+                    }
+                    Status::Failure => {
+                        self.state = IfElseState::IfFalse;
+                        self.if_false.run_fallible(blackboard)
+                    }
+                }
+            }
+            IfElseState::IfTrue => self.if_true.run_fallible(blackboard),
+            IfElseState::IfFalse => self.if_false.run_fallible(blackboard),
+        };
+        
+        if !result.is_running() {
+            self.state = IfElseState::Condition;
+        }
+        
+        result
+    }
+}
+
+impl<A, B, C, D, T> EternalBehavior<D, T> for IfElse<A, B, C>
+where
+    A: Behavior<D, T>,
+    B: EternalBehavior<D, T>,
+    C: EternalBehavior<D, T>,
+{
+    fn run_eternal(&mut self, blackboard: &mut D) -> T {
+        match self.state {
+            IfElseState::Condition => {
+                match self.condition.run(blackboard) {
+                    Status::Running(t) => return t,
+                    Status::Success => {
+                        self.state = IfElseState::IfTrue;
+                        self.if_true.run_eternal(blackboard)
+                    }
+                    Status::Failure => {
+                        self.state = IfElseState::IfFalse;
+                        self.if_false.run_eternal(blackboard)
+                    }
+                }
+            }
+            IfElseState::IfTrue => self.if_true.run_eternal(blackboard),
+            IfElseState::IfFalse => self.if_false.run_eternal(blackboard),
+        }
+    }
+}
+
+impl<A, B, C> IfElse<A, B, C> {
+    pub fn new(condition: A, if_true: B, if_false: C) -> Self {
+        Self {
+            condition,
+            if_true,
+            if_false,
+            state: IfElseState::Condition,
+        }
+    }
+}
+
 pub struct TryCatch<A, B> {
     pub try_behavior: A,
     pub catch: B,
@@ -87,22 +191,68 @@ where
 {
     fn run_infallible(&mut self, blackboard: &mut D) -> InfallibleStatus<T> {
         let result = if self.trying {
-                match self.try_behavior.run(blackboard) {
-                    Status::Running(t) => return InfallibleStatus::Running(t),
-                    Status::Success => return InfallibleStatus::Success,
-                    Status::Failure => {
-                        self.trying = false;
-                        self.catch.run_infallible(blackboard)
-                    }
+            match self.try_behavior.run(blackboard) {
+                Status::Running(t) => return InfallibleStatus::Running(t),
+                Status::Success => return InfallibleStatus::Success,
+                Status::Failure => {
+                    self.trying = false;
+                    self.catch.run_infallible(blackboard)
                 }
-            } else {
-                self.catch.run_infallible(blackboard)
-            };
-            
-            if !result.is_running() {
-                self.trying = true;
             }
-            
-            result
+        } else {
+            self.catch.run_infallible(blackboard)
+        };
+        
+        if !result.is_running() {
+            self.trying = true;
+        }
+        
+        result
+    }
+}
+
+impl<A, B, D, T> FallibleBehavior<D, T> for TryCatch<A, B>
+where
+    A: FallibleBehavior<D, T>,
+    B: FallibleBehavior<D, T>,
+{
+    fn run_fallible(&mut self, blackboard: &mut D) -> FallibleStatus<T> {
+        let result = if self.trying {
+            match self.try_behavior.run_fallible(blackboard) {
+                FallibleStatus::Running(t) => return FallibleStatus::Running(t),
+                FallibleStatus::Failure => {
+                    self.trying = false;
+                    self.catch.run_fallible(blackboard)
+                }
+            }
+        } else {
+            self.catch.run_fallible(blackboard)
+        };
+        
+        if !result.is_running() {
+            self.trying = true;
+        }
+        
+        result
+    }
+}
+
+impl<A, B, D, T> EternalBehavior<D, T> for TryCatch<A, B>
+where
+    A: EternalBehavior<D, T>,
+{
+    fn run_eternal(&mut self, blackboard: &mut D) -> T {
+        self.trying = true;
+        self.try_behavior.run_eternal(blackboard)
+    }
+}
+
+impl<A, B> TryCatch<A, B> {
+    pub fn new(try_behavior: A, catch: B) -> Self {
+        Self {
+            try_behavior,
+            catch,
+            trying: true,
+        }
     }
 }

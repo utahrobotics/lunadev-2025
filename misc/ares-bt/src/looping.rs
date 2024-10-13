@@ -99,3 +99,13 @@ where
         }
     }
 }
+
+impl<A, B> WhileLoop<A, B> {
+    pub fn new(condition: A, body: B) -> Self {
+        Self {
+            condition,
+            body,
+            check_condition: true,
+        }
+    }
+}
