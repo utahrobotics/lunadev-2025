@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-luna-bt = { workspace = true }
+ares-bt = { workspace = true }
 tasker = { workspace = true }
 nalgebra = { workspace = true }
 common = { path = "../common" }

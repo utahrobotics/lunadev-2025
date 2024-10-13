@@ -103,14 +103,9 @@ impl<T> InfallibleStatus<T> {
     }
 }
 
-/// A behavior that runs forever.
-pub trait EternalBehavior<B, T> {
-    fn run_eternal(&mut self, blackboard: &mut B) -> T;
-}
-
-/// A behavior that runs until it fails.
-pub trait FallibleBehavior<B, T> {
-    fn run_fallible(&mut self, blackboard: &mut B) -> FallibleStatus<T>;
+/// A behavior that runs until it fails or succeeds.
+pub trait Behavior<B, T> {
+    fn run(&mut self, blackboard: &mut B) -> Status<T>;
 }
 
 /// A behavior that runs until it succeeds.
@@ -118,9 +113,14 @@ pub trait InfallibleBehavior<B, T> {
     fn run_infallible(&mut self, blackboard: &mut B) -> InfallibleStatus<T>;
 }
 
-/// A behavior that runs until it fails or succeeds.
-pub trait Behavior<B, T> {
-    fn run(&mut self, blackboard: &mut B) -> Status<T>;
+/// A behavior that runs until it fails.
+pub trait FallibleBehavior<B, T> {
+    fn run_fallible(&mut self, blackboard: &mut B) -> FallibleStatus<T>;
+}
+
+/// A behavior that runs forever.
+pub trait EternalBehavior<B, T> {
+    fn run_eternal(&mut self, blackboard: &mut B) -> T;
 }
 
 #[cfg(test)]

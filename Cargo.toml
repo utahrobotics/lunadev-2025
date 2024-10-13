@@ -23,7 +23,7 @@ members = [
     "misc/k",
     "misc/byteable/byteable-core",
     "misc/byteable/byteable-derive",
-    "misc/byteable/byteable", "lunabotics/heightmap", "misc/luna-bt", "lunabotics/lunabot-ai", "misc/ares-bt", "misc/cakap2",
+    "misc/byteable/byteable", "lunabotics/heightmap", "lunabotics/lunabot-ai", "misc/ares-bt", "misc/cakap2",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]
@@ -89,7 +89,6 @@ tasker = { path = "misc/tasker" }
 cakap2 = { path = "misc/cakap2" }
 lunabase-lib = { path = "lunabotics/lunabase-lib" }
 byteable = { path = "misc/byteable/byteable" }
-luna-bt = { path = "misc/luna-bt" }
 ares-bt = { path = "misc/ares-bt" }
 thiserror = "1.0.64"
 

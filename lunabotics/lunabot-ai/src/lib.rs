@@ -1,188 +1,76 @@
-use std::{marker::PhantomData, panic::UnwindSafe};
+use ares_bt::{
+    action::AlwaysSucceed,
+    branching::TryCatch,
+    converters::{CatchPanic, Invert, WithSubBlackboard},
+    looping::WhileLoop,
+    sequence::Sequence,
+    EternalBehavior, FallibleStatus, Status,
+};
+use autonomy::autonomy;
+use blackboard::{FromLunabaseQueue, LunabotBlackboard};
+use common::{FromLunabase, FromLunabot, Steering};
+use tasker::task::SyncTask;
 
-use common::{FromLunabase, LunabotStage};
-pub use drive::{DriveComponent, FailedToDrive};
-use log::{error, info, warn};
-use luna_bt::{Behaviour, ERR, OK};
-use nalgebra::Isometry3;
-pub use pathfinding::PathfinderComponent;
-use tasker::{task::SyncTask, BlockOn};
-pub use teleop::TeleOpComponent;
+mod autonomy;
+mod blackboard;
 
-mod drive;
-mod pathfinding;
-mod run;
-mod teleop;
+pub use blackboard::Input;
 
-pub struct LunabotAI<F, D = (), P = (), O = (), T = ()> {
-    pub make_blackboard: F,
-    _phantom: PhantomData<fn() -> (D, P, O, T)>,
+pub enum Action {
+    WaitForLunabase,
+    FromLunabot(FromLunabot),
+    SetSteering(Steering),
 }
 
-impl<D, P, O, T, F> From<F> for LunabotAI<F, D, P, O, T> {
-    fn from(value: F) -> Self {
-        Self {
-            make_blackboard: value,
-            _phantom: PhantomData,
-        }
-    }
-}
+pub struct LunabotAI<F>(pub F);
 
-pub struct LunabotInterfaces<D, P, O, T> {
-    pub drive: D,
-    pub pathfinder: P,
-    pub get_isometry: O,
-    pub teleop: T,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum AutonomyStage {
-    TraverseObstacles,
-    Dig,
-    Dump,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Autonomy {
-    FullAutonomy(AutonomyStage),
-    PartialAutonomy(AutonomyStage),
-    None,
-}
-
-struct LunabotBlackboard<D, P, O, T> {
-    drive: D,
-    pathfinder: P,
-    get_isometry: O,
-    teleop: T,
-    autonomy: Autonomy,
-}
-
-impl<D, P, O, T> From<LunabotInterfaces<D, P, O, T>> for LunabotBlackboard<D, P, O, T> {
-    fn from(value: LunabotInterfaces<D, P, O, T>) -> Self {
-        Self {
-            drive: value.drive,
-            pathfinder: value.pathfinder,
-            get_isometry: value.get_isometry,
-            teleop: value.teleop,
-            autonomy: Autonomy::PartialAutonomy(AutonomyStage::TraverseObstacles),
-        }
-    }
-}
-
-impl<D, P, O, T> From<LunabotBlackboard<D, P, O, T>> for LunabotInterfaces<D, P, O, T> {
-    fn from(value: LunabotBlackboard<D, P, O, T>) -> Self {
-        Self {
-            drive: value.drive,
-            pathfinder: value.pathfinder,
-            get_isometry: value.get_isometry,
-            teleop: value.teleop,
-        }
-    }
-}
-
-impl<D, P, O, T, F> SyncTask for LunabotAI<F, D, P, O, T>
-where
-    D: DriveComponent,
-    P: PathfinderComponent,
-    O: Fn() -> Isometry3<f64>,
-    T: TeleOpComponent,
-    F: FnMut(Option<LunabotInterfaces<D, P, O, T>>) -> Result<LunabotInterfaces<D, P, O, T>, ()>
-        + UnwindSafe,
-    Self: Send + 'static,
-{
+impl<F: FnMut(Action) -> Input + Send + 'static> SyncTask for LunabotAI<F> {
     type Output = ();
 
     fn run(mut self) -> Self::Output {
-        let mut bb: Option<LunabotBlackboard<D, P, O, T>> = None;
-        let _ = Behaviour::while_loop(
-            Behaviour::constant(OK),
-            [
-                // Setup, Software Stop, loop
-                Behaviour::invert(Behaviour::while_loop(
-                    Behaviour::constant(OK),
-                    [
-                        // Setup
-                        //
-                        // Initialize the blackboard. The blackboard may already exist, so the
-                        // make_blackboard function can modify it if needed. If setup fails due
-                        // to a panic (or returns an ERR), two things can happen. If the blackboard
-                        // is not initialized, setup will be called again after a delay. Otherwise,
-                        // Software Stop will be triggered. When setup resolves, the blackboard must
-                        // be initialized.
-                        Behaviour::invert(Behaviour::while_loop(
-                            Behaviour::constant(OK),
-                            [
-                                Behaviour::invert(Behaviour::action_catch_panic(
-                                    move |bb: &mut Option<LunabotBlackboard<D, P, O, T>>| {
-                                        *bb = Some(
-                                            (self.make_blackboard)(bb.take().map(Into::into))?
-                                                .into(),
-                                        );
-                                        info!("Blackboard initialized");
-                                        OK
-                                    },
-                                    |info| {
-                                        error!("Setup panicked");
-                                        Some(info)
-                                    },
-                                )),
-                                Behaviour::action(
-                                    |bb: &mut Option<LunabotBlackboard<D, P, O, T>>| {
-                                        if bb.is_none() {
-                                            std::thread::sleep(std::time::Duration::from_secs(2));
-                                            OK
-                                        } else {
-                                            ERR
+        let mut blackboard = LunabotBlackboard::default();
+        let mut b = WhileLoop::new(
+            AlwaysSucceed,
+            Sequence::new((
+                Invert(WhileLoop::new(
+                    AlwaysSucceed,
+                    WithSubBlackboard::from(|blackboard: &mut FromLunabaseQueue| {
+                        while let Some(msg) = blackboard.pop() {
+                            match msg {
+                                FromLunabase::ContinueMission => return FallibleStatus::Failure,
+                                _ => {}
+                            }
+                        }
+                        FallibleStatus::Running(Action::WaitForLunabase)
+                    }),
+                )),
+                TryCatch::new(
+                    WhileLoop::new(
+                        AlwaysSucceed,
+                        Sequence::new((
+                            WithSubBlackboard::from(|blackboard: &mut FromLunabaseQueue| {
+                                while let Some(msg) = blackboard.pop() {
+                                    match msg {
+                                        FromLunabase::Steering(steering) => {
+                                            return Status::Running(Action::SetSteering(steering))
                                         }
-                                    },
-                                ),
-                            ],
-                        )),
-                        // Software Stop
-                        //
-                        // Wait for the operator to send a message indicating if it is safe
-                        // to continue the mission or if the blackboard needs to be re-initialized.
-                        // For now, the blackboard is dropped when re-initialization is requested,
-                        // but we could allow for partial re-initialization if needed in the future.
-                        Behaviour::invert(Behaviour::action_catch_panic(
-                            |bb: &mut Option<LunabotBlackboard<D, P, O, T>>| {
-                                info!("Software Stop");
-                                let bb_mut = bb.as_mut().expect("Blackboard should be initialized");
-                                bb_mut.teleop.set_lunabot_stage(LunabotStage::SoftStop);
-
-                                loop {
-                                    match bb_mut.teleop.from_lunabase().block_on() {
-                                        FromLunabase::ContinueMission => break OK,
-                                        FromLunabase::TriggerSetup => {
-                                            *bb = None;
-                                            break ERR;
-                                        }
-                                        FromLunabase::Steering(_) => {}
-                                        m => warn!("Unexpected message: {m:?}"),
+                                        FromLunabase::SoftStop => return Status::Failure,
+                                        _ => {}
                                     }
                                 }
-                            },
-                            |info| {
-                                error!("Software stop panicked");
-                                Some(info)
-                            },
+                                Status::Running(Action::WaitForLunabase)
+                            }),
+                            CatchPanic(autonomy()),
                         )),
-                    ],
-                )),
-                // Run
-                //
-                // If run fails, log it but replace the fail with OK so the loop continues.
-                Behaviour::if_else(
-                    run::run(),
-                    Behaviour::Constant(OK),
-                    Behaviour::action(|_| {
-                        error!("Run behaviour tree failed");
-                        OK
-                    }),
+                    ),
+                    AlwaysSucceed,
                 ),
-            ],
-        )
-        .run(&mut bb);
-        unreachable!("BT while_loop should never return");
+            )),
+        );
+
+        loop {
+            let input = (self.0)(b.run_eternal(&mut blackboard));
+            blackboard.digest_input(input);
+        }
     }
 }
