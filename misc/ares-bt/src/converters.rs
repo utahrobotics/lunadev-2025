@@ -1,4 +1,7 @@
-use crate::{Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, Status};
+use crate::{
+    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
+    InfallibleStatus, Status,
+};
 
 pub struct InfallibleShim<A>(pub A);
 
@@ -55,7 +58,7 @@ where
 }
 
 impl<A, B, T> InfallibleBehavior<B, T> for Invert<A>
-where 
+where
     A: FallibleBehavior<B, T>,
 {
     fn run_infallible(&mut self, blackboard: &mut B) -> InfallibleStatus<T> {
@@ -67,7 +70,7 @@ where
 }
 
 impl<A, B, T> FallibleBehavior<B, T> for Invert<A>
-where 
+where
     A: InfallibleBehavior<B, T>,
 {
     fn run_fallible(&mut self, blackboard: &mut B) -> FallibleStatus<T> {
@@ -79,7 +82,7 @@ where
 }
 
 impl<A, B, T> EternalBehavior<B, T> for Invert<A>
-where 
+where
     A: EternalBehavior<B, T>,
 {
     fn run_eternal(&mut self, blackboard: &mut B) -> T {

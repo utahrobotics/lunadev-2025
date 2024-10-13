@@ -1,8 +1,8 @@
-pub mod converters;
 pub mod action;
 pub mod branching;
-pub mod sequence;
+pub mod converters;
 pub mod looping;
+pub mod sequence;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Status<T> {
@@ -27,12 +27,22 @@ impl<T> Status<T> {
             Self::Failure => true,
         }
     }
-    
+
     pub const fn is_running(&self) -> bool {
         match self {
             Self::Running(_) => true,
             Self::Success => false,
             Self::Failure => false,
+        }
+    }
+}
+
+impl<T> From<bool> for Status<T> {
+    fn from(value: bool) -> Self {
+        if value {
+            Status::Success
+        } else {
+            Status::Failure
         }
     }
 }
@@ -56,7 +66,7 @@ impl<T> FallibleStatus<T> {
             Self::Failure => true,
         }
     }
-    
+
     pub const fn is_running(&self) -> bool {
         match self {
             Self::Running(_) => true,
@@ -84,7 +94,7 @@ impl<T> InfallibleStatus<T> {
             Self::Success => false,
         }
     }
-    
+
     pub const fn is_running(&self) -> bool {
         match self {
             Self::Running(_) => true,
@@ -113,15 +123,6 @@ pub trait Behavior<B, T> {
     fn run(&mut self, blackboard: &mut B) -> Status<T>;
 }
 
-/// Returns `Success` if `status` is `true`, otherwise returns `Failure`.
-pub fn status<T>(status: bool) -> Status<T> {
-    if status {
-        Status::Success
-    } else {
-        Status::Failure
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use looping::WhileLoop;
@@ -131,10 +132,13 @@ mod tests {
     #[test]
     fn test_sum() {
         let mut sum = 0;
-        let is_ok = WhileLoop::new(|sum: &mut usize| status::<()>(*sum < 10), |sum: &mut usize| {
-            *sum += 1;
-            InfallibleStatus::Success
-        })
+        let is_ok = WhileLoop::new(
+            |sum: &mut usize| (*sum < 10).into(),
+            |sum: &mut usize| {
+                *sum += 1;
+                InfallibleStatus::<()>::Success
+            },
+        )
         .run_infallible(&mut sum)
         .is_ok();
         assert!(is_ok);

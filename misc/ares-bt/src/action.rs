@@ -1,5 +1,7 @@
-use crate::{Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, Status};
-
+use crate::{
+    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
+    InfallibleStatus, Status,
+};
 
 impl<T, F: FnMut(&mut B) -> Status<T>, B> Behavior<B, T> for F {
     fn run(&mut self, blackboard: &mut B) -> Status<T> {

@@ -1,4 +1,7 @@
-use crate::{Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, Status};
+use crate::{
+    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
+    InfallibleStatus, Status,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum IfElseState {
@@ -22,27 +25,25 @@ where
 {
     fn run(&mut self, blackboard: &mut D) -> Status<T> {
         let result = match self.state {
-            IfElseState::Condition => {
-                match self.condition.run(blackboard) {
-                    Status::Running(t) => return Status::Running(t),
-                    Status::Success => {
-                        self.state = IfElseState::IfTrue;
-                        self.if_true.run(blackboard)
-                    }
-                    Status::Failure => {
-                        self.state = IfElseState::IfFalse;
-                        self.if_false.run(blackboard)
-                    }
+            IfElseState::Condition => match self.condition.run(blackboard) {
+                Status::Running(t) => return Status::Running(t),
+                Status::Success => {
+                    self.state = IfElseState::IfTrue;
+                    self.if_true.run(blackboard)
                 }
-            }
+                Status::Failure => {
+                    self.state = IfElseState::IfFalse;
+                    self.if_false.run(blackboard)
+                }
+            },
             IfElseState::IfTrue => self.if_true.run(blackboard),
             IfElseState::IfFalse => self.if_false.run(blackboard),
         };
-        
+
         if !result.is_running() {
             self.state = IfElseState::Condition;
         }
-        
+
         result
     }
 }
@@ -55,27 +56,25 @@ where
 {
     fn run_infallible(&mut self, blackboard: &mut D) -> InfallibleStatus<T> {
         let result = match self.state {
-            IfElseState::Condition => {
-                match self.condition.run(blackboard) {
-                    Status::Running(t) => return InfallibleStatus::Running(t),
-                    Status::Success => {
-                        self.state = IfElseState::IfTrue;
-                        self.if_true.run_infallible(blackboard)
-                    }
-                    Status::Failure => {
-                        self.state = IfElseState::IfFalse;
-                        self.if_false.run_infallible(blackboard)
-                    }
+            IfElseState::Condition => match self.condition.run(blackboard) {
+                Status::Running(t) => return InfallibleStatus::Running(t),
+                Status::Success => {
+                    self.state = IfElseState::IfTrue;
+                    self.if_true.run_infallible(blackboard)
                 }
-            }
+                Status::Failure => {
+                    self.state = IfElseState::IfFalse;
+                    self.if_false.run_infallible(blackboard)
+                }
+            },
             IfElseState::IfTrue => self.if_true.run_infallible(blackboard),
             IfElseState::IfFalse => self.if_false.run_infallible(blackboard),
         };
-        
+
         if !result.is_running() {
             self.state = IfElseState::Condition;
         }
-        
+
         result
     }
 }
@@ -88,27 +87,25 @@ where
 {
     fn run_fallible(&mut self, blackboard: &mut D) -> FallibleStatus<T> {
         let result = match self.state {
-            IfElseState::Condition => {
-                match self.condition.run(blackboard) {
-                    Status::Running(t) => return FallibleStatus::Running(t),
-                    Status::Success => {
-                        self.state = IfElseState::IfTrue;
-                        self.if_true.run_fallible(blackboard)
-                    }
-                    Status::Failure => {
-                        self.state = IfElseState::IfFalse;
-                        self.if_false.run_fallible(blackboard)
-                    }
+            IfElseState::Condition => match self.condition.run(blackboard) {
+                Status::Running(t) => return FallibleStatus::Running(t),
+                Status::Success => {
+                    self.state = IfElseState::IfTrue;
+                    self.if_true.run_fallible(blackboard)
                 }
-            }
+                Status::Failure => {
+                    self.state = IfElseState::IfFalse;
+                    self.if_false.run_fallible(blackboard)
+                }
+            },
             IfElseState::IfTrue => self.if_true.run_fallible(blackboard),
             IfElseState::IfFalse => self.if_false.run_fallible(blackboard),
         };
-        
+
         if !result.is_running() {
             self.state = IfElseState::Condition;
         }
-        
+
         result
     }
 }
@@ -121,19 +118,17 @@ where
 {
     fn run_eternal(&mut self, blackboard: &mut D) -> T {
         match self.state {
-            IfElseState::Condition => {
-                match self.condition.run(blackboard) {
-                    Status::Running(t) => return t,
-                    Status::Success => {
-                        self.state = IfElseState::IfTrue;
-                        self.if_true.run_eternal(blackboard)
-                    }
-                    Status::Failure => {
-                        self.state = IfElseState::IfFalse;
-                        self.if_false.run_eternal(blackboard)
-                    }
+            IfElseState::Condition => match self.condition.run(blackboard) {
+                Status::Running(t) => return t,
+                Status::Success => {
+                    self.state = IfElseState::IfTrue;
+                    self.if_true.run_eternal(blackboard)
                 }
-            }
+                Status::Failure => {
+                    self.state = IfElseState::IfFalse;
+                    self.if_false.run_eternal(blackboard)
+                }
+            },
             IfElseState::IfTrue => self.if_true.run_eternal(blackboard),
             IfElseState::IfFalse => self.if_false.run_eternal(blackboard),
         }
@@ -154,7 +149,7 @@ impl<A, B, C> IfElse<A, B, C> {
 pub struct TryCatch<A, B> {
     pub try_behavior: A,
     pub catch: B,
-    trying: bool
+    trying: bool,
 }
 
 impl<A, B, D, T> Behavior<D, T> for TryCatch<A, B>
@@ -175,11 +170,11 @@ where
         } else {
             self.catch.run(blackboard)
         };
-        
+
         if !result.is_running() {
             self.trying = true;
         }
-        
+
         result
     }
 }
@@ -202,11 +197,11 @@ where
         } else {
             self.catch.run_infallible(blackboard)
         };
-        
+
         if !result.is_running() {
             self.trying = true;
         }
-        
+
         result
     }
 }
@@ -228,11 +223,11 @@ where
         } else {
             self.catch.run_fallible(blackboard)
         };
-        
+
         if !result.is_running() {
             self.trying = true;
         }
-        
+
         result
     }
 }

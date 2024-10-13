@@ -1,10 +1,12 @@
-use crate::{Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, Status};
-
+use crate::{
+    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
+    InfallibleStatus, Status,
+};
 
 pub struct WhileLoop<A, B> {
     pub condition: A,
     pub body: B,
-    check_condition: bool
+    check_condition: bool,
 }
 
 impl<A, B, D, T> Behavior<D, T> for WhileLoop<A, B>
@@ -26,7 +28,7 @@ where
                 Status::Success => self.check_condition = true,
                 Status::Failure => {
                     self.check_condition = true;
-                    return Status::Failure
+                    return Status::Failure;
                 }
             }
         }
