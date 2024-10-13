@@ -90,6 +90,7 @@ cakap2 = { path = "misc/cakap2" }
 lunabase-lib = { path = "lunabotics/lunabase-lib" }
 byteable = { path = "misc/byteable/byteable" }
 luna-bt = { path = "misc/luna-bt" }
+ares-bt = { path = "misc/ares-bt" }
 thiserror = "1.0.64"
 
 [profile.dev.package.lunabot]
