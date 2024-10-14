@@ -81,14 +81,17 @@ impl PeerStateMachine {
         }
     }
 
-    pub fn send_reconnection_msg<'a>(&'a mut self, now: Instant) -> RecommendedAction<'a, 'static> {
+    pub fn send_reconnection_msg<'a>(&'a mut self, now: Instant) -> (RecommendedAction<'a, 'static>, ReliableIndex) {
         let index = !(1u64 << 63);
         let data = Box::new(index.to_be_bytes());
         let index = ReliableIndex(NonZeroU64::new(index).unwrap());
 
-        self.poll(
-            Event::Action(Action::SendReliable(ReliablePacket { index, data })),
-            now,
+        (
+            self.poll(
+                Event::Action(Action::SendReliable(ReliablePacket { index, data })),
+                now,
+            ),
+            index
         )
     }
 
@@ -96,6 +99,10 @@ impl PeerStateMachine {
         PacketBuilder {
             shared: self.shared.clone(),
         }
+    }
+
+    pub fn is_packet_retransmitting(&self, index: ReliableIndex) -> bool {
+        self.retransmission_map.contains_key(&index.0)
     }
 
     /// Digests the given [`Event`] according to the given [`Instant`] and produces a [`RecommendedAction`] that should be taken.

@@ -67,7 +67,7 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
                 break udp;
             };
 
-            let mut action: RecommendedAction<'_, '_> = cakap_sm.send_reconnection_msg(Instant::now());
+            let mut action: RecommendedAction<'_, '_> = cakap_sm.send_reconnection_msg(Instant::now()).0;
             let mut wait_for: Option<Duration>;
 
             macro_rules! send {

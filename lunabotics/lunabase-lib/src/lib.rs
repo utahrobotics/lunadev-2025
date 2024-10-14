@@ -1,6 +1,9 @@
 #![feature(backtrace_frames)]
 use std::{
-    collections::VecDeque, net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket}, sync::Once, time::{Duration, Instant}
+    collections::VecDeque,
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
+    sync::Once,
+    time::{Duration, Instant},
 };
 
 use bitcode::encode;
@@ -99,7 +102,7 @@ impl INode for LunabotConn {
                 bitcode_buffer: bitcode::Buffer::new(),
                 did_reconnection: false,
                 last_steering: None,
-                send_to: None
+                send_to: None,
             }),
             base,
         }
@@ -194,7 +197,7 @@ impl INode for LunabotConn {
                         // godot_warn!("{:?}", &buf[..n]);
                         inner.send_to = Some(addr);
                         if !inner.did_reconnection {
-                            let tmp_action = inner.cakap_sm.send_reconnection_msg(now);
+                            let tmp_action = inner.cakap_sm.send_reconnection_msg(now).0;
                             handle!(tmp_action);
                             inner.did_reconnection = true;
                         }

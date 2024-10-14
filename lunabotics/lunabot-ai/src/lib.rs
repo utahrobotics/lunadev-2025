@@ -22,7 +22,7 @@ pub use blackboard::Input;
 pub enum Action {
     WaitForLunabase,
     SetSteering(Steering),
-    SetStage(LunabotStage)
+    SetStage(LunabotStage),
 }
 
 pub fn run_ai(mut on_action: impl FnMut(Action) -> Input) {

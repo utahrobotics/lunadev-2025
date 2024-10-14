@@ -32,5 +32,4 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard, Action> {
             Status::Running(Action::WaitForLunabase)
         },
     ))
-    
 }
