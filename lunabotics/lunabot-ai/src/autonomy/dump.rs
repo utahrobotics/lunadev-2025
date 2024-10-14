@@ -1,6 +1,4 @@
-use ares_bt::{
-    action::AlwaysFail, branching::IfElse, Behavior, Status,
-};
+use ares_bt::{action::AlwaysFail, branching::IfElse, Behavior, Status};
 
 use crate::{blackboard::LunabotBlackboard, Action};
 

@@ -158,7 +158,7 @@ impl SyncTask for Localizer {
                     angle: angle as f32,
                     origin,
                 });
-                
+
                 lunasim_stdin.write(bytes);
             }
         }

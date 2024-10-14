@@ -26,7 +26,6 @@ define_callbacks!(HeightMapCallbacks => Fn(heightmap: &[f32]) + Send + Sync);
 //     }
 // }
 
-
 pub fn heightmap_strategy(
     projection_size: Vector2<u32>,
     raw_pcl_callbacks_ref: &PointCloudCallbacksRef,

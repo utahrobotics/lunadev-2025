@@ -1,5 +1,6 @@
 use crate::{
-    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
+    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
+    InfallibleStatus, IntoRon, Status,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,10 +26,21 @@ where
     fn into_ron(&self) -> ron::Value {
         ron::Value::Map(
             [
-                (ron::Value::String("condition".to_string()), self.condition.into_ron()),
-                (ron::Value::String("success".to_string()), self.if_true.into_ron()),
-                (ron::Value::String("failure".to_string()), self.if_false.into_ron()),
-            ].into_iter().collect()
+                (
+                    ron::Value::String("condition".to_string()),
+                    self.condition.into_ron(),
+                ),
+                (
+                    ron::Value::String("success".to_string()),
+                    self.if_true.into_ron(),
+                ),
+                (
+                    ron::Value::String("failure".to_string()),
+                    self.if_false.into_ron(),
+                ),
+            ]
+            .into_iter()
+            .collect(),
         )
     }
 }
@@ -176,9 +188,17 @@ where
     fn into_ron(&self) -> ron::Value {
         ron::Value::Map(
             [
-                (ron::Value::String("try".to_string()), self.try_behavior.into_ron()),
-                (ron::Value::String("catch".to_string()), self.catch.into_ron()),
-            ].into_iter().collect()
+                (
+                    ron::Value::String("try".to_string()),
+                    self.try_behavior.into_ron(),
+                ),
+                (
+                    ron::Value::String("catch".to_string()),
+                    self.catch.into_ron(),
+                ),
+            ]
+            .into_iter()
+            .collect(),
         )
     }
 }

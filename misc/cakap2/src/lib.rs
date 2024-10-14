@@ -67,10 +67,7 @@ impl PeerStateMachine {
     /// them twice).
     ///
     /// The returned [`RecommendedAction`] is an action that should be taken immediately after creating the state machine.
-    pub fn new(
-        retransmission_duration: Duration,
-        max_received_set_size: usize,
-    ) -> Self {
+    pub fn new(retransmission_duration: Duration, max_received_set_size: usize) -> Self {
         Self {
             retransmission_duration,
             max_received_set_size,
@@ -89,7 +86,10 @@ impl PeerStateMachine {
         let data = Box::new(index.to_be_bytes());
         let index = ReliableIndex(NonZeroU64::new(index).unwrap());
 
-        self.poll(Event::Action(Action::SendReliable(ReliablePacket { index, data })), now)
+        self.poll(
+            Event::Action(Action::SendReliable(ReliablePacket { index, data })),
+            now,
+        )
     }
 
     pub fn get_packet_builder(&self) -> PacketBuilder {
@@ -237,7 +237,7 @@ pub enum RecommendedAction<'a, 'b> {
     /// Handle the given data from the peer.
     HandleData(&'b [u8]),
     /// Handle `received` from the peer, and send `to_send` to the peer.
-    /// 
+    ///
     /// If the given message is not valid for whatever reason, you can choose to not
     /// send `to_send` and *not* poll the state machine with `NoEvent`.
     HandleDataAndSend {
@@ -430,10 +430,8 @@ mod tests {
         assert!(duration.as_millis() > 98);
 
         // 'state_machine' retransmits after some time
-        let action = state_machine.poll(
-            Event::NoEvent,
-            Instant::now() + Duration::from_millis(100),
-        );
+        let action =
+            state_machine.poll(Event::NoEvent, Instant::now() + Duration::from_millis(100));
         assert_eq!(
             action.get_hot_packet().deref(),
             [15, 0, 0, 0, 0, 0, 0, 0, 1],

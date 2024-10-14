@@ -41,9 +41,7 @@ impl Autonomy {
 
 pub fn autonomy() -> impl Behavior<LunabotBlackboard, Action> {
     WhileLoop::new(
-        |blackboard: &mut LunabotBlackboard| {
-            (*blackboard.get_autonomy() != Autonomy::None).into()
-        },
-        Select::new((dig(), dump(), traverse()))
+        |blackboard: &mut LunabotBlackboard| (*blackboard.get_autonomy() != Autonomy::None).into(),
+        Select::new((dig(), dump(), traverse())),
     )
 }

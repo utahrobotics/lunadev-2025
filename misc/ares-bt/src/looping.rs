@@ -1,5 +1,6 @@
 use crate::{
-    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
+    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
+    InfallibleStatus, IntoRon, Status,
 };
 
 pub struct WhileLoop<A, B> {
@@ -16,9 +17,14 @@ where
     fn into_ron(&self) -> ron::Value {
         ron::Value::Map(
             [
-                (ron::Value::String("condition".to_string()), self.condition.into_ron()),
+                (
+                    ron::Value::String("condition".to_string()),
+                    self.condition.into_ron(),
+                ),
                 (ron::Value::String("body".to_string()), self.body.into_ron()),
-            ].into_iter().collect()
+            ]
+            .into_iter()
+            .collect(),
         )
     }
 }

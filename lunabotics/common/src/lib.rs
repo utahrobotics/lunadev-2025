@@ -6,7 +6,7 @@ pub mod lunasim;
 
 #[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]
 pub enum LunabotStage {
-    Manual,
+    TeleOp,
     SoftStop,
     TraverseObstacles,
     Dig,
@@ -17,12 +17,10 @@ pub enum LunabotStage {
 pub enum FromLunabase {
     // Pong,
     ContinueMission,
-    TriggerSetup,
     Steering(Steering),
     TraverseObstacles,
     SoftStop,
 }
-
 
 impl FromLunabase {
     fn write_code(&self, mut w: impl Write) -> std::io::Result<()> {
@@ -37,7 +35,6 @@ impl FromLunabase {
     pub fn write_code_sheet(mut w: impl Write) -> std::io::Result<()> {
         // FromLunabase::Pong.write_code(&mut w)?;
         FromLunabase::ContinueMission.write_code(&mut w)?;
-        FromLunabase::TriggerSetup.write_code(&mut w)?;
         FromLunabase::Steering(Steering::new(0.0, 0.0)).write_code(&mut w)?;
         FromLunabase::TraverseObstacles.write_code(&mut w)?;
         FromLunabase::SoftStop.write_code(&mut w)?;
@@ -50,7 +47,6 @@ pub enum FromLunabot {
     Ping(LunabotStage),
 }
 
-
 impl FromLunabot {
     fn write_code(&self, mut w: impl Write) -> std::io::Result<()> {
         let bytes = bitcode::encode(self);
@@ -59,10 +55,10 @@ impl FromLunabot {
             write!(w, "{b:x}")?;
         }
         writeln!(w, "")
-}
+    }
 
     pub fn write_code_sheet(mut w: impl Write) -> std::io::Result<()> {
-        FromLunabot::Ping(LunabotStage::Manual).write_code(&mut w)?;
+        FromLunabot::Ping(LunabotStage::TeleOp).write_code(&mut w)?;
         FromLunabot::Ping(LunabotStage::SoftStop).write_code(&mut w)?;
         FromLunabot::Ping(LunabotStage::TraverseObstacles).write_code(&mut w)?;
         FromLunabot::Ping(LunabotStage::Dig).write_code(&mut w)?;

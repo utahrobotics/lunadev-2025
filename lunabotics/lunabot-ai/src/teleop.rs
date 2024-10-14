@@ -1,11 +1,16 @@
 use ares_bt::{Behavior, Status};
-use common::FromLunabase;
+use common::{FromLunabase, LunabotStage};
 use log::warn;
 
-use crate::{autonomy::{Autonomy, AutonomyStage}, blackboard::LunabotBlackboard, Action};
+use crate::{
+    autonomy::{Autonomy, AutonomyStage},
+    blackboard::LunabotBlackboard,
+    Action,
+};
 
 pub fn teleop() -> impl Behavior<LunabotBlackboard, Action> {
     |blackboard: &mut LunabotBlackboard| {
+        blackboard.set_stage(LunabotStage::TeleOp);
         while let Some(msg) = blackboard.pop_from_lunabase() {
             match msg {
                 FromLunabase::Steering(steering) => {
@@ -16,7 +21,8 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard, Action> {
                     return Status::Failure;
                 }
                 FromLunabase::TraverseObstacles => {
-                    *blackboard.get_autonomy() = Autonomy::PartialAutonomy(AutonomyStage::TraverseObstacles);
+                    *blackboard.get_autonomy() =
+                        Autonomy::PartialAutonomy(AutonomyStage::TraverseObstacles);
                     return Status::Success;
                 }
                 _ => {}

@@ -1,9 +1,18 @@
-use std::{net::{Ipv4Addr, SocketAddr, SocketAddrV4}, ops::Deref, sync::Arc, time::{Duration, Instant}};
+use std::{
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    ops::Deref,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use cakap2::{packet::Action, Event, PeerStateMachine, RecommendedAction};
 use common::{FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
-use urobotics::{get_tokio_handle, log::{error, warn}, tokio::{self, net::UdpSocket, sync::mpsc}};
+use urobotics::{
+    get_tokio_handle,
+    log::{error, warn},
+    tokio::{self, net::UdpSocket, sync::mpsc},
+};
 
 pub struct PacketBuilder {
     builder: cakap2::packet::PacketBuilder,
@@ -27,12 +36,12 @@ impl PacketBuilder {
 pub struct LunabaseConn<F> {
     pub lunabase_address: SocketAddr,
     pub on_msg: F,
-    pub lunabot_stage: Arc<AtomicCell<LunabotStage>>
+    pub lunabot_stage: Arc<AtomicCell<LunabotStage>>,
 }
 
 impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
     /// Connect to the lunabase and return a [`PacketBuilder`] to send packets to the lunabase.
-    /// 
+    ///
     /// The `on_msg` closure is called whenever a message is received from the lunabase, and must
     /// return `true` if the message was successfully parsed, and `false` otherwise.
     pub fn connect_to_lunabase(mut self) -> PacketBuilder {
@@ -57,10 +66,10 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
                 }
                 break udp;
             };
-        
+
             let mut action: RecommendedAction<'_, '_> = cakap_sm.send_reconnection_msg(Instant::now());
             let mut wait_for: Option<Duration>;
-        
+
             macro_rules! send {
                 ($data: expr) => {{
                     loop {
@@ -73,7 +82,7 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
                     }
                 }};
             }
-        
+
             let mut buf= [0u8; 1408];
             macro_rules! handle {
                 () => {
@@ -105,7 +114,7 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
             handle!();
             let mut bitcode_buffer = bitcode::Buffer::new();
             let mut ping_at = tokio::time::Instant::now();
-        
+
             loop {
                 tokio::select! {
                     _ = tokio::time::sleep_until(ping_at) => {

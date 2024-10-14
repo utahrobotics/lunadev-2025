@@ -19,10 +19,10 @@ use urobotics::{
 
 // mod interfaces;
 mod localization;
-mod sim;
-mod utils;
-mod teleop;
 mod obstacles;
+mod sim;
+mod teleop;
+mod utils;
 
 fn_alias! {
     type PointCloudCallbacksRef = CallbacksRef(&[Vector4<f32>]) + Send + Sync

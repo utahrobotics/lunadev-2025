@@ -1,11 +1,18 @@
 #![feature(backtrace_frames)]
-use std::{collections::VecDeque, net::{Ipv4Addr, SocketAddrV4, UdpSocket}, sync::Once, time::{Duration, Instant}};
+use std::{
+    collections::VecDeque,
+    net::{Ipv4Addr, SocketAddrV4, UdpSocket},
+    sync::Once,
+    time::{Duration, Instant},
+};
 
 use bitcode::encode;
-use cakap2::{packet::{Action, ReliableIndex}, Event, PeerStateMachine, RecommendedAction};
+use cakap2::{
+    packet::{Action, ReliableIndex},
+    Event, PeerStateMachine, RecommendedAction,
+};
 use common::{FromLunabase, FromLunabot, LunabotStage, Steering};
 use godot::{classes::Engine, prelude::*};
-
 
 struct LunabaseLib;
 
@@ -80,7 +87,8 @@ impl INode for LunabotConn {
         let udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10600))
             .expect("Failed to bind to 10600");
 
-        udp.set_nonblocking(true).expect("Failed to set non-blocking");
+        udp.set_nonblocking(true)
+            .expect("Failed to set non-blocking");
 
         let cakap_sm = PeerStateMachine::new(Duration::from_millis(150), 1024);
         // godot_warn!("LunabotConn initialized");
@@ -108,7 +116,7 @@ impl INode for LunabotConn {
                     match $msg {
                         FromLunabot::Ping(stage) => {
                             match stage {
-                                LunabotStage::Manual => {
+                                LunabotStage::TeleOp => {
                                     self.base_mut().emit_signal("entered_manual".into(), &[])
                                 }
                                 LunabotStage::SoftStop => {
@@ -127,13 +135,15 @@ impl INode for LunabotConn {
                             inner = self.inner.as_mut().unwrap();
                         }
                     }
-                }}
+                }};
             }
 
             macro_rules! handle {
                 ($action: ident) => {
                     match $action {
-                        RecommendedAction::HandleError(cakap_error) => godot_error!("{cakap_error}"),
+                        RecommendedAction::HandleError(cakap_error) => {
+                            godot_error!("{cakap_error}")
+                        }
                         RecommendedAction::HandleData(received) => {
                             match inner.bitcode_buffer.decode::<FromLunabot>(received) {
                                 Ok(x) => {
@@ -164,7 +174,7 @@ impl INode for LunabotConn {
                         }
                         RecommendedAction::WaitForData | RecommendedAction::WaitForDuration(_) => {}
                     }
-                }
+                };
             }
 
             let now = Instant::now();
@@ -192,7 +202,7 @@ impl INode for LunabotConn {
                     Err(e) => match e.kind() {
                         std::io::ErrorKind::WouldBlock => break,
                         _ => godot_error!("Failed to receive data: {e}"),
-                    }
+                    },
                 }
             }
 
@@ -206,7 +216,7 @@ impl INode for LunabotConn {
                         }
                     }
                     RecommendedAction::WaitForData | RecommendedAction::WaitForDuration(_) => break,
-                    _ => unreachable!()
+                    _ => unreachable!(),
                 }
             }
 
@@ -221,7 +231,11 @@ impl INode for LunabotConn {
 impl LunabotConn {
     fn send_reliable(&mut self, msg: &FromLunabase) {
         if let Some(inner) = &mut self.inner {
-            match inner.cakap_sm.get_packet_builder().new_reliable(encode(msg).into()) {
+            match inner
+                .cakap_sm
+                .get_packet_builder()
+                .new_reliable(encode(msg).into())
+            {
                 Ok(packet) => {
                     inner.to_lunabot.push_back(Action::SendReliable(packet));
                 }
@@ -273,7 +287,11 @@ impl LunabotConn {
                 }
             }
             let msg = FromLunabase::Steering(new_steering);
-            match inner.cakap_sm.get_packet_builder().new_reliable(encode(&msg).into()) {
+            match inner
+                .cakap_sm
+                .get_packet_builder()
+                .new_reliable(encode(&msg).into())
+            {
                 Ok(packet) => {
                     if let Some(old_idx) = last_steering_reliable_idx {
                         inner.to_lunabot.push_back(Action::CancelReliable(old_idx));
@@ -291,11 +309,6 @@ impl LunabotConn {
     #[func]
     fn continue_mission(&mut self) {
         self.send_reliable(&FromLunabase::ContinueMission);
-    }
-
-    #[func]
-    fn trigger_setup(&mut self) {
-        self.send_reliable(&FromLunabase::TriggerSetup);
     }
 
     #[func]

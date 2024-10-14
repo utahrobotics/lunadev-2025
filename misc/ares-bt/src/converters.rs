@@ -1,7 +1,8 @@
 use std::borrow::Cow;
 
 use crate::{
-    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
+    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
+    InfallibleStatus, IntoRon, Status,
 };
 
 pub struct InfallibleShim<A>(pub A);
@@ -24,9 +25,12 @@ where
 {
     fn into_ron(&self) -> ron::Value {
         ron::Value::Map(
-            [
-                (ron::Value::String("infallible".to_string()), self.0.into_ron()),
-            ].into_iter().collect()
+            [(
+                ron::Value::String("infallible".to_string()),
+                self.0.into_ron(),
+            )]
+            .into_iter()
+            .collect(),
         )
     }
 }
@@ -51,9 +55,12 @@ where
 {
     fn into_ron(&self) -> ron::Value {
         ron::Value::Map(
-            [
-                (ron::Value::String("fallible".to_string()), self.0.into_ron()),
-            ].into_iter().collect()
+            [(
+                ron::Value::String("fallible".to_string()),
+                self.0.into_ron(),
+            )]
+            .into_iter()
+            .collect(),
         )
     }
 }
@@ -75,9 +82,9 @@ where
 {
     fn into_ron(&self) -> ron::Value {
         ron::Value::Map(
-            [
-                (ron::Value::String("eternal".to_string()), self.0.into_ron()),
-            ].into_iter().collect()
+            [(ron::Value::String("eternal".to_string()), self.0.into_ron())]
+                .into_iter()
+                .collect(),
         )
     }
 }
@@ -103,9 +110,9 @@ where
 {
     fn into_ron(&self) -> ron::Value {
         ron::Value::Map(
-            [
-                (ron::Value::String("invert".to_string()), self.0.into_ron()),
-            ].into_iter().collect()
+            [(ron::Value::String("invert".to_string()), self.0.into_ron())]
+                .into_iter()
+                .collect(),
         )
     }
 }
@@ -162,7 +169,9 @@ where
     A: FallibleBehavior<B, T>,
 {
     fn run_fallible(&mut self, blackboard: &mut B) -> FallibleStatus<T> {
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.0.run_fallible(blackboard))) {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.0.run_fallible(blackboard)
+        })) {
             Ok(status) => status,
             Err(_) => FallibleStatus::Failure,
         }
@@ -175,9 +184,12 @@ where
 {
     fn into_ron(&self) -> ron::Value {
         ron::Value::Map(
-            [
-                (ron::Value::String("catch_panic".to_string()), self.0.into_ron()),
-            ].into_iter().collect()
+            [(
+                ron::Value::String("catch_panic".to_string()),
+                self.0.into_ron(),
+            )]
+            .into_iter()
+            .collect(),
         )
     }
 }

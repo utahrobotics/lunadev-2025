@@ -1,6 +1,6 @@
 use crate::{
     Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
-    InfallibleStatus, Status, IntoRon
+    InfallibleStatus, IntoRon, Status,
 };
 
 pub struct Sequence<A> {
@@ -78,7 +78,7 @@ macro_rules! impl_seq {
                 self.body.0.run_eternal(blackboard)
             }
         }
-        
+
         impl<$($name,)+> IntoRon for Sequence<($($name,)+)>
         where
             $($name: IntoRon,)+
@@ -185,7 +185,7 @@ macro_rules! impl_sel {
                 self.body.0.run_eternal(blackboard)
             }
         }
-        
+
         impl<$($name,)+> IntoRon for Select<($($name,)+)>
         where
             $($name: IntoRon,)+
