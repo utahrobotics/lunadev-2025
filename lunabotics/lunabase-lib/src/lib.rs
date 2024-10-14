@@ -58,8 +58,8 @@ struct LunabotConnInner {
     udp: UdpSocket,
     to_lunabot: VecDeque<Action>,
     bitcode_buffer: bitcode::Buffer,
-    last_steering_reliable_idx: Option<ReliableIndex>,
     did_reconnection: bool,
+    last_steering: Option<(Steering, ReliableIndex)>,
 }
 
 #[derive(GodotClass)]
@@ -91,8 +91,8 @@ impl INode for LunabotConn {
                 cakap_sm,
                 to_lunabot: VecDeque::new(),
                 bitcode_buffer: bitcode::Buffer::new(),
-                last_steering_reliable_idx: None,
-                did_reconnection: false
+                did_reconnection: false,
+                last_steering: None,
             }),
             base,
         }
@@ -178,6 +178,7 @@ impl INode for LunabotConn {
             loop {
                 match inner.udp.recv_from(&mut buf) {
                     Ok((n, addr)) => {
+                        // godot_warn!("{:?}", &buf[..n]);
                         if let Err(e) = inner.udp.connect(addr) {
                             godot_error!("Failed to connect to lunabot: {e}");
                         } else if !inner.did_reconnection {
@@ -263,13 +264,21 @@ impl LunabotConn {
     #[func]
     fn set_steering(&mut self, drive: f64, steering: f64) {
         if let Some(inner) = &mut self.inner {
-            let msg = FromLunabase::Steering(Steering::new(drive, steering));
+            let new_steering = Steering::new(drive, steering);
+            let mut last_steering_reliable_idx = None;
+            if let Some((old_steering, old_idx)) = inner.last_steering {
+                last_steering_reliable_idx = Some(old_idx);
+                if old_steering == new_steering {
+                    return;
+                }
+            }
+            let msg = FromLunabase::Steering(new_steering);
             match inner.cakap_sm.get_packet_builder().new_reliable(encode(&msg).into()) {
                 Ok(packet) => {
-                    if let Some(old_idx) = inner.last_steering_reliable_idx {
+                    if let Some(old_idx) = last_steering_reliable_idx {
                         inner.to_lunabot.push_back(Action::CancelReliable(old_idx));
                     }
-                    inner.last_steering_reliable_idx = Some(packet.get_index());
+                    inner.last_steering = Some((new_steering, packet.get_index()));
                     inner.to_lunabot.push_back(Action::SendReliable(packet));
                 }
                 Err(e) => {

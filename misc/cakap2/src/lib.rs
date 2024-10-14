@@ -18,7 +18,7 @@
 use std::{
     collections::VecDeque,
     num::NonZeroU64,
-    sync::{atomic::{AtomicU64, Ordering}, Arc},
+    sync::{atomic::AtomicU64, Arc},
     time::{Duration, Instant},
     u64,
 };
@@ -40,6 +40,7 @@ pub struct Shared {
     max_packet_size: usize,
 }
 
+#[derive(Debug)]
 struct Retransmit {
     send_at: Instant,
     data: Box<[u8]>,
@@ -81,20 +82,14 @@ impl PeerStateMachine {
             retransmission_queue: Default::default(),
             received_set: Default::default(),
         }
-        // (
-        //     ,
-        //     RecommendedAction::SendData(HotPacket {
-        //         inner: HotPacketInner::Index((!(1u64 << 63)).to_be_bytes()),
-        //     }),
-        // )
     }
 
     pub fn send_reconnection_msg<'a>(&'a mut self, now: Instant) -> RecommendedAction<'a, 'static> {
-        let index = self.shared.reliable_index.fetch_add(1, Ordering::Relaxed);
-        let index = NonZeroU64::new(index).expect("Reliable Index has overflowed. Consider reconstructing the state machine earlier to avoid this");
-        let data = Box::new((!(1u64 << 63)).to_be_bytes());
+        let index = !(1u64 << 63);
+        let data = Box::new(index.to_be_bytes());
+        let index = ReliableIndex(NonZeroU64::new(index).unwrap());
 
-        self.poll(Event::Action(Action::SendReliable(ReliablePacket { index: ReliableIndex(index), data })), now)
+        self.poll(Event::Action(Action::SendReliable(ReliablePacket { index, data })), now)
     }
 
     pub fn get_packet_builder(&self) -> PacketBuilder {

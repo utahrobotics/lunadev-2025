@@ -13,7 +13,7 @@ pub enum LunabotStage {
     Dump,
 }
 
-#[derive(Debug, Encode, Decode, Clone, Copy)]
+#[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]
 pub enum FromLunabase {
     // Pong,
     ContinueMission,
@@ -73,7 +73,7 @@ impl FromLunabot {
 
 const MAX_STEERING: u8 = 14;
 
-#[derive(Encode, Decode, Clone, Copy)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq)]
 pub struct Steering(u8);
 
 impl std::fmt::Debug for Steering {

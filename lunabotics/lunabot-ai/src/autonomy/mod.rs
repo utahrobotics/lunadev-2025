@@ -1,4 +1,4 @@
-use ares_bt::{action::AlwaysSucceed, looping::WhileLoop, sequence::Select, Behavior};
+use ares_bt::{looping::WhileLoop, sequence::Select, Behavior};
 use dig::dig;
 use dump::dump;
 use traverse::traverse;
