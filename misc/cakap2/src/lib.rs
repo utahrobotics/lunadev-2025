@@ -81,7 +81,10 @@ impl PeerStateMachine {
         }
     }
 
-    pub fn send_reconnection_msg<'a>(&'a mut self, now: Instant) -> (RecommendedAction<'a, 'static>, ReliableIndex) {
+    pub fn send_reconnection_msg<'a>(
+        &'a mut self,
+        now: Instant,
+    ) -> (RecommendedAction<'a, 'static>, ReliableIndex) {
         let index = !(1u64 << 63);
         let data = Box::new(index.to_be_bytes());
         let index = ReliableIndex(NonZeroU64::new(index).unwrap());
@@ -91,7 +94,7 @@ impl PeerStateMachine {
                 Event::Action(Action::SendReliable(ReliablePacket { index, data })),
                 now,
             ),
-            index
+            index,
         )
     }
 

@@ -507,18 +507,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "428d9aa8fbc0670b7b8d6030a7fadd0f86151cae55e4dbbece15f3780a3dfaf3"
 
 [[package]]
-name = "cakap"
-version = "0.1.0"
-dependencies = [
- "bitcode",
- "crossbeam",
- "fxhash",
- "log",
- "tasker",
- "tokio",
-]
-
-[[package]]
 name = "cakap2"
 version = "0.1.0"
 dependencies = [
@@ -2427,6 +2415,7 @@ version = "0.1.0"
 dependencies = [
  "ares-bt",
  "common",
+ "k",
  "log",
  "nalgebra 0.32.6",
 ]

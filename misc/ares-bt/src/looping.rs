@@ -1,5 +1,6 @@
 use crate::{
-    Behavior, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
+    Behavior, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior,
+    InfallibleStatus, IntoRon, Status,
 };
 
 pub struct WhileLoop<A, B> {

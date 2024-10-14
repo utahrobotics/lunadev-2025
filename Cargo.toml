@@ -12,7 +12,6 @@ members = [
     "urobotics/urobotics-py",
     "urobotics/urobotics-apriltag",
     "misc/tasker",
-    "lunabotics/cakap",
     "lunabotics/lunabot",
     "lunabotics/common",
     "lunabotics/pathfinding",

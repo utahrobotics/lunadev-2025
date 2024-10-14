@@ -1,4 +1,10 @@
-use ares_bt::{action::AlwaysSucceed, branching::IfElse, Behavior, Status};
+use ares_bt::{
+    action::{AlwaysSucceed, RunOnce},
+    branching::IfElse,
+    sequence::Sequence,
+    Behavior, Status,
+};
+use common::LunabotStage;
 
 use crate::{blackboard::LunabotBlackboard, Action};
 
@@ -14,10 +20,13 @@ pub(super) fn dump() -> impl Behavior<LunabotBlackboard, Action> {
             )
             .into()
         },
-        |blackboard: &mut LunabotBlackboard| {
-            blackboard.get_autonomy().advance();
-            Status::Success
-        },
+        Sequence::new((
+            RunOnce::from(Action::SetStage(LunabotStage::Dump)),
+            |blackboard: &mut LunabotBlackboard| {
+                blackboard.get_autonomy().advance();
+                Status::Success
+            },
+        )),
         AlwaysSucceed,
     )
 }

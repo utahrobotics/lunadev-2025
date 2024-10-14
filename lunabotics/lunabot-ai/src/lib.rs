@@ -1,3 +1,5 @@
+use std::{sync::Arc, time::Instant};
+
 use ares_bt::{
     action::{AlwaysSucceed, RunOnce},
     branching::TryCatch,
@@ -9,7 +11,9 @@ use ares_bt::{
 use autonomy::autonomy;
 use blackboard::LunabotBlackboard;
 use common::{FromLunabase, LunabotStage, Steering};
+use k::Chain;
 use log::warn;
+use nalgebra::Point3;
 use teleop::teleop;
 
 mod autonomy;
@@ -18,15 +22,23 @@ mod teleop;
 
 pub use blackboard::Input;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Action {
+    /// Wait indefinitely for a message from lunabase.
     WaitForLunabase,
     SetSteering(Steering),
     SetStage(LunabotStage),
+    CalculatePath {
+        from: Point3<f64>,
+        to: Point3<f64>,
+        into: Vec<Point3<f64>>,
+    },
+    /// Wait until the given instant for any input, otherwise poll the ai again.
+    WaitUntil(Instant),
 }
 
-pub fn run_ai(mut on_action: impl FnMut(Action) -> Input) {
-    let mut blackboard = LunabotBlackboard::default();
+pub fn run_ai(chain: Arc<Chain<f64>>, mut on_action: impl FnMut(Action, &mut Vec<Input>)) {
+    let mut blackboard = LunabotBlackboard::new(chain);
     let mut b = WhileLoop::new(
         AlwaysSucceed,
         Sequence::new((
@@ -56,8 +68,11 @@ pub fn run_ai(mut on_action: impl FnMut(Action) -> Input) {
         )),
     );
 
+    let mut inputs = vec![];
     loop {
-        let input = on_action(b.run_eternal(&mut blackboard).unwrap());
-        blackboard.digest_input(input);
+        on_action(b.run_eternal(&mut blackboard).unwrap(), &mut inputs);
+        for input in inputs.drain(..) {
+            blackboard.digest_input(input);
+        }
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
-    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
-    InfallibleStatus, IntoRon, Status, EternalStatus
+    Behavior, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior,
+    InfallibleStatus, IntoRon, Status,
 };
 
 pub struct Sequence<A> {

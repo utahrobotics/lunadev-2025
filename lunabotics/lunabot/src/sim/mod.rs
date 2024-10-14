@@ -330,28 +330,49 @@ impl Application for LunasimbotApp {
         let mut bitcode_buffer = bitcode::Buffer::new();
 
         std::thread::spawn(move || {
-            run_ai(|action| match action {
-                Action::WaitForLunabase => {
-                    let Ok(msg) = from_lunabase_rx.recv() else {
-                        error!("Lunabase message channel closed");
-                        loop {
-                            std::thread::park();
+            run_ai(robot_chain, |action, inputs| {
+                debug_assert!(inputs.is_empty());
+                match action {
+                    Action::WaitForLunabase => {
+                        while let Ok(msg) = from_lunabase_rx.try_recv() {
+                            inputs.push(Input::FromLunabase(msg));
                         }
-                    };
-                    Input::FromLunabase(msg)
-                }
-                Action::SetStage(stage) => {
-                    lunabot_stage.store(stage);
-                    Input::NoInput
-                }
-                Action::SetSteering(steering) => {
-                    let (left, right) = steering.get_left_and_right();
-                    let bytes = bitcode_buffer.encode(&FromLunasimbot::Drive {
-                        left: left as f32,
-                        right: right as f32,
-                    });
-                    lunasim_stdin.write(bytes);
-                    Input::NoInput
+                        if inputs.is_empty() {
+                            let Ok(msg) = from_lunabase_rx.recv() else {
+                                error!("Lunabase message channel closed");
+                                loop {
+                                    std::thread::park();
+                                }
+                            };
+                            inputs.push(Input::FromLunabase(msg));
+                        }
+                    }
+                    Action::SetStage(stage) => {
+                        lunabot_stage.store(stage);
+                    }
+                    Action::SetSteering(steering) => {
+                        let (left, right) = steering.get_left_and_right();
+                        let bytes = bitcode_buffer.encode(&FromLunasimbot::Drive {
+                            left: left as f32,
+                            right: right as f32,
+                        });
+                        lunasim_stdin.write(bytes);
+                    }
+                    Action::CalculatePath { from, to, mut into } => {
+                        into.push(from);
+                        into.push(to);
+                        inputs.push(Input::PathCalculated(into));
+                    }
+                    Action::WaitUntil(deadline) => match from_lunabase_rx.recv_deadline(deadline) {
+                        Ok(msg) => inputs.push(Input::FromLunabase(msg)),
+                        Err(e) => match e {
+                            mpsc::RecvTimeoutError::Timeout => {}
+                            mpsc::RecvTimeoutError::Disconnected => {
+                                error!("Lunabase message channel closed");
+                                std::thread::sleep_until(deadline);
+                            }
+                        },
+                    },
                 }
             });
         });

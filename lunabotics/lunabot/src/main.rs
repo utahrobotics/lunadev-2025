@@ -1,4 +1,4 @@
-#![feature(result_flattening, deadline_api, never_type)]
+#![feature(result_flattening, deadline_api, never_type, thread_sleep_until)]
 
 use std::{fs::File, net::SocketAddr, path::Path, sync::Arc};
 

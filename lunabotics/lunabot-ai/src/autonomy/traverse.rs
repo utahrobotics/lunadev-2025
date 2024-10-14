@@ -1,4 +1,10 @@
-use ares_bt::{action::AlwaysSucceed, branching::IfElse, Behavior, Status};
+use ares_bt::{
+    action::{AlwaysSucceed, RunOnce},
+    branching::IfElse,
+    sequence::Sequence,
+    Behavior, Status,
+};
+use common::{FromLunabase, LunabotStage};
 
 use crate::{blackboard::LunabotBlackboard, Action};
 
@@ -14,16 +20,20 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard, Action> {
             )
             .into()
         },
-        |blackboard: &mut LunabotBlackboard| {
-            while let Some(msg) = blackboard.pop_from_lunabase() {
-                match msg {
-                    common::FromLunabase::SoftStop => return Status::Failure,
-                    _ => {}
+        Sequence::new((
+            RunOnce::from(Action::SetStage(LunabotStage::TraverseObstacles)),
+            |blackboard: &mut LunabotBlackboard| {
+                while let Some(msg) = blackboard.pop_from_lunabase() {
+                    match msg {
+                        FromLunabase::SoftStop => return Status::Failure,
+                        FromLunabase::Steering(_) => return Status::Success,
+                        _ => {}
+                    }
                 }
-            }
-            blackboard.get_autonomy().advance();
-            Status::Success
-        },
+                blackboard.get_autonomy().advance();
+                Status::Success
+            },
+        )),
         AlwaysSucceed,
     )
 }
