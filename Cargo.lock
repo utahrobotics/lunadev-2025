@@ -2420,13 +2420,10 @@ dependencies = [
 name = "lunabase-lib"
 version = "0.1.0"
 dependencies = [
- "byteable",
+ "bitcode",
  "cakap2",
  "common",
- "crossbeam",
  "godot",
- "log",
- "tasker",
 ]
 
 [[package]]
@@ -2466,7 +2463,7 @@ dependencies = [
 name = "lunasim-lib"
 version = "0.1.0"
 dependencies = [
- "byteable",
+ "bitcode",
  "common",
  "crossbeam",
  "godot",

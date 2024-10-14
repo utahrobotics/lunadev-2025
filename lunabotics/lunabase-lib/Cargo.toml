@@ -8,9 +8,6 @@ crate-type = ["cdylib"]  # Compile this crate to a dynamic C library.
 
 [dependencies]
 godot = { workspace = true }
-crossbeam = { workspace = true }
 common = { path = "../common" }
 cakap2 = { workspace = true }
-tasker = { workspace = true }
-log = { workspace = true }
-byteable = { workspace = true }
+bitcode = { workspace = true }

@@ -42,15 +42,22 @@ macro_rules! impl_seq {
             $($name: InfallibleBehavior<C1, T>,)+
         {
             fn run_infallible(&mut self, blackboard: &mut C1) -> InfallibleStatus<T> {
-                $(
-                    self.index = $num;
-                    match self.body.$num.run_infallible(blackboard) {
-                        InfallibleStatus::Running(t) => return InfallibleStatus::Running(t),
-                        InfallibleStatus::Success => {}
+                loop {
+                    match self.index {
+                        $(
+                            $num => match self.body.$num.run_infallible(blackboard) {
+                                InfallibleStatus::Running(t) => return InfallibleStatus::Running(t),
+                                InfallibleStatus::Success => {
+                                    self.index += 1;
+                                }
+                            }
+                        )+
+                        _ => {
+                            self.index = 0;
+                            return InfallibleStatus::Success;
+                        }
                     }
-                )+
-                self.index = 0;
-                InfallibleStatus::Success
+                }
             }
         }
         impl<C1, T, $($name,)+> FallibleBehavior<C1, T> for Sequence<($($name,)+)>
@@ -151,15 +158,22 @@ macro_rules! impl_sel {
             $($name: FallibleBehavior<C1, T>,)+
         {
             fn run_fallible(&mut self, blackboard: &mut C1) -> FallibleStatus<T> {
-                $(
-                    self.index = $num;
-                    match self.body.$num.run_fallible(blackboard) {
-                        FallibleStatus::Running(t) => return FallibleStatus::Running(t),
-                        FallibleStatus::Failure => {}
+                loop {
+                    match self.index {
+                        $(
+                            $num => match self.body.$num.run_fallible(blackboard) {
+                                FallibleStatus::Running(t) => return FallibleStatus::Running(t),
+                                FallibleStatus::Failure => {
+                                    self.index += 1;
+                                }
+                            }
+                        )+
+                        _ => {
+                            self.index = 0;
+                            return FallibleStatus::Failure;
+                        }
                     }
-                )+
-                self.index = 0;
-                FallibleStatus::Failure
+                }
             }
         }
         impl<C1, T, $($name,)+> EternalBehavior<C1, T> for Select<($($name,)+)>

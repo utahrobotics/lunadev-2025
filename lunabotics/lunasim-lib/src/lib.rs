@@ -1,9 +1,10 @@
+#![feature(try_blocks)]
+
 use std::{
     io::{stdin, stdout, BufReader, Read, Write},
     sync::{mpsc::Sender, Arc},
 };
 
-use byteable::IntoBytesSlice;
 use common::lunasim::{FromLunasim, FromLunasimbot};
 use crossbeam::queue::SegQueue;
 use godot::{
@@ -57,6 +58,8 @@ impl INode for Lunasim {
                 let mut stdin = BufReader::new(stdin().lock());
                 let mut size_buf = [0u8; 4];
                 let mut bytes = Vec::with_capacity(1024);
+                let mut bitcode_buffer = bitcode::Buffer::new();
+
                 macro_rules! handle_err {
                     ($err: ident) => {{
                         match $err.kind() {
@@ -82,7 +85,7 @@ impl INode for Lunasim {
                         Ok(_) => {}
                         Err(e) => handle_err!(e),
                     }
-                    match FromLunasimbot::try_from(bytes.as_slice()) {
+                    match bitcode_buffer.decode(&bytes) {
                         Ok(msg) => shared2.from_lunasimbot.push(msg),
                         Err(e) => {
                             godot_error!("Failed to deserialize from lunasim: {e}");
@@ -94,21 +97,24 @@ impl INode for Lunasim {
 
             std::thread::spawn(move || {
                 let mut stdout = stdout().lock();
+                let mut bitcode_buffer = bitcode::Buffer::new();
 
                 loop {
                     let Ok(msg) = to_lunasimbot_rx.recv() else {
                         break;
                     };
-                    if let Err(e) = msg.into_bytes_slice(|bytes| {
-                        if bytes.len() > u32::MAX as usize {
-                            godot_error!("Message is too large");
-                            return Ok(());
-                        }
+                    let bytes = bitcode_buffer.encode(&msg);
+                    if bytes.len() > u32::MAX as usize {
+                        godot_error!("Message is too large");
+                    } else {
                         let len = bytes.len() as u32;
-                        stdout.write_all(&len.to_ne_bytes())?;
-                        stdout.write_all(bytes)
-                    }) {
-                        godot_error!("Faced the following error while writing to stdout: {e}");
+                        let result: std::io::Result<()> = try {
+                            stdout.write_all(&len.to_ne_bytes())?;
+                            stdout.write_all(bytes)?
+                        };
+                        if let Err(e) = result {
+                            godot_error!("Faced the following error while writing to stdout: {e}");
+                        }
                     }
                 }
             });

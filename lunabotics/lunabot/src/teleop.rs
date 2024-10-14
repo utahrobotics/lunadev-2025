@@ -36,14 +36,11 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
     /// The `on_msg` closure is called whenever a message is received from the lunabase, and must
     /// return `true` if the message was successfully parsed, and `false` otherwise.
     pub fn connect_to_lunabase(mut self) -> PacketBuilder {
-        let (cakap_sm, first_action) = PeerStateMachine::new(Duration::from_millis(150), 1024);
+        let mut cakap_sm = PeerStateMachine::new(Duration::from_millis(150), 1024);
         let packet_builder = cakap_sm.get_packet_builder();
         let (packet_tx, mut packet_rx) = mpsc::unbounded_channel();
 
         get_tokio_handle().spawn(async move {
-            let mut cakap_sm = cakap_sm;
-            let mut action = first_action;
-
             let udp = loop {
                 let udp = match UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).await {
                     Ok(x) => x,
@@ -61,6 +58,7 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
                 break udp;
             };
         
+            let mut action: RecommendedAction<'_, '_> = cakap_sm.send_reconnection_msg(Instant::now());
             let mut wait_for: Option<Duration>;
         
             macro_rules! send {
@@ -106,14 +104,16 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
             }
             handle!();
             let mut bitcode_buffer = bitcode::Buffer::new();
+            let mut ping_at = tokio::time::Instant::now();
         
             loop {
                 tokio::select! {
-                    _ = tokio::time::sleep(Duration::from_millis(800)) => {
+                    _ = tokio::time::sleep_until(ping_at) => {
                         let bytes = bitcode_buffer.encode(&FromLunabot::Ping(self.lunabot_stage.load()));
-                        if let Err(e) = udp.send(bytes).await {
-                            error!("Failed to send ping to lunabase: {e}");
-                        }
+                        let packet = cakap_sm.get_packet_builder().new_unreliable(bytes.to_vec().into()).unwrap();
+                        action = cakap_sm.poll(Event::Action(Action::SendUnreliable(packet)), Instant::now());
+                        handle!();
+                        ping_at = tokio::time::Instant::now() + Duration::from_millis(800);
                         continue;
                     }
                     _ = async {
@@ -143,6 +143,7 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
                                 continue;
                             }
                         };
+                        // println!("{:?}", &buf[..n]);
                         action = cakap_sm.poll(Event::IncomingData(&buf[..n]), Instant::now());
                     }
                 }

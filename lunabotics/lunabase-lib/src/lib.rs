@@ -1,13 +1,11 @@
 #![feature(backtrace_frames)]
-use std::sync::{Arc, Once};
+use std::{collections::VecDeque, net::{Ipv4Addr, SocketAddrV4, UdpSocket}, sync::Once, time::{Duration, Instant}};
 
+use bitcode::encode;
+use cakap2::{packet::{Action, ReliableIndex}, Event, PeerStateMachine, RecommendedAction};
 use common::{FromLunabase, FromLunabot, LunabotStage, Steering};
-use crossbeam::queue::SegQueue;
 use godot::{classes::Engine, prelude::*};
-use log::Log;
-use tasker::BlockOn;
 
-use byteable::IntoBytesSlice;
 
 struct LunabaseLib;
 
@@ -55,17 +53,13 @@ pub fn init_panic_hook() {
     });
 }
 
-struct LunabotShared {
-    from_lunabot: SegQueue<FromLunabot>,
-}
-
-const STEERING_DELAY: f64 = 1.0 / 15.0;
-
 struct LunabotConnInner {
-    lunabase_conn: CakapSender,
-    shared: Arc<LunabotShared>,
-    steering: Steering,
-    steering_timer: f64,
+    cakap_sm: PeerStateMachine,
+    udp: UdpSocket,
+    to_lunabot: VecDeque<Action>,
+    bitcode_buffer: bitcode::Buffer,
+    last_steering_reliable_idx: Option<ReliableIndex>,
+    did_reconnection: bool,
 }
 
 #[derive(GodotClass)]
@@ -75,24 +69,6 @@ struct LunabotConn {
     base: Base<Node>,
 }
 
-struct GodotLog;
-
-impl Log for GodotLog {
-    fn enabled(&self, _metadata: &log::Metadata) -> bool {
-        true
-    }
-
-    fn log(&self, record: &log::Record) {
-        match record.level() {
-            log::Level::Error => godot_error!("{}", record.args()),
-            log::Level::Warn => godot_warn!("{}", record.args()),
-            _ => godot_print!("{}", record.args()),
-        }
-    }
-
-    fn flush(&self) {}
-}
-
 #[godot_api]
 impl INode for LunabotConn {
     fn init(base: Base<Node>) -> Self {
@@ -100,77 +76,136 @@ impl INode for LunabotConn {
             return Self { inner: None, base };
         }
         init_panic_hook();
-        log::set_boxed_logger(Box::new(GodotLog)).unwrap();
 
-        let shared = Arc::new(LunabotShared {
-            from_lunabot: SegQueue::default(),
-        });
-
-        let socket = CakapSocket::bind(10600)
-            .block_on()
+        let udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10600))
             .expect("Failed to bind to 10600");
-        let lunabase_conn = socket.get_stream();
 
-        let shared2 = shared.clone();
-        socket
-            .get_bytes_callback_ref()
-            .add_dyn_fn(Box::new(move |bytes| {
-                let msg: FromLunabot = match TryFrom::try_from(bytes) {
-                    Ok(x) => x,
-                    Err(e) => {
-                        godot_error!("Failed to parse message from lunabase: {e}");
-                        return;
-                    }
-                };
-                shared2.from_lunabot.push(msg);
-            }));
-        socket.spawn_looping();
+        udp.set_nonblocking(true).expect("Failed to set non-blocking");
+
+        let cakap_sm = PeerStateMachine::new(Duration::from_millis(150), 1024);
+        // godot_warn!("LunabotConn initialized");
+
         Self {
             inner: Some(LunabotConnInner {
-                lunabase_conn,
-                shared,
-                steering: Steering::default(),
-                steering_timer: STEERING_DELAY,
+                udp,
+                cakap_sm,
+                to_lunabot: VecDeque::new(),
+                bitcode_buffer: bitcode::Buffer::new(),
+                last_steering_reliable_idx: None,
+                did_reconnection: false
             }),
             base,
         }
     }
 
-    fn process(&mut self, delta: f64) {
+    fn process(&mut self, _delta: f64) {
         if let Some(mut inner) = self.inner.as_mut() {
-            inner.steering_timer -= delta;
-            if inner.steering_timer <= 0.0 {
-                inner.steering_timer = STEERING_DELAY;
-                FromLunabase::Steering(inner.steering).into_bytes_slice(|bytes| {
-                    inner.lunabase_conn.send_unreliable(bytes).block_on();
-                });
-            }
-
             let mut received = false;
 
-            while let Some(msg) = inner.shared.from_lunabot.pop() {
-                received = true;
-                match msg {
-                    FromLunabot::Ping(stage) => {
-                        match stage {
-                            LunabotStage::Manual => {
-                                self.base_mut().emit_signal("entered_manual".into(), &[])
-                            }
-                            LunabotStage::SoftStop => {
-                                self.base_mut().emit_signal("entered_soft_stop".into(), &[])
-                            }
-                            LunabotStage::TraverseObstacles => self
-                                .base_mut()
-                                .emit_signal("entered_traverse_obstacles".into(), &[]),
-                            LunabotStage::Dig => {
-                                self.base_mut().emit_signal("entered_dig".into(), &[])
-                            }
-                            LunabotStage::Dump => {
-                                self.base_mut().emit_signal("entered_dump".into(), &[])
-                            }
-                        };
-                        inner = self.inner.as_mut().unwrap();
+            macro_rules! on_msg {
+                ($msg: ident) => {{
+                    received = true;
+                    match $msg {
+                        FromLunabot::Ping(stage) => {
+                            match stage {
+                                LunabotStage::Manual => {
+                                    self.base_mut().emit_signal("entered_manual".into(), &[])
+                                }
+                                LunabotStage::SoftStop => {
+                                    self.base_mut().emit_signal("entered_soft_stop".into(), &[])
+                                }
+                                LunabotStage::TraverseObstacles => self
+                                    .base_mut()
+                                    .emit_signal("entered_traverse_obstacles".into(), &[]),
+                                LunabotStage::Dig => {
+                                    self.base_mut().emit_signal("entered_dig".into(), &[])
+                                }
+                                LunabotStage::Dump => {
+                                    self.base_mut().emit_signal("entered_dump".into(), &[])
+                                }
+                            };
+                            inner = self.inner.as_mut().unwrap();
+                        }
                     }
+                }}
+            }
+
+            macro_rules! handle {
+                ($action: ident) => {
+                    match $action {
+                        RecommendedAction::HandleError(cakap_error) => godot_error!("{cakap_error}"),
+                        RecommendedAction::HandleData(received) => {
+                            match inner.bitcode_buffer.decode::<FromLunabot>(received) {
+                                Ok(x) => {
+                                    on_msg!(x);
+                                }
+                                Err(e) => {
+                                    godot_error!("Failed to decode message: {e}")
+                                }
+                            }
+                        }
+                        RecommendedAction::HandleDataAndSend { received, to_send } => {
+                            match inner.bitcode_buffer.decode::<FromLunabot>(received) {
+                                Ok(x) => {
+                                    if let Err(e) = inner.udp.send(&to_send) {
+                                        godot_error!("Failed to send ack: {e}");
+                                    }
+                                    on_msg!(x);
+                                }
+                                Err(e) => {
+                                    godot_error!("Failed to decode message: {e}")
+                                }
+                            }
+                        }
+                        RecommendedAction::SendData(hot_packet) => {
+                            if let Err(e) = inner.udp.send(&hot_packet) {
+                                godot_error!("Failed to send hot packet: {e}");
+                            }
+                        }
+                        RecommendedAction::WaitForData | RecommendedAction::WaitForDuration(_) => {}
+                    }
+                }
+            }
+
+            let now = Instant::now();
+
+            while let Some(to_lunabot) = inner.to_lunabot.pop_front() {
+                let action = inner.cakap_sm.poll(Event::Action(to_lunabot), now);
+                handle!(action);
+            }
+
+            let mut buf = [0u8; 1408];
+            loop {
+                match inner.udp.recv_from(&mut buf) {
+                    Ok((n, addr)) => {
+                        if let Err(e) = inner.udp.connect(addr) {
+                            godot_error!("Failed to connect to lunabot: {e}");
+                        } else if !inner.did_reconnection {
+                            let tmp_action = inner.cakap_sm.send_reconnection_msg(now);
+                            handle!(tmp_action);
+                            inner.did_reconnection = true;
+                        }
+                        let action = inner.cakap_sm.poll(Event::IncomingData(&buf[..n]), now);
+                        handle!(action);
+                    }
+                    Err(e) => match e.kind() {
+                        std::io::ErrorKind::WouldBlock => break,
+                        _ => godot_error!("Failed to receive data: {e}"),
+                    }
+                }
+            }
+
+            loop {
+                let action = inner.cakap_sm.poll(Event::NoEvent, now);
+                match action {
+                    RecommendedAction::HandleError(cakap_error) => godot_error!("{cakap_error}"),
+                    RecommendedAction::SendData(hot_packet) => {
+                        if let Err(e) = inner.udp.send(&hot_packet) {
+                            godot_error!("Failed to send hot packet: {e}");
+                        }
+                    }
+                    RecommendedAction::WaitForData | RecommendedAction::WaitForDuration(_) => break,
+                    _ => unreachable!()
                 }
             }
 
@@ -183,15 +218,31 @@ impl INode for LunabotConn {
 }
 
 impl LunabotConn {
-    fn send_reliable(&self, msg: &FromLunabase) {
-        if let Some(inner) = &self.inner {
-            msg.into_bytes_slice(|bytes| {
-                let mut vec = inner.lunabase_conn.get_recycled_byte_vecs().get_vec();
-                vec.extend_from_slice(bytes);
-                inner.lunabase_conn.send_reliable(vec);
-            });
+    fn send_reliable(&mut self, msg: &FromLunabase) {
+        if let Some(inner) = &mut self.inner {
+            match inner.cakap_sm.get_packet_builder().new_reliable(encode(msg).into()) {
+                Ok(packet) => {
+                    inner.to_lunabot.push_back(Action::SendReliable(packet));
+                }
+                Err(e) => {
+                    godot_error!("Failed to build reliable packet: {e}");
+                }
+            }
         }
     }
+
+    // fn send_unreliable(&mut self, msg: &FromLunabase) {
+    //     if let Some(inner) = &mut self.inner {
+    //         match inner.cakap_sm.get_packet_builder().new_unreliable(encode(msg).into()) {
+    //             Ok(packet) => {
+    //                 inner.to_lunabot.push_back(Action::SendUnreliable(packet));
+    //             }
+    //             Err(e) => {
+    //                 godot_error!("Failed to build reliable packet: {e}");
+    //             }
+    //         }
+    //     }
+    // }
 }
 
 #[godot_api]
@@ -212,32 +263,39 @@ impl LunabotConn {
     #[func]
     fn set_steering(&mut self, drive: f64, steering: f64) {
         if let Some(inner) = &mut self.inner {
-            inner.steering = Steering::new(drive, steering);
+            let msg = FromLunabase::Steering(Steering::new(drive, steering));
+            match inner.cakap_sm.get_packet_builder().new_reliable(encode(&msg).into()) {
+                Ok(packet) => {
+                    if let Some(old_idx) = inner.last_steering_reliable_idx {
+                        inner.to_lunabot.push_back(Action::CancelReliable(old_idx));
+                    }
+                    inner.last_steering_reliable_idx = Some(packet.get_index());
+                    inner.to_lunabot.push_back(Action::SendReliable(packet));
+                }
+                Err(e) => {
+                    godot_error!("Failed to build reliable packet: {e}");
+                }
+            }
         }
     }
 
     #[func]
-    fn continue_mission(&self) {
+    fn continue_mission(&mut self) {
         self.send_reliable(&FromLunabase::ContinueMission);
     }
 
     #[func]
-    fn trigger_setup(&self) {
+    fn trigger_setup(&mut self) {
         self.send_reliable(&FromLunabase::TriggerSetup);
     }
 
     #[func]
-    fn traverse_obstacles(&self) {
+    fn traverse_obstacles(&mut self) {
         self.send_reliable(&FromLunabase::TraverseObstacles);
     }
 
     #[func]
-    fn soft_stop(&self) {
+    fn soft_stop(&mut self) {
         self.send_reliable(&FromLunabase::SoftStop);
     }
-
-    // #[func]
-    // fn send_ping(&self) {
-    //     self.send_reliable(&FromLunabase::Ping);
-    // }
 }

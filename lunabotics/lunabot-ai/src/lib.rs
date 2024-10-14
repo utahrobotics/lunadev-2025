@@ -9,6 +9,7 @@ use ares_bt::{
 use autonomy::autonomy;
 use blackboard::LunabotBlackboard;
 use common::{FromLunabase, LunabotStage, Steering};
+use log::warn;
 use teleop::teleop;
 
 mod autonomy;
@@ -34,7 +35,10 @@ pub fn run_ai(mut on_action: impl FnMut(Action) -> Input) {
                 |blackboard: &mut LunabotBlackboard| {
                     while let Some(msg) = blackboard.pop_from_lunabase() {
                         match msg {
-                            FromLunabase::ContinueMission => return FallibleStatus::Failure,
+                            FromLunabase::ContinueMission => {
+                                warn!("Continuing mission");
+                                return FallibleStatus::Failure;
+                            },
                             _ => {}
                         }
                     }
