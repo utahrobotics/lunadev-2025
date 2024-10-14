@@ -1,25 +1,31 @@
 use ares_bt::{
-    action::AlwaysFail, branching::IfElse, converters::WithSubBlackboard, Behavior, Status,
+    action::AlwaysFail, branching::IfElse, Behavior, Status,
 };
 
 use crate::{blackboard::LunabotBlackboard, Action};
 
-use super::{Autonomy, AutonomyBlackboard, AutonomyStage};
+use super::{Autonomy, AutonomyStage};
 
 pub(super) fn traverse() -> impl Behavior<LunabotBlackboard, Action> {
-    WithSubBlackboard::<_, AutonomyBlackboard>::from(IfElse::new(
-        |blackboard: &mut AutonomyBlackboard| {
+    IfElse::new(
+        |blackboard: &mut LunabotBlackboard| {
             matches!(
-                blackboard.autonomy,
+                blackboard.get_autonomy(),
                 Autonomy::FullAutonomy(AutonomyStage::TraverseObstacles)
                     | Autonomy::PartialAutonomy(AutonomyStage::TraverseObstacles)
             )
             .into()
         },
-        |blackboard: &mut AutonomyBlackboard| {
-            blackboard.autonomy.advance();
+        |blackboard: &mut LunabotBlackboard| {
+            while let Some(msg) = blackboard.pop_from_lunabase() {
+                match msg {
+                    common::FromLunabase::SoftStop => return Status::Failure,
+                    _ => {}
+                }
+            }
+            blackboard.get_autonomy().advance();
             Status::Success
         },
         AlwaysFail,
-    ))
+    )
 }

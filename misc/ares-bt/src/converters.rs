@@ -1,8 +1,7 @@
-use std::marker::PhantomData;
+use std::borrow::Cow;
 
 use crate::{
-    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
-    InfallibleStatus, Status,
+    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
 };
 
 pub struct InfallibleShim<A>(pub A);
@@ -16,6 +15,19 @@ where
             InfallibleStatus::Running(t) => Status::Running(t),
             InfallibleStatus::Success => Status::Success,
         }
+    }
+}
+
+impl<A> IntoRon for InfallibleShim<A>
+where
+    A: IntoRon,
+{
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::Map(
+            [
+                (ron::Value::String("infallible".to_string()), self.0.into_ron()),
+            ].into_iter().collect()
+        )
     }
 }
 
@@ -33,6 +45,19 @@ where
     }
 }
 
+impl<A> IntoRon for FallibleShim<A>
+where
+    A: IntoRon,
+{
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::Map(
+            [
+                (ron::Value::String("fallible".to_string()), self.0.into_ron()),
+            ].into_iter().collect()
+        )
+    }
+}
+
 pub struct EternalShim<A>(pub A);
 
 impl<A, B, T> Behavior<B, T> for EternalShim<A>
@@ -41,6 +66,19 @@ where
 {
     fn run(&mut self, blackboard: &mut B) -> Status<T> {
         Status::Running((self.0)(blackboard))
+    }
+}
+
+impl<A> IntoRon for EternalShim<A>
+where
+    A: IntoRon,
+{
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::Map(
+            [
+                (ron::Value::String("eternal".to_string()), self.0.into_ron()),
+            ].into_iter().collect()
+        )
     }
 }
 
@@ -56,6 +94,19 @@ where
             Status::Success => Status::Failure,
             Status::Running(t) => Status::Running(t),
         }
+    }
+}
+
+impl<A> IntoRon for Invert<A>
+where
+    A: IntoRon,
+{
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::Map(
+            [
+                (ron::Value::String("invert".to_string()), self.0.into_ron()),
+            ].into_iter().collect()
+        )
     }
 }
 
@@ -92,64 +143,6 @@ where
     }
 }
 
-pub struct WithSubBlackboard<A, B> {
-    pub behavior: A,
-    _phantom: PhantomData<fn() -> B>
-}
-
-impl<A, B> From<A> for WithSubBlackboard<A, B> {
-    fn from(behavior: A) -> Self {
-        WithSubBlackboard {
-            behavior,
-            _phantom: PhantomData,
-        }
-    }
-}
-
-pub trait AsSubBlackboard<B> {
-    fn on_sub_blackboard<T>(&mut self, f: impl FnOnce(&mut B) -> T) -> T;
-}
-
-impl<A, B1, B2, T> Behavior<B1, T> for WithSubBlackboard<A, B2>
-where
-    A: Behavior<B2, T>,
-    B1: AsSubBlackboard<B2>,
-{
-    fn run(&mut self, blackboard: &mut B1) -> Status<T> {
-        blackboard.on_sub_blackboard(|sub_blackboard| self.behavior.run(sub_blackboard))
-    }
-}
-
-impl<A, B1, B2, T> InfallibleBehavior<B1, T> for WithSubBlackboard<A, B2>
-where
-    A: InfallibleBehavior<B2, T>,
-    B1: AsSubBlackboard<B2>,
-{
-    fn run_infallible(&mut self, blackboard: &mut B1) -> InfallibleStatus<T> {
-        blackboard.on_sub_blackboard(|sub_blackboard| self.behavior.run_infallible(sub_blackboard))
-    }
-}
-
-impl<A, B1, B2, T> FallibleBehavior<B1, T> for WithSubBlackboard<A, B2>
-where
-    A: FallibleBehavior<B2, T>,
-    B1: AsSubBlackboard<B2>,
-{
-    fn run_fallible(&mut self, blackboard: &mut B1) -> FallibleStatus<T> {
-        blackboard.on_sub_blackboard(|sub_blackboard| self.behavior.run_fallible(sub_blackboard))
-    }
-}
-
-impl<A, B1, B2, T> EternalBehavior<B1, T> for WithSubBlackboard<A, B2>
-where
-    A: EternalBehavior<B2, T>,
-    B1: AsSubBlackboard<B2>,
-{
-    fn run_eternal(&mut self, blackboard: &mut B1) -> T {
-        blackboard.on_sub_blackboard(|sub_blackboard| self.behavior.run_eternal(sub_blackboard))
-    }
-}
-
 pub struct CatchPanic<A>(pub A);
 
 impl<A, B, T> Behavior<B, T> for CatchPanic<A>
@@ -173,5 +166,38 @@ where
             Ok(status) => status,
             Err(_) => FallibleStatus::Failure,
         }
+    }
+}
+
+impl<A> IntoRon for CatchPanic<A>
+where
+    A: IntoRon,
+{
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::Map(
+            [
+                (ron::Value::String("catch_panic".to_string()), self.0.into_ron()),
+            ].into_iter().collect()
+        )
+    }
+}
+
+pub struct Rename<A> {
+    pub name: Cow<'static, str>,
+    pub behavior: A,
+}
+
+impl<A> Rename<A> {
+    pub fn new(name: impl Into<Cow<'static, str>>, behavior: A) -> Self {
+        Self {
+            name: name.into(),
+            behavior,
+        }
+    }
+}
+
+impl<A> IntoRon for Rename<A> {
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::String(self.name.to_string())
     }
 }

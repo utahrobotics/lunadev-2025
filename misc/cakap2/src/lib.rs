@@ -233,6 +233,9 @@ pub enum RecommendedAction<'a, 'b> {
     /// Handle the given data from the peer.
     HandleData(&'b [u8]),
     /// Handle `received` from the peer, and send `to_send` to the peer.
+    /// 
+    /// If the given message is not valid for whatever reason, you can choose to not
+    /// send `to_send` and *not* poll the state machine with `DataSent`.
     HandleDataAndSend {
         received: &'b [u8],
         to_send: [u8; 8],
@@ -256,8 +259,8 @@ pub enum Event<'a> {
     IncomingData(&'a [u8]),
     /// An [`Action`] to perform.
     Action(Action),
-    /// A [`HotPacket`] was confirmed to be sent.
-    HotPacketSent,
+    /// Some data was confirmed to be sent.
+    DataSent,
     /// No data received, to be sent, or was sent. Usually used when some duration of time has passed,
     /// or after an error was handled.
     NoEvent,
@@ -298,7 +301,7 @@ mod tests {
         );
         // `state_machine` is notified that the packet is sent
         assert_eq!(
-            state_machine.poll(Event::HotPacketSent, Instant::now()),
+            state_machine.poll(Event::DataSent, Instant::now()),
             RecommendedAction::WaitForData
         );
 
@@ -330,7 +333,7 @@ mod tests {
             [15, 0, 0, 0, 0, 0, 0, 0, 1],
         );
         // `state_machine` is notified that the packet is sent
-        let action = state_machine.poll(Event::HotPacketSent, Instant::now());
+        let action = state_machine.poll(Event::DataSent, Instant::now());
         let RecommendedAction::WaitForDuration(duration) = action else {
             panic!("Not WaitForDuration")
         };
@@ -353,12 +356,12 @@ mod tests {
 
         // `other_state_machine` is notified that the packet is sent
         assert_eq!(
-            other_state_machine.poll(Event::HotPacketSent, Instant::now()),
+            other_state_machine.poll(Event::DataSent, Instant::now()),
             RecommendedAction::WaitForData
         );
 
         // `state_machine` waits for data
-        let action = state_machine.poll(Event::HotPacketSent, Instant::now());
+        let action = state_machine.poll(Event::DataSent, Instant::now());
         let RecommendedAction::WaitForDuration(duration) = action else {
             panic!("Not WaitForDuration")
         };
@@ -390,7 +393,7 @@ mod tests {
             [15, 0, 0, 0, 0, 0, 0, 0, 1],
         );
         // `state_machine` is notified that the packet is sent
-        let action = state_machine.poll(Event::HotPacketSent, Instant::now());
+        let action = state_machine.poll(Event::DataSent, Instant::now());
         let RecommendedAction::WaitForDuration(duration) = action else {
             panic!("Not WaitForDuration")
         };
@@ -413,12 +416,12 @@ mod tests {
 
         // `other_state_machine` is notified that the packet is sent
         assert_eq!(
-            other_state_machine.poll(Event::HotPacketSent, Instant::now()),
+            other_state_machine.poll(Event::DataSent, Instant::now()),
             RecommendedAction::WaitForData
         );
 
         // `state_machine` waits for data
-        let action = state_machine.poll(Event::HotPacketSent, Instant::now());
+        let action = state_machine.poll(Event::DataSent, Instant::now());
         let RecommendedAction::WaitForDuration(duration) = action else {
             panic!("Not WaitForDuration")
         };
@@ -426,7 +429,7 @@ mod tests {
 
         // 'state_machine' retransmits after some time
         let action = state_machine.poll(
-            Event::HotPacketSent,
+            Event::DataSent,
             Instant::now() + Duration::from_millis(100),
         );
         assert_eq!(
@@ -434,7 +437,7 @@ mod tests {
             [15, 0, 0, 0, 0, 0, 0, 0, 1],
         );
         // `state_machine` is notified that the packet is sent
-        let action = state_machine.poll(Event::HotPacketSent, Instant::now());
+        let action = state_machine.poll(Event::DataSent, Instant::now());
         let RecommendedAction::WaitForDuration(duration) = action else {
             panic!("Not WaitForDuration")
         };

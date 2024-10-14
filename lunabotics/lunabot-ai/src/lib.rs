@@ -1,76 +1,61 @@
 use ares_bt::{
     action::AlwaysSucceed,
     branching::TryCatch,
-    converters::{CatchPanic, Invert, WithSubBlackboard},
+    converters::{CatchPanic, Invert},
     looping::WhileLoop,
     sequence::Sequence,
-    EternalBehavior, FallibleStatus, Status,
+    EternalBehavior, FallibleStatus,
 };
 use autonomy::autonomy;
-use blackboard::{FromLunabaseQueue, LunabotBlackboard};
-use common::{FromLunabase, FromLunabot, Steering};
-use tasker::task::SyncTask;
+use blackboard::LunabotBlackboard;
+use common::{FromLunabase, LunabotStage, Steering};
+use teleop::teleop;
 
 mod autonomy;
 mod blackboard;
+mod teleop;
 
 pub use blackboard::Input;
 
 pub enum Action {
     WaitForLunabase,
-    FromLunabot(FromLunabot),
     SetSteering(Steering),
+    StateChange(LunabotStage)
 }
 
-pub struct LunabotAI<F>(pub F);
 
-impl<F: FnMut(Action) -> Input + Send + 'static> SyncTask for LunabotAI<F> {
-    type Output = ();
-
-    fn run(mut self) -> Self::Output {
-        let mut blackboard = LunabotBlackboard::default();
-        let mut b = WhileLoop::new(
-            AlwaysSucceed,
-            Sequence::new((
-                Invert(WhileLoop::new(
-                    AlwaysSucceed,
-                    WithSubBlackboard::from(|blackboard: &mut FromLunabaseQueue| {
-                        while let Some(msg) = blackboard.pop() {
-                            match msg {
-                                FromLunabase::ContinueMission => return FallibleStatus::Failure,
-                                _ => {}
-                            }
+pub fn run_ai(mut on_action: impl FnMut(Action) -> Input) {
+    let mut blackboard = LunabotBlackboard::default();
+    let mut b = WhileLoop::new(
+        AlwaysSucceed,
+        Sequence::new((
+            Invert(WhileLoop::new(
+                AlwaysSucceed,
+                |blackboard: &mut LunabotBlackboard| {
+                    while let Some(msg) = blackboard.pop_from_lunabase() {
+                        match msg {
+                            FromLunabase::ContinueMission => return FallibleStatus::Failure,
+                            _ => {}
                         }
-                        FallibleStatus::Running(Action::WaitForLunabase)
-                    }),
-                )),
-                TryCatch::new(
-                    WhileLoop::new(
-                        AlwaysSucceed,
-                        Sequence::new((
-                            WithSubBlackboard::from(|blackboard: &mut FromLunabaseQueue| {
-                                while let Some(msg) = blackboard.pop() {
-                                    match msg {
-                                        FromLunabase::Steering(steering) => {
-                                            return Status::Running(Action::SetSteering(steering))
-                                        }
-                                        FromLunabase::SoftStop => return Status::Failure,
-                                        _ => {}
-                                    }
-                                }
-                                Status::Running(Action::WaitForLunabase)
-                            }),
-                            CatchPanic(autonomy()),
-                        )),
-                    ),
-                    AlwaysSucceed,
-                ),
+                    }
+                    FallibleStatus::Running(Action::WaitForLunabase)
+                },
             )),
-        );
+            TryCatch::new(
+                WhileLoop::new(
+                    AlwaysSucceed,
+                    Sequence::new((
+                        CatchPanic(teleop()),
+                        CatchPanic(autonomy()),
+                    )),
+                ),
+                AlwaysSucceed,
+            ),
+        )),
+    );
 
-        loop {
-            let input = (self.0)(b.run_eternal(&mut blackboard));
-            blackboard.digest_input(input);
-        }
+    loop {
+        let input = on_action(b.run_eternal(&mut blackboard));
+        blackboard.digest_input(input);
     }
 }

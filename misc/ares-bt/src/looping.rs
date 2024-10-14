@@ -1,12 +1,26 @@
 use crate::{
-    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
-    InfallibleStatus, Status,
+    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
 };
 
 pub struct WhileLoop<A, B> {
     pub condition: A,
     pub body: B,
     check_condition: bool,
+}
+
+impl<A, B> IntoRon for WhileLoop<A, B>
+where
+    A: IntoRon,
+    B: IntoRon,
+{
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::Map(
+            [
+                (ron::Value::String("condition".to_string()), self.condition.into_ron()),
+                (ron::Value::String("body".to_string()), self.body.into_ron()),
+            ].into_iter().collect()
+        )
+    }
 }
 
 impl<A, B, D, T> Behavior<D, T> for WhileLoop<A, B>

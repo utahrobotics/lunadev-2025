@@ -2,14 +2,14 @@ use std::{
     cmp::Ordering,
     collections::VecDeque,
     process::Stdio,
-    sync::{Arc, Mutex},
+    sync::{mpsc, Arc, Mutex},
 };
 
-use byteable::IntoBytesSlice;
 use byteable::Recycler;
-use common::lunasim::{FromLunasim, FromLunasimbot};
+use common::{lunasim::{FromLunasim, FromLunasimbot}, LunabotStage};
+use crossbeam::atomic::AtomicCell;
 use fitter::utils::CameraProjection;
-use lunabot_ai::{LunabotAI, LunabotInterfaces};
+use lunabot_ai::{run_ai, Action, Input};
 use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4};
 use serde::{Deserialize, Serialize};
 use urobotics::{
@@ -27,14 +27,7 @@ use urobotics::{
 use urobotics::{task::SyncTask, tokio::task::block_in_place};
 
 use crate::{
-    create_robot_chain,
-    interfaces::{
-        drive::SimMotors,
-        obstacles::heightmap::{heightmap_strategy, HeightMapPathfinder},
-        teleop::LunabaseConn,
-    },
-    localization::{Localizer, LocalizerRef},
-    log_teleop_messages, wait_for_ctrl_c, LunabotApp, PointCloudCallbacks,
+    create_robot_chain, localization::{Localizer, LocalizerRef}, log_teleop_messages, obstacles::heightmap::heightmap_strategy, teleop::LunabaseConn, wait_for_ctrl_c, LunabotApp, PointCloudCallbacks
 };
 
 fn_alias! {
@@ -170,6 +163,7 @@ impl Application for LunasimbotApp {
                     }
                     let mut size_buf = [0u8; 4];
                     let mut bytes = Vec::with_capacity(1024);
+                    let mut bitcode_buffer = bitcode::Buffer::new();
                     loop {
                         let size = match stdout.read_exact(&mut size_buf).await {
                             Ok(_) => u32::from_ne_bytes(size_buf),
@@ -181,7 +175,7 @@ impl Application for LunasimbotApp {
                             Err(e) => handle_err!("stdout", e)
                         }
 
-                        match FromLunasim::try_from(bytes.as_slice()) {
+                        match bitcode_buffer.decode(&bytes) {
                             Ok(msg) => {
                                 callbacks.call(msg);
                             }
@@ -234,11 +228,11 @@ impl Application for LunasimbotApp {
         let raw_pcl_callbacks_ref = raw_pcl_callbacks.get_ref();
 
         let lunasim_stdin2 = lunasim_stdin.clone();
-        raw_pcl_callbacks_ref.add_dyn_fn(Box::new(move |point_cloud| {
-            FromLunasimbot::PointCloud(point_cloud.iter().map(|p| [p.x, p.y, p.z]).collect())
-                .into_bytes_slice(|bytes| {
-                    lunasim_stdin2.write(bytes);
-                });
+        let mut bitcode_buffer = bitcode::Buffer::new();
+        raw_pcl_callbacks_ref.add_dyn_fn_mut(Box::new(move |point_cloud| {
+            let msg = FromLunasimbot::PointCloud(point_cloud.iter().map(|p| [p.x, p.y, p.z]).collect());
+            let bytes = bitcode_buffer.encode(&msg);
+            lunasim_stdin2.write(bytes);
         }));
 
         from_lunasim_ref.add_fn(move |msg| match msg {
@@ -295,30 +289,64 @@ impl Application for LunasimbotApp {
             }
         });
 
-        let heightmap = heightmap_strategy(
+        let heightmap_ref = heightmap_strategy(
             PROJECTION_SIZE,
             &raw_pcl_callbacks_ref,
-            lunasim_stdin.clone(),
         );
+        let lunasim_stdin2 = lunasim_stdin.clone();
+        let mut bitcode_buffer = bitcode::Buffer::new();
+        heightmap_ref.add_dyn_fn_mut(Box::new(move |heightmap| {
+            let bytes = bitcode_buffer.encode(&FromLunasimbot::HeightMap(heightmap.to_vec().into_boxed_slice()));
+            lunasim_stdin2.write(bytes);
+        }));
 
-        LunabotAI::from(move |interfaces: Option<LunabotInterfaces<_, _, _, _>>| {
-            if let Some(interfaces) = interfaces {
-                // If we want to support partial-reinitialization, it would
-                // be done here.
-                return Ok(interfaces);
-            }
+        let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
+        let (from_lunabase_tx, from_lunabase_rx) = mpsc::channel();
+        let mut bitcode_buffer = bitcode::Buffer::new();
 
-            let robot_chain = robot_chain.clone();
-            Ok(LunabotInterfaces {
-                teleop: LunabaseConn::new(self.app.lunabase_address).map_err(|e| {
-                    error!("Failed to connect to lunabase: {e}");
-                })?,
-                pathfinder: HeightMapPathfinder::new(heightmap.clone()),
-                drive: SimMotors::new(lunasim_stdin.clone(), from_lunasim_ref.clone()),
-                get_isometry: move || robot_chain.origin(),
-            })
-        })
-        .spawn();
+        let packet_builder = LunabaseConn {
+            lunabase_address: self.app.lunabase_address,
+            on_msg: move |bytes: &[u8]| {
+                match bitcode_buffer.decode(bytes) {
+                    Ok(msg) => {
+                        let _ = from_lunabase_tx.send(msg);
+                        true
+                    }
+                    Err(e) => {
+                        error!("Failed to decode from lunabase: {e}");
+                        false
+                    }
+                }
+            },
+            lunabot_stage: lunabot_stage.clone(),
+        }.connect_to_lunabase();
+        let mut bitcode_buffer = bitcode::Buffer::new();
+        
+        std::thread::spawn(move || {
+            run_ai(|action| {
+                match action {
+                    Action::WaitForLunabase => {
+                        let Ok(msg) = from_lunabase_rx.recv() else {
+                            error!("Lunabase message channel closed");
+                            loop {
+                                std::thread::park();
+                            }
+                        };
+                        Input::FromLunabase(msg)
+                    }
+                    Action::StateChange(stage) => {
+                        lunabot_stage.store(stage);
+                        Input::NoInput
+                    }
+                    Action::SetSteering(steering) => {
+                        let (left, right) = steering.get_left_and_right();
+                        let bytes = bitcode_buffer.encode(&FromLunasimbot::Drive { left: left as f32, right: right as f32 });
+                        lunasim_stdin.write(bytes);
+                        Input::NoInput
+                    }
+                }
+            });
+        });
 
         wait_for_ctrl_c();
     }

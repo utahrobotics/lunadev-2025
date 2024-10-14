@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
-use byteable::IntoBytesSlice;
-use common::lunasim::FromLunasimbot;
 use crossbeam::atomic::AtomicCell;
 use heightmap::HeightMapper;
-use lunabot_ai::PathfinderComponent;
 use nalgebra::Vector2;
 use urobotics::{
     define_callbacks, fn_alias,
@@ -12,37 +9,27 @@ use urobotics::{
     BlockOn,
 };
 
-use crate::{sim::LunasimStdin, PointCloudCallbacksRef};
+use crate::PointCloudCallbacksRef;
 
 fn_alias! {
     pub type HeightMapCallbacksRef = CallbacksRef(&[f32]) + Send + Sync
 }
 define_callbacks!(HeightMapCallbacks => Fn(heightmap: &[f32]) + Send + Sync);
 
-pub struct HeightMapPathfinder {
-    heightmap: HeightMapCallbacksRef,
-}
+// pub struct HeightMapPathfinder {
+//     heightmap: HeightMapCallbacksRef,
+// }
 
-impl HeightMapPathfinder {
-    pub fn new(heightmap: HeightMapCallbacksRef) -> Self {
-        Self { heightmap }
-    }
-}
+// impl HeightMapPathfinder {
+//     pub fn new(heightmap: HeightMapCallbacksRef) -> Self {
+//         Self { heightmap }
+//     }
+// }
 
-impl PathfinderComponent for HeightMapPathfinder {
-    fn pathfind(
-        &mut self,
-        _from: nalgebra::Vector2<f64>,
-        _to: nalgebra::Vector2<f64>,
-    ) -> &[nalgebra::Vector2<f64>] {
-        &[]
-    }
-}
 
 pub fn heightmap_strategy(
     projection_size: Vector2<u32>,
     raw_pcl_callbacks_ref: &PointCloudCallbacksRef,
-    lunasim_stdin: LunasimStdin,
 ) -> HeightMapCallbacksRef {
     let heightmapper = HeightMapper::new(Vector2::new(64, 128), -0.0625, projection_size)
         .block_on()
@@ -79,14 +66,6 @@ pub fn heightmap_strategy(
                 )));
             });
         }
-    }));
-
-    heightmap_callbacks_ref.add_dyn_fn(Box::new(move |heightmap| {
-        FromLunasimbot::HeightMap(heightmap.to_vec().into_boxed_slice()).into_bytes_slice(
-            |bytes| {
-                lunasim_stdin.write(bytes);
-            },
-        );
     }));
 
     heightmap_callbacks_ref

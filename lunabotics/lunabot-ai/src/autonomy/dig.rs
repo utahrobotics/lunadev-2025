@@ -1,25 +1,25 @@
 use ares_bt::{
-    action::AlwaysFail, branching::IfElse, converters::WithSubBlackboard, Behavior, Status,
+    action::AlwaysFail, branching::IfElse, Behavior, Status,
 };
 
 use crate::{blackboard::LunabotBlackboard, Action};
 
-use super::{Autonomy, AutonomyBlackboard, AutonomyStage};
+use super::{Autonomy, AutonomyStage};
 
 pub(super) fn dig() -> impl Behavior<LunabotBlackboard, Action> {
-    WithSubBlackboard::<_, AutonomyBlackboard>::from(IfElse::new(
-        |blackboard: &mut AutonomyBlackboard| {
+    IfElse::new(
+        |blackboard: &mut LunabotBlackboard| {
             matches!(
-                blackboard.autonomy,
+                blackboard.get_autonomy(),
                 Autonomy::FullAutonomy(AutonomyStage::Dig)
                     | Autonomy::PartialAutonomy(AutonomyStage::Dig)
             )
             .into()
         },
-        |blackboard: &mut AutonomyBlackboard| {
-            blackboard.autonomy.advance();
+        |blackboard: &mut LunabotBlackboard| {
+            blackboard.get_autonomy().advance();
             Status::Success
         },
         AlwaysFail,
-    ))
+    )
 }

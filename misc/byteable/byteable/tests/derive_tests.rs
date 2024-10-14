@@ -1,3 +1,5 @@
+#![cfg(feature = "bitcode")]
+
 use byteable::{
     EmptyVec, FillByteVec, FillByteVecBitcode, IntoBytes, IntoBytesSlice, IntoBytesSliceBitcode,
 };

@@ -1,6 +1,5 @@
 use crate::{
-    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
-    InfallibleStatus, Status,
+    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
 };
 
 impl<T, F: FnMut(&mut B) -> Status<T>, B> Behavior<B, T> for F {
@@ -42,6 +41,12 @@ impl<T, B> InfallibleBehavior<B, T> for AlwaysSucceed {
     }
 }
 
+impl IntoRon for AlwaysSucceed {
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::String("AlwaysSucceed".to_string())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct AlwaysFail;
 
@@ -54,6 +59,12 @@ impl<T, B> Behavior<B, T> for AlwaysFail {
 impl<T, B> FallibleBehavior<B, T> for AlwaysFail {
     fn run_fallible(&mut self, _blackboard: &mut B) -> FallibleStatus<T> {
         FallibleStatus::Failure
+    }
+}
+
+impl IntoRon for AlwaysFail {
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::String("AlwaysFail".to_string())
     }
 }
 
@@ -81,5 +92,11 @@ impl<T: Default, B> FallibleBehavior<B, T> for AlwaysRunning {
 impl<T: Default, B> EternalBehavior<B, T> for AlwaysRunning {
     fn run_eternal(&mut self, _blackboard: &mut B) -> T {
         Default::default()
+    }
+}
+
+impl IntoRon for AlwaysRunning {
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::String("AlwaysRunning".to_string())
     }
 }

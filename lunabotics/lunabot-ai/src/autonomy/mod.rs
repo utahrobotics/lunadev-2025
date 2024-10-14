@@ -3,16 +3,11 @@ use dig::dig;
 use dump::dump;
 use traverse::traverse;
 
-use crate::{blackboard::{FromLunabaseQueue, LunabotBlackboard}, Action};
+use crate::{blackboard::LunabotBlackboard, Action};
 
 mod dig;
 mod dump;
 mod traverse;
-
-pub struct AutonomyBlackboard<'a> {
-    pub autonomy: Autonomy,
-    pub from_lunabase: &'a mut FromLunabaseQueue
-}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum AutonomyStage {
@@ -45,5 +40,10 @@ impl Autonomy {
 }
 
 pub fn autonomy() -> impl Behavior<LunabotBlackboard, Action> {
-    WhileLoop::new(AlwaysSucceed, Select::new((dig(), dump(), traverse())))
+    WhileLoop::new(
+        |blackboard: &mut LunabotBlackboard| {
+            (*blackboard.get_autonomy() != Autonomy::None).into()
+        },
+        Select::new((dig(), dump(), traverse()))
+    )
 }

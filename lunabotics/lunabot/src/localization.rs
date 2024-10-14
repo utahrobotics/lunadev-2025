@@ -1,6 +1,5 @@
 use std::{sync::Arc, time::Duration};
 
-use byteable::IntoBytesSlice;
 use common::lunasim::FromLunasimbot;
 use crossbeam::atomic::AtomicCell;
 use k::{Chain, Isometry3, UnitQuaternion, Vector3};
@@ -66,6 +65,7 @@ impl SyncTask for Localizer {
 
     fn run(self) -> Self::Output {
         let spin_sleeper = SpinSleeper::default();
+        let mut bitcode_buffer = bitcode::Buffer::new();
 
         loop {
             spin_sleeper.sleep(Duration::from_secs_f64(LOCALIZATION_DELTA));
@@ -153,14 +153,13 @@ impl SyncTask for Localizer {
                     isometry.translation.z as f32,
                 ];
 
-                FromLunasimbot::Isometry {
+                let bytes = bitcode_buffer.encode(&FromLunasimbot::Isometry {
                     axis,
                     angle: angle as f32,
                     origin,
-                }
-                .into_bytes_slice(|bytes| {
-                    lunasim_stdin.write(bytes);
                 });
+                
+                lunasim_stdin.write(bytes);
             }
         }
     }

@@ -1,10 +1,23 @@
-use std::future::Future;
+use ares_bt::{Behavior, Status};
+use common::FromLunabase;
 
-use common::{FromLunabase, FromLunabot, LunabotStage};
+use crate::{autonomy::{Autonomy, AutonomyStage}, blackboard::LunabotBlackboard, Action};
 
-pub trait TeleOpComponent {
-    fn from_lunabase(&mut self) -> impl Future<Output = FromLunabase>;
-    fn to_lunabase_unreliable(&mut self, to_lunabase: FromLunabot) -> impl Future<Output = ()>;
-    fn to_lunabase_reliable(&mut self, to_lunabase: FromLunabot) -> impl Future<Output = ()>;
-    fn set_lunabot_stage(&mut self, stage: LunabotStage);
+pub fn teleop() -> impl Behavior<LunabotBlackboard, Action> {
+    |blackboard: &mut LunabotBlackboard| {
+        while let Some(msg) = blackboard.pop_from_lunabase() {
+            match msg {
+                FromLunabase::Steering(steering) => {
+                    return Status::Running(Action::SetSteering(steering))
+                }
+                FromLunabase::SoftStop => return Status::Failure,
+                FromLunabase::TraverseObstacles => {
+                    *blackboard.get_autonomy() = Autonomy::PartialAutonomy(AutonomyStage::TraverseObstacles);
+                    return Status::Success;
+                }
+                _ => {}
+            }
+        }
+        Status::Running(Action::WaitForLunabase)
+    }
 }

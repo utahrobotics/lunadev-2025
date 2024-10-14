@@ -7,6 +7,7 @@ use std::{
 
 use crate::{error::BuildPacketError, Shared};
 
+#[derive(Debug)]
 pub enum Action {
     SendReliable(ReliablePacket),
     CancelReliable(ReliableIndex),

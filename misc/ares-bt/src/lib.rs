@@ -123,6 +123,10 @@ pub trait EternalBehavior<B, T> {
     fn run_eternal(&mut self, blackboard: &mut B) -> T;
 }
 
+pub trait IntoRon {
+    fn into_ron(&self) -> ron::Value;
+}
+
 #[cfg(test)]
 mod tests {
     use looping::WhileLoop;

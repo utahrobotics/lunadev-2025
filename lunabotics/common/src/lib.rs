@@ -1,7 +1,6 @@
 use std::io::Write;
 
 use bitcode::{Decode, Encode};
-use byteable::{FillByteVecBitcode, IntoBytes, IntoBytesSlice, IntoBytesSliceBitcode};
 
 pub mod lunasim;
 
@@ -14,7 +13,7 @@ pub enum LunabotStage {
     Dump,
 }
 
-#[derive(Debug, Encode, Decode, FillByteVecBitcode, IntoBytes, IntoBytesSliceBitcode)]
+#[derive(Debug, Encode, Decode, Clone, Copy)]
 pub enum FromLunabase {
     // Pong,
     ContinueMission,
@@ -24,28 +23,15 @@ pub enum FromLunabase {
     SoftStop,
 }
 
-impl TryFrom<&[u8]> for FromLunabase {
-    type Error = bitcode::Error;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        __FromLunabase_BUFFER.with_borrow_mut(|queue| {
-            if queue.is_empty() {
-                queue.push_back(Default::default());
-            }
-            queue.front_mut().unwrap().decode(value)
-        })
-    }
-}
 
 impl FromLunabase {
     fn write_code(&self, mut w: impl Write) -> std::io::Result<()> {
-        self.into_bytes_slice(|bytes| {
-            write!(w, "{self:?} = 0x")?;
-            for b in bytes {
-                write!(w, "{b:x}")?;
-            }
-            writeln!(w, "")
-        })
+        let bytes = bitcode::encode(self);
+        write!(w, "{self:?} = 0x")?;
+        for b in bytes {
+            write!(w, "{b:x}")?;
+        }
+        writeln!(w, "")
     }
 
     pub fn write_code_sheet(mut w: impl Write) -> std::io::Result<()> {
@@ -59,34 +45,21 @@ impl FromLunabase {
     }
 }
 
-#[derive(Debug, Encode, Decode, FillByteVecBitcode, IntoBytes, IntoBytesSliceBitcode)]
+#[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]
 pub enum FromLunabot {
     Ping(LunabotStage),
 }
 
-impl TryFrom<&[u8]> for FromLunabot {
-    type Error = bitcode::Error;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        __FromLunabot_BUFFER.with_borrow_mut(|queue| {
-            if queue.is_empty() {
-                queue.push_back(Default::default());
-            }
-            queue.front_mut().unwrap().decode(value)
-        })
-    }
-}
 
 impl FromLunabot {
     fn write_code(&self, mut w: impl Write) -> std::io::Result<()> {
-        self.into_bytes_slice(|bytes| {
-            write!(w, "{self:?} = 0x")?;
-            for b in bytes {
-                write!(w, "{b:x}")?;
-            }
-            writeln!(w, "")
-        })
-    }
+        let bytes = bitcode::encode(self);
+        write!(w, "{self:?} = 0x")?;
+        for b in bytes {
+            write!(w, "{b:x}")?;
+        }
+        writeln!(w, "")
+}
 
     pub fn write_code_sheet(mut w: impl Write) -> std::io::Result<()> {
         FromLunabot::Ping(LunabotStage::Manual).write_code(&mut w)?;

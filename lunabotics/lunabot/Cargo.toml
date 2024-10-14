@@ -25,5 +25,6 @@ k = { workspace = true }
 fxhash = { workspace = true }
 fitter = { workspace = true }
 byteable = { workspace = true }
+bitcode = { workspace = true }
 heightmap = { path = "../heightmap" }
 lunabot-ai = { path = "../lunabot-ai" }
