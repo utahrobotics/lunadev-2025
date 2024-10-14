@@ -1,9 +1,6 @@
 #![feature(backtrace_frames)]
 use std::{
-    collections::VecDeque,
-    net::{Ipv4Addr, SocketAddrV4, UdpSocket},
-    sync::Once,
-    time::{Duration, Instant},
+    collections::VecDeque, net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket}, sync::Once, time::{Duration, Instant}
 };
 
 use bitcode::encode;
@@ -67,6 +64,7 @@ struct LunabotConnInner {
     bitcode_buffer: bitcode::Buffer,
     did_reconnection: bool,
     last_steering: Option<(Steering, ReliableIndex)>,
+    send_to: Option<SocketAddr>,
 }
 
 #[derive(GodotClass)]
@@ -101,6 +99,7 @@ impl INode for LunabotConn {
                 bitcode_buffer: bitcode::Buffer::new(),
                 did_reconnection: false,
                 last_steering: None,
+                send_to: None
             }),
             base,
         }
@@ -157,10 +156,12 @@ impl INode for LunabotConn {
                         RecommendedAction::HandleDataAndSend { received, to_send } => {
                             match inner.bitcode_buffer.decode::<FromLunabot>(received) {
                                 Ok(x) => {
-                                    if let Err(e) = inner.udp.send(&to_send) {
-                                        godot_error!("Failed to send ack: {e}");
+                                    if let Some(addr) = inner.send_to {
+                                        if let Err(e) = inner.udp.send_to(&to_send, addr) {
+                                            godot_error!("Failed to send ack: {e}");
+                                        }
+                                        on_msg!(x);
                                     }
-                                    on_msg!(x);
                                 }
                                 Err(e) => {
                                     godot_error!("Failed to decode message: {e}")
@@ -168,8 +169,10 @@ impl INode for LunabotConn {
                             }
                         }
                         RecommendedAction::SendData(hot_packet) => {
-                            if let Err(e) = inner.udp.send(&hot_packet) {
-                                godot_error!("Failed to send hot packet: {e}");
+                            if let Some(addr) = inner.send_to {
+                                if let Err(e) = inner.udp.send_to(&hot_packet, addr) {
+                                    godot_error!("Failed to send hot packet: {e}");
+                                }
                             }
                         }
                         RecommendedAction::WaitForData | RecommendedAction::WaitForDuration(_) => {}
@@ -189,9 +192,8 @@ impl INode for LunabotConn {
                 match inner.udp.recv_from(&mut buf) {
                     Ok((n, addr)) => {
                         // godot_warn!("{:?}", &buf[..n]);
-                        if let Err(e) = inner.udp.connect(addr) {
-                            godot_error!("Failed to connect to lunabot: {e}");
-                        } else if !inner.did_reconnection {
+                        inner.send_to = Some(addr);
+                        if !inner.did_reconnection {
                             let tmp_action = inner.cakap_sm.send_reconnection_msg(now);
                             handle!(tmp_action);
                             inner.did_reconnection = true;
@@ -211,8 +213,10 @@ impl INode for LunabotConn {
                 match action {
                     RecommendedAction::HandleError(cakap_error) => godot_error!("{cakap_error}"),
                     RecommendedAction::SendData(hot_packet) => {
-                        if let Err(e) = inner.udp.send(&hot_packet) {
-                            godot_error!("Failed to send hot packet: {e}");
+                        if let Some(addr) = inner.send_to {
+                            if let Err(e) = inner.udp.send_to(&hot_packet, addr) {
+                                godot_error!("Failed to send hot packet: {e}");
+                            }
                         }
                     }
                     RecommendedAction::WaitForData | RecommendedAction::WaitForDuration(_) => break,

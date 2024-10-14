@@ -330,7 +330,7 @@ impl Application for LunasimbotApp {
         let mut bitcode_buffer = bitcode::Buffer::new();
 
         std::thread::spawn(move || {
-            run_ai(lunabot_stage, |action| match action {
+            run_ai(|action| match action {
                 Action::WaitForLunabase => {
                     let Ok(msg) = from_lunabase_rx.recv() else {
                         error!("Lunabase message channel closed");
@@ -339,6 +339,10 @@ impl Application for LunasimbotApp {
                         }
                     };
                     Input::FromLunabase(msg)
+                }
+                Action::SetStage(stage) => {
+                    lunabot_stage.store(stage);
+                    Input::NoInput
                 }
                 Action::SetSteering(steering) => {
                     let (left, right) = steering.get_left_and_right();

@@ -1,7 +1,6 @@
-use std::{collections::VecDeque, sync::Arc, time::Instant};
+use std::{collections::VecDeque, time::Instant};
 
-use common::{FromLunabase, LunabotStage};
-use crossbeam::atomic::AtomicCell;
+use common::FromLunabase;
 
 use crate::autonomy::Autonomy;
 
@@ -15,16 +14,14 @@ pub(crate) struct LunabotBlackboard {
     now: Instant,
     from_lunabase: VecDeque<FromLunabase>,
     autonomy: Autonomy,
-    stage: Arc<AtomicCell<LunabotStage>>,
 }
 
-impl LunabotBlackboard {
-    pub fn new(stage: Arc<AtomicCell<LunabotStage>>) -> Self {
+impl Default for LunabotBlackboard {
+    fn default() -> Self {
         Self {
             now: Instant::now(),
             from_lunabase: Default::default(),
             autonomy: Autonomy::None,
-            stage,
         }
     }
 }
@@ -36,14 +33,6 @@ impl LunabotBlackboard {
 
     pub fn get_autonomy(&mut self) -> &mut Autonomy {
         &mut self.autonomy
-    }
-
-    pub fn set_stage(&self, stage: LunabotStage) {
-        self.stage.store(stage);
-    }
-
-    pub fn get_stage(&self) -> LunabotStage {
-        self.stage.load()
     }
 
     // pub fn get_now(&self) -> Instant {

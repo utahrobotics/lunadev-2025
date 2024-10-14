@@ -1,7 +1,5 @@
-use std::sync::Arc;
-
 use ares_bt::{
-    action::AlwaysSucceed,
+    action::{AlwaysSucceed, RunOnce},
     branching::TryCatch,
     converters::{CatchPanic, Invert},
     looping::WhileLoop,
@@ -11,7 +9,6 @@ use ares_bt::{
 use autonomy::autonomy;
 use blackboard::LunabotBlackboard;
 use common::{FromLunabase, LunabotStage, Steering};
-use crossbeam::atomic::AtomicCell;
 use log::warn;
 use teleop::teleop;
 
@@ -21,20 +18,22 @@ mod teleop;
 
 pub use blackboard::Input;
 
+#[derive(Debug, Clone, Copy)]
 pub enum Action {
     WaitForLunabase,
     SetSteering(Steering),
+    SetStage(LunabotStage)
 }
 
-pub fn run_ai(stage: Arc<AtomicCell<LunabotStage>>, mut on_action: impl FnMut(Action) -> Input) {
-    let mut blackboard = LunabotBlackboard::new(stage);
+pub fn run_ai(mut on_action: impl FnMut(Action) -> Input) {
+    let mut blackboard = LunabotBlackboard::default();
     let mut b = WhileLoop::new(
         AlwaysSucceed,
         Sequence::new((
+            RunOnce::from(Action::SetStage(LunabotStage::SoftStop)),
             Invert(WhileLoop::new(
                 AlwaysSucceed,
                 |blackboard: &mut LunabotBlackboard| {
-                    blackboard.set_stage(LunabotStage::SoftStop);
                     while let Some(msg) = blackboard.pop_from_lunabase() {
                         match msg {
                             FromLunabase::ContinueMission => {

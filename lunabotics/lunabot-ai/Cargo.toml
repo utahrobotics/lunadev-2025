@@ -9,4 +9,3 @@ ares-bt = { workspace = true }
 nalgebra = { workspace = true }
 common = { path = "../common" }
 log = { workspace = true }
-crossbeam = { workspace = true }

@@ -101,3 +101,41 @@ impl IntoRon for AlwaysRunning {
         ron::Value::String("AlwaysRunning".to_string())
     }
 }
+
+pub struct RunOnce<T> {
+    pub run_value: T,
+    ran: bool,
+}
+
+impl<T> From<T> for RunOnce<T> {
+    fn from(run_value: T) -> Self {
+        Self {
+            run_value,
+            ran: false,
+        }
+    }
+}
+
+impl<B, T: Clone> Behavior<B, T> for RunOnce<T> {
+    fn run(&mut self, _blackboard: &mut B) -> Status<T> {
+        if self.ran {
+            self.ran = false;
+            Status::Success
+        } else {
+            self.ran = true;
+            Status::Running(self.run_value.clone())
+        }
+    }
+}
+
+impl<B, T: Clone> InfallibleBehavior<B, T> for RunOnce<T> {
+    fn run_infallible(&mut self, _blackboard: &mut B) -> InfallibleStatus<T> {
+        if self.ran {
+            self.ran = false;
+            InfallibleStatus::Success
+        } else {
+            self.ran = true;
+            InfallibleStatus::Running(self.run_value.clone())
+        }
+    }
+}

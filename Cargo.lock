@@ -2427,7 +2427,6 @@ version = "0.1.0"
 dependencies = [
  "ares-bt",
  "common",
- "crossbeam",
  "log",
  "nalgebra 0.32.6",
 ]
