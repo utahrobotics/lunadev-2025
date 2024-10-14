@@ -5,7 +5,7 @@ use std::{
     sync::{mpsc, Arc, Mutex},
 };
 
-use byteable::Recycler;
+use recycler::Recycler;
 use common::{lunasim::{FromLunasim, FromLunasimbot}, LunabotStage};
 use crossbeam::atomic::AtomicCell;
 use fitter::utils::CameraProjection;

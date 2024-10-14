@@ -24,7 +24,7 @@ k = { workspace = true }
 # indexmap = "2.2.6"
 fxhash = { workspace = true }
 fitter = { workspace = true }
-byteable = { workspace = true }
+recycler = { workspace = true }
 bitcode = { workspace = true }
 heightmap = { path = "../heightmap" }
 lunabot-ai = { path = "../lunabot-ai" }
