@@ -1,6 +1,5 @@
 use crate::{
-    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
-    InfallibleStatus, IntoRon, Status,
+    Behavior, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
 };
 
 impl<T, F: FnMut(&mut B) -> Status<T>, B> Behavior<B, T> for F {
@@ -21,8 +20,8 @@ impl<T, F: FnMut(&mut B) -> FallibleStatus<T>, B> FallibleBehavior<B, T> for F {
     }
 }
 
-impl<T, F: FnMut(&mut B) -> T, B> EternalBehavior<B, T> for F {
-    fn run_eternal(&mut self, blackboard: &mut B) -> T {
+impl<T, F: FnMut(&mut B) -> EternalStatus<T>, B> EternalBehavior<B, T> for F {
+    fn run_eternal(&mut self, blackboard: &mut B) -> EternalStatus<T> {
         self(blackboard)
     }
 }
@@ -91,7 +90,7 @@ impl<T: Default, B> FallibleBehavior<B, T> for AlwaysRunning {
 }
 
 impl<T: Default, B> EternalBehavior<B, T> for AlwaysRunning {
-    fn run_eternal(&mut self, _blackboard: &mut B) -> T {
+    fn run_eternal(&mut self, _blackboard: &mut B) -> EternalStatus<T> {
         Default::default()
     }
 }

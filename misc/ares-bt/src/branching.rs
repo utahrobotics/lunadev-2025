@@ -1,6 +1,5 @@
 use crate::{
-    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
-    InfallibleStatus, IntoRon, Status,
+    Behavior, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -144,10 +143,10 @@ where
     B: EternalBehavior<D, T>,
     C: EternalBehavior<D, T>,
 {
-    fn run_eternal(&mut self, blackboard: &mut D) -> T {
+    fn run_eternal(&mut self, blackboard: &mut D) -> EternalStatus<T> {
         match self.state {
             IfElseState::Condition => match self.condition.run(blackboard) {
-                Status::Running(t) => return t,
+                Status::Running(t) => return EternalStatus::Running(t),
                 Status::Success => {
                     self.state = IfElseState::IfTrue;
                     self.if_true.run_eternal(blackboard)
@@ -287,7 +286,7 @@ impl<A, B, D, T> EternalBehavior<D, T> for TryCatch<A, B>
 where
     A: EternalBehavior<D, T>,
 {
-    fn run_eternal(&mut self, blackboard: &mut D) -> T {
+    fn run_eternal(&mut self, blackboard: &mut D) -> EternalStatus<T> {
         self.trying = true;
         self.try_behavior.run_eternal(blackboard)
     }

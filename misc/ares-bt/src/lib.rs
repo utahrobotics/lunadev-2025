@@ -103,6 +103,49 @@ impl<T> InfallibleStatus<T> {
     }
 }
 
+#[derive(Debug)]
+pub enum EternalStatus<T> {
+    Running(T),
+}
+
+impl<T: Default> Default for EternalStatus<T> {
+    fn default() -> Self {
+        EternalStatus::Running(T::default())
+    }
+}
+
+impl<T> EternalStatus<T> {
+    pub const fn is_ok(&self) -> bool {
+        match self {
+            Self::Running(_) => false,
+        }
+    }
+
+    pub const fn is_err(&self) -> bool {
+        match self {
+            Self::Running(_) => false,
+        }
+    }
+
+    pub const fn is_running(&self) -> bool {
+        match self {
+            Self::Running(_) => true,
+        }
+    }
+
+    pub fn unwrap(self) -> T {
+        match self {
+            Self::Running(t) => t,
+        }
+    }
+}
+
+impl<T> From<T> for EternalStatus<T> {
+    fn from(value: T) -> Self {
+        EternalStatus::Running(value)
+    }
+}
+
 /// A behavior that runs until it fails or succeeds.
 pub trait Behavior<B, T> {
     fn run(&mut self, blackboard: &mut B) -> Status<T>;
@@ -120,7 +163,7 @@ pub trait FallibleBehavior<B, T> {
 
 /// A behavior that runs forever.
 pub trait EternalBehavior<B, T> {
-    fn run_eternal(&mut self, blackboard: &mut B) -> T;
+    fn run_eternal(&mut self, blackboard: &mut B) -> EternalStatus<T>;
 }
 
 pub trait IntoRon {

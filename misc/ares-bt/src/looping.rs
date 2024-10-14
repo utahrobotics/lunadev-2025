@@ -1,6 +1,5 @@
 use crate::{
-    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
-    InfallibleStatus, IntoRon, Status,
+    Behavior, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
 };
 
 pub struct WhileLoop<A, B> {
@@ -106,16 +105,16 @@ where
     A: InfallibleBehavior<D, T>,
     B: InfallibleBehavior<D, T>,
 {
-    fn run_eternal(&mut self, blackboard: &mut D) -> T {
+    fn run_eternal(&mut self, blackboard: &mut D) -> EternalStatus<T> {
         loop {
             if self.check_condition {
                 match self.condition.run_infallible(blackboard) {
-                    InfallibleStatus::Running(t) => return t,
+                    InfallibleStatus::Running(t) => return EternalStatus::Running(t),
                     InfallibleStatus::Success => self.check_condition = false,
                 }
             }
             match self.body.run_infallible(blackboard) {
-                InfallibleStatus::Running(t) => return t,
+                InfallibleStatus::Running(t) => return EternalStatus::Running(t),
                 InfallibleStatus::Success => self.check_condition = true,
             }
         }

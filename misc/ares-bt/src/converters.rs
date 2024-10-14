@@ -1,8 +1,7 @@
 use std::borrow::Cow;
 
 use crate::{
-    Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
-    InfallibleStatus, IntoRon, Status,
+    Behavior, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
 };
 
 pub struct InfallibleShim<A>(pub A);
@@ -145,7 +144,7 @@ impl<A, B, T> EternalBehavior<B, T> for Invert<A>
 where
     A: EternalBehavior<B, T>,
 {
-    fn run_eternal(&mut self, blackboard: &mut B) -> T {
+    fn run_eternal(&mut self, blackboard: &mut B) -> EternalStatus<T>{
         self.0.run_eternal(blackboard)
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
     Behavior, EternalBehavior, FallibleBehavior, FallibleStatus, InfallibleBehavior,
-    InfallibleStatus, IntoRon, Status,
+    InfallibleStatus, IntoRon, Status, EternalStatus
 };
 
 pub struct Sequence<A> {
@@ -73,7 +73,7 @@ macro_rules! impl_seq {
         where
             $($name: EternalBehavior<C1, T>,)+
         {
-            fn run_eternal(&mut self, blackboard: &mut C1) -> T {
+            fn run_eternal(&mut self, blackboard: &mut C1) -> EternalStatus<T> {
                 self.index = 0;
                 self.body.0.run_eternal(blackboard)
             }
@@ -180,7 +180,7 @@ macro_rules! impl_sel {
         where
             $($name: EternalBehavior<C1, T>,)+
         {
-            fn run_eternal(&mut self, blackboard: &mut C1) -> T {
+            fn run_eternal(&mut self, blackboard: &mut C1) -> EternalStatus<T> {
                 self.index = 0;
                 self.body.0.run_eternal(blackboard)
             }

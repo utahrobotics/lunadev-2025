@@ -57,7 +57,7 @@ pub fn run_ai(mut on_action: impl FnMut(Action) -> Input) {
     );
 
     loop {
-        let input = on_action(b.run_eternal(&mut blackboard));
+        let input = on_action(b.run_eternal(&mut blackboard).unwrap());
         blackboard.digest_input(input);
     }
 }
