@@ -1,4 +1,4 @@
-use ares_bt::{looping::WhileLoop, sequence::Select, Behavior};
+use ares_bt::{looping::WhileLoop, sequence::Sequence, Behavior};
 use dig::dig;
 use dump::dump;
 use traverse::traverse;
@@ -42,6 +42,6 @@ impl Autonomy {
 pub fn autonomy() -> impl Behavior<LunabotBlackboard, Action> {
     WhileLoop::new(
         |blackboard: &mut LunabotBlackboard| (*blackboard.get_autonomy() != Autonomy::None).into(),
-        Select::new((dig(), dump(), traverse())),
+        Sequence::new((dig(), dump(), traverse())),
     )
 }

@@ -1,4 +1,4 @@
-use ares_bt::{action::AlwaysFail, branching::IfElse, Behavior, Status};
+use ares_bt::{action::AlwaysSucceed, branching::IfElse, Behavior, Status};
 
 use crate::{blackboard::LunabotBlackboard, Action};
 
@@ -18,6 +18,6 @@ pub(super) fn dump() -> impl Behavior<LunabotBlackboard, Action> {
             blackboard.get_autonomy().advance();
             Status::Success
         },
-        AlwaysFail,
+        AlwaysSucceed,
     )
 }
