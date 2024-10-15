@@ -1,5 +1,6 @@
 use crate::{
-    Behavior, CancelSafe, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
+    Behavior, CancelSafe, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus,
+    InfallibleBehavior, InfallibleStatus, IntoRon, Status,
 };
 
 impl<T, F: FnMut(&mut B) -> Status<T>, B> Behavior<B, T> for F {
@@ -120,10 +121,7 @@ pub struct RunOnce<F> {
 
 impl<F> From<F> for RunOnce<F> {
     fn from(func: F) -> Self {
-        Self {
-            func,
-            ran: false,
-        }
+        Self { func, ran: false }
     }
 }
 

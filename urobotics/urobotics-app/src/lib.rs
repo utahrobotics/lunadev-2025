@@ -1,16 +1,21 @@
 //! A library for creating applications with a command line interface.
 
-use std::{path::PathBuf, sync::Once};
+use std::{
+    path::{Path, PathBuf},
+    sync::Once,
+};
 
 use fxhash::FxHashMap;
 use serde::de::DeserializeOwned;
 use unfmt::unformat;
 use urobotics_core::{
-    cabinet::CabinetBuilder, end_tokio_runtime_and_wait, get_tokio_handle, log::{
+    cabinet::CabinetBuilder,
+    end_tokio_runtime_and_wait, get_tokio_handle,
+    log::{
         log_panics, log_to_console, log_to_file,
         metrics::{CpuUsage, Temperature},
         OwoColorize,
-    }
+    },
 };
 
 /// A trait that represents an application that can be run.
@@ -88,6 +93,18 @@ macro_rules! application {
 
 impl Applications {
     fn pre_run_inner(&mut self) -> Option<bool> {
+        if !Path::new(&self.config_path).exists() {
+            eprintln!(
+                "{}",
+                format!(
+                    "Config file does not exist ({:?}). Refer to (\"./examples/app-config.toml\")",
+                    self.config_path
+                )
+                .red()
+            );
+            return Some(false);
+        }
+
         let mut worked = None;
         APPLICATION_CONSUMED.call_once(|| {
             if let Err(e) = self

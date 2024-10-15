@@ -1,5 +1,5 @@
 use std::{
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4},
     ops::Deref,
     sync::Arc,
     time::{Duration, Instant},
@@ -148,6 +148,12 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
                         let n = match result {
                             Ok(n) => n,
                             Err(e) => {
+                                if e.kind() == std::io::ErrorKind::ConnectionRefused {
+                                    match self.lunabase_address.ip() {
+                                        IpAddr::V4(Ipv4Addr::LOCALHOST) | IpAddr::V6(Ipv6Addr::LOCALHOST) => continue,
+                                        _ => {}
+                                    }
+                                }
                                 error!("Failed to receive data from lunabase: {e}");
                                 continue;
                             }

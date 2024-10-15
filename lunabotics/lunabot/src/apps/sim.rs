@@ -15,6 +15,7 @@ use lunabot_ai::{run_ai, Action, Input};
 use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4};
 use recycler::Recycler;
 use serde::{Deserialize, Serialize};
+use urobotics::tokio::task::block_in_place;
 use urobotics::{
     app::Application,
     callbacks::caller::CallbacksStorage,
@@ -27,13 +28,8 @@ use urobotics::{
     },
     BlockOn,
 };
-use urobotics::tokio::task::block_in_place;
 
-use crate::{
-    localization::Localizer,
-    obstacles::heightmap::heightmap_strategy,
-    LunabotApp,
-};
+use crate::{localization::Localizer, obstacles::heightmap::heightmap_strategy, LunabotApp};
 
 use super::{
     create_packet_builder, create_robot_chain, log_teleop_messages, wait_for_ctrl_c,
@@ -56,11 +52,15 @@ impl LunasimStdin {
             .write_all(&u32::to_ne_bytes(bytes.len() as u32))
             .block_on()
         {
-            error!("Failed to send to lunasim: {e}");
+            if e.kind() != std::io::ErrorKind::BrokenPipe {
+                error!("Failed to send to lunasim: {e}");
+            }
             return;
         }
         if let Err(e) = stdin.write_all(bytes).block_on() {
-            error!("Failed to send to lunasim: {e}");
+            if e.kind() != std::io::ErrorKind::BrokenPipe {
+                error!("Failed to send to lunasim: {e}");
+            }
         }
     }
 }
@@ -356,7 +356,7 @@ impl Application for LunasimbotApp {
                                 std::thread::sleep_until(deadline);
                             }
                         },
-                    }
+                    },
                     Action::PollAgain => {}
                 }
             });

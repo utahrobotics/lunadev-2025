@@ -60,15 +60,12 @@ pub struct Localizer {
 }
 
 impl Localizer {
-    pub fn new(
-        robot_chain: Arc<Chain<f64>>,
-        lunasim_stdin: Option<LunasimStdin>,
-    ) -> Self {
+    pub fn new(robot_chain: Arc<Chain<f64>>, lunasim_stdin: Option<LunasimStdin>) -> Self {
         Self {
             robot_chain,
             lunasim_stdin,
             localizer_ref: LocalizerRef {
-                inner: Default::default()
+                inner: Default::default(),
             },
         }
     }

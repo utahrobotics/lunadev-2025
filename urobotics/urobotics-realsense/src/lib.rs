@@ -295,7 +295,6 @@ impl RealSenseCamera {
     }
 }
 
-
 /// Returns an iterator over all the RealSense cameras that were identified.
 pub fn discover_all_realsense(
     product_mask: impl IntoIterator<Item = Rs2ProductLine>,

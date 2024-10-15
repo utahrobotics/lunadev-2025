@@ -17,9 +17,7 @@ use bincode::deserialize_from;
 use chrono::{Datelike, Local, Timelike};
 use fxhash::FxHashSet;
 use log::error;
-use tasker::{
-    attach_drop_guard, callbacks::caller::try_drop_this_callback, detach_drop_guard,
-};
+use tasker::{attach_drop_guard, callbacks::caller::try_drop_this_callback, detach_drop_guard};
 
 /// A builder for setting up a cabinet.
 pub struct CabinetBuilder {
@@ -154,8 +152,7 @@ pub struct DataDump<T, F> {
 /// A variant of `DataDump` that uses a boxed writer function, making it easier to store in a field.
 pub type DataDumpBoxed<T> = DataDump<T, Box<dyn FnMut(T)>>;
 
-impl<T: Send + 'static, F: FnMut(T) -> std::io::Result<()> + Send + 'static> DataDump<T, F>
-{
+impl<T: Send + 'static, F: FnMut(T) -> std::io::Result<()> + Send + 'static> DataDump<T, F> {
     pub fn spawn(mut self) {
         std::thread::spawn(move || {
             attach_drop_guard();
@@ -386,16 +383,14 @@ impl<F> DataReader<F> {
 
 impl<F: FnMut() -> Option<std::io::Result<()>> + Send + 'static> DataReader<F> {
     pub fn spawn(mut self) {
-        std::thread::spawn(move || {
-            loop {
-                if let Some(result) = (self.reader)() {
-                    if let Err(e) = result {
-                        error!("Error reading data: {e}");
-                        break;
-                    }
-                } else {
+        std::thread::spawn(move || loop {
+            if let Some(result) = (self.reader)() {
+                if let Err(e) = result {
+                    error!("Error reading data: {e}");
                     break;
                 }
+            } else {
+                break;
             }
         });
     }

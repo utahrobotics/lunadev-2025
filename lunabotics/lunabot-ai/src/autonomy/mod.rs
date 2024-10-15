@@ -1,4 +1,9 @@
-use ares_bt::{converters::AssertCancelSafe, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, Status};
+use ares_bt::{
+    converters::AssertCancelSafe,
+    looping::WhileLoop,
+    sequence::{ParallelAny, Sequence},
+    Behavior, Status,
+};
 use common::FromLunabase;
 use dig::dig;
 use dump::dump;
@@ -58,6 +63,6 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard, Action> {
                 Status::Running(Action::PollAgain)
             }),
             Sequence::new((dig(), dump(), traverse())),
-        ))
+        )),
     )
 }

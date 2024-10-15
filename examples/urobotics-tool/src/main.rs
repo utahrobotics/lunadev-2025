@@ -1,16 +1,29 @@
 use std::path::Path;
 
-use urobotics::{app::{adhoc_app, application}, camera, log::OwoColorize, python, serial};
+use urobotics::{
+    app::{adhoc_app, application},
+    camera,
+    log::OwoColorize,
+    python, serial,
+};
 
 fn delete_cabinet() {
-    if let Err(e) = std::fs::remove_dir_all("../../../") {
-        eprintln!("{}", format!("Failed to delete cabinet folder: {}", e).red());
+    if let Err(e) = std::fs::remove_dir_all("../../") {
+        eprintln!(
+            "{}",
+            format!("Failed to delete cabinet folder: {}", e).red()
+        );
     } else {
         eprintln!("{}", "Deleted cabinet folder".green());
     }
 }
 
-adhoc_app!(DeleteCabinetApp, "delete-cabinet", "Delete cabinet folder", delete_cabinet);
+adhoc_app!(
+    DeleteCabinetApp,
+    "delete-cabinet",
+    "Delete cabinet folder",
+    delete_cabinet
+);
 
 fn main() {
     let mut app = application!();

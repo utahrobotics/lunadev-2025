@@ -1,6 +1,6 @@
 use crate::{
-    Behavior, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior,
-    InfallibleStatus, IntoRon, Status, CancelSafe
+    Behavior, CancelSafe, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus,
+    InfallibleBehavior, InfallibleStatus, IntoRon, Status,
 };
 
 pub struct Sequence<A> {
@@ -239,11 +239,10 @@ impl<A> Select<A> {
     }
 }
 
-
 pub struct ParallelSequence<A> {
     pub body: A,
     index: usize,
-    succeeded: usize
+    succeeded: usize,
 }
 
 macro_rules! impl_seq {
@@ -404,14 +403,18 @@ impl_seq!(3 A 0 B 1 C 2);
 
 impl<A> ParallelSequence<A> {
     pub fn new(body: A) -> Self {
-        Self { body, index: 0, succeeded: 0 }
+        Self {
+            body,
+            index: 0,
+            succeeded: 0,
+        }
     }
 }
 
 pub struct ParallelSelect<A> {
     pub body: A,
     index: usize,
-    failed: usize
+    failed: usize,
 }
 
 macro_rules! impl_sel {
@@ -572,10 +575,13 @@ impl_sel!(3 A 0 B 1 C 2);
 
 impl<A> ParallelSelect<A> {
     pub fn new(body: A) -> Self {
-        Self { body, index: 0, failed: 0 }
+        Self {
+            body,
+            index: 0,
+            failed: 0,
+        }
     }
 }
-
 
 pub struct ParallelAny<A> {
     pub body: A,

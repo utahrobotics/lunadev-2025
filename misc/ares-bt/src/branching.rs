@@ -1,5 +1,6 @@
 use crate::{
-    Behavior, CancelSafe, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
+    Behavior, CancelSafe, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus,
+    InfallibleBehavior, InfallibleStatus, IntoRon, Status,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

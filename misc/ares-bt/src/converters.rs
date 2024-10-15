@@ -1,7 +1,8 @@
 use std::borrow::Cow;
 
 use crate::{
-    Behavior, CancelSafe, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
+    Behavior, CancelSafe, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus,
+    InfallibleBehavior, InfallibleStatus, IntoRon, Status,
 };
 
 pub struct InfallibleShim<A>(pub A);

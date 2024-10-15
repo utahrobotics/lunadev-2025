@@ -5,7 +5,9 @@
 //! to RealSense cameras.
 
 use std::{
-    borrow::Cow, path::PathBuf, sync::{Arc, OnceLock}
+    borrow::Cow,
+    path::PathBuf,
+    sync::{Arc, OnceLock},
 };
 
 use image::{DynamicImage, ImageBuffer};
@@ -19,7 +21,12 @@ use nokhwa::{
 use serde::Deserialize;
 use unfmt::unformat;
 use urobotics_core::{
-    define_callbacks, fn_alias, log::error, service::ServiceExt, task::Loggable, tokio::sync::{Mutex, OnceCell}, BlockOn
+    define_callbacks, fn_alias,
+    log::error,
+    service::ServiceExt,
+    task::Loggable,
+    tokio::sync::{Mutex, OnceCell},
+    BlockOn,
 };
 use urobotics_py::{PyRepl, PythonValue, PythonVenvBuilder};
 use urobotics_video::VideoDataDump;
@@ -296,8 +303,8 @@ impl urobotics_app::Application for CameraConnectionBuilder {
 }
 
 /// Returns an iterator over all the cameras that were identified on this computer.
-pub fn discover_all_cameras() -> Result<impl Iterator<Item = CameraConnectionBuilder>, nokhwa::NokhwaError>
-{
+pub fn discover_all_cameras(
+) -> Result<impl Iterator<Item = CameraConnectionBuilder>, nokhwa::NokhwaError> {
     Ok(query(nokhwa::utils::ApiBackend::Auto)?
         .into_iter()
         .filter_map(|info| {
