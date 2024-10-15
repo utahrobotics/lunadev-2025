@@ -4591,23 +4591,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "urobotics-learning"
-version = "0.1.0"
-dependencies = [
- "crossbeam",
- "fxhash",
- "heapless",
- "image 0.25.2",
- "indexmap",
- "nalgebra 0.32.6",
- "rand",
- "serde",
- "spin_sleep",
- "toml 0.8.19",
- "urobotics",
-]
-
-[[package]]
 name = "urobotics-py"
 version = "0.1.0"
 dependencies = [
@@ -4651,7 +4634,6 @@ name = "urobotics-tool"
 version = "0.1.0"
 dependencies = [
  "urobotics",
- "urobotics-learning",
 ]
 
 [[package]]

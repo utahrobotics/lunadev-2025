@@ -13,12 +13,12 @@ use nalgebra::{Vector2, Vector4};
 use recycler::Recycler;
 use serde::{Deserialize, Serialize};
 use urobotics::{
-    app::Application, callbacks::caller::CallbacksStorage, log::error, task::SyncTask, BlockOn,
+    app::Application, callbacks::caller::CallbacksStorage, log::error, BlockOn,
 };
 
 use crate::{
     apps::log_teleop_messages,
-    localization::{Localizer, LocalizerRef},
+    localization::Localizer,
     obstacles::heightmap::heightmap_strategy,
 };
 
@@ -42,7 +42,7 @@ impl Application for LunabotApp {
         let robot_chain = create_robot_chain();
         let localizer = Localizer::new(robot_chain.clone(), None);
         let localizer_ref = localizer.get_ref();
-        localizer.spawn();
+        std::thread::spawn(|| localizer.run());
 
         let depth_project = match CameraProjection::new(10.392, PROJECTION_SIZE, 0.01).block_on() {
             Ok(x) => Some(Arc::new(x)),

@@ -27,10 +27,10 @@ use urobotics::{
     },
     BlockOn,
 };
-use urobotics::{task::SyncTask, tokio::task::block_in_place};
+use urobotics::tokio::task::block_in_place;
 
 use crate::{
-    localization::{Localizer, LocalizerRef},
+    localization::Localizer,
     obstacles::heightmap::heightmap_strategy,
     LunabotApp,
 };
@@ -207,7 +207,7 @@ impl Application for LunasimbotApp {
         let robot_chain = create_robot_chain();
         let localizer = Localizer::new(robot_chain.clone(), Some(lunasim_stdin.clone()));
         let localizer_ref = localizer.get_ref();
-        localizer.spawn();
+        std::thread::spawn(|| localizer.run());
 
         let depth_project = match CameraProjection::new(10.392, PROJECTION_SIZE, 0.01).block_on() {
             Ok(x) => Some(Arc::new(x)),

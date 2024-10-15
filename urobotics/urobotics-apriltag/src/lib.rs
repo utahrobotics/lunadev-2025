@@ -12,7 +12,6 @@ use urobotics_core::{
     callbacks::callee::Subscriber,
     define_callbacks, fn_alias,
     log::{error, warn},
-    task::SyncTask,
     BlockOn,
 };
 
@@ -139,10 +138,8 @@ impl AprilTagDetector {
     }
 }
 
-impl SyncTask for AprilTagDetector {
-    type Output = ();
-
-    fn run(mut self) -> Self::Output {
+impl AprilTagDetector {
+    pub fn run(mut self) {
         let mut detector = DetectorBuilder::new()
             .add_family_bits(Tag16h5::default(), 1)
             .build()

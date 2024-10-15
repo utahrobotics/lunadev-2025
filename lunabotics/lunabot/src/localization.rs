@@ -177,8 +177,4 @@ impl Localizer {
             }
         }
     }
-
-    pub fn spawn(self) {
-        std::thread::spawn(move || self.run());
-    }
 }

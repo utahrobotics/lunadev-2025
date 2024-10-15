@@ -16,8 +16,9 @@ use std::{
 use bincode::deserialize_from;
 use chrono::{Datelike, Local, Timelike};
 use fxhash::FxHashSet;
+use log::error;
 use tasker::{
-    attach_drop_guard, callbacks::caller::try_drop_this_callback, detach_drop_guard, task::SyncTask,
+    attach_drop_guard, callbacks::caller::try_drop_this_callback, detach_drop_guard,
 };
 
 /// A builder for setting up a cabinet.
@@ -153,22 +154,22 @@ pub struct DataDump<T, F> {
 /// A variant of `DataDump` that uses a boxed writer function, making it easier to store in a field.
 pub type DataDumpBoxed<T> = DataDump<T, Box<dyn FnMut(T)>>;
 
-impl<T: Send + 'static, F: FnMut(T) -> std::io::Result<()> + Send + 'static> SyncTask
-    for DataDump<T, F>
+impl<T: Send + 'static, F: FnMut(T) -> std::io::Result<()> + Send + 'static> DataDump<T, F>
 {
-    type Output = std::io::Result<()>;
-
-    fn run(mut self) -> std::io::Result<()> {
-        attach_drop_guard();
-        drop(self.sender);
-        loop {
-            let Ok(data) = self.receiver.recv() else {
-                break;
-            };
-            (self.writer)(data)?;
-        }
-        detach_drop_guard();
-        Ok(())
+    pub fn spawn(mut self) {
+        std::thread::spawn(move || {
+            attach_drop_guard();
+            drop(self.sender);
+            loop {
+                let Ok(data) = self.receiver.recv() else {
+                    break;
+                };
+                if let Err(e) = (self.writer)(data) {
+                    error!("Error writing data: {e}");
+                }
+            }
+            detach_drop_guard();
+        });
     }
 }
 
@@ -383,17 +384,20 @@ impl<F> DataReader<F> {
     }
 }
 
-impl<F: FnMut() -> Option<std::io::Result<()>> + Send + 'static> SyncTask for DataReader<F> {
-    type Output = std::io::Result<()>;
-
-    fn run(mut self) -> Self::Output {
-        loop {
-            if let Some(result) = (self.reader)() {
-                result?;
-            } else {
-                break Ok(());
+impl<F: FnMut() -> Option<std::io::Result<()>> + Send + 'static> DataReader<F> {
+    pub fn spawn(mut self) {
+        std::thread::spawn(move || {
+            loop {
+                if let Some(result) = (self.reader)() {
+                    if let Err(e) = result {
+                        error!("Error reading data: {e}");
+                        break;
+                    }
+                } else {
+                    break;
+                }
             }
-        }
+        });
     }
 }
 

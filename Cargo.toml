@@ -15,7 +15,7 @@ members = [
     "lunabotics/lunabot",
     "lunabotics/common",
     "lunabotics/pathfinding",
-    "urobotics/urobotics-learning",
+    # "urobotics/urobotics-learning",
     "misc/fitter",
     "lunabotics/lunabase-lib",
     "lunabotics/lunasim-lib",

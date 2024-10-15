@@ -1,3 +1,4 @@
+#[deprecated]
 pub trait SyncTask: Send + Sized + 'static {
     type Output;
 
@@ -48,13 +49,5 @@ impl<T: Loggable, E: std::fmt::Display> Loggable for Result<T, E> {
             Ok(t) => t.log(),
             Err(e) => log::error!("{e}"),
         }
-    }
-}
-
-impl<T: Loggable, F: FnOnce() -> T + Send + 'static> SyncTask for F {
-    type Output = T;
-
-    fn run(self) -> T {
-        self()
     }
 }

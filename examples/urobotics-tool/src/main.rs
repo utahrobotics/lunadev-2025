@@ -10,8 +10,8 @@ fn main() {
     app.add_app::<serial::SerialConnection>()
         .add_app::<python::PythonVenvBuilder>()
         .add_app::<camera::CameraConnectionBuilder>()
-        .add_app::<urobotics_learning::multiples_of_two::solution::MultiplesOfTwoSolution>()
-        .add_app::<urobotics_learning::simbot::linear_maze::solution::LinearMazeSolution>()
-        .add_app::<urobotics_learning::simbot::teleop::solution::LinearMazeTeleopSolution>()
+        // .add_app::<urobotics_learning::multiples_of_two::solution::MultiplesOfTwoSolution>()
+        // .add_app::<urobotics_learning::simbot::linear_maze::solution::LinearMazeSolution>()
+        // .add_app::<urobotics_learning::simbot::teleop::solution::LinearMazeTeleopSolution>()
         .run();
 }
