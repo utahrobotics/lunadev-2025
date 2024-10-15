@@ -1,8 +1,7 @@
 use std::borrow::Cow;
 
 use crate::{
-    Behavior, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior,
-    InfallibleStatus, IntoRon, Status,
+    Behavior, CancelSafe, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
 };
 
 pub struct InfallibleShim<A>(pub A);
@@ -35,6 +34,15 @@ where
     }
 }
 
+impl<A> CancelSafe for InfallibleShim<A>
+where
+    A: CancelSafe,
+{
+    fn reset(&mut self) {
+        self.0.reset();
+    }
+}
+
 pub struct FallibleShim<A>(pub A);
 
 impl<A, B, T> Behavior<B, T> for FallibleShim<A>
@@ -46,6 +54,15 @@ where
             FallibleStatus::Running(t) => Status::Running(t),
             FallibleStatus::Failure => Status::Failure,
         }
+    }
+}
+
+impl<A> CancelSafe for FallibleShim<A>
+where
+    A: CancelSafe,
+{
+    fn reset(&mut self) {
+        self.0.reset();
     }
 }
 
@@ -69,10 +86,19 @@ pub struct EternalShim<A>(pub A);
 
 impl<A, B, T> Behavior<B, T> for EternalShim<A>
 where
-    A: FnMut(&mut B) -> T,
+    A: EternalBehavior<B, T>,
 {
     fn run(&mut self, blackboard: &mut B) -> Status<T> {
-        Status::Running((self.0)(blackboard))
+        Status::Running(self.0.run_eternal(blackboard).unwrap())
+    }
+}
+
+impl<A> CancelSafe for EternalShim<A>
+where
+    A: CancelSafe,
+{
+    fn reset(&mut self) {
+        self.0.reset();
     }
 }
 
@@ -101,6 +127,15 @@ where
             Status::Success => Status::Failure,
             Status::Running(t) => Status::Running(t),
         }
+    }
+}
+
+impl<A> CancelSafe for Invert<A>
+where
+    A: CancelSafe,
+{
+    fn reset(&mut self) {
+        self.0.reset();
     }
 }
 
@@ -164,6 +199,15 @@ where
     }
 }
 
+impl<A> CancelSafe for CatchPanic<A>
+where
+    A: CancelSafe,
+{
+    fn reset(&mut self) {
+        self.0.reset();
+    }
+}
+
 impl<A, B, T> FallibleBehavior<B, T> for CatchPanic<A>
 where
     A: FallibleBehavior<B, T>,
@@ -211,5 +255,31 @@ impl<A> Rename<A> {
 impl<A> IntoRon for Rename<A> {
     fn into_ron(&self) -> ron::Value {
         ron::Value::String(self.name.to_string())
+    }
+}
+
+pub struct AssertCancelSafe<A>(pub A);
+
+impl<A> CancelSafe for AssertCancelSafe<A> {
+    fn reset(&mut self) {}
+}
+
+impl<A, B, T> FnMut<(&mut B,)> for AssertCancelSafe<A>
+where
+    A: FnMut(&mut B) -> T,
+{
+    extern "rust-call" fn call_mut(&mut self, args: (&mut B,)) -> Self::Output {
+        self.0.call_mut(args)
+    }
+}
+
+impl<A, B, T> FnOnce<(&mut B,)> for AssertCancelSafe<A>
+where
+    A: FnMut(&mut B) -> T,
+{
+    type Output = T;
+
+    extern "rust-call" fn call_once(mut self, args: (&mut B,)) -> Self::Output {
+        self.call_mut(args)
     }
 }

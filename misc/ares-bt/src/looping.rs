@@ -1,6 +1,5 @@
 use crate::{
-    Behavior, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior,
-    InfallibleStatus, IntoRon, Status,
+    Behavior, CancelSafe, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
 };
 
 pub struct WhileLoop<A, B> {
@@ -52,6 +51,18 @@ where
                 }
             }
         }
+    }
+}
+
+impl<A, B> CancelSafe for WhileLoop<A, B>
+where
+    A: CancelSafe,
+    B: CancelSafe,
+{
+    fn reset(&mut self) {
+        self.check_condition = true;
+        self.condition.reset();
+        self.body.reset();
     }
 }
 

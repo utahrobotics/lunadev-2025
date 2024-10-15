@@ -33,6 +33,10 @@ impl LunabotBlackboard {
 }
 
 impl LunabotBlackboard {
+    pub fn peek_from_lunabase(&self) -> Option<&FromLunabase> {
+        self.from_lunabase.front()
+    }
+
     pub fn pop_from_lunabase(&mut self) -> Option<FromLunabase> {
         self.from_lunabase.pop_front()
     }

@@ -109,6 +109,7 @@ impl Application for LunabotApp {
                             }
                         },
                     },
+                    Action::PollAgain => {}
                 }
             });
         });

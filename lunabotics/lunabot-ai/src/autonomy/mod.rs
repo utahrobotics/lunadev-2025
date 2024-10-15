@@ -1,4 +1,5 @@
-use ares_bt::{looping::WhileLoop, sequence::Sequence, Behavior};
+use ares_bt::{converters::AssertCancelSafe, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, Status};
+use common::FromLunabase;
 use dig::dig;
 use dump::dump;
 use traverse::traverse;
@@ -42,6 +43,21 @@ impl Autonomy {
 pub fn autonomy() -> impl Behavior<LunabotBlackboard, Action> {
     WhileLoop::new(
         |blackboard: &mut LunabotBlackboard| (*blackboard.get_autonomy() != Autonomy::None).into(),
-        Sequence::new((dig(), dump(), traverse())),
+        ParallelAny::new((
+            AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+                while let Some(msg) = blackboard.peek_from_lunabase() {
+                    match msg {
+                        FromLunabase::Steering(_) => return Status::Success,
+                        FromLunabase::SoftStop => {
+                            blackboard.pop_from_lunabase();
+                            return Status::Failure;
+                        }
+                        _ => blackboard.pop_from_lunabase(),
+                    };
+                }
+                Status::Running(Action::PollAgain)
+            }),
+            Sequence::new((dig(), dump(), traverse())),
+        ))
     )
 }

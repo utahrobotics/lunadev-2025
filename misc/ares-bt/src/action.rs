@@ -1,6 +1,5 @@
 use crate::{
-    Behavior, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior,
-    InfallibleStatus, IntoRon, Status,
+    Behavior, CancelSafe, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
 };
 
 impl<T, F: FnMut(&mut B) -> Status<T>, B> Behavior<B, T> for F {
@@ -48,6 +47,10 @@ impl IntoRon for AlwaysSucceed {
     }
 }
 
+impl CancelSafe for AlwaysSucceed {
+    fn reset(&mut self) {}
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct AlwaysFail;
 
@@ -67,6 +70,10 @@ impl IntoRon for AlwaysFail {
     fn into_ron(&self) -> ron::Value {
         ron::Value::String("AlwaysFail".to_string())
     }
+}
+
+impl CancelSafe for AlwaysFail {
+    fn reset(&mut self) {}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -94,6 +101,10 @@ impl<T: Default, B> EternalBehavior<B, T> for AlwaysRunning {
     fn run_eternal(&mut self, _blackboard: &mut B) -> EternalStatus<T> {
         Default::default()
     }
+}
+
+impl CancelSafe for AlwaysRunning {
+    fn reset(&mut self) {}
 }
 
 impl IntoRon for AlwaysRunning {
@@ -137,5 +148,11 @@ impl<B, T, F: FnMut() -> T> InfallibleBehavior<B, T> for RunOnce<F> {
             self.ran = true;
             InfallibleStatus::Running((self.func)())
         }
+    }
+}
+
+impl<F> CancelSafe for RunOnce<F> {
+    fn reset(&mut self) {
+        self.ran = false;
     }
 }

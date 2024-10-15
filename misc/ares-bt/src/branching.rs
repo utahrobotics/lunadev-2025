@@ -1,6 +1,5 @@
 use crate::{
-    Behavior, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior,
-    InfallibleStatus, IntoRon, Status,
+    Behavior, CancelSafe, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus, InfallibleBehavior, InfallibleStatus, IntoRon, Status
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,6 +72,20 @@ where
         }
 
         result
+    }
+}
+
+impl<A, B, C> CancelSafe for IfElse<A, B, C>
+where
+    A: CancelSafe,
+    B: CancelSafe,
+    C: CancelSafe,
+{
+    fn reset(&mut self) {
+        self.state = IfElseState::Condition;
+        self.condition.reset();
+        self.if_true.reset();
+        self.if_false.reset();
     }
 }
 
@@ -230,6 +243,18 @@ where
     }
 }
 
+impl<A, B> CancelSafe for TryCatch<A, B>
+where
+    A: CancelSafe,
+    B: CancelSafe,
+{
+    fn reset(&mut self) {
+        self.trying = true;
+        self.try_behavior.reset();
+        self.catch.reset();
+    }
+}
+
 impl<A, B, D, T> InfallibleBehavior<D, T> for TryCatch<A, B>
 where
     A: Behavior<D, T>,
@@ -286,6 +311,7 @@ where
 impl<A, B, D, T> EternalBehavior<D, T> for TryCatch<A, B>
 where
     A: EternalBehavior<D, T>,
+    B: Behavior<D, T>,
 {
     fn run_eternal(&mut self, blackboard: &mut D) -> EternalStatus<T> {
         self.trying = true;

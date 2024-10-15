@@ -35,6 +35,7 @@ pub enum Action {
     },
     /// Wait until the given instant for any input, otherwise poll the ai again.
     WaitUntil(Instant),
+    PollAgain,
 }
 
 pub fn run_ai(chain: Arc<Chain<f64>>, mut on_action: impl FnMut(Action, &mut Vec<Input>)) {

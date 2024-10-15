@@ -1,3 +1,5 @@
+#![feature(unboxed_closures, fn_traits)]
+
 pub mod action;
 pub mod branching;
 pub mod converters;
@@ -168,6 +170,9 @@ pub trait EternalBehavior<B, T> {
 
 pub trait IntoRon {
     fn into_ron(&self) -> ron::Value;
+}
+pub trait CancelSafe {
+    fn reset(&mut self);
 }
 
 #[cfg(test)]

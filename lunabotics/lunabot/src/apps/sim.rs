@@ -360,7 +360,8 @@ impl Application for LunasimbotApp {
                                 std::thread::sleep_until(deadline);
                             }
                         },
-                    },
+                    }
+                    Action::PollAgain => {}
                 }
             });
         });
