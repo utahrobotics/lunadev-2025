@@ -13,7 +13,6 @@ use urobotics_core::{
         metrics::{CpuUsage, Temperature},
         OwoColorize,
     },
-    task::AsyncTask,
 };
 
 /// A trait that represents an application that can be run.
@@ -114,10 +113,10 @@ impl Applications {
             log_to_console();
 
             if let Some(cpu_usage) = self.cpu_usage.clone() {
-                cpu_usage.spawn();
+                tokio::spawn(cpu_usage.run());
             }
             if let Some(temperature) = self.temperature.clone() {
-                temperature.spawn();
+                tokio::spawn(temperature.run());
             }
 
             worked = Some(true);

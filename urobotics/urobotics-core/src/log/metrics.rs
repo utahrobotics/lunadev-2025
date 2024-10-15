@@ -5,7 +5,6 @@ use std::time::Instant;
 use futures::{stream::FuturesUnordered, StreamExt};
 use fxhash::FxHashSet;
 use sysinfo::{Components, Pid};
-use tasker::task::AsyncTask;
 
 /// Configuration for the temperature monitoring task.
 #[derive(Clone)]
@@ -16,10 +15,8 @@ pub struct Temperature {
     pub ignore_component_temperature: FxHashSet<String>,
 }
 
-impl AsyncTask for Temperature {
-    type Output = !;
-
-    async fn run(self) -> Self::Output {
+impl Temperature {
+    pub async fn run(self) {
         let mut components = Components::new_with_refreshed_list();
         let mut tasks = FuturesUnordered::new();
 
@@ -65,10 +62,8 @@ pub struct CpuUsage {
     pub cpu_usage_warning_threshold: f32,
 }
 
-impl AsyncTask for CpuUsage {
-    type Output = !;
-
-    async fn run(self) -> Self::Output {
+impl CpuUsage {
+    pub async fn run(self) {
         let mut sys = sysinfo::System::new();
         let mut last_cpu_check = Instant::now();
         let pid = Pid::from_u32(std::process::id());
