@@ -40,13 +40,9 @@ impl Application for LunabotApp {
         log_teleop_messages();
 
         let robot_chain = create_robot_chain();
-        let localizer_ref = LocalizerRef::default();
-        Localizer {
-            robot_chain: robot_chain.clone(),
-            lunasim_stdin: None,
-            localizer_ref: localizer_ref.clone(),
-        }
-        .spawn();
+        let localizer = Localizer::new(robot_chain.clone(), None);
+        let localizer_ref = localizer.get_ref();
+        localizer.spawn();
 
         let depth_project = match CameraProjection::new(10.392, PROJECTION_SIZE, 0.01).block_on() {
             Ok(x) => Some(Arc::new(x)),

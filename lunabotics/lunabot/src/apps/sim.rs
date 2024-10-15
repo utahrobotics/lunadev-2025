@@ -205,13 +205,9 @@ impl Application for LunasimbotApp {
             }
         };
         let robot_chain = create_robot_chain();
-        let localizer_ref = LocalizerRef::default();
-        Localizer {
-            robot_chain: robot_chain.clone(),
-            lunasim_stdin: Some(lunasim_stdin.clone()),
-            localizer_ref: localizer_ref.clone(),
-        }
-        .spawn();
+        let localizer = Localizer::new(robot_chain.clone(), Some(lunasim_stdin.clone()));
+        let localizer_ref = localizer.get_ref();
+        localizer.spawn();
 
         let depth_project = match CameraProjection::new(10.392, PROJECTION_SIZE, 0.01).block_on() {
             Ok(x) => Some(Arc::new(x)),

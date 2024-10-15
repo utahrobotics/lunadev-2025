@@ -5,7 +5,7 @@ use crossbeam::atomic::AtomicCell;
 use k::{Chain, Isometry3, UnitQuaternion, Vector3};
 use nalgebra::UnitVector3;
 use spin_sleep::SpinSleeper;
-use urobotics::{log::error, task::SyncTask};
+use urobotics::log::error;
 
 use crate::{
     apps::LunasimStdin,
@@ -22,7 +22,7 @@ struct LocalizerRefInner {
     april_tag_isometry: AtomicCell<Option<Isometry3<f64>>>,
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct LocalizerRef {
     inner: Arc<LocalizerRefInner>,
 }
@@ -54,16 +54,30 @@ impl LocalizerRef {
 }
 
 pub struct Localizer {
-    pub robot_chain: Arc<Chain<f64>>,
-    pub lunasim_stdin: Option<LunasimStdin>,
-    // pub lunabase_sender: CakapSender,
-    pub localizer_ref: LocalizerRef,
+    robot_chain: Arc<Chain<f64>>,
+    lunasim_stdin: Option<LunasimStdin>,
+    localizer_ref: LocalizerRef,
 }
 
-impl SyncTask for Localizer {
-    type Output = !;
+impl Localizer {
+    pub fn new(
+        robot_chain: Arc<Chain<f64>>,
+        lunasim_stdin: Option<LunasimStdin>,
+    ) -> Self {
+        Self {
+            robot_chain,
+            lunasim_stdin,
+            localizer_ref: LocalizerRef {
+                inner: Default::default()
+            },
+        }
+    }
 
-    fn run(self) -> Self::Output {
+    pub fn get_ref(&self) -> LocalizerRef {
+        self.localizer_ref.clone()
+    }
+
+    pub fn run(self) {
         let spin_sleeper = SpinSleeper::default();
         let mut bitcode_buffer = bitcode::Buffer::new();
 
@@ -162,5 +176,9 @@ impl SyncTask for Localizer {
                 lunasim_stdin.write(bytes);
             }
         }
+    }
+
+    pub fn spawn(self) {
+        std::thread::spawn(move || self.run());
     }
 }

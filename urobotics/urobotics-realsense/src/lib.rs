@@ -23,7 +23,6 @@ use realsense_rust::{
 use urobotics_core::{
     define_callbacks, fn_alias,
     log::{error, warn},
-    task::SyncTask,
 };
 
 define_callbacks!(ColorCallbacks => CloneFn(color_img: ImageBuffer<Rgb<u8>, &[u8]>) + Send);
@@ -296,15 +295,6 @@ impl RealSenseCamera {
     }
 }
 
-impl SyncTask for RealSenseCamera {
-    type Output = Result<!, FrameWaitError>;
-
-    fn run(mut self) -> Self::Output {
-        loop {
-            self.poll(None)?;
-        }
-    }
-}
 
 /// Returns an iterator over all the RealSense cameras that were identified.
 pub fn discover_all_realsense(
