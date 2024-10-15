@@ -44,6 +44,7 @@ pub fn run_ai(chain: Arc<Chain<f64>>, mut on_action: impl FnMut(Action, &mut Vec
         AlwaysSucceed,
         Sequence::new((
             RunOnce::from(|| Action::SetStage(LunabotStage::SoftStop)),
+            RunOnce::from(|| Action::SetSteering(Steering::default())),
             Invert(WhileLoop::new(
                 AlwaysSucceed,
                 |blackboard: &mut LunabotBlackboard| {
@@ -51,6 +52,7 @@ pub fn run_ai(chain: Arc<Chain<f64>>, mut on_action: impl FnMut(Action, &mut Vec
                         match msg {
                             FromLunabase::ContinueMission => {
                                 warn!("Continuing mission");
+                                *blackboard.lunabase_disconnected() = false;
                                 return FallibleStatus::Failure;
                             }
                             _ => {}

@@ -77,6 +77,12 @@ struct LunabotConn {
     base: Base<Node>,
 }
 
+thread_local! {
+    static PONG_MESSAGE: Box<[u8]> = {
+        encode(&FromLunabase::Pong).into()
+    };
+}
+
 #[godot_api]
 impl INode for LunabotConn {
     fn init(base: Base<Node>) -> Self {
@@ -135,6 +141,16 @@ impl INode for LunabotConn {
                                 }
                             };
                             inner = self.inner.as_mut().unwrap();
+
+                            PONG_MESSAGE.with(|pong| {
+                                inner.to_lunabot.push_back(Action::SendUnreliable(
+                                    inner
+                                        .cakap_sm
+                                        .get_packet_builder()
+                                        .new_unreliable(pong.to_vec().into())
+                                        .unwrap(),
+                                ));
+                            });
                         }
                     }
                 }};

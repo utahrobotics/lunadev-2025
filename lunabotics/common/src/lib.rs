@@ -15,7 +15,7 @@ pub enum LunabotStage {
 
 #[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]
 pub enum FromLunabase {
-    // Pong,
+    Pong,
     ContinueMission,
     Steering(Steering),
     TraverseObstacles,

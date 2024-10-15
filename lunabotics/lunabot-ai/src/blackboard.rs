@@ -9,6 +9,7 @@ use crate::autonomy::Autonomy;
 pub enum Input {
     FromLunabase(FromLunabase),
     PathCalculated(Vec<Point3<f64>>),
+    LunabaseDisconnected,
 }
 
 #[derive(Debug)]
@@ -18,6 +19,7 @@ pub(crate) struct LunabotBlackboard {
     autonomy: Autonomy,
     chain: Arc<Chain<f64>>,
     path: Vec<Point3<f64>>,
+    lunabase_disconnected: bool,
 }
 
 impl LunabotBlackboard {
@@ -28,6 +30,7 @@ impl LunabotBlackboard {
             autonomy: Autonomy::None,
             path: vec![],
             chain,
+            lunabase_disconnected: true,
         }
     }
 }
@@ -61,6 +64,10 @@ impl LunabotBlackboard {
         self.path.clear();
     }
 
+    pub fn lunabase_disconnected(&mut self) -> &mut bool {
+        &mut self.lunabase_disconnected
+    }
+
     // pub fn get_now(&self) -> Instant {
     //     self.now
     // }
@@ -69,6 +76,7 @@ impl LunabotBlackboard {
         match input {
             Input::FromLunabase(msg) => self.from_lunabase.push_back(msg),
             Input::PathCalculated(path) => self.path = path,
+            Input::LunabaseDisconnected => self.lunabase_disconnected = true,
         }
         self.now = Instant::now();
     }

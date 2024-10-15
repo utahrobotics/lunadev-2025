@@ -2,7 +2,7 @@ use std::{
     cmp::Ordering,
     collections::VecDeque,
     process::Stdio,
-    sync::{mpsc, Arc, Mutex},
+    sync::{Arc, Mutex},
 };
 
 use common::{
@@ -15,7 +15,7 @@ use lunabot_ai::{run_ai, Action, Input};
 use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4};
 use recycler::Recycler;
 use serde::{Deserialize, Serialize};
-use urobotics::tokio::task::block_in_place;
+use urobotics::tokio::{self, task::block_in_place};
 use urobotics::{
     app::Application,
     callbacks::caller::CallbacksStorage,
@@ -308,7 +308,7 @@ impl Application for LunasimbotApp {
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
-        let (packet_builder, from_lunabase_rx) =
+        let (packet_builder, mut from_lunabase_rx, mut connected) =
             create_packet_builder(self.app.lunabase_address, lunabot_stage.clone());
 
         let mut bitcode_buffer = bitcode::Buffer::new();
@@ -316,19 +316,36 @@ impl Application for LunasimbotApp {
         std::thread::spawn(move || {
             run_ai(robot_chain, |action, inputs| {
                 debug_assert!(inputs.is_empty());
+                let wait_disconnect = async {
+                    if lunabot_stage.load() == LunabotStage::SoftStop {
+                        std::future::pending::<()>().await;
+                    } else {
+                        connected.wait_disconnect().await;
+                    }
+                };
+
                 match action {
                     Action::WaitForLunabase => {
                         while let Ok(msg) = from_lunabase_rx.try_recv() {
                             inputs.push(Input::FromLunabase(msg));
                         }
                         if inputs.is_empty() {
-                            let Ok(msg) = from_lunabase_rx.recv() else {
-                                error!("Lunabase message channel closed");
-                                loop {
-                                    std::thread::park();
+                            async {
+                                tokio::select! {
+                                    result = from_lunabase_rx.recv() => {
+                                        let Some(msg) = result else {
+                                            error!("Lunabase message channel closed");
+                                            std::future::pending::<()>().await;
+                                            unreachable!();
+                                        };
+                                        inputs.push(Input::FromLunabase(msg));
+                                    }
+                                    _ = wait_disconnect => {
+                                        inputs.push(Input::LunabaseDisconnected);
+                                    }
                                 }
-                            };
-                            inputs.push(Input::FromLunabase(msg));
+                            }
+                            .block_on();
                         }
                     }
                     Action::SetStage(stage) => {
@@ -347,16 +364,25 @@ impl Application for LunasimbotApp {
                         into.push(to);
                         inputs.push(Input::PathCalculated(into));
                     }
-                    Action::WaitUntil(deadline) => match from_lunabase_rx.recv_deadline(deadline) {
-                        Ok(msg) => inputs.push(Input::FromLunabase(msg)),
-                        Err(e) => match e {
-                            mpsc::RecvTimeoutError::Timeout => {}
-                            mpsc::RecvTimeoutError::Disconnected => {
-                                error!("Lunabase message channel closed");
-                                std::thread::sleep_until(deadline);
+                    Action::WaitUntil(deadline) => {
+                        async {
+                            tokio::select! {
+                                result = from_lunabase_rx.recv() => {
+                                    let Some(msg) = result else {
+                                        error!("Lunabase message channel closed");
+                                        std::future::pending::<()>().await;
+                                        unreachable!();
+                                    };
+                                    inputs.push(Input::FromLunabase(msg));
+                                }
+                                _ = tokio::time::sleep_until(deadline.into()) => {}
+                                _ = wait_disconnect => {
+                                    inputs.push(Input::LunabaseDisconnected);
+                                }
                             }
-                        },
-                    },
+                        }
+                        .block_on();
+                    }
                     Action::PollAgain => {}
                 }
             });

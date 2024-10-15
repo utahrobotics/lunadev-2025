@@ -1,6 +1,6 @@
 use ares_bt::{action::RunOnce, sequence::Sequence, Behavior, Status};
 use common::{FromLunabase, LunabotStage};
-use log::warn;
+use log::{error, warn};
 
 use crate::{
     autonomy::{Autonomy, AutonomyStage},
@@ -12,6 +12,10 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard, Action> {
     Sequence::new((
         RunOnce::from(|| Action::SetStage(LunabotStage::TeleOp)),
         |blackboard: &mut LunabotBlackboard| {
+            if *blackboard.lunabase_disconnected() {
+                error!("Lunabase disconnected");
+                return Status::Failure;
+            }
             while let Some(msg) = blackboard.pop_from_lunabase() {
                 match msg {
                     FromLunabase::Steering(steering) => {

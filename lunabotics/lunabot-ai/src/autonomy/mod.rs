@@ -7,6 +7,7 @@ use ares_bt::{
 use common::FromLunabase;
 use dig::dig;
 use dump::dump;
+use log::error;
 use traverse::traverse;
 
 use crate::{blackboard::LunabotBlackboard, Action};
@@ -50,6 +51,10 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard, Action> {
         |blackboard: &mut LunabotBlackboard| (*blackboard.get_autonomy() != Autonomy::None).into(),
         ParallelAny::new((
             AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+                if *blackboard.lunabase_disconnected() {
+                    error!("Lunabase disconnected");
+                    return Status::Failure;
+                }
                 while let Some(msg) = blackboard.peek_from_lunabase() {
                     match msg {
                         FromLunabase::Steering(_) => return Status::Success,

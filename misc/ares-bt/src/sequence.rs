@@ -114,6 +114,9 @@ macro_rules! impl_seq {
 impl_seq!(1 A 0);
 impl_seq!(2 A 0 B 1);
 impl_seq!(3 A 0 B 1 C 2);
+impl_seq!(4 A 0 B 1 C 2 D 3);
+impl_seq!(5 A 0 B 1 C 2 D 3 E 4);
+impl_seq!(6 A 0 B 1 C 2 D 3 E 4 F 5);
 
 impl<A> Sequence<A> {
     pub fn new(body: A) -> Self {
@@ -232,6 +235,9 @@ macro_rules! impl_sel {
 impl_sel!(1 A 0);
 impl_sel!(2 A 0 B 1);
 impl_sel!(3 A 0 B 1 C 2);
+impl_sel!(4 A 0 B 1 C 2 D 3);
+impl_sel!(5 A 0 B 1 C 2 D 3 E 4);
+impl_sel!(6 A 0 B 1 C 2 D 3 E 4 F 5);
 
 impl<A> Select<A> {
     pub fn new(body: A) -> Self {
@@ -400,6 +406,9 @@ macro_rules! impl_seq {
 impl_seq!(1 A 0);
 impl_seq!(2 A 0 B 1);
 impl_seq!(3 A 0 B 1 C 2);
+impl_seq!(4 A 0 B 1 C 2 D 3);
+impl_seq!(5 A 0 B 1 C 2 D 3 E 4);
+impl_seq!(6 A 0 B 1 C 2 D 3 E 4 F 5);
 
 impl<A> ParallelSequence<A> {
     pub fn new(body: A) -> Self {
@@ -572,6 +581,9 @@ macro_rules! impl_sel {
 impl_sel!(1 A 0);
 impl_sel!(2 A 0 B 1);
 impl_sel!(3 A 0 B 1 C 2);
+impl_sel!(4 A 0 B 1 C 2 D 3);
+impl_sel!(5 A 0 B 1 C 2 D 3 E 4);
+impl_sel!(6 A 0 B 1 C 2 D 3 E 4 F 5);
 
 impl<A> ParallelSelect<A> {
     pub fn new(body: A) -> Self {

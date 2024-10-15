@@ -96,11 +96,7 @@ impl Applications {
         if !Path::new(&self.config_path).exists() {
             eprintln!(
                 "{}",
-                format!(
-                    "Config file does not exist ({:?})",
-                    self.config_path
-                )
-                .red()
+                format!("Config file does not exist ({:?})", self.config_path).red()
             );
             return Some(false);
         }

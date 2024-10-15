@@ -14,6 +14,7 @@ use urobotics::{
     tokio::{self, net::UdpSocket, sync::mpsc},
 };
 
+#[derive(Clone)]
 pub struct PacketBuilder {
     builder: cakap2::packet::PacketBuilder,
     packet_tx: mpsc::UnboundedSender<Action>,
@@ -100,7 +101,10 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
                                 error!("{cakap_error}");
                                 action = cakap_sm.poll(Event::NoEvent, Instant::now());
                             }
-                            RecommendedAction::HandleData(received) => {(self.on_msg)(&received);}
+                            RecommendedAction::HandleData(received) => {
+                                (self.on_msg)(&received);
+                                action = cakap_sm.poll(Event::NoEvent, Instant::now());
+                            }
                             RecommendedAction::HandleDataAndSend { received, to_send } =>  if (self.on_msg)(&received) {
                                 send!(&to_send);
                             }

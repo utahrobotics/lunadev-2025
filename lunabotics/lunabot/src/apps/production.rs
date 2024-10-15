@@ -12,7 +12,9 @@ use lunabot_ai::{run_ai, Action, Input};
 use nalgebra::{Vector2, Vector4};
 use recycler::Recycler;
 use serde::{Deserialize, Serialize};
-use urobotics::{app::Application, callbacks::caller::CallbacksStorage, log::error, BlockOn};
+use urobotics::{
+    app::Application, callbacks::caller::CallbacksStorage, log::error, tokio, BlockOn,
+};
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer, obstacles::heightmap::heightmap_strategy,
@@ -58,7 +60,7 @@ impl Application for LunabotApp {
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
-        let (packet_builder, from_lunabase_rx) =
+        let (packet_builder, mut from_lunabase_rx, mut connected) =
             create_packet_builder(self.lunabase_address, lunabot_stage.clone());
 
         std::thread::spawn(move || {
@@ -70,13 +72,22 @@ impl Application for LunabotApp {
                             inputs.push(Input::FromLunabase(msg));
                         }
                         if inputs.is_empty() {
-                            let Ok(msg) = from_lunabase_rx.recv() else {
-                                error!("Lunabase message channel closed");
-                                loop {
-                                    std::thread::park();
+                            async {
+                                tokio::select! {
+                                    result = from_lunabase_rx.recv() => {
+                                        let Some(msg) = result else {
+                                            error!("Lunabase message channel closed");
+                                            std::future::pending::<()>().await;
+                                            unreachable!();
+                                        };
+                                        inputs.push(Input::FromLunabase(msg));
+                                    }
+                                    _ = connected.wait_disconnect() => {
+                                        inputs.push(Input::LunabaseDisconnected);
+                                    }
                                 }
-                            };
-                            inputs.push(Input::FromLunabase(msg));
+                            }
+                            .block_on();
                         }
                     }
                     Action::SetStage(stage) => {
@@ -91,16 +102,25 @@ impl Application for LunabotApp {
                         into.push(to);
                         inputs.push(Input::PathCalculated(into));
                     }
-                    Action::WaitUntil(deadline) => match from_lunabase_rx.recv_deadline(deadline) {
-                        Ok(msg) => inputs.push(Input::FromLunabase(msg)),
-                        Err(e) => match e {
-                            mpsc::RecvTimeoutError::Timeout => {}
-                            mpsc::RecvTimeoutError::Disconnected => {
-                                error!("Lunabase message channel closed");
-                                std::thread::sleep_until(deadline);
+                    Action::WaitUntil(deadline) => {
+                        async {
+                            tokio::select! {
+                                result = from_lunabase_rx.recv() => {
+                                    let Some(msg) = result else {
+                                        error!("Lunabase message channel closed");
+                                        std::future::pending::<()>().await;
+                                        unreachable!();
+                                    };
+                                    inputs.push(Input::FromLunabase(msg));
+                                }
+                                _ = tokio::time::sleep_until(deadline.into()) => {}
+                                _ = connected.wait_disconnect() => {
+                                    inputs.push(Input::LunabaseDisconnected);
+                                }
                             }
-                        },
-                    },
+                        }
+                        .block_on();
+                    }
                     Action::PollAgain => {}
                 }
             });
