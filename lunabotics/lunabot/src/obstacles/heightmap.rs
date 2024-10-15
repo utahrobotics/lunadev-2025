@@ -9,7 +9,7 @@ use urobotics::{
     BlockOn,
 };
 
-use crate::PointCloudCallbacksRef;
+use crate::apps::PointCloudCallbacksRef;
 
 fn_alias! {
     pub type HeightMapCallbacksRef = CallbacksRef(&[f32]) + Send + Sync

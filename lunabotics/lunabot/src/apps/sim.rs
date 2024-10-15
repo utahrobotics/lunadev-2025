@@ -30,12 +30,14 @@ use urobotics::{
 use urobotics::{task::SyncTask, tokio::task::block_in_place};
 
 use crate::{
-    create_robot_chain,
     localization::{Localizer, LocalizerRef},
-    log_teleop_messages,
     obstacles::heightmap::heightmap_strategy,
-    teleop::LunabaseConn,
-    wait_for_ctrl_c, LunabotApp, PointCloudCallbacks,
+    LunabotApp,
+};
+
+use super::{
+    create_packet_builder, create_robot_chain, log_teleop_messages, wait_for_ctrl_c,
+    PointCloudCallbacks,
 };
 
 fn_alias! {
@@ -309,24 +311,10 @@ impl Application for LunasimbotApp {
         }));
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
-        let (from_lunabase_tx, from_lunabase_rx) = mpsc::channel();
-        let mut bitcode_buffer = bitcode::Buffer::new();
 
-        let packet_builder = LunabaseConn {
-            lunabase_address: self.app.lunabase_address,
-            on_msg: move |bytes: &[u8]| match bitcode_buffer.decode(bytes) {
-                Ok(msg) => {
-                    let _ = from_lunabase_tx.send(msg);
-                    true
-                }
-                Err(e) => {
-                    error!("Failed to decode from lunabase: {e}");
-                    false
-                }
-            },
-            lunabot_stage: lunabot_stage.clone(),
-        }
-        .connect_to_lunabase();
+        let (packet_builder, from_lunabase_rx) =
+            create_packet_builder(self.app.lunabase_address, lunabot_stage.clone());
+
         let mut bitcode_buffer = bitcode::Buffer::new();
 
         std::thread::spawn(move || {

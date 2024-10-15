@@ -28,3 +28,4 @@ recycler = { workspace = true }
 bitcode = { workspace = true }
 heightmap = { path = "../heightmap" }
 lunabot-ai = { path = "../lunabot-ai" }
+vesc_translator.git = "https://github.com/Hydro111/vesc-translator.git"

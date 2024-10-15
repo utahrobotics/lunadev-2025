@@ -8,7 +8,7 @@ use spin_sleep::SpinSleeper;
 use urobotics::{log::error, task::SyncTask};
 
 use crate::{
-    sim::LunasimStdin,
+    apps::LunasimStdin,
     utils::{lerp_value, swing_twist_decomposition},
 };
 
