@@ -97,7 +97,7 @@ impl Applications {
             eprintln!(
                 "{}",
                 format!(
-                    "Config file does not exist ({:?}). Refer to (\"./examples/app-config.toml\")",
+                    "Config file does not exist ({:?})",
                     self.config_path
                 )
                 .red()
