@@ -21,7 +21,7 @@ pub(super) fn dig() -> impl Behavior<LunabotBlackboard, Action> {
             .into()
         },
         Sequence::new((
-            RunOnce::from(Action::SetStage(LunabotStage::Dig)),
+            RunOnce::from(|| Action::SetStage(LunabotStage::Dig)),
             |blackboard: &mut LunabotBlackboard| {
                 blackboard.get_autonomy().advance();
                 Status::Success

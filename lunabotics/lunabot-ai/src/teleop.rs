@@ -10,7 +10,7 @@ use crate::{
 
 pub fn teleop() -> impl Behavior<LunabotBlackboard, Action> {
     Sequence::new((
-        RunOnce::from(Action::SetStage(LunabotStage::TeleOp)),
+        RunOnce::from(|| Action::SetStage(LunabotStage::TeleOp)),
         |blackboard: &mut LunabotBlackboard| {
             while let Some(msg) = blackboard.pop_from_lunabase() {
                 match msg {

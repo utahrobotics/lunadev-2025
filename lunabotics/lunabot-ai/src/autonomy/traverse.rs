@@ -21,7 +21,7 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard, Action> {
             .into()
         },
         Sequence::new((
-            RunOnce::from(Action::SetStage(LunabotStage::TraverseObstacles)),
+            RunOnce::from(|| Action::SetStage(LunabotStage::TraverseObstacles)),
             |blackboard: &mut LunabotBlackboard| {
                 while let Some(msg) = blackboard.pop_from_lunabase() {
                     match msg {

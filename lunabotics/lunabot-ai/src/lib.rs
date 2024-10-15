@@ -42,7 +42,7 @@ pub fn run_ai(chain: Arc<Chain<f64>>, mut on_action: impl FnMut(Action, &mut Vec
     let mut b = WhileLoop::new(
         AlwaysSucceed,
         Sequence::new((
-            RunOnce::from(Action::SetStage(LunabotStage::SoftStop)),
+            RunOnce::from(|| Action::SetStage(LunabotStage::SoftStop)),
             Invert(WhileLoop::new(
                 AlwaysSucceed,
                 |blackboard: &mut LunabotBlackboard| {

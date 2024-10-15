@@ -21,7 +21,7 @@ pub(super) fn dump() -> impl Behavior<LunabotBlackboard, Action> {
             .into()
         },
         Sequence::new((
-            RunOnce::from(Action::SetStage(LunabotStage::Dump)),
+            RunOnce::from(|| Action::SetStage(LunabotStage::Dump)),
             |blackboard: &mut LunabotBlackboard| {
                 blackboard.get_autonomy().advance();
                 Status::Success
