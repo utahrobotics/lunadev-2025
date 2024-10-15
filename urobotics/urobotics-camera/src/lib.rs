@@ -5,9 +5,7 @@
 //! to RealSense cameras.
 
 use std::{
-    borrow::Cow,
-    path::PathBuf,
-    sync::{Arc, OnceLock},
+    borrow::Cow, path::PathBuf, sync::{Arc, OnceLock}
 };
 
 use image::{DynamicImage, ImageBuffer};
@@ -21,14 +19,7 @@ use nokhwa::{
 use serde::Deserialize;
 use unfmt::unformat;
 use urobotics_core::{
-    define_callbacks, fn_alias,
-    service::ServiceExt,
-    task::{AsyncTask, Loggable},
-    tokio::{
-        sync::{Mutex, OnceCell},
-        task::block_in_place,
-    },
-    BlockOn,
+    define_callbacks, fn_alias, log::error, service::ServiceExt, task::Loggable, tokio::sync::{Mutex, OnceCell}, BlockOn
 };
 use urobotics_py::{PyRepl, PythonValue, PythonVenvBuilder};
 use urobotics_video::VideoDataDump;
@@ -56,7 +47,7 @@ static PY_REPL: OnceCell<Mutex<PyRepl>> = OnceCell::const_new();
 ///
 /// The connection is not created until this `Node` is ran.
 #[derive(Deserialize)]
-pub struct CameraConnection {
+pub struct CameraConnectionBuilder {
     pub identifier: CameraIdentifier,
     #[serde(default)]
     pub fps: u32,
@@ -77,30 +68,6 @@ pub struct PendingCameraInfo(Arc<OnceLock<CameraInfo>>);
 impl PendingCameraInfo {
     pub fn try_get(&self) -> Option<&CameraInfo> {
         self.0.get()
-    }
-}
-
-impl CameraConnection {
-    /// Creates a pending connection to the camera with the given index.
-    pub fn new(identifier: CameraIdentifier) -> Self {
-        Self {
-            identifier,
-            fps: 0,
-            image_width: 0,
-            image_height: 0,
-            image_received: ImageCallbacks::default(),
-            camera_info: Arc::default(),
-            py_venv_builder: PythonVenvBuilder::default(),
-        }
-    }
-
-    pub async fn get_camera_info(&mut self) -> PendingCameraInfo {
-        PendingCameraInfo(self.camera_info.clone())
-    }
-
-    /// Gets a reference to the `Signal` that represents received images.
-    pub fn image_received_ref(&self) -> ImageCallbacksRef {
-        self.image_received.get_ref()
     }
 }
 
@@ -199,27 +166,77 @@ macro_rules! cam_impl {
     }};
 }
 
-impl AsyncTask for CameraConnection {
-    type Output = Result<(), nokhwa::NokhwaError>;
+impl CameraConnectionBuilder {
+    /// Creates a pending connection to the camera with the given index.
+    pub fn new(identifier: CameraIdentifier) -> Self {
+        Self {
+            identifier,
+            fps: 0,
+            image_width: 0,
+            image_height: 0,
+            image_received: ImageCallbacks::default(),
+            camera_info: Arc::default(),
+            py_venv_builder: PythonVenvBuilder::default(),
+        }
+    }
 
-    async fn run(mut self) -> Self::Output {
-        let (index, requested) = cam_impl!(self);
+    pub async fn get_camera_info(&mut self) -> PendingCameraInfo {
+        PendingCameraInfo(self.camera_info.clone())
+    }
 
-        block_in_place(|| {
-            let mut camera = nokhwa::Camera::new(index, requested)?;
+    /// Gets a reference to the `Signal` that represents received images.
+    pub fn image_received_ref(&self) -> ImageCallbacksRef {
+        self.image_received.get_ref()
+    }
 
+    pub async fn resolve(mut self) -> Result<PendingCameraConnection, nokhwa::NokhwaError> {
+        let (camera_index, requested) = cam_impl!(self);
+
+        Ok(PendingCameraConnection {
+            camera_index,
+            requested,
+            image_received: self.image_received,
+        })
+    }
+}
+
+pub struct PendingCameraConnection {
+    camera_index: CameraIndex,
+    requested: RequestedFormat<'static>,
+    image_received: ImageCallbacks,
+}
+
+impl PendingCameraConnection {
+    pub fn spawn(mut self) -> Result<CameraInfo, nokhwa::NokhwaError> {
+        let (info_tx, info_rx) = std::sync::mpsc::sync_channel(1);
+
+        std::thread::spawn(move || {
+            macro_rules! unwrap {
+                ($result: expr) => {
+                    match $result {
+                        Ok(x) => x,
+                        Err(e) => {
+                            let _ = info_tx.send(Err(e));
+                            return;
+                        }
+                    }
+                };
+            }
+            let mut camera = unwrap!(nokhwa::Camera::new(self.camera_index, self.requested));
             let camera_info = CameraInfo {
                 camera_name: camera.info().human_name(),
             };
+            unwrap!(camera.open_stream());
+            let _ = info_tx.send(Ok(camera_info));
 
-            self.camera_info.set(camera_info).unwrap();
-
-            camera.open_stream()?;
             loop {
-                let frame = camera.frame()?;
-                // if context.is_runtime_exiting() {
-                //     break Ok(());
-                // }
+                let frame = match camera.frame() {
+                    Ok(x) => x,
+                    Err(e) => {
+                        error!(target: &camera.info().human_name(), "Failed to get frame: {:?}", e);
+                        break;
+                    }
+                };
                 let decoded = frame.decode_image::<RgbFormat>().unwrap();
                 let img = DynamicImage::ImageRgb8(
                     ImageBuffer::from_raw(decoded.width(), decoded.height(), decoded.into_raw())
@@ -228,12 +245,14 @@ impl AsyncTask for CameraConnection {
                 let img = Arc::new(img);
                 self.image_received.call(&img);
             }
-        })
+        });
+
+        info_rx.recv().unwrap()
     }
 }
 
 #[cfg(feature = "standalone")]
-impl urobotics_app::Application for CameraConnection {
+impl urobotics_app::Application for CameraConnectionBuilder {
     const DESCRIPTION: &'static str = "Displays a camera feed";
     const APP_NAME: &'static str = "camera";
 
@@ -277,7 +296,7 @@ impl urobotics_app::Application for CameraConnection {
 }
 
 /// Returns an iterator over all the cameras that were identified on this computer.
-pub fn discover_all_cameras() -> Result<impl Iterator<Item = CameraConnection>, nokhwa::NokhwaError>
+pub fn discover_all_cameras() -> Result<impl Iterator<Item = CameraConnectionBuilder>, nokhwa::NokhwaError>
 {
     Ok(query(nokhwa::utils::ApiBackend::Auto)?
         .into_iter()
@@ -285,7 +304,7 @@ pub fn discover_all_cameras() -> Result<impl Iterator<Item = CameraConnection>, 
             let CameraIndex::Index(n) = info.index() else {
                 return None;
             };
-            Some(CameraConnection::new(CameraIdentifier::Index(*n)))
+            Some(CameraConnectionBuilder::new(CameraIdentifier::Index(*n)))
         }))
 }
 

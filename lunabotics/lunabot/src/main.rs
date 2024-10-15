@@ -47,7 +47,7 @@ fn main() {
 
     app.add_app::<serial::SerialConnection>()
         .add_app::<python::PythonVenvBuilder>()
-        .add_app::<camera::CameraConnection>()
+        .add_app::<camera::CameraConnectionBuilder>()
         .add_app::<LunabotApp>()
         .add_app::<InfoApp>()
         .add_app::<LunasimbotApp>()
