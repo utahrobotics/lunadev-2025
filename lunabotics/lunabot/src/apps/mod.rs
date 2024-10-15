@@ -85,6 +85,7 @@ impl LunabotConnected {
 fn create_packet_builder(
     lunabase_address: SocketAddr,
     lunabot_stage: Arc<AtomicCell<LunabotStage>>,
+    max_pong_delay_ms: u64,
 ) -> (
     PacketBuilder,
     mpsc::UnboundedReceiver<FromLunabase>,
@@ -117,7 +118,7 @@ fn create_packet_builder(
     let (connected_tx, connected_rx) = watch::channel(false);
 
     std::thread::spawn(move || loop {
-        match pinged_rx.recv_timeout(Duration::from_millis(1500)) {
+        match pinged_rx.recv_timeout(Duration::from_millis(max_pong_delay_ms)) {
             Ok(()) => {
                 let _ = connected_tx.send(true);
             }
