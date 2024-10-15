@@ -1,26 +1,18 @@
-#![feature(exclusive_wrapper, never_type)]
 //! This crate offers several ways to interface with serial ports under
 //! the Unros framwork.
 
-use std::{
-    borrow::Cow,
-    sync::{Arc, Exclusive, OnceLock},
-};
+use std::borrow::Cow;
 
 pub use bytes::Bytes;
 use bytes::BytesMut;
-use crossbeam::utils::Backoff;
 use serde::Deserialize;
 use tokio_serial::{SerialPort, SerialPortBuilderExt, SerialStream};
 use urobotics_app::Application;
 use urobotics_core::{
-    define_callbacks,
-    task::AsyncTask,
-    tokio::{
+    define_callbacks, log::error, tokio::{
         self,
         io::{AsyncReadExt, WriteHalf},
-    },
-    BlockOn,
+    }, BlockOn
 };
 
 define_callbacks!(BytesCallbacks => Fn(bytes: &[u8]) + Send + Sync);
@@ -37,8 +29,6 @@ pub struct SerialConnection {
 
     #[serde(skip)]
     serial_output: BytesCallbacks,
-    #[serde(skip)]
-    serial_input: Arc<OnceLock<Exclusive<WriteHalf<SerialStream>>>>,
 }
 
 fn default_baud_rate() -> u32 {
@@ -59,76 +49,12 @@ impl SerialConnection {
         Self {
             baud_rate: default_baud_rate(),
             serial_output: BytesCallbacks::default(),
-            serial_input: Arc::default(),
             path: path.into(),
             buffer_size: default_buffer_size(),
         }
     }
 
-    /// Takes a `PendingWriter` if it has not been taken yet.
-    pub fn take_writer(&mut self) -> Option<PendingWriter> {
-        if Arc::strong_count(&self.serial_input) > 1 {
-            None
-        } else {
-            Some(PendingWriter(self.serial_input.clone()))
-        }
-    }
-}
-
-/// A pending writer for a serial connection.
-///
-/// When the `SerialConnection` is ran, the writer is set.
-pub struct PendingWriter(Arc<OnceLock<Exclusive<WriteHalf<SerialStream>>>>);
-
-impl PendingWriter {
-    /// Attempts to unwrap the writer.
-    ///
-    /// # Errors
-    /// If the `SerialConnection` has not ran yet, then the writer will not be available.
-    pub fn try_unwrap(self) -> Result<WriteHalf<SerialStream>, Self> {
-        if Arc::strong_count(&self.0) == 1 && self.0.get().is_some() {
-            Ok(Arc::try_unwrap(self.0)
-                .unwrap()
-                .into_inner()
-                .unwrap()
-                .into_inner())
-        } else {
-            Err(self)
-        }
-    }
-
-    /// Blocks until the writer is available by blocking the current thread.
-    pub fn blocking_unwrap(mut self) -> WriteHalf<SerialStream> {
-        let backoff = Backoff::default();
-        loop {
-            match self.try_unwrap() {
-                Ok(writer) => break writer,
-                Err(pending) => {
-                    self = pending;
-                    backoff.snooze();
-                }
-            }
-        }
-    }
-
-    /// Blocks until the writer is available.
-    pub async fn unwrap(mut self) -> WriteHalf<SerialStream> {
-        loop {
-            match self.try_unwrap() {
-                Ok(writer) => break writer,
-                Err(pending) => {
-                    self = pending;
-                    tokio::task::yield_now().await;
-                }
-            }
-        }
-    }
-}
-
-impl AsyncTask for SerialConnection {
-    type Output = std::io::Result<!>;
-
-    async fn run(mut self) -> Self::Output {
+    pub fn spawn(mut self) -> std::io::Result<WriteHalf<SerialStream>> {
         #[allow(unused_mut)]
         let mut stream = tokio_serial::new(self.path, self.baud_rate).open_native_async()?;
         #[cfg(unix)]
@@ -138,13 +64,17 @@ impl AsyncTask for SerialConnection {
 
         let mut buf = BytesMut::with_capacity(self.buffer_size);
 
-        let _ = self.serial_input.set(Exclusive::new(writer));
-        drop(self.serial_input);
-        loop {
-            reader.read_buf(&mut buf).await?;
-            self.serial_output.call(&buf);
-            buf.clear();
-        }
+        tokio::spawn(async move {
+            loop {
+                if let Err(e) = reader.read_buf(&mut buf).await {
+                    error!("Error reading from serial port: {e}");
+                }
+                self.serial_output.call(&buf);
+                buf.clear();
+            }
+        });
+
+        Ok(writer)
     }
 }
 

@@ -1,9 +1,3 @@
-use std::future::Future;
-
-use tokio::runtime::Handle;
-
-use crate::get_tokio_handle;
-
 pub trait SyncTask: Send + Sized + 'static {
     type Output;
 
@@ -23,54 +17,6 @@ pub trait SyncTask: Send + Sized + 'static {
         })
     }
 }
-
-pub trait AsyncTask: Sized {
-    type Output;
-
-    fn run(self) -> impl Future<Output = Self::Output> + Send + 'static;
-    fn spawn(self) -> tokio::task::JoinHandle<()>
-    where
-        Self::Output: Loggable,
-    {
-        self.spawn_with(|x| x.log())
-    }
-    fn spawn_with(
-        self,
-        f: impl FnOnce(Self::Output) + Send + 'static,
-    ) -> tokio::task::JoinHandle<()> {
-        let fut = self.run();
-        Handle::try_current()
-            .unwrap_or_else(|_| get_tokio_handle())
-            .spawn(async move {
-                let output = fut.await;
-                f(output);
-            })
-    }
-}
-
-// pub trait BlockingAsyncTask: Send + Sized + 'static {
-//     type Output: Loggable;
-
-//     fn parallelism(&self) -> NonZeroUsize {
-//         NonZeroUsize::new(1).unwrap()
-//     }
-//     fn run(self) -> impl Future<Output = Self::Output> + Send + 'static;
-//     fn spawn(self) {
-//         std::thread::spawn(move || {
-//             let parallelism = self.parallelism().get();
-//             let mut builder = if parallelism == 1 {
-//                 tokio::runtime::Builder::new_current_thread()
-//             } else {
-//                 let mut builder = tokio::runtime::Builder::new_multi_thread();
-//                 builder.worker_threads(parallelism);
-//                 builder
-//             };
-
-//             let runtime = builder.enable_all().build().unwrap();
-//             runtime.block_on(self.run()).log();
-//         });
-//     }
-// }
 
 pub trait Loggable {
     fn log(&self);
@@ -109,14 +55,6 @@ impl<T: Loggable, F: FnOnce() -> T + Send + 'static> SyncTask for F {
     type Output = T;
 
     fn run(self) -> T {
-        self()
-    }
-}
-
-impl<F: FnOnce() -> Fut, Fut: Future<Output: Loggable> + Send + 'static> AsyncTask for F {
-    type Output = Fut::Output;
-
-    fn run(self) -> impl Future<Output = Self::Output> + Send + 'static {
         self()
     }
 }

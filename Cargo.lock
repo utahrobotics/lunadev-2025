@@ -4633,7 +4633,6 @@ name = "urobotics-serial"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "crossbeam",
  "serde",
  "tokio-serial",
  "urobotics-app",
