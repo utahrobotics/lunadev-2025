@@ -6,13 +6,11 @@ use fxhash::FxHashMap;
 use serde::de::DeserializeOwned;
 use unfmt::unformat;
 use urobotics_core::{
-    cabinet::CabinetBuilder,
-    end_tokio_runtime_and_wait,
-    log::{
+    cabinet::CabinetBuilder, end_tokio_runtime_and_wait, get_tokio_handle, log::{
         log_panics, log_to_console, log_to_file,
         metrics::{CpuUsage, Temperature},
         OwoColorize,
-    },
+    }
 };
 
 /// A trait that represents an application that can be run.
@@ -112,11 +110,12 @@ impl Applications {
 
             log_to_console();
 
+            let handle = get_tokio_handle();
             if let Some(cpu_usage) = self.cpu_usage.clone() {
-                tokio::spawn(cpu_usage.run());
+                handle.spawn(cpu_usage.run());
             }
             if let Some(temperature) = self.temperature.clone() {
-                tokio::spawn(temperature.run());
+                handle.spawn(temperature.run());
             }
 
             worked = Some(true);

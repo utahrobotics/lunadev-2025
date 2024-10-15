@@ -4633,6 +4633,7 @@ dependencies = [
 name = "urobotics-tool"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "urobotics",
 ]
 

@@ -6,4 +6,5 @@ description = "Tool for urobotics"
 
 [dependencies]
 urobotics = { workspace = true, features = ["serial", "app", "python", "camera"] }
+serde.workspace = true
 # urobotics-learning = { path = "../../urobotics/urobotics-learning" }

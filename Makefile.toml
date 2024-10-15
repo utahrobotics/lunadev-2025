@@ -1,0 +1,31 @@
+[tasks.build_lunasim]
+workspace = false
+command = "cargo"
+args = ["build", "-p", "lunasim-lib"]
+
+[tasks.build_lunabase]
+workspace = false
+command = "cargo"
+args = ["build", "-p", "lunabase-lib"]
+
+[tasks.godot]
+workspace = false
+dependencies = [
+    "build_lunabase",
+    "build_lunasim"
+]
+
+[tasks.sim]
+workspace = false
+command = "cargo"
+args = ["run", "-p", "lunabot", "--", "sim"]
+
+[tasks.main]
+workspace = false
+command = "cargo"
+args = ["run", "-p", "lunabot", "--", "main"]
+
+[tasks.del-cabinet]
+workspace = false
+command = "cargo"
+args = ["run", "-p", "urobotics-tool", "--", "delete-cabinet"]
