@@ -9,15 +9,15 @@ use serde::Deserialize;
 use tokio_serial::{SerialPort, SerialPortBuilderExt, SerialStream};
 use urobotics_app::Application;
 use urobotics_core::{
-    define_callbacks,
-    log::error,
-    tokio::{
+    define_callbacks, fn_alias, log::error, tokio::{
         self,
         io::{AsyncReadExt, WriteHalf},
-    },
-    BlockOn,
+    }, BlockOn
 };
 
+fn_alias! {
+    pub type BytesCallbacksRef = CallbacksRef(&[u8]) + Send + Sync
+}
 define_callbacks!(BytesCallbacks => Fn(bytes: &[u8]) + Send + Sync);
 
 /// A single duplex connection to a serial port.
@@ -55,6 +55,10 @@ impl SerialConnection {
             path: path.into(),
             buffer_size: default_buffer_size(),
         }
+    }
+    
+    pub fn get_bytes_callback(&self) -> BytesCallbacksRef {
+        self.serial_output.get_ref()
     }
 
     pub fn spawn(mut self) -> std::io::Result<WriteHalf<SerialStream>> {
