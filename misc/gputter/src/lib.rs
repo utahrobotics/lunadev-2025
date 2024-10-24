@@ -1,0 +1,52 @@
+use std::sync::OnceLock;
+
+pub mod buffers;
+pub mod types;
+pub mod size;
+
+
+struct GpuDevice {
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+}
+
+static GPU_DEVICE: OnceLock<GpuDevice> = OnceLock::new();
+
+pub async fn init_gputter() -> anyhow::Result<()> {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::all(),
+        ..Default::default()
+    });
+
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::default(),
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        })
+        .await
+        .ok_or_else(|| anyhow::anyhow!("Failed to request adapter"))?;
+
+    let (device, queue) = adapter
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                required_features: wgpu::Features::empty(),
+                // WebGL doesn't support all of wgpu's features, so if
+                // we're building for the web, we'll have to disable some.
+                required_limits: if cfg!(target_arch = "wasm32") {
+                    wgpu::Limits::downlevel_webgl2_defaults()
+                } else {
+                    wgpu::Limits::default()
+                },
+                label: None,
+            },
+            None, // Trace path
+        )
+        .await?;
+    GPU_DEVICE.set(GpuDevice { device, queue }).map_err(|_| anyhow::anyhow!("GpuDevice was already initialized"))?;
+    Ok(())
+}
+
+fn get_device() -> &'static GpuDevice {
+    GPU_DEVICE.get().expect("GpuDevice was not initialized. Call init_gputter first")
+}
