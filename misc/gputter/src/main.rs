@@ -1,6 +1,15 @@
 use std::num::NonZeroU32;
 
-use gputter::{buffers::{storage::{HostHidden, HostReadOnly, HostReadWrite, ShaderReadOnly, ShaderReadWrite, StorageBuffer}, uniform::UniformBuffer, GpuBufferSet, StaticIndexable}, shader::BufferGroupBinding};
+use gputter::{
+    buffers::{
+        storage::{
+            HostHidden, HostReadOnly, HostReadWrite, ShaderReadOnly, ShaderReadWrite, StorageBuffer,
+        },
+        uniform::UniformBuffer,
+        GpuBufferSet, StaticIndexable,
+    },
+    shader::BufferGroupBinding,
+};
 use gputter_macros::build_shader;
 build_shader!(
     Test,
@@ -20,12 +29,12 @@ fn main(
 
 type BindGroupA = (
     UniformBuffer<u32>,
-    StorageBuffer<f32, HostReadWrite, ShaderReadOnly>
+    StorageBuffer<f32, HostReadWrite, ShaderReadOnly>,
 );
 
 type BindGroupB = (
     StorageBuffer<f32, HostReadOnly, ShaderReadWrite>,
-    StorageBuffer<u32, HostHidden, ShaderReadWrite>
+    StorageBuffer<u32, HostHidden, ShaderReadWrite>,
 );
 
 type BindGroupSet = (GpuBufferSet<BindGroupA>, GpuBufferSet<BindGroupB>);

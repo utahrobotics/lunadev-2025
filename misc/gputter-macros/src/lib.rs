@@ -19,10 +19,10 @@ use unfmt::unformat;
 
 enum StorageType {
     Uniform,
-    Storage{
+    Storage {
         host_rw_mode: &'static str,
-        shader_read_only: bool
-    }
+        shader_read_only: bool,
+    },
 }
 
 struct BuildShader {
@@ -56,25 +56,20 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         tmp.push_str(&shader.value());
         tmp
     };
-    
-    let re = Regex::new(
-            r"#\[buffer\(([a-zA-Z0-9]+)\)\]",
-        )
-        .unwrap();
-    
+
+    let re = Regex::new(r"#\[buffer\(([a-zA-Z0-9]+)\)\]").unwrap();
+
     let mut buffer_rw_modes = vec![];
-    
+
     re.captures_iter(&shader).for_each(|caps| {
         let (_, [rw_mode]) = caps.extract();
-        buffer_rw_modes.push(
-            match rw_mode {
-                "HostHidden" => "HostHidden",
-                "HostReadOnly" => "HostReadOnly",
-                "HostWriteOnly" => "HostWriteOnly",
-                "HostReadWrite" => "HostReadWrite",
-                _ => panic!("Unsupported buffer host read-write mode: {rw_mode}"),
-            }
-        );
+        buffer_rw_modes.push(match rw_mode {
+            "HostHidden" => "HostHidden",
+            "HostReadOnly" => "HostReadOnly",
+            "HostWriteOnly" => "HostWriteOnly",
+            "HostReadWrite" => "HostReadWrite",
+            _ => panic!("Unsupported buffer host read-write mode: {rw_mode}"),
+        });
     });
 
     let mut buffer_storage_types = vec![];
@@ -95,37 +90,33 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                 .unwrap();
 
             ty = ty.trim();
-            buffer_types.push(
-                match ty {
-                    "f32" => "f32",
-                    "u32" => "u32",
-                    "i32" => "i32",
-                    _ => panic!("Unsupported buffer type: {ty}"),
-                }
-            );
+            buffer_types.push(match ty {
+                "f32" => "f32",
+                "u32" => "u32",
+                "i32" => "i32",
+                _ => panic!("Unsupported buffer type: {ty}"),
+            });
             let host_rw_mode = buffer_rw_modes[buffer_storage_types.len()];
-            buffer_storage_types.push(
-                if storage_ty.trim() == "uniform" {
-                    if host_rw_mode != "HostWriteOnly" {
-                        panic!("Uniform buffer must be HostWriteOnly");
-                    }
-                    StorageType::Uniform
-                } else if let Some((_, shader_rw_mode)) = unformat!("{}storage,{}", storage_ty) {
-                    match shader_rw_mode.trim() {
-                        "read_write" => StorageType::Storage {
-                            host_rw_mode,
-                            shader_read_only: false,
-                        },
-                        "read" => StorageType::Storage {
-                            host_rw_mode,
-                            shader_read_only: true,
-                        },
-                        _ => panic!("Unsupported shader read-write mode: {shader_rw_mode}"),
-                    }
-                } else {
-                    panic!("Unsupported buffer storage type: {storage_ty}")
+            buffer_storage_types.push(if storage_ty.trim() == "uniform" {
+                if host_rw_mode != "HostWriteOnly" {
+                    panic!("Uniform buffer must be HostWriteOnly");
                 }
-            );
+                StorageType::Uniform
+            } else if let Some((_, shader_rw_mode)) = unformat!("{}storage,{}", storage_ty) {
+                match shader_rw_mode.trim() {
+                    "read_write" => StorageType::Storage {
+                        host_rw_mode,
+                        shader_read_only: false,
+                    },
+                    "read" => StorageType::Storage {
+                        host_rw_mode,
+                        shader_read_only: true,
+                    },
+                    _ => panic!("Unsupported shader read-write mode: {shader_rw_mode}"),
+                }
+            } else {
+                panic!("Unsupported buffer storage type: {storage_ty}")
+            });
             name.trim()
         })
         .collect();
@@ -188,7 +179,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
             }
         })
         .collect();
-    
+
     // Check that it compiles
     init_gputter()
         .block_on()
@@ -240,7 +231,6 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                 }
             };
             proc_macro2::TokenStream::from_str(&stream).unwrap()
-            
         })
         .collect();
 
