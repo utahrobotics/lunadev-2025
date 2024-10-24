@@ -17,6 +17,14 @@ use syn::{
 };
 use unfmt::unformat;
 
+enum StorageType {
+    Uniform,
+    Storage{
+        host_rw_mode: &'static str,
+        shader_read_only: bool
+    }
+}
+
 struct BuildShader {
     vis: Visibility,
     name: Ident,
@@ -48,16 +56,36 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         tmp.push_str(&shader.value());
         tmp
     };
+    
+    let re = Regex::new(
+            r"#\[buffer\(([a-zA-Z0-9]+)\)\]",
+        )
+        .unwrap();
+    
+    let mut buffer_rw_modes = vec![];
+    
+    re.captures_iter(&shader).for_each(|caps| {
+        let (_, [rw_mode]) = caps.extract();
+        buffer_rw_modes.push(
+            match rw_mode {
+                "HostHidden" => "HostHidden",
+                "HostReadOnly" => "HostReadOnly",
+                "HostWriteOnly" => "HostWriteOnly",
+                "HostReadWrite" => "HostReadWrite",
+                _ => panic!("Unsupported buffer host read-write mode: {rw_mode}"),
+            }
+        );
+    });
 
+    let mut buffer_storage_types = vec![];
     let mut buffer_types = vec![];
-    let splitted: Vec<_> = shader.split("#[buffer]").collect();
-    // panic!("{splitted:?}");
+    let splitted: Vec<_> = re.split(&shader).collect();
 
     let buffer_names: Vec<_> = splitted
         .iter()
         .skip(1)
         .map(|&s| {
-            let (_, _, name, mut ty) = unformat!("{}var<{}>{}:{};", s)
+            let (_, storage_ty, name, mut ty) = unformat!("{}var<{}>{}:{};", s)
                 .ok_or_else(|| {
                     panic!(
                         "Format of buffer is incorrect: {}",
@@ -73,6 +101,29 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                     "u32" => "u32",
                     "i32" => "i32",
                     _ => panic!("Unsupported buffer type: {ty}"),
+                }
+            );
+            let host_rw_mode = buffer_rw_modes[buffer_storage_types.len()];
+            buffer_storage_types.push(
+                if storage_ty.trim() == "uniform" {
+                    if host_rw_mode != "HostWriteOnly" {
+                        panic!("Uniform buffer must be HostWriteOnly");
+                    }
+                    StorageType::Uniform
+                } else if let Some((_, shader_rw_mode)) = unformat!("{}storage,{}", storage_ty) {
+                    match shader_rw_mode.trim() {
+                        "read_write" => StorageType::Storage {
+                            host_rw_mode,
+                            shader_read_only: false,
+                        },
+                        "read" => StorageType::Storage {
+                            host_rw_mode,
+                            shader_read_only: true,
+                        },
+                        _ => panic!("Unsupported shader read-write mode: {shader_rw_mode}"),
+                    }
+                } else {
+                    panic!("Unsupported buffer storage type: {storage_ty}")
                 }
             );
             name.trim()
@@ -179,8 +230,17 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
     let buffer_def: Vec<_> = buffer_names
         .iter()
         .zip(buffer_types.iter())
-        .map(|(&name, &ty)| {
-            proc_macro2::TokenStream::from_str(&format!("{name}: gputter::shader::BufferGroupBinding<{ty}, S>")).unwrap()
+        .zip(buffer_storage_types.iter())
+        .map(|((&name, &ty), storage_ty)| {
+            let stream = match storage_ty {
+                StorageType::Uniform => format!("{name}: gputter::shader::BufferGroupBinding<gputter::buffers::uniform::UniformBuffer<{ty}>, S>"),
+                StorageType::Storage { host_rw_mode, shader_read_only } => {
+                    let shader_read_only = if *shader_read_only { "ShaderReadOnly" } else { "ShaderReadWrite" };
+                    format!("{name}: gputter::shader::BufferGroupBinding<gputter::buffers::storage::StorageBuffer<{ty}, gputter::buffers::storage::{host_rw_mode}, gputter::buffers::storage::{shader_read_only}>, S>")
+                }
+            };
+            proc_macro2::TokenStream::from_str(&stream).unwrap()
+            
         })
         .collect();
 

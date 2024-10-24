@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use wgpu::ShaderModule;
 
-use crate::buffers::{StaticIndexable, Index};
+use crate::buffers::{StaticIndexable, GpuBufferSet, GpuBufferTuple};
 
 /// A list (tuple) of [`GpuBufferTuple`].
 pub trait GpuBufferTupleList<const GRP_IDX: u32, const BIND_IDX: u32> {
@@ -13,11 +13,11 @@ pub trait GpuBufferTupleList<const GRP_IDX: u32, const BIND_IDX: u32> {
 
 macro_rules! tuple_idx_impl {
     ($index1: tt $index2: tt $($ty:ident),+) => {
-        impl<$($ty),*> GpuBufferTupleList<$index1, $index2> for ($($ty,)*)
+        impl<$($ty: GpuBufferTuple),*> GpuBufferTupleList<$index1, $index2> for ($(GpuBufferSet<$ty>,)*)
         where
-            <Self as StaticIndexable<Index<$index1>>>::Output: StaticIndexable<Index<$index2>>
+            <Self as StaticIndexable<$index1>>::Output: StaticIndexable<$index2>
         {
-            type Binding = BufferGroupBinding<<<Self as StaticIndexable<Index<$index1>>>::Output as StaticIndexable<Index<$index2>>>::Output, Self>;
+            type Binding = BufferGroupBinding<<<Self as StaticIndexable<$index1>>::Output as StaticIndexable<$index2>>::Output, Self>;
             // type Output = ;
             fn get() -> Self::Binding {
                 BufferGroupBinding {
@@ -92,16 +92,4 @@ impl<S> From<ShaderModule> for CompiledShader<S> {
             phantom: PhantomData
         }
     }
-}
-
-
-fn test() {
-    
-    let bind = BufferGroupBinding::<
-        _,
-        (
-            (bool, f32),
-            (&str, u64)
-        )
-    >::get::<1, 0>();
 }

@@ -41,9 +41,7 @@ pub trait GpuBufferTuple {
     fn max_size(sizes: Self::SizeSet) -> u64;
 }
 
-pub struct Index<const I: usize>;
-
-pub trait StaticIndexable<I> {
+pub trait StaticIndexable<const I: usize> {
     type Output;
     fn get(&self) -> &Self::Output;
 }
@@ -93,10 +91,16 @@ tuple_impl!(4, 0 A, 1 B, 2 C, 3 D);
 
 macro_rules! tuple_idx_impl {
     ($index: tt $selected: ident $($ty:ident),+) => {
-        impl<$($ty),*> StaticIndexable<Index<$index>> for ($($ty,)*) {
+        impl<$($ty),*> StaticIndexable<$index> for ($($ty,)*) {
             type Output = $selected;
             fn get(&self) -> &Self::Output {
                 &self.$index
+            }
+        }
+        impl<$($ty: GpuBuffer),*> StaticIndexable<$index> for GpuBufferSet<($($ty,)*)> {
+            type Output = $selected;
+            fn get(&self) -> &Self::Output {
+                &self.buffers.$index
             }
         }
     }
@@ -145,7 +149,7 @@ impl<S: GpuBufferTuple> GpuReaderWriter<S> {
 }
 
 pub struct GpuBufferSet<S: GpuBufferTuple> {
-    buffers: S,
+    pub(crate) buffers: S,
     bind_group: wgpu::BindGroup,
 }
 

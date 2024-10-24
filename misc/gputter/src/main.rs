@@ -1,11 +1,12 @@
 use std::num::NonZeroU32;
 
-use gputter::buffers::{Index, StaticIndexable};
+use gputter::{buffers::{storage::{HostHidden, HostReadOnly, HostReadWrite, ShaderReadOnly, ShaderReadWrite, StorageBuffer}, uniform::UniformBuffer, GpuBufferSet, StaticIndexable}, shader::BufferGroupBinding};
 use gputter_macros::build_shader;
 build_shader!(
     Test,
     r#"
-#[buffer] var<storage, read_write> heightmap: u32;
+#[buffer(HostHidden)] var<storage, read_write> heightmap: u32;
+#[buffer(HostWriteOnly)] var<uniform> heightmap2: u32;
  
 const NUMBER: f32 = {{number}};
 const COUNT: NonZeroU32 = {{index}};
@@ -17,17 +18,24 @@ fn main(
 ) {}"#
 );
 
+type BindGroupA = (
+    UniformBuffer<u32>,
+    StorageBuffer<f32, HostReadWrite, ShaderReadOnly>
+);
+
+type BindGroupB = (
+    StorageBuffer<f32, HostReadOnly, ShaderReadWrite>,
+    StorageBuffer<u32, HostHidden, ShaderReadWrite>
+);
+
+type BindGroupSet = (GpuBufferSet<BindGroupA>, GpuBufferSet<BindGroupB>);
+
 fn main() {
-    let tuple = (false, 0u32, -2i32);
-    let a = StaticIndexable::<Index<0>>::get(&tuple);
-    let b = StaticIndexable::<Index<1>>::get(&tuple);
-    let c = StaticIndexable::<Index<2>>::get(&tuple);
-    // let test = Test {
-    //     heightmap: todo!(),
-    //     points: todo!(),
-    //     original_heightmap: todo!(),
-    //     number: 0.2,
-    //     index: NonZeroU32::new(3).unwrap(),
-    // };
-    // test.compile();
+    let test = Test {
+        heightmap: BufferGroupBinding::<_, BindGroupSet>::get::<1, 1>(),
+        heightmap2: BufferGroupBinding::<_, BindGroupSet>::get::<0, 0>(),
+        number: 2.2,
+        index: NonZeroU32::new(1).unwrap(),
+    };
+    let test = test.compile();
 }
