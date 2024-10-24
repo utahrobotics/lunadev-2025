@@ -3,11 +3,12 @@ use std::sync::OnceLock;
 pub mod buffers;
 pub mod types;
 pub mod size;
+pub mod compute;
 
 
-struct GpuDevice {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
+pub struct GpuDevice {
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
 }
 
 static GPU_DEVICE: OnceLock<GpuDevice> = OnceLock::new();
@@ -47,6 +48,6 @@ pub async fn init_gputter() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn get_device() -> &'static GpuDevice {
+pub fn get_device() -> &'static GpuDevice {
     GPU_DEVICE.get().expect("GpuDevice was not initialized. Call init_gputter first")
 }
