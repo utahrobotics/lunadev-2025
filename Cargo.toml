@@ -20,7 +20,7 @@ members = [
     "lunabotics/lunabase-lib",
     "lunabotics/lunasim-lib",
     "misc/k",
-    "lunabotics/heightmap", "lunabotics/lunabot-ai", "misc/ares-bt", "misc/cakap2", "misc/recycler", "misc/gputter",
+    "lunabotics/heightmap", "lunabotics/lunabot-ai", "misc/ares-bt", "misc/cakap2", "misc/recycler", "misc/gputter-core",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]

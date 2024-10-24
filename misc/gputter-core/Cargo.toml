@@ -1,5 +1,5 @@
 [package]
-name = "gputter"
+name = "gputter-core"
 version = "0.1.0"
 edition = "2021"
 

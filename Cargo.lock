@@ -1844,7 +1844,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gputter"
+name = "gputter-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
