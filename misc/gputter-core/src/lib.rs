@@ -1,10 +1,12 @@
 use std::sync::OnceLock;
 
+pub use wgpu;
+
 pub mod buffers;
 pub mod types;
 pub mod size;
 pub mod compute;
-
+pub mod shader;
 
 pub struct GpuDevice {
     pub device: wgpu::Device,
@@ -44,7 +46,7 @@ pub async fn init_gputter() -> anyhow::Result<()> {
             None, // Trace path
         )
         .await?;
-    GPU_DEVICE.set(GpuDevice { device, queue }).map_err(|_| anyhow::anyhow!("GpuDevice was already initialized"))?;
+    let _ = GPU_DEVICE.set(GpuDevice { device, queue });
     Ok(())
 }
 
