@@ -5,15 +5,15 @@ use std::{
     str::FromStr,
 };
 
+use fxhash::FxHashMap;
 use gputter_core::{get_device, init_gputter, wgpu, GpuDevice};
 use pollster::FutureExt;
 use proc_macro::TokenStream;
-use proc_macro2::Literal;
 use quote::{format_ident, quote};
 use regex::Regex;
 use syn::{
     parse::{Parse, ParseStream},
-    parse_macro_input, token, DeriveInput, Ident, LitStr, Visibility,
+    parse_macro_input, token, Ident, LitStr, Visibility,
 };
 use unfmt::unformat;
 
@@ -28,7 +28,7 @@ enum StorageType {
 struct BuildShader {
     vis: Visibility,
     name: Ident,
-    comma: token::Comma,
+    _comma: token::Comma,
     shader: LitStr,
 }
 
@@ -37,10 +37,54 @@ impl Parse for BuildShader {
         Ok(BuildShader {
             vis: input.parse()?,
             name: input.parse()?,
-            comma: input.parse()?,
+            _comma: input.parse()?,
             shader: input.parse()?,
         })
     }
+}
+
+fn type_resolver(s: &str, uint_consts: &FxHashMap<&str, Option<u32>>) -> String {
+    match s {
+        "f32" => return "f32".into(),
+        "u32" => return "u32".into(),
+        "i32" => return "i32".into(),
+        "vec2f" => return "gputter::types::AlignedVec2<f32>".into(),
+        "vec3f" => return "gputter::types::AlignedVec3<f32>".into(),
+        "vec4f" => return "gputter::types::AlignedVec4<f32>".into(),
+        "vec2u" => return "gputter::types::AlignedVec2<u32>".into(),
+        "vec3u" => return "gputter::types::AlignedVec3<u32>".into(),
+        "vec4u" => return "gputter::types::AlignedVec4<u32>".into(),
+        "vec2i" => return "gputter::types::AlignedVec2<i32>".into(),
+        "vec3i" => return "gputter::types::AlignedVec3<i32>".into(),
+        "vec4i" => return "gputter::types::AlignedVec4<i32>".into(),
+        _ => {}
+    }
+    
+    if let Some(inner) = unformat!("array<{}>", s) {
+        if let Some((ty, mut count)) = unformat!("{},{}", inner) {
+            count = count.trim();
+            if let Ok(count) = usize::from_str(count) {
+                // count is a literal integer
+                return format!("[{}; {}]", type_resolver(ty.trim(), uint_consts), count);
+            } else if let Some(&count) = uint_consts.get(count) {
+                if let Some(count) = count {
+                    // count is a constant value
+                    return format!("[{}; {}]", type_resolver(ty.trim(), uint_consts), count);
+                } else {
+                    // If count is None, it is a build time constant that is not known at compile time
+                    // of the host code
+                    return format!("[{}]", type_resolver(ty.trim(), uint_consts));
+                }
+            } else {
+                panic!("Invalid array count: {count} in {s} {uint_consts:?}");
+            }
+        }
+        // There is no count
+        return format!("[{}]", type_resolver(inner.trim(), uint_consts));
+    }
+    
+    // It is some custom type that is used verbatim in the shader and the host
+    s.into()
 }
 
 #[proc_macro]
@@ -56,6 +100,30 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         tmp.push_str(&shader.value());
         tmp
     };
+    
+    let re = Regex::new(
+            r"const\s*([a-zA-Z0-9]+)\s*:\s*([a-zA-Z0-9]+)\s*=\s*([\{\}a-zA-Z0-9]+)\s*;?",
+        )
+        .unwrap();
+
+    let mut uint_consts = FxHashMap::default();
+
+    re.captures_iter(&shader).for_each(|caps| {
+        let (_, [const_name, const_ty, const_val]) = caps.extract();
+        if const_ty != "u32" && const_ty != "NonZeroU32" {
+            return;
+        }
+
+        if const_val.starts_with("{{") && const_val.ends_with("}}") {
+            uint_consts.insert(const_name,  None);
+            return;
+        }
+
+        let Ok(n) = u32::from_str(&const_val) else {
+            panic!(r#"Constant "{const_name}" is not a valid u32 (was {const_val})"#);
+        };
+        uint_consts.insert(const_name, Some(n));
+    });
 
     let re = Regex::new(r"#\[buffer\(([a-zA-Z0-9]+)\)\]").unwrap();
 
@@ -80,7 +148,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         .iter()
         .skip(1)
         .map(|&s| {
-            let (_, storage_ty, name, mut ty) = unformat!("{}var<{}>{}:{};", s)
+            let (_, storage_ty, name, ty) = unformat!("{}var<{}>{}:{};", s)
                 .ok_or_else(|| {
                     panic!(
                         "Format of buffer is incorrect: {}",
@@ -89,13 +157,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                 })
                 .unwrap();
 
-            ty = ty.trim();
-            buffer_types.push(match ty {
-                "f32" => "f32",
-                "u32" => "u32",
-                "i32" => "i32",
-                _ => panic!("Unsupported buffer type: {ty}"),
-            });
+            buffer_types.push(type_resolver(ty.trim(), &uint_consts));
             let host_rw_mode = buffer_rw_modes[buffer_storage_types.len()];
             buffer_storage_types.push(if storage_ty.trim() == "uniform" {
                 if host_rw_mode != "HostWriteOnly" {
@@ -122,7 +184,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         .collect();
 
     let re = Regex::new(
-        r"(const\s*[a-zA-Z0-9]+\s*:\s*([a-zA-Z0-9]+)\s*=\s*)\{\{([a-zA-Z0-9]+)\}\}\s*(;?)",
+        r"(const\s+[a-zA-Z0-9]+\s*:\s*([a-zA-Z0-9]+)\s*=\s*)\{\{([a-zA-Z0-9]+)\}\}\s*(;?)",
     )
     .unwrap();
 
@@ -222,7 +284,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         .iter()
         .zip(buffer_types.iter())
         .zip(buffer_storage_types.iter())
-        .map(|((&name, &ty), storage_ty)| {
+        .map(|((&name, ty), storage_ty)| {
             let stream = match storage_ty {
                 StorageType::Uniform => format!("{name}: gputter::shader::BufferGroupBinding<gputter::buffers::uniform::UniformBuffer<{ty}>, S>"),
                 StorageType::Storage { host_rw_mode, shader_read_only } => {

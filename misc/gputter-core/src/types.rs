@@ -4,7 +4,7 @@
 
 use std::ops::{Deref, DerefMut};
 
-use bytemuck::{bytes_of, bytes_of_mut, from_bytes};
+use bytemuck::{bytes_of, bytes_of_mut, cast_slice, cast_slice_mut, from_bytes};
 use nalgebra::{Matrix2, Matrix3, Matrix4, Scalar, Vector2, Vector3, Vector4};
 
 use crate::size::{BufferSize, DynamicSize, StaticSize};
@@ -121,18 +121,17 @@ where
     }
 }
 
-impl<T> GpuType for [T]
-where
-    Self: bytemuck::NoUninit + bytemuck::AnyBitPattern,
+impl<T: 'static> GpuType for [T]
+where T: bytemuck::NoUninit + bytemuck::AnyBitPattern
 {
     type Size = DynamicSize<T>;
 
     fn to_bytes(&self) -> &[u8] {
-        bytes_of(self)
+        cast_slice(self)
     }
 
     fn from_bytes(&mut self, bytes: &[u8]) {
-        bytes_of_mut(self).copy_from_slice(bytes);
+        cast_slice_mut::<_, u8>(self).copy_from_slice(bytes);
     }
 }
 

@@ -1843,6 +1843,7 @@ name = "gputter-macros"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "fxhash",
  "gputter-core",
  "pollster",
  "proc-macro2",

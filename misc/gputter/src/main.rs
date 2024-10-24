@@ -14,11 +14,12 @@ use gputter_macros::build_shader;
 build_shader!(
     Test,
     r#"
-#[buffer(HostHidden)] var<storage, read_write> heightmap: u32;
+#[buffer(HostHidden)] var<storage, read_write> heightmap: array<u32, COUNT2>;
 #[buffer(HostWriteOnly)] var<uniform> heightmap2: u32;
  
 const NUMBER: f32 = {{number}};
 const COUNT: NonZeroU32 = {{index}};
+const COUNT2: u32 = 4;
 
 @compute
 @workgroup_size(1, 1, COUNT)
@@ -34,7 +35,7 @@ type BindGroupA = (
 
 type BindGroupB = (
     StorageBuffer<f32, HostReadOnly, ShaderReadWrite>,
-    StorageBuffer<u32, HostHidden, ShaderReadWrite>,
+    StorageBuffer<[u32; 4], HostHidden, ShaderReadWrite>,
 );
 
 type BindGroupSet = (GpuBufferSet<BindGroupA>, GpuBufferSet<BindGroupB>);
