@@ -23,16 +23,20 @@ impl<T: GpuType + ?Sized> GpuBuffer for UniformBuffer<T> {
     type ReadBuffer = ();
     type Size = T::Size;
 
-    fn write_bytes(&self, data: &[u8], encoder: &mut CommandEncoder, staging_belt: &mut StagingBelt, device: &wgpu::Device) {
+    fn write_bytes(
+        &self,
+        data: &[u8],
+        encoder: &mut CommandEncoder,
+        staging_belt: &mut StagingBelt,
+        device: &wgpu::Device,
+    ) {
         let len = data.len() as u64;
-        let Some(len) = NonZeroU64::new(len) else { return; };
-        staging_belt.write_buffer(
-            encoder,
-            &self.buffer,
-            0,
-            len,
-            device
-        ).copy_from_slice(data);
+        let Some(len) = NonZeroU64::new(len) else {
+            return;
+        };
+        staging_belt
+            .write_buffer(encoder, &self.buffer, 0, len, device)
+            .copy_from_slice(data);
     }
     fn copy_to_read_buffer(&self, _encoder: &mut CommandEncoder, _read_buffer: &Self::ReadBuffer) {}
     fn make_read_buffer(_size: Self::Size, _device: &wgpu::Device) -> Self::ReadBuffer {
@@ -82,7 +86,10 @@ pub struct TooLargeForUniform;
 
 impl std::fmt::Display for TooLargeForUniform {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Type is too large to be used in a uniform buffer (max 65536 bytes)")
+        write!(
+            f,
+            "Type is too large to be used in a uniform buffer (max 65536 bytes)"
+        )
     }
 }
 

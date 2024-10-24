@@ -7,15 +7,14 @@ use std::ops::{Deref, DerefMut};
 use bytemuck::{bytes_of, bytes_of_mut, from_bytes};
 use nalgebra::{Matrix2, Matrix3, Matrix4, Scalar, Vector2, Vector3, Vector4};
 
-use crate::size::{BufferSize, StaticSize, DynamicSize};
+use crate::size::{BufferSize, DynamicSize, StaticSize};
 
 pub trait GpuType {
     type Size: BufferSize;
-    
+
     fn to_bytes(&self) -> &[u8];
     fn from_bytes(&mut self, bytes: &[u8]);
 }
-
 
 macro_rules! bytemuck_impl {
     ($type: ty) => {
@@ -25,7 +24,7 @@ macro_rules! bytemuck_impl {
             fn to_bytes(&self) -> &[u8] {
                 bytes_of(self)
             }
-        
+
             fn from_bytes(&mut self, bytes: &[u8]) {
                 *self = *from_bytes(bytes);
             }
@@ -55,21 +54,21 @@ macro_rules! define_aligned {
                 }
             }
         }
-        
+
         impl<N> From<$name<N>> for $inner<N> {
             fn from(v: $name<N>) -> Self {
                 v.vec
             }
         }
-        
+
         impl<N> Deref for $name<N> {
             type Target = $inner<N>;
-        
+
             fn deref(&self) -> &Self::Target {
                 &self.vec
             }
         }
-        
+
         impl<N> DerefMut for $name<N> {
             fn deref_mut(&mut self) -> &mut Self::Target {
                 &mut self.vec
@@ -81,20 +80,21 @@ macro_rules! define_aligned {
         unsafe impl bytemuck::Pod for $name<u32> where $inner<u32>: bytemuck::Pod {}
 
         unsafe impl bytemuck::Zeroable for $name<f32> where $inner<f32>: bytemuck::Zeroable {}
-        unsafe impl bytemuck::Pod for $name<f32> where $inner<f32>: bytemuck::Pod{}
+        unsafe impl bytemuck::Pod for $name<f32> where $inner<f32>: bytemuck::Pod {}
 
         unsafe impl bytemuck::Zeroable for $name<i32> where $inner<i32>: bytemuck::Zeroable {}
         unsafe impl bytemuck::Pod for $name<i32> where $inner<i32>: bytemuck::Pod {}
 
         impl<N> GpuType for $name<N>
-        where Self: bytemuck::Pod
+        where
+            Self: bytemuck::Pod,
         {
             type Size = StaticSize<Self>;
 
             fn to_bytes(&self) -> &[u8] {
                 bytes_of(self)
             }
-        
+
             fn from_bytes(&mut self, bytes: &[u8]) {
                 bytes_of_mut(self).copy_from_slice(bytes);
             }
@@ -106,7 +106,10 @@ define_aligned!(AlignedVec2 8 Vector2 8);
 define_aligned!(AlignedVec3 16 Vector3 4);
 define_aligned!(AlignedVec4 16 Vector4 0);
 
-impl<const N: usize, T> GpuType for [T; N] where Self: bytemuck::NoUninit + bytemuck::AnyBitPattern {
+impl<const N: usize, T> GpuType for [T; N]
+where
+    Self: bytemuck::NoUninit + bytemuck::AnyBitPattern,
+{
     type Size = StaticSize<Self>;
 
     fn to_bytes(&self) -> &[u8] {
@@ -118,9 +121,12 @@ impl<const N: usize, T> GpuType for [T; N] where Self: bytemuck::NoUninit + byte
     }
 }
 
-impl<T> GpuType for [T] where Self: bytemuck::NoUninit + bytemuck::AnyBitPattern {
+impl<T> GpuType for [T]
+where
+    Self: bytemuck::NoUninit + bytemuck::AnyBitPattern,
+{
     type Size = DynamicSize<T>;
-    
+
     fn to_bytes(&self) -> &[u8] {
         bytes_of(self)
     }
@@ -135,8 +141,16 @@ pub struct AlignedMat<V, const C: usize> {
     pub columns: [V; C],
 }
 
-unsafe impl<V, const C: usize> bytemuck::Zeroable for AlignedMat<V, C> where [V; C]: bytemuck::Zeroable {}
-unsafe impl<V, const C: usize> bytemuck::Pod for AlignedMat<V, C> where [V; C]: bytemuck::Pod, V: Copy {}
+unsafe impl<V, const C: usize> bytemuck::Zeroable for AlignedMat<V, C> where
+    [V; C]: bytemuck::Zeroable
+{
+}
+unsafe impl<V, const C: usize> bytemuck::Pod for AlignedMat<V, C>
+where
+    [V; C]: bytemuck::Pod,
+    V: Copy,
+{
+}
 
 macro_rules! define_mat {
     ($name: ident $vec: ident $columns: literal $matrix: ident) => {
@@ -145,21 +159,17 @@ macro_rules! define_mat {
         impl<N: Scalar> From<$matrix<N>> for $name<N> {
             fn from(m: $matrix<N>) -> Self {
                 Self {
-                    columns: std::array::from_fn(
-                        |i| $vec::from(m.column(i).into_owned())
-                    )
+                    columns: std::array::from_fn(|i| $vec::from(m.column(i).into_owned())),
                 }
             }
         }
 
         impl<N: Scalar + Copy> From<$name<N>> for $matrix<N> {
             fn from(m: $name<N>) -> Self {
-                Self::from_iterator(
-                    m.columns.into_iter().flat_map(|v| v.vec.data.0[0])
-                )
+                Self::from_iterator(m.columns.into_iter().flat_map(|v| v.vec.data.0[0]))
             }
         }
-    }
+    };
 }
 
 define_mat!(AlignedMatrix2 AlignedVec2 2 Matrix2);

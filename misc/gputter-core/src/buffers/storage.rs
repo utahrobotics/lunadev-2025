@@ -27,7 +27,6 @@ impl HostStorageBufferMode for HostHidden {
     fn get_usage() -> wgpu::BufferUsages {
         wgpu::BufferUsages::STORAGE
     }
-
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -85,7 +84,11 @@ pub struct StorageBuffer<T: GpuType + ?Sized, HM, SM> {
     pub(crate) phantom: PhantomData<(fn() -> (HM, SM), T)>,
 }
 
-impl<T, HM, SM> StorageBuffer<T, HM, SM> where T: GpuType<Size = StaticSize<T>>, HM: HostStorageBufferMode {
+impl<T, HM, SM> StorageBuffer<T, HM, SM>
+where
+    T: GpuType<Size = StaticSize<T>>,
+    HM: HostStorageBufferMode,
+{
     pub fn new() -> Self {
         const {
             // If this assertion fails, the size of T
@@ -112,13 +115,20 @@ pub struct TooLargeForStorage;
 
 impl std::fmt::Display for TooLargeForStorage {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Type is too large to be used in a storage buffer (max 134217728 bytes)")
+        write!(
+            f,
+            "Type is too large to be used in a storage buffer (max 134217728 bytes)"
+        )
     }
 }
 
 impl std::error::Error for TooLargeForStorage {}
 
-impl<T, HM, SM> StorageBuffer<[T], HM, SM> where [T]: GpuType<Size = DynamicSize<T>>, HM: HostStorageBufferMode {
+impl<T, HM, SM> StorageBuffer<[T], HM, SM>
+where
+    [T]: GpuType<Size = DynamicSize<T>>,
+    HM: HostStorageBufferMode,
+{
     pub fn new(len: usize) -> Result<Self, TooLargeForStorage> {
         let size = len as u64 * size_of::<T>() as u64;
         if size < 134217728 {
@@ -140,13 +150,24 @@ impl<T, HM, SM> StorageBuffer<[T], HM, SM> where [T]: GpuType<Size = DynamicSize
     }
 }
 
-impl<T, SM> GpuBuffer for StorageBuffer<T, HostHidden, SM> where T: GpuType + ?Sized, SM: ShaderStorageBufferMode {
+impl<T, SM> GpuBuffer for StorageBuffer<T, HostHidden, SM>
+where
+    T: GpuType + ?Sized,
+    SM: ShaderStorageBufferMode,
+{
     type Data = T;
     type ReadBuffer = ();
     type Size = T::Size;
 
-    fn write_bytes(&self, _data: &[u8], _encoder: &mut CommandEncoder, _staging_belt: &mut StagingBelt, _device: &wgpu::Device) { }
-    fn copy_to_read_buffer(&self, _encoder: &mut CommandEncoder, _read_buffer: &Self::ReadBuffer) { }
+    fn write_bytes(
+        &self,
+        _data: &[u8],
+        _encoder: &mut CommandEncoder,
+        _staging_belt: &mut StagingBelt,
+        _device: &wgpu::Device,
+    ) {
+    }
+    fn copy_to_read_buffer(&self, _encoder: &mut CommandEncoder, _read_buffer: &Self::ReadBuffer) {}
 
     fn make_read_buffer(_size: Self::Size, _device: &wgpu::Device) -> Self::ReadBuffer {
         ()
@@ -157,7 +178,9 @@ impl<T, SM> GpuBuffer for StorageBuffer<T, HostHidden, SM> where T: GpuType + ?S
             binding,
             visibility: wgpu::ShaderStages::COMPUTE,
             ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: SM::readonly() },
+                ty: wgpu::BufferBindingType::Storage {
+                    read_only: SM::readonly(),
+                },
                 has_dynamic_offset: false,
                 min_binding_size: None,
             },
@@ -169,23 +192,31 @@ impl<T, SM> GpuBuffer for StorageBuffer<T, HostHidden, SM> where T: GpuType + ?S
     }
 }
 
-impl<T, SM> GpuBuffer for StorageBuffer<T, HostWriteOnly, SM> where T: GpuType + ?Sized, SM: ShaderStorageBufferMode {
+impl<T, SM> GpuBuffer for StorageBuffer<T, HostWriteOnly, SM>
+where
+    T: GpuType + ?Sized,
+    SM: ShaderStorageBufferMode,
+{
     type Data = T;
     type ReadBuffer = ();
     type Size = T::Size;
 
-    fn write_bytes(&self, data: &[u8], encoder: &mut CommandEncoder, staging_belt: &mut StagingBelt, device: &wgpu::Device) {
+    fn write_bytes(
+        &self,
+        data: &[u8],
+        encoder: &mut CommandEncoder,
+        staging_belt: &mut StagingBelt,
+        device: &wgpu::Device,
+    ) {
         let len = data.len() as u64;
-        let Some(len) = NonZeroU64::new(len) else { return; };
-        staging_belt.write_buffer(
-            encoder,
-            &self.buffer,
-            0,
-            len,
-            device
-        ).copy_from_slice(data);
+        let Some(len) = NonZeroU64::new(len) else {
+            return;
+        };
+        staging_belt
+            .write_buffer(encoder, &self.buffer, 0, len, device)
+            .copy_from_slice(data);
     }
-    fn copy_to_read_buffer(&self, _encoder: &mut CommandEncoder, _read_buffer: &Self::ReadBuffer) { }
+    fn copy_to_read_buffer(&self, _encoder: &mut CommandEncoder, _read_buffer: &Self::ReadBuffer) {}
 
     fn make_read_buffer(_size: Self::Size, _device: &wgpu::Device) -> Self::ReadBuffer {
         ()
@@ -196,7 +227,9 @@ impl<T, SM> GpuBuffer for StorageBuffer<T, HostWriteOnly, SM> where T: GpuType +
             binding,
             visibility: wgpu::ShaderStages::COMPUTE,
             ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: SM::readonly() },
+                ty: wgpu::BufferBindingType::Storage {
+                    read_only: SM::readonly(),
+                },
                 has_dynamic_offset: false,
                 min_binding_size: None,
             },
@@ -208,12 +241,23 @@ impl<T, SM> GpuBuffer for StorageBuffer<T, HostWriteOnly, SM> where T: GpuType +
     }
 }
 
-impl<T, SM> GpuBuffer for StorageBuffer<T, HostReadOnly, SM> where T: GpuType + ?Sized, SM: ShaderStorageBufferMode {
+impl<T, SM> GpuBuffer for StorageBuffer<T, HostReadOnly, SM>
+where
+    T: GpuType + ?Sized,
+    SM: ShaderStorageBufferMode,
+{
     type Data = T;
     type ReadBuffer = wgpu::Buffer;
     type Size = T::Size;
 
-    fn write_bytes(&self, _data: &[u8], _encoder: &mut CommandEncoder, _staging_belt: &mut StagingBelt, _device: &wgpu::Device) { }
+    fn write_bytes(
+        &self,
+        _data: &[u8],
+        _encoder: &mut CommandEncoder,
+        _staging_belt: &mut StagingBelt,
+        _device: &wgpu::Device,
+    ) {
+    }
     fn copy_to_read_buffer(&self, encoder: &mut CommandEncoder, read_buffer: &Self::ReadBuffer) {
         encoder.copy_buffer_to_buffer(&self.buffer, 0, read_buffer, 0, self.size.size());
     }
@@ -232,7 +276,9 @@ impl<T, SM> GpuBuffer for StorageBuffer<T, HostReadOnly, SM> where T: GpuType + 
             binding,
             visibility: wgpu::ShaderStages::COMPUTE,
             ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: SM::readonly() },
+                ty: wgpu::BufferBindingType::Storage {
+                    read_only: SM::readonly(),
+                },
                 has_dynamic_offset: false,
                 min_binding_size: None,
             },
@@ -244,21 +290,29 @@ impl<T, SM> GpuBuffer for StorageBuffer<T, HostReadOnly, SM> where T: GpuType + 
     }
 }
 
-impl<T, SM> GpuBuffer for StorageBuffer<T, HostReadWrite, SM> where T: GpuType + ?Sized, SM: ShaderStorageBufferMode {
+impl<T, SM> GpuBuffer for StorageBuffer<T, HostReadWrite, SM>
+where
+    T: GpuType + ?Sized,
+    SM: ShaderStorageBufferMode,
+{
     type Data = T;
     type ReadBuffer = wgpu::Buffer;
     type Size = T::Size;
 
-    fn write_bytes(&self, data: &[u8], encoder: &mut CommandEncoder, staging_belt: &mut StagingBelt, device: &wgpu::Device) {
+    fn write_bytes(
+        &self,
+        data: &[u8],
+        encoder: &mut CommandEncoder,
+        staging_belt: &mut StagingBelt,
+        device: &wgpu::Device,
+    ) {
         let len = data.len() as u64;
-        let Some(len) = NonZeroU64::new(len) else { return; };
-        staging_belt.write_buffer(
-            encoder,
-            &self.buffer,
-            0,
-            len,
-            device
-        ).copy_from_slice(data);
+        let Some(len) = NonZeroU64::new(len) else {
+            return;
+        };
+        staging_belt
+            .write_buffer(encoder, &self.buffer, 0, len, device)
+            .copy_from_slice(data);
     }
     fn copy_to_read_buffer(&self, encoder: &mut CommandEncoder, read_buffer: &Self::ReadBuffer) {
         encoder.copy_buffer_to_buffer(&self.buffer, 0, read_buffer, 0, self.size.size());
@@ -278,7 +332,9 @@ impl<T, SM> GpuBuffer for StorageBuffer<T, HostReadWrite, SM> where T: GpuType +
             binding,
             visibility: wgpu::ShaderStages::COMPUTE,
             ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: SM::readonly() },
+                ty: wgpu::BufferBindingType::Storage {
+                    read_only: SM::readonly(),
+                },
                 has_dynamic_offset: false,
                 min_binding_size: None,
             },

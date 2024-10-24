@@ -2,8 +2,8 @@ use wgpu::{util::StagingBelt, CommandEncoder};
 
 use crate::{get_device, size::BufferSize, GpuDevice};
 
-pub mod uniform;
 pub mod storage;
+pub mod uniform;
 
 pub trait GpuBuffer {
     type Data: ?Sized;
@@ -12,19 +12,30 @@ pub trait GpuBuffer {
     type Size: BufferSize;
 
     fn get_entire_binding(&self) -> wgpu::BufferBinding;
-    fn write_bytes(&self, data: &[u8], encoder: &mut CommandEncoder, staging_belt: &mut StagingBelt, device: &wgpu::Device);
+    fn write_bytes(
+        &self,
+        data: &[u8],
+        encoder: &mut CommandEncoder,
+        staging_belt: &mut StagingBelt,
+        device: &wgpu::Device,
+    );
     fn copy_to_read_buffer(&self, encoder: &mut CommandEncoder, read_buffer: &Self::ReadBuffer);
     fn make_read_buffer(size: Self::Size, device: &wgpu::Device) -> Self::ReadBuffer;
     fn into_layout(&self, binding: u32) -> wgpu::BindGroupLayoutEntry;
 }
-
 
 pub trait GpuBufferTuple {
     type BytesSet<'a>;
     type ReadBufferSet;
     type SizeSet: Copy;
 
-    fn write_bytes(&self, data: Self::BytesSet<'_>, encoder: &mut CommandEncoder, staging_belt: &mut StagingBelt, device: &wgpu::Device);
+    fn write_bytes(
+        &self,
+        data: Self::BytesSet<'_>,
+        encoder: &mut CommandEncoder,
+        staging_belt: &mut StagingBelt,
+        device: &wgpu::Device,
+    );
     fn copy_to_read_buffer(&self, encoder: &mut CommandEncoder, read_buffers: &Self::ReadBufferSet);
     fn make_read_buffers(sizes: Self::SizeSet, device: &wgpu::Device) -> Self::ReadBufferSet;
     fn max_size(sizes: Self::SizeSet) -> u64;
@@ -73,7 +84,6 @@ tuple_impl!(2, 0 A, 1 B);
 tuple_impl!(3, 0 A, 1 B, 2 C);
 tuple_impl!(4, 0 A, 1 B, 2 C, 3 D);
 
-
 pub struct GpuReaderWriter<S: GpuBufferTuple> {
     staging_belt: StagingBelt,
     read_buffers: S::ReadBufferSet,
@@ -88,7 +98,13 @@ impl<S: GpuBufferTuple> GpuReaderWriter<S> {
             read_buffers,
         }
     }
-    fn write_bytes(&mut self, buffers: &S, data: S::BytesSet<'_>, encoder: &mut CommandEncoder, device: &wgpu::Device) {
+    fn write_bytes(
+        &mut self,
+        buffers: &S,
+        data: S::BytesSet<'_>,
+        encoder: &mut CommandEncoder,
+        device: &wgpu::Device,
+    ) {
         buffers.write_bytes(data, encoder, &mut self.staging_belt, device);
     }
     fn copy_to_read_buffer(&self, buffers: &S, encoder: &mut CommandEncoder) {
@@ -98,9 +114,8 @@ impl<S: GpuBufferTuple> GpuReaderWriter<S> {
 
 pub struct GpuBufferSet<S: GpuBufferTuple> {
     buffers: S,
-    bind_group: wgpu::BindGroup
+    bind_group: wgpu::BindGroup,
 }
-
 
 macro_rules! set_impl {
     ($count: literal, $($index: tt $ty:ident),+) => {

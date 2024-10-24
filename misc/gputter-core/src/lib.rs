@@ -3,10 +3,10 @@ use std::sync::OnceLock;
 pub use wgpu;
 
 pub mod buffers;
-pub mod types;
-pub mod size;
 pub mod compute;
 pub mod shader;
+pub mod size;
+pub mod types;
 
 pub struct GpuDevice {
     pub device: wgpu::Device,
@@ -51,5 +51,7 @@ pub async fn init_gputter() -> anyhow::Result<()> {
 }
 
 pub fn get_device() -> &'static GpuDevice {
-    GPU_DEVICE.get().expect("GpuDevice was not initialized. Call init_gputter first")
+    GPU_DEVICE
+        .get()
+        .expect("GpuDevice was not initialized. Call init_gputter first")
 }

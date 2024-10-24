@@ -308,8 +308,11 @@ impl Application for LunasimbotApp {
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
-        let (packet_builder, mut from_lunabase_rx, mut connected) =
-            create_packet_builder(self.app.lunabase_address, lunabot_stage.clone(), self.app.max_pong_delay_ms);
+        let (packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
+            self.app.lunabase_address,
+            lunabot_stage.clone(),
+            self.app.max_pong_delay_ms,
+        );
 
         let mut bitcode_buffer = bitcode::Buffer::new();
 

@@ -26,7 +26,7 @@ use super::{create_packet_builder, create_robot_chain, wait_for_ctrl_c, PointClo
 pub struct LunabotApp {
     pub lunabase_address: SocketAddr,
     #[serde(default = "default_max_pong_delay_ms")]
-    pub max_pong_delay_ms: u64
+    pub max_pong_delay_ms: u64,
 }
 
 fn default_max_pong_delay_ms() -> u64 {
@@ -66,8 +66,11 @@ impl Application for LunabotApp {
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
-        let (packet_builder, mut from_lunabase_rx, mut connected) =
-            create_packet_builder(self.lunabase_address, lunabot_stage.clone(), self.max_pong_delay_ms);
+        let (packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
+            self.lunabase_address,
+            lunabot_stage.clone(),
+            self.max_pong_delay_ms,
+        );
 
         std::thread::spawn(move || {
             run_ai(robot_chain, |action, inputs| {

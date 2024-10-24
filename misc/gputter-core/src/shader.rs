@@ -6,6 +6,10 @@ pub struct BufferGroupBinding {
 
 impl std::fmt::Display for BufferGroupBinding {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "@group({}) @binding({}) ", self.group_index, self.binding_index)
+        write!(
+            f,
+            "@group({}) @binding({}) ",
+            self.group_index, self.binding_index
+        )
     }
 }

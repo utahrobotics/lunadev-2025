@@ -1,6 +1,9 @@
 #![feature(iter_intersperse)]
 
-use std::{panic::{catch_unwind, AssertUnwindSafe}, str::FromStr};
+use std::{
+    panic::{catch_unwind, AssertUnwindSafe},
+    str::FromStr,
+};
 
 use gputter_core::{get_device, init_gputter, wgpu, GpuDevice};
 use pollster::FutureExt;
@@ -65,9 +68,10 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         })
         .collect();
 
-    let re =
-        Regex::new(r"(const\s*[a-zA-Z0-9]+\s*:\s*([a-zA-Z0-9]+)\s*=\s*)\{\{([a-zA-Z0-9]+)\}\}\s*(;?)")
-            .unwrap();
+    let re = Regex::new(
+        r"(const\s*[a-zA-Z0-9]+\s*:\s*([a-zA-Z0-9]+)\s*=\s*)\{\{([a-zA-Z0-9]+)\}\}\s*(;?)",
+    )
+    .unwrap();
 
     let mut const_types = vec![];
     let mut const_names = vec![];
@@ -168,11 +172,11 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
             }
         })
         .collect();
-    
-    
-    let const_def = const_names.iter().zip(const_types.iter()).map(|(name, ty)| {
-        proc_macro2::TokenStream::from_str(&format!("{name}: {ty}")).unwrap()
-    });
+
+    let const_def = const_names
+        .iter()
+        .zip(const_types.iter())
+        .map(|(name, ty)| proc_macro2::TokenStream::from_str(&format!("{name}: {ty}")).unwrap());
 
     let const_idents = const_names.iter().map(|name| format_ident!("{name}"));
     let buffer_idents = buffer_names.iter().map(|&name| format_ident!("{name}"));
