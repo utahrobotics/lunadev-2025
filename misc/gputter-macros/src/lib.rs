@@ -44,18 +44,20 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
 
     let shader = {
         let mut tmp = String::with_capacity(shader.value().len() + 1);
-        tmp.push_str(" ");
+        tmp.push_str("alias NonZeroU32 = u32;\nalias NonZeroI32 = i32;\n");
         tmp.push_str(&shader.value());
         tmp
     };
 
-    let mut splitted: Vec<_> = shader.split("{{BUFFER}}").collect();
+    let mut buffer_types = vec![];
+    let splitted: Vec<_> = shader.split("#[buffer]").collect();
+    // panic!("{splitted:?}");
 
     let buffer_names: Vec<_> = splitted
         .iter()
         .skip(1)
         .map(|&s| {
-            let (_, _, name, _) = unformat!("{}var<{}>{}:{}", s)
+            let (_, _, name, mut ty) = unformat!("{}var<{}>{}:{};", s)
                 .ok_or_else(|| {
                     panic!(
                         "Format of buffer is incorrect: {}",
@@ -64,6 +66,15 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                 })
                 .unwrap();
 
+            ty = ty.trim();
+            buffer_types.push(
+                match ty {
+                    "f32" => "f32",
+                    "u32" => "u32",
+                    "i32" => "i32",
+                    _ => panic!("Unsupported buffer type: {ty}"),
+                }
+            );
             name.trim()
         })
         .collect();
@@ -117,6 +128,8 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                     "u32" => "0".to_owned(),
                     "i32" => "0".to_owned(),
                     "bool" => "false".to_owned(),
+                    "NonZeroU32" => "1".to_owned(),
+                    "NonZeroI32" => "1".to_owned(),
                     _ => panic!("Unsupported type for substitution: {}", ty),
                 }
             } else {
@@ -124,7 +137,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
             }
         })
         .collect();
-
+    
     // Check that it compiles
     init_gputter()
         .block_on()
@@ -165,11 +178,9 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
 
     let buffer_def: Vec<_> = buffer_names
         .iter()
-        .map(|&name| {
-            let name = format_ident!("{name}");
-            quote! {
-                #name : gputter::shader::BufferGroupBinding
-            }
+        .zip(buffer_types.iter())
+        .map(|(&name, &ty)| {
+            proc_macro2::TokenStream::from_str(&format!("{name}: gputter::shader::BufferGroupBinding<{ty}, S>")).unwrap()
         })
         .collect();
 
@@ -183,19 +194,19 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
 
     // Build the output, possibly using quasi-quotation
     let expanded = quote! {
-        #vis struct #name {
+        #vis struct #name<S> {
             #(#buffer_def,)*
             #(#const_def,)*
         }
-        impl #name {
-            #vis fn compile(&self) -> gputter::wgpu::ShaderModule {
-                #(let #buffer_idents = self.#buffer_idents;)*
-                #(let #const_idents = self.#const_idents;)*
+        impl<S> #name<S> {
+            #vis fn compile(&self) -> gputter::shader::CompiledShader<S> {
+                #(let #buffer_idents = &self.#buffer_idents;)*
+                #(let #const_idents = &self.#const_idents;)*
                 let shader = format!(#shader);
                 gputter::get_device().device.create_shader_module(gputter::wgpu::ShaderModuleDescriptor {
                     label: None,
                     source: gputter::wgpu::ShaderSource::Wgsl(shader.into()),
-                })
+                }).into()
             }
         }
     };

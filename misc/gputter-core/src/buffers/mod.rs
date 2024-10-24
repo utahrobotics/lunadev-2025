@@ -41,6 +41,13 @@ pub trait GpuBufferTuple {
     fn max_size(sizes: Self::SizeSet) -> u64;
 }
 
+pub struct Index<const I: usize>;
+
+pub trait StaticIndexable<I> {
+    type Output;
+    fn get(&self) -> &Self::Output;
+}
+
 macro_rules! tuple_impl {
     ($count: literal, $($index: tt $ty:ident),+) => {
         impl<$($ty: GpuBuffer),*> GpuBufferTuple for ($($ty,)*) {
@@ -83,6 +90,31 @@ tuple_impl!(1, 0 A);
 tuple_impl!(2, 0 A, 1 B);
 tuple_impl!(3, 0 A, 1 B, 2 C);
 tuple_impl!(4, 0 A, 1 B, 2 C, 3 D);
+
+macro_rules! tuple_idx_impl {
+    ($index: tt $selected: ident $($ty:ident),+) => {
+        impl<$($ty),*> StaticIndexable<Index<$index>> for ($($ty,)*) {
+            type Output = $selected;
+            fn get(&self) -> &Self::Output {
+                &self.$index
+            }
+        }
+    }
+}
+
+tuple_idx_impl!(0 A A);
+
+tuple_idx_impl!(0 A A, B);
+tuple_idx_impl!(1 B A, B);
+
+tuple_idx_impl!(0 A A, B, C);
+tuple_idx_impl!(1 B A, B, C);
+tuple_idx_impl!(2 C A, B, C);
+
+tuple_idx_impl!(0 A A, B, C, D);
+tuple_idx_impl!(1 B A, B, C, D);
+tuple_idx_impl!(2 C A, B, C, D);
+tuple_idx_impl!(3 D A, B, C, D);
 
 pub struct GpuReaderWriter<S: GpuBufferTuple> {
     staging_belt: StagingBelt,
