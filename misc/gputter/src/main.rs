@@ -6,15 +6,15 @@ use gputter::{
             HostHidden, HostReadOnly, HostReadWrite, ShaderReadOnly, ShaderReadWrite, StorageBuffer,
         },
         uniform::UniformBuffer,
-        GpuBufferSet, StaticIndexable,
+        GpuBufferSet,
     },
-    shader::BufferGroupBinding,
+    shader::BufferGroupBinding, types::AlignedVec2,
 };
 use gputter_macros::build_shader;
 build_shader!(
     Test,
     r#"
-#[buffer(HostHidden)] var<storage, read_write> heightmap: array<u32, COUNT2>;
+#[buffer(HostHidden)] var<storage, read_write> heightmap: array<vec2f, COUNT2>;
 #[buffer(HostWriteOnly)] var<uniform> heightmap2: u32;
  
 const NUMBER: f32 = {{number}};
@@ -35,7 +35,7 @@ type BindGroupA = (
 
 type BindGroupB = (
     StorageBuffer<f32, HostReadOnly, ShaderReadWrite>,
-    StorageBuffer<[u32; 4], HostHidden, ShaderReadWrite>,
+    StorageBuffer<[AlignedVec2<f32>; 4], HostHidden, ShaderReadWrite>,
 );
 
 type BindGroupSet = (GpuBufferSet<BindGroupA>, GpuBufferSet<BindGroupB>);
@@ -47,5 +47,5 @@ fn main() {
         number: 2.2,
         index: NonZeroU32::new(1).unwrap(),
     };
-    let test = test.compile();
+    let [main_fn] = test.compile();
 }

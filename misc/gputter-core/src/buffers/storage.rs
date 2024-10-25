@@ -173,7 +173,7 @@ where
         ()
     }
 
-    fn into_layout(&self, binding: u32) -> wgpu::BindGroupLayoutEntry {
+    fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding,
             visibility: wgpu::ShaderStages::COMPUTE,
@@ -222,7 +222,7 @@ where
         ()
     }
 
-    fn into_layout(&self, binding: u32) -> wgpu::BindGroupLayoutEntry {
+    fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding,
             visibility: wgpu::ShaderStages::COMPUTE,
@@ -271,7 +271,7 @@ where
         })
     }
 
-    fn into_layout(&self, binding: u32) -> wgpu::BindGroupLayoutEntry {
+    fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding,
             visibility: wgpu::ShaderStages::COMPUTE,
@@ -327,7 +327,7 @@ where
         })
     }
 
-    fn into_layout(&self, binding: u32) -> wgpu::BindGroupLayoutEntry {
+    fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding,
             visibility: wgpu::ShaderStages::COMPUTE,

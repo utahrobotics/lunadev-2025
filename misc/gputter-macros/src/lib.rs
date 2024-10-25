@@ -100,45 +100,47 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         tmp.push_str(&shader.value());
         tmp
     };
+
+    let re = Regex::new(r"@compute[\s@a-zA-Z0-9\(\)_,]+fn\s+([a-zA-Z0-9]+)\s*\(").unwrap();
+    let compute_fns: Vec<_> = re.captures_iter(&shader).map(|caps| {
+        let (_, [fn_name]) = caps.extract();
+        fn_name
+    }).collect();
     
     let re = Regex::new(
             r"const\s*([a-zA-Z0-9]+)\s*:\s*([a-zA-Z0-9]+)\s*=\s*([\{\}a-zA-Z0-9]+)\s*;?",
         )
         .unwrap();
 
-    let mut uint_consts = FxHashMap::default();
-
-    re.captures_iter(&shader).for_each(|caps| {
+    let uint_consts: FxHashMap<_, _> = re.captures_iter(&shader).filter_map(|caps| {
         let (_, [const_name, const_ty, const_val]) = caps.extract();
         if const_ty != "u32" && const_ty != "NonZeroU32" {
-            return;
+            return None;
         }
 
         if const_val.starts_with("{{") && const_val.ends_with("}}") {
-            uint_consts.insert(const_name,  None);
-            return;
+            return Some((const_name, None));
         }
 
         let Ok(n) = u32::from_str(&const_val) else {
             panic!(r#"Constant "{const_name}" is not a valid u32 (was {const_val})"#);
         };
-        uint_consts.insert(const_name, Some(n));
-    });
+        Some((const_name, Some(n)))
+    })
+    .collect();
 
     let re = Regex::new(r"#\[buffer\(([a-zA-Z0-9]+)\)\]").unwrap();
 
-    let mut buffer_rw_modes = vec![];
-
-    re.captures_iter(&shader).for_each(|caps| {
+    let buffer_rw_modes: Vec<_> = re.captures_iter(&shader).map(|caps| {
         let (_, [rw_mode]) = caps.extract();
-        buffer_rw_modes.push(match rw_mode {
+        match rw_mode {
             "HostHidden" => "HostHidden",
             "HostReadOnly" => "HostReadOnly",
             "HostWriteOnly" => "HostWriteOnly",
             "HostReadWrite" => "HostReadWrite",
             _ => panic!("Unsupported buffer host read-write mode: {rw_mode}"),
-        });
-    });
+        }
+    }).collect();
 
     let mut buffer_storage_types = vec![];
     let mut buffer_types = vec![];
@@ -304,6 +306,12 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
     let const_idents = const_names.iter().map(|name| format_ident!("{name}"));
     let buffer_idents = buffer_names.iter().map(|&name| format_ident!("{name}"));
 
+    let compute_count = compute_fns.len();
+    let compile_out = compute_fns.iter()
+        .map(|&name| {
+            proc_macro2::TokenStream::from_str(&format!("gputter::shader::ComputeFn::new_unchecked(shader.clone(), {name:?})")).unwrap()
+        });
+    
     // Build the output, possibly using quasi-quotation
     let expanded = quote! {
         #vis struct #name<S> {
@@ -311,14 +319,18 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
             #(#const_def,)*
         }
         impl<S> #name<S> {
-            #vis fn compile(&self) -> gputter::shader::CompiledShader<S> {
+            #vis fn compile(&self) -> [gputter::shader::ComputeFn<S>; #compute_count] {
                 #(let #buffer_idents = &self.#buffer_idents;)*
                 #(let #const_idents = &self.#const_idents;)*
                 let shader = format!(#shader);
-                gputter::get_device().device.create_shader_module(gputter::wgpu::ShaderModuleDescriptor {
+                let shader = gputter::get_device().device.create_shader_module(gputter::wgpu::ShaderModuleDescriptor {
                     label: None,
                     source: gputter::wgpu::ShaderSource::Wgsl(shader.into()),
-                }).into()
+                });
+                let shader = std::sync::Arc::new(shader);
+                [
+                    #(#compile_out,)*
+                ]
             }
         }
     };

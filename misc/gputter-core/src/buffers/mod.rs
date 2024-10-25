@@ -21,13 +21,14 @@ pub trait GpuBuffer {
     );
     fn copy_to_read_buffer(&self, encoder: &mut CommandEncoder, read_buffer: &Self::ReadBuffer);
     fn make_read_buffer(size: Self::Size, device: &wgpu::Device) -> Self::ReadBuffer;
-    fn into_layout(&self, binding: u32) -> wgpu::BindGroupLayoutEntry;
+    fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry;
 }
 
 pub trait GpuBufferTuple {
     type BytesSet<'a>;
     type ReadBufferSet;
     type SizeSet: Copy;
+    type LayoutSet: IntoIterator<Item = wgpu::BindGroupLayoutEntry>;
 
     fn write_bytes(
         &self,
@@ -39,6 +40,7 @@ pub trait GpuBufferTuple {
     fn copy_to_read_buffer(&self, encoder: &mut CommandEncoder, read_buffers: &Self::ReadBufferSet);
     fn make_read_buffers(sizes: Self::SizeSet, device: &wgpu::Device) -> Self::ReadBufferSet;
     fn max_size(sizes: Self::SizeSet) -> u64;
+    fn create_layouts() -> Self::LayoutSet;
 }
 
 pub trait StaticIndexable<const I: usize> {
@@ -52,6 +54,7 @@ macro_rules! tuple_impl {
             type BytesSet<'a> = [&'a [u8]; $count];
             type ReadBufferSet = ($($ty::ReadBuffer,)*);
             type SizeSet = ($($ty::Size,)*);
+            type LayoutSet = [wgpu::BindGroupLayoutEntry; $count];
 
             fn write_bytes(&self, data: Self::BytesSet<'_>, encoder: &mut CommandEncoder, staging_belt: &mut StagingBelt, device: &wgpu::Device) {
                 $(
@@ -79,6 +82,14 @@ macro_rules! tuple_impl {
                     max = max.max(sizes.$index.size());
                 )*
                 max
+            }
+
+            fn create_layouts() -> Self::LayoutSet {
+                [
+                    $(
+                        $ty::create_layout($index as u32),
+                    )*
+                ]
             }
         }
     }
@@ -153,6 +164,10 @@ pub struct GpuBufferSet<S: GpuBufferTuple> {
     bind_group: wgpu::BindGroup,
 }
 
+pub trait ValidGpuBufferSet {
+    fn set_into_compute_pass<'a>(&'a self, index: u32, pass: &mut wgpu::ComputePass<'a>);
+}
+
 macro_rules! set_impl {
     ($count: literal, $($index: tt $ty:ident),+) => {
         impl<$($ty: GpuBuffer),*> From<($($ty,)*)> for GpuBufferSet<($($ty,)*)> {
@@ -162,7 +177,7 @@ macro_rules! set_impl {
                     layout: &device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                         entries: &[
                             $(
-                                buffers.$index.into_layout($index),
+                                $ty::create_layout($index),
                             )*
                         ],
                         label: None,
@@ -181,6 +196,12 @@ macro_rules! set_impl {
                     buffers,
                     bind_group,
                 }
+            }
+        }
+
+        impl<$($ty: GpuBuffer),*> ValidGpuBufferSet for GpuBufferSet<($($ty,)*)> {
+            fn set_into_compute_pass<'a>(&'a self, index: u32, pass: &mut wgpu::ComputePass<'a>) {
+                pass.set_bind_group(index, &self.bind_group, &[]);
             }
         }
     }

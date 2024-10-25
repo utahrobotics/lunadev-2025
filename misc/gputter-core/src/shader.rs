@@ -1,19 +1,49 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Arc};
 
 use wgpu::ShaderModule;
 
-use crate::buffers::{GpuBufferSet, GpuBufferTuple, StaticIndexable};
+use crate::buffers::{GpuBufferSet, GpuBufferTuple, StaticIndexable, ValidGpuBufferSet};
 
 /// A list (tuple) of [`GpuBufferTuple`].
-pub trait GpuBufferTupleList<const GRP_IDX: u32, const BIND_IDX: u32> {
+pub trait IndexGpuBufferTupleList<const GRP_IDX: u32, const BIND_IDX: u32> {
     type Binding;
 
     fn get() -> Self::Binding;
 }
 
+pub trait GpuBufferTupleList {
+    fn create_layout_entries() -> Box<[wgpu::BindGroupLayoutEntry]>;
+    fn set_into_compute_pass<'a>(&'a self, pass: &mut wgpu::ComputePass<'a>);
+}
+
+
+macro_rules! tuple_impl {
+    ($count: literal, $($index: tt $ty:ident),+) => {
+        impl<$($ty: GpuBufferTuple),*> GpuBufferTupleList for ($(GpuBufferSet<$ty>,)*)
+        where
+        $(GpuBufferSet<$ty>: ValidGpuBufferSet,)*
+        {
+            fn create_layout_entries() -> Box<[wgpu::BindGroupLayoutEntry]> {
+                let mut entries = Vec::new();
+                $(
+                    entries.extend($ty::create_layouts());
+                )*
+                entries.into_boxed_slice()
+            }
+            fn set_into_compute_pass<'a>(&'a self, pass: &mut wgpu::ComputePass<'a>) {
+                $(
+                    self.$index.set_into_compute_pass($index, pass);
+                )*
+            }
+        }
+    }
+}
+
+tuple_impl!(1, 0 A);
+
 macro_rules! tuple_idx_impl {
     ($index1: tt $index2: tt $($ty:ident),+) => {
-        impl<$($ty: GpuBufferTuple),*> GpuBufferTupleList<$index1, $index2> for ($(GpuBufferSet<$ty>,)*)
+        impl<$($ty: GpuBufferTuple),*> IndexGpuBufferTupleList<$index1, $index2> for ($(GpuBufferSet<$ty>,)*)
         where
             <Self as StaticIndexable<$index1>>::Output: StaticIndexable<$index2>
         {
@@ -62,7 +92,7 @@ impl<B, S> BufferGroupBinding<B, S> {
 
     pub fn get<const GRP_IDX: u32, const BIND_IDX: u32>() -> Self
     where
-        S: GpuBufferTupleList<GRP_IDX, BIND_IDX, Binding = Self>,
+        S: IndexGpuBufferTupleList<GRP_IDX, BIND_IDX, Binding = Self>,
     {
         S::get()
     }
@@ -78,16 +108,55 @@ impl<B, S> std::fmt::Display for BufferGroupBinding<B, S> {
     }
 }
 
-pub struct CompiledShader<S> {
-    shader: ShaderModule,
+// pub struct CompiledShader<S> {
+//     shader: ShaderModule,
+//     phantom: PhantomData<fn() -> S>,
+// }
+
+// impl<S> From<ShaderModule> for CompiledShader<S> {
+//     fn from(shader: ShaderModule) -> Self {
+//         Self {
+//             shader,
+//             phantom: PhantomData,
+//         }
+//     }
+// }
+
+pub struct ComputeFn<S> {
+    pub(crate) shader: Arc<ShaderModule>,
+    pub(crate) name: &'static str,
     phantom: PhantomData<fn() -> S>,
 }
 
-impl<S> From<ShaderModule> for CompiledShader<S> {
-    fn from(shader: ShaderModule) -> Self {
+impl<S> Clone for ComputeFn<S> {
+    fn clone(&self) -> Self {
         Self {
-            shader,
+            shader: self.shader.clone(),
+            name: self.name,
             phantom: PhantomData,
         }
+    }
+}
+
+impl<S> std::fmt::Debug for ComputeFn<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ComputeFn")
+            .field("shader", &self.shader)
+            .field("name", &self.name)
+            .finish()
+    }
+}
+
+impl<S> ComputeFn<S> {
+    pub fn new_unchecked(shader: Arc<ShaderModule>, name: &'static str) -> Self {
+        Self {
+            shader,
+            name,
+            phantom: PhantomData,
+        }
+    }
+
+    pub fn assert_name(&self, name: &'static str) {
+        assert_eq!(name, self.name);
     }
 }
