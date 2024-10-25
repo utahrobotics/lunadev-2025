@@ -12,7 +12,7 @@ pub trait IndexGpuBufferTupleList<const GRP_IDX: u32, const BIND_IDX: u32> {
 }
 
 pub trait GpuBufferTupleList {
-    fn create_layout_entries() -> Box<[wgpu::BindGroupLayoutEntry]>;
+    fn create_layout_entries() -> Box<[Box<[wgpu::BindGroupLayoutEntry]>]>;
     fn set_into_compute_pass<'a>(&'a self, pass: &mut wgpu::ComputePass<'a>);
 }
 
@@ -23,12 +23,14 @@ macro_rules! tuple_impl {
         where
         $(GpuBufferSet<$ty>: ValidGpuBufferSet,)*
         {
-            fn create_layout_entries() -> Box<[wgpu::BindGroupLayoutEntry]> {
-                let mut entries = Vec::new();
-                $(
-                    entries.extend($ty::create_layouts());
-                )*
-                entries.into_boxed_slice()
+            fn create_layout_entries() -> Box<[Box<[wgpu::BindGroupLayoutEntry]>]> {
+                Box::new(
+                    [
+                        $(
+                            $ty::create_layouts(),
+                        )*
+                    ]
+                )
             }
             fn set_into_compute_pass<'a>(&'a self, pass: &mut wgpu::ComputePass<'a>) {
                 $(
@@ -40,6 +42,9 @@ macro_rules! tuple_impl {
 }
 
 tuple_impl!(1, 0 A);
+tuple_impl!(2, 0 A, 1 B);
+tuple_impl!(3, 0 A, 1 B, 2 C);
+tuple_impl!(4, 0 A, 1 B, 2 C, 3 D);
 
 macro_rules! tuple_idx_impl {
     ($index1: tt $index2: tt $($ty:ident),+) => {

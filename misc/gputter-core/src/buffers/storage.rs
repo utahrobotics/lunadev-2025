@@ -129,7 +129,7 @@ where
     [T]: GpuType<Size = DynamicSize<T>>,
     HM: HostStorageBufferMode,
 {
-    pub fn new(len: usize) -> Result<Self, TooLargeForStorage> {
+    pub fn new_dyn(len: usize) -> Result<Self, TooLargeForStorage> {
         let size = len as u64 * size_of::<T>() as u64;
         if size < 134217728 {
             let GpuDevice { device, .. } = get_device();
@@ -166,6 +166,9 @@ where
         _staging_belt: &mut StagingBelt,
         _device: &wgpu::Device,
     ) {
+        const {
+            panic!("Attempted to write to a hidden storage buffer");
+        }
     }
     fn copy_to_read_buffer(&self, _encoder: &mut CommandEncoder, _read_buffer: &Self::ReadBuffer) {}
 
@@ -189,6 +192,9 @@ where
     }
     fn get_entire_binding(&self) -> wgpu::BufferBinding {
         self.buffer.as_entire_buffer_binding()
+    }
+    fn get_size(&self) -> Self::Size {
+        self.size
     }
 }
 
@@ -239,6 +245,9 @@ where
     fn get_entire_binding(&self) -> wgpu::BufferBinding {
         self.buffer.as_entire_buffer_binding()
     }
+    fn get_size(&self) -> Self::Size {
+        self.size
+    }
 }
 
 impl<T, SM> GpuBuffer for StorageBuffer<T, HostReadOnly, SM>
@@ -257,6 +266,9 @@ where
         _staging_belt: &mut StagingBelt,
         _device: &wgpu::Device,
     ) {
+        const {
+            panic!("Attempted to write to a hidden storage buffer");
+        }
     }
     fn copy_to_read_buffer(&self, encoder: &mut CommandEncoder, read_buffer: &Self::ReadBuffer) {
         encoder.copy_buffer_to_buffer(&self.buffer, 0, read_buffer, 0, self.size.size());
@@ -287,6 +299,9 @@ where
     }
     fn get_entire_binding(&self) -> wgpu::BufferBinding {
         self.buffer.as_entire_buffer_binding()
+    }
+    fn get_size(&self) -> Self::Size {
+        self.size
     }
 }
 
@@ -343,5 +358,8 @@ where
     }
     fn get_entire_binding(&self) -> wgpu::BufferBinding {
         self.buffer.as_entire_buffer_binding()
+    }
+    fn get_size(&self) -> Self::Size {
+        self.size
     }
 }

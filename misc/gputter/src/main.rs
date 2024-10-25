@@ -7,10 +7,10 @@ use gputter::{
         },
         uniform::UniformBuffer,
         GpuBufferSet,
-    },
-    shader::BufferGroupBinding, types::AlignedVec2,
+    }, compute::ComputePipeline, init_gputter, shader::BufferGroupBinding, types::AlignedVec2
 };
 use gputter_macros::build_shader;
+use pollster::FutureExt;
 build_shader!(
     Test,
     r#"
@@ -41,6 +41,7 @@ type BindGroupB = (
 type BindGroupSet = (GpuBufferSet<BindGroupA>, GpuBufferSet<BindGroupB>);
 
 fn main() {
+    init_gputter().block_on().unwrap();
     let test = Test {
         heightmap: BufferGroupBinding::<_, BindGroupSet>::get::<1, 1>(),
         heightmap2: BufferGroupBinding::<_, BindGroupSet>::get::<0, 0>(),
@@ -48,4 +49,24 @@ fn main() {
         index: NonZeroU32::new(1).unwrap(),
     };
     let [main_fn] = test.compile();
+    let pipeline = ComputePipeline::new([&main_fn]);
+    pipeline.new_pass(|_lock| {
+        (
+            GpuBufferSet::from(
+                (
+                    UniformBuffer::new(),
+                    StorageBuffer::new(),
+                )
+            ),
+            GpuBufferSet::from(
+                (
+                    StorageBuffer::new(),
+                    StorageBuffer::new(),
+                )
+            ),
+        )
+    }).finish();
+    loop {
+        std::thread::park();
+    }
 }

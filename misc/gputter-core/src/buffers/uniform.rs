@@ -1,3 +1,4 @@
+use crate::size::{DynamicSize, StaticSize};
 use crate::{get_device, GpuDevice};
 
 use std::num::NonZeroU64;
@@ -13,8 +14,9 @@ use crate::types::GpuType;
 use std::marker::PhantomData;
 
 /// Uniform Buffers can only be read from shaders, and written to by the host.
-pub struct UniformBuffer<T: ?Sized> {
+pub struct UniformBuffer<T: GpuType +  ?Sized> {
     pub(crate) buffer: wgpu::Buffer,
+    size: T::Size,
     pub(crate) phantom: PhantomData<T>,
 }
 
@@ -58,9 +60,12 @@ impl<T: GpuType + ?Sized> GpuBuffer for UniformBuffer<T> {
     fn get_entire_binding(&self) -> wgpu::BufferBinding {
         self.buffer.as_entire_buffer_binding()
     }
+    fn get_size(&self) -> Self::Size {
+        self.size
+    }
 }
 
-impl<T> UniformBuffer<T> {
+impl<T: GpuType<Size=StaticSize<T>>> UniformBuffer<T> {
     pub fn new() -> Self {
         const {
             // If this assertion fails, the size of T
@@ -76,6 +81,7 @@ impl<T> UniformBuffer<T> {
         });
         Self {
             buffer,
+            size: StaticSize::default(),
             phantom: PhantomData,
         }
     }
@@ -95,8 +101,8 @@ impl std::fmt::Display for TooLargeForUniform {
 
 impl std::error::Error for TooLargeForUniform {}
 
-impl<T> UniformBuffer<[T]> {
-    pub fn new(len: usize) -> Result<Self, TooLargeForUniform> {
+impl<T> UniformBuffer<[T]> where [T]: GpuType<Size=DynamicSize<T>> {
+    pub fn new_dyn(len: usize) -> Result<Self, TooLargeForUniform> {
         let size = len as u64 * size_of::<T>() as u64;
         if size < 65536 {
             let GpuDevice { device, .. } = get_device();
@@ -108,6 +114,7 @@ impl<T> UniformBuffer<[T]> {
             });
             Ok(Self {
                 buffer,
+                size: DynamicSize::new(len),
                 phantom: PhantomData,
             })
         } else {
