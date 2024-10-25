@@ -1,10 +1,4 @@
-use std::num::NonZeroU64;
-
-use wgpu::util::StagingBelt;
-
-use wgpu::CommandEncoder;
-
-use super::GpuBuffer;
+use super::{GpuBuffer, ReadableGpuBuffer, WritableGpuBuffer};
 
 use crate::size::{BufferSize, DynamicSize};
 
@@ -159,19 +153,6 @@ where
     type ReadBuffer = ();
     type Size = T::Size;
 
-    fn write_bytes(
-        &self,
-        _data: &[u8],
-        _encoder: &mut CommandEncoder,
-        _staging_belt: &mut StagingBelt,
-        _device: &wgpu::Device,
-    ) {
-        const {
-            panic!("Attempted to write to a hidden storage buffer");
-        }
-    }
-    fn copy_to_read_buffer(&self, _encoder: &mut CommandEncoder, _read_buffer: &Self::ReadBuffer) {}
-
     fn make_read_buffer(_size: Self::Size, _device: &wgpu::Device) -> Self::ReadBuffer {
         ()
     }
@@ -190,8 +171,8 @@ where
             count: None,
         }
     }
-    fn get_entire_binding(&self) -> wgpu::BufferBinding {
-        self.buffer.as_entire_buffer_binding()
+    fn get_buffer(&self) -> &wgpu::Buffer {
+        &self.buffer
     }
     fn get_size(&self) -> Self::Size {
         self.size
@@ -207,23 +188,6 @@ where
     type ReadBuffer = ();
     type Size = T::Size;
 
-    fn write_bytes(
-        &self,
-        data: &[u8],
-        encoder: &mut CommandEncoder,
-        staging_belt: &mut StagingBelt,
-        device: &wgpu::Device,
-    ) {
-        let len = data.len() as u64;
-        let Some(len) = NonZeroU64::new(len) else {
-            return;
-        };
-        staging_belt
-            .write_buffer(encoder, &self.buffer, 0, len, device)
-            .copy_from_slice(data);
-    }
-    fn copy_to_read_buffer(&self, _encoder: &mut CommandEncoder, _read_buffer: &Self::ReadBuffer) {}
-
     fn make_read_buffer(_size: Self::Size, _device: &wgpu::Device) -> Self::ReadBuffer {
         ()
     }
@@ -242,13 +206,18 @@ where
             count: None,
         }
     }
-    fn get_entire_binding(&self) -> wgpu::BufferBinding {
-        self.buffer.as_entire_buffer_binding()
+    fn get_buffer(&self) -> &wgpu::Buffer {
+        &self.buffer
     }
     fn get_size(&self) -> Self::Size {
         self.size
     }
 }
+
+impl<T, SM> WritableGpuBuffer for StorageBuffer<T, HostWriteOnly, SM>
+where
+    T: GpuType + ?Sized,
+    SM: ShaderStorageBufferMode, {}
 
 impl<T, SM> GpuBuffer for StorageBuffer<T, HostReadOnly, SM>
 where
@@ -259,20 +228,6 @@ where
     type ReadBuffer = wgpu::Buffer;
     type Size = T::Size;
 
-    fn write_bytes(
-        &self,
-        _data: &[u8],
-        _encoder: &mut CommandEncoder,
-        _staging_belt: &mut StagingBelt,
-        _device: &wgpu::Device,
-    ) {
-        const {
-            panic!("Attempted to write to a hidden storage buffer");
-        }
-    }
-    fn copy_to_read_buffer(&self, encoder: &mut CommandEncoder, read_buffer: &Self::ReadBuffer) {
-        encoder.copy_buffer_to_buffer(&self.buffer, 0, read_buffer, 0, self.size.size());
-    }
 
     fn make_read_buffer(size: Self::Size, device: &wgpu::Device) -> Self::ReadBuffer {
         device.create_buffer(&wgpu::BufferDescriptor {
@@ -297,13 +252,18 @@ where
             count: None,
         }
     }
-    fn get_entire_binding(&self) -> wgpu::BufferBinding {
-        self.buffer.as_entire_buffer_binding()
+    fn get_buffer(&self) -> &wgpu::Buffer {
+        &self.buffer
     }
     fn get_size(&self) -> Self::Size {
         self.size
     }
 }
+
+impl<T, SM> ReadableGpuBuffer for StorageBuffer<T, HostReadOnly, SM>
+where
+    T: GpuType + ?Sized,
+    SM: ShaderStorageBufferMode, {}
 
 impl<T, SM> GpuBuffer for StorageBuffer<T, HostReadWrite, SM>
 where
@@ -314,25 +274,6 @@ where
     type ReadBuffer = wgpu::Buffer;
     type Size = T::Size;
 
-    fn write_bytes(
-        &self,
-        data: &[u8],
-        encoder: &mut CommandEncoder,
-        staging_belt: &mut StagingBelt,
-        device: &wgpu::Device,
-    ) {
-        let len = data.len() as u64;
-        let Some(len) = NonZeroU64::new(len) else {
-            return;
-        };
-        staging_belt
-            .write_buffer(encoder, &self.buffer, 0, len, device)
-            .copy_from_slice(data);
-    }
-    fn copy_to_read_buffer(&self, encoder: &mut CommandEncoder, read_buffer: &Self::ReadBuffer) {
-        encoder.copy_buffer_to_buffer(&self.buffer, 0, read_buffer, 0, self.size.size());
-    }
-
     fn make_read_buffer(size: Self::Size, device: &wgpu::Device) -> Self::ReadBuffer {
         device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
@@ -356,10 +297,19 @@ where
             count: None,
         }
     }
-    fn get_entire_binding(&self) -> wgpu::BufferBinding {
-        self.buffer.as_entire_buffer_binding()
+    fn get_buffer(&self) -> &wgpu::Buffer {
+        &self.buffer
     }
     fn get_size(&self) -> Self::Size {
         self.size
     }
 }
+
+impl<T, SM> WritableGpuBuffer for StorageBuffer<T, HostReadWrite, SM>
+where
+    T: GpuType + ?Sized,
+    SM: ShaderStorageBufferMode, {}
+impl<T, SM> ReadableGpuBuffer for StorageBuffer<T, HostReadWrite, SM>
+where
+    T: GpuType + ?Sized,
+    SM: ShaderStorageBufferMode, {}

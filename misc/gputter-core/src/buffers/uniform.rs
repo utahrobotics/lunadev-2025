@@ -1,13 +1,7 @@
 use crate::size::{DynamicSize, StaticSize};
 use crate::{get_device, GpuDevice};
 
-use std::num::NonZeroU64;
-
-use wgpu::util::StagingBelt;
-
-use wgpu::CommandEncoder;
-
-use super::GpuBuffer;
+use super::{GpuBuffer, ReadableGpuBuffer, WritableGpuBuffer};
 
 use crate::types::GpuType;
 
@@ -25,24 +19,8 @@ impl<T: GpuType + ?Sized> GpuBuffer for UniformBuffer<T> {
     type ReadBuffer = ();
     type Size = T::Size;
 
-    fn write_bytes(
-        &self,
-        data: &[u8],
-        encoder: &mut CommandEncoder,
-        staging_belt: &mut StagingBelt,
-        device: &wgpu::Device,
-    ) {
-        let len = data.len() as u64;
-        let Some(len) = NonZeroU64::new(len) else {
-            return;
-        };
-        staging_belt
-            .write_buffer(encoder, &self.buffer, 0, len, device)
-            .copy_from_slice(data);
-    }
-    fn copy_to_read_buffer(&self, _encoder: &mut CommandEncoder, _read_buffer: &Self::ReadBuffer) {}
     fn make_read_buffer(_size: Self::Size, _device: &wgpu::Device) -> Self::ReadBuffer {
-        ()
+        
     }
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -57,8 +35,8 @@ impl<T: GpuType + ?Sized> GpuBuffer for UniformBuffer<T> {
             count: None,
         }
     }
-    fn get_entire_binding(&self) -> wgpu::BufferBinding {
-        self.buffer.as_entire_buffer_binding()
+    fn get_buffer(&self) -> &wgpu::Buffer {
+        &self.buffer
     }
     fn get_size(&self) -> Self::Size {
         self.size
@@ -86,6 +64,9 @@ impl<T: GpuType<Size=StaticSize<T>>> UniformBuffer<T> {
         }
     }
 }
+
+impl<T: GpuType +  ?Sized> WritableGpuBuffer for UniformBuffer<T> {}
+impl<T: GpuType +  ?Sized> ReadableGpuBuffer for UniformBuffer<T> {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TooLargeForUniform;

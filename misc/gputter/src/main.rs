@@ -4,9 +4,7 @@ use gputter::{
     buffers::{
         storage::{
             HostHidden, HostReadOnly, HostReadWrite, ShaderReadOnly, ShaderReadWrite, StorageBuffer,
-        },
-        uniform::UniformBuffer,
-        GpuBufferSet,
+        }, uniform::UniformBuffer, GpuBufferSet, GpuBufferTuple, GpuReaderWriter
     }, compute::ComputePipeline, init_gputter, shader::BufferGroupBinding, types::AlignedVec2
 };
 use gputter_macros::build_shader;
@@ -50,21 +48,24 @@ fn main() {
     };
     let [main_fn] = test.compile();
     let pipeline = ComputePipeline::new([&main_fn]);
-    pipeline.new_pass(|_lock| {
-        (
-            GpuBufferSet::from(
-                (
-                    UniformBuffer::new(),
-                    StorageBuffer::new(),
-                )
-            ),
-            GpuBufferSet::from(
-                (
-                    StorageBuffer::new(),
-                    StorageBuffer::new(),
-                )
-            ),
-        )
+    let bind_grp = (
+        GpuBufferSet::from(
+            (
+                UniformBuffer::new(),
+                StorageBuffer::new(),
+            )
+        ),
+        GpuBufferSet::from(
+            (
+                StorageBuffer::new(),
+                StorageBuffer::new(),
+            )
+        ),
+    );
+    let mut reader_writer = GpuReaderWriter::<BindGroupA>::new(bind_grp.0.buffers.get_size());
+    pipeline.new_pass(|lock| {
+        reader_writer.lock_write(lock).write_into(&32, &bind_grp.0.buffers.0);
+        bind_grp
     }).finish();
     loop {
         std::thread::park();

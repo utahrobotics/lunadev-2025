@@ -1,3 +1,5 @@
+use std::num::NonZeroU64;
+
 use wgpu::{util::StagingBelt, CommandEncoder, Device};
 
 use crate::{get_device, size::BufferSize, types::GpuType, GpuDevice};
@@ -11,18 +13,34 @@ pub trait GpuBuffer {
     type ReadBuffer;
     type Size: BufferSize;
 
-    fn get_entire_binding(&self) -> wgpu::BufferBinding;
+    fn get_buffer(&self) -> &wgpu::Buffer;
+    fn make_read_buffer(size: Self::Size, device: &wgpu::Device) -> Self::ReadBuffer;
+    fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry;
+    fn get_size(&self) -> Self::Size;
+}
+
+pub trait WritableGpuBuffer: GpuBuffer {
     fn write_bytes(
         &self,
         data: &[u8],
         encoder: &mut CommandEncoder,
         staging_belt: &mut StagingBelt,
         device: &wgpu::Device,
-    );
-    fn copy_to_read_buffer(&self, encoder: &mut CommandEncoder, read_buffer: &Self::ReadBuffer);
-    fn make_read_buffer(size: Self::Size, device: &wgpu::Device) -> Self::ReadBuffer;
-    fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry;
-    fn get_size(&self) -> Self::Size;
+    ) {
+        let len = data.len() as u64;
+        let Some(len) = NonZeroU64::new(len) else {
+            return;
+        };
+        staging_belt
+            .write_buffer(encoder, self.get_buffer(), 0, len, device)
+            .copy_from_slice(data);
+    }
+}
+
+pub trait ReadableGpuBuffer: GpuBuffer {
+    fn copy_to_read_buffer(&self, encoder: &mut CommandEncoder, read_buffer: &wgpu::Buffer) {
+        encoder.copy_buffer_to_buffer(self.get_buffer(), 0, read_buffer, 0, self.get_size().size());
+    }
 }
 
 pub trait GpuBufferTuple {
@@ -37,7 +55,7 @@ pub trait GpuBufferTuple {
     //     staging_belt: &mut StagingBelt,
     //     device: &wgpu::Device,
     // );
-    fn copy_to_read_buffer(&self, encoder: &mut CommandEncoder, read_buffers: &Self::ReadBufferSet);
+    // fn copy_to_read_buffer(&self, encoder: &mut CommandEncoder, read_buffers: &Self::ReadBufferSet);
     fn make_read_buffers(sizes: Self::SizeSet, device: &wgpu::Device) -> Self::ReadBufferSet;
     fn max_size(sizes: Self::SizeSet) -> u64;
     fn create_layouts() -> Box<[wgpu::BindGroupLayoutEntry]>;
@@ -62,11 +80,11 @@ macro_rules! tuple_impl {
             //     )*
             // }
 
-            fn copy_to_read_buffer(&self, encoder: &mut CommandEncoder, read_buffers: &Self::ReadBufferSet) {
-                $(
-                    self.$index.copy_to_read_buffer(encoder, &read_buffers.$index);
-                )*
-            }
+            // fn copy_to_read_buffer(&self, encoder: &mut CommandEncoder, read_buffers: &Self::ReadBufferSet) {
+            //     $(
+            //         self.$index.copy_to_read_buffer(encoder, &read_buffers.$index);
+            //     )*
+            // }
 
             fn make_read_buffers(sizes: Self::SizeSet, device: &wgpu::Device) -> Self::ReadBufferSet {
                 (
@@ -175,10 +193,10 @@ impl<'a, S: GpuBufferTuple> LockedGpuWriter<'a, S> {
     pub fn unlock(mut self) -> GpuWriteLock<'a> {
         self.lock.take().unwrap()
     }
-    pub fn write_into<T, B>(&mut self, data: &T, buffer: B)
+    pub fn write_into<T, B>(&mut self, data: &T, buffer: &B)
     where
         T: GpuType,
-        B: GpuBuffer<Data = T>,
+        B: WritableGpuBuffer<Data = T>,
     {
         let lock = self.lock.as_mut().unwrap();
         buffer.write_bytes(data.to_bytes(), lock.encoder, &mut self.inner.staging_belt, lock.device);
@@ -218,7 +236,7 @@ macro_rules! set_impl {
                         $(
                             wgpu::BindGroupEntry {
                                 binding: $index as u32,
-                                resource: wgpu::BindingResource::Buffer(buffers.$index.get_entire_binding()),
+                                resource: wgpu::BindingResource::Buffer(buffers.$index.get_buffer().as_entire_buffer_binding()),
                             },
                         )*
                     ],
