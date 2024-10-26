@@ -8,3 +8,6 @@ wgpu = "0.19"
 bytemuck.workspace = true
 nalgebra.workspace = true
 anyhow.workspace = true
+# static_assertions.workspace = true
+# crossbeam.workspace = true
+pollster = "0.3.0"

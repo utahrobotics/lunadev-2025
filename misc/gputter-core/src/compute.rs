@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use crate::{buffers::GpuWriteLock, get_device, shader::{ComputeFn, GpuBufferTupleList}, GpuDevice};
 
+
 pub struct ComputePipeline<S, const SIZE: usize> {
     compute_pipelines: [wgpu::ComputePipeline; SIZE],
     pub workgroups: [(u32, u32, u32); SIZE],
@@ -43,7 +44,7 @@ impl<S: GpuBufferTupleList, const SIZE: usize> ComputePipeline<S, SIZE> {
         Self {
             compute_pipelines,
             workgroups: [(1, 1, 1); SIZE],
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 
@@ -52,8 +53,9 @@ impl<S: GpuBufferTupleList, const SIZE: usize> ComputePipeline<S, SIZE> {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: None,
         });
+        let bind_group_set = bind_group_fn(GpuWriteLock { encoder: &mut encoder, device });
         ComputePass {
-            bind_group_set: bind_group_fn(GpuWriteLock { encoder: &mut encoder, device }),
+            bind_group_set,
             encoder,
             compute_pipelines: &self.compute_pipelines,
             workgroups: self.workgroups,

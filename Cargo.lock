@@ -1836,6 +1836,7 @@ dependencies = [
  "anyhow",
  "bytemuck",
  "nalgebra 0.32.6",
+ "pollster",
  "wgpu",
 ]
 
@@ -1846,7 +1847,6 @@ dependencies = [
  "anyhow",
  "fxhash",
  "gputter-core",
- "pollster",
  "proc-macro2",
  "quote",
  "regex",

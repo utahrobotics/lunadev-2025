@@ -1,5 +1,6 @@
 use std::sync::OnceLock;
 
+use pollster::FutureExt;
 pub use wgpu;
 
 pub mod buffers;
@@ -54,4 +55,8 @@ pub fn get_device() -> &'static GpuDevice {
     GPU_DEVICE
         .get()
         .expect("GpuDevice was not initialized. Call init_gputter first")
+}
+
+pub fn init_gputter_blocking() -> anyhow::Result<()> {
+    init_gputter().block_on()
 }

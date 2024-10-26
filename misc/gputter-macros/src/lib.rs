@@ -6,8 +6,7 @@ use std::{
 };
 
 use fxhash::FxHashMap;
-use gputter_core::{get_device, init_gputter, wgpu, GpuDevice};
-use pollster::FutureExt;
+use gputter_core::{get_device, init_gputter_blocking, wgpu, GpuDevice};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use regex::Regex;
@@ -245,8 +244,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         .collect();
 
     // Check that it compiles
-    init_gputter()
-        .block_on()
+    init_gputter_blocking()
         .expect("Failed to initialize gputter");
     let GpuDevice { device, .. } = get_device();
     if let Err(panic) = catch_unwind(AssertUnwindSafe(|| {
