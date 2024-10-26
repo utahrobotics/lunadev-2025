@@ -9,10 +9,13 @@ use serde::Deserialize;
 use tokio_serial::{SerialPort, SerialPortBuilderExt, SerialStream};
 use urobotics_app::Application;
 use urobotics_core::{
-    define_callbacks, fn_alias, log::error, tokio::{
+    define_callbacks, fn_alias,
+    log::error,
+    tokio::{
         self,
         io::{AsyncReadExt, WriteHalf},
-    }, BlockOn
+    },
+    BlockOn,
 };
 
 fn_alias! {
@@ -56,7 +59,7 @@ impl SerialConnection {
             buffer_size: default_buffer_size(),
         }
     }
-    
+
     pub fn get_bytes_callback(&self) -> BytesCallbacksRef {
         self.serial_output.get_ref()
     }

@@ -20,7 +20,7 @@ members = [
     "lunabotics/lunabase-lib",
     "lunabotics/lunasim-lib",
     "misc/k",
-    "lunabotics/heightmap", "lunabotics/lunabot-ai", "misc/ares-bt", "misc/cakap2", "misc/recycler",
+    "lunabotics/heightmap", "lunabotics/lunabot-ai", "misc/ares-bt", "misc/cakap2", "misc/recycler", "misc/gputter-core", "misc/gputter-macros", "misc/gputter",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]
@@ -81,7 +81,7 @@ urobotics-video = { path = "urobotics/urobotics-video" }
 urobotics = { path = "urobotics/urobotics" }
 urobotics-camera = { path = "urobotics/urobotics-camera" }
 urobotics-py = { path = "urobotics/urobotics-py" }
-urobotics-realsense = { path = "urobotics/urobotics-realsense" }
+# urobotics-realsense = { path = "urobotics/urobotics-realsense" }
 tasker = { path = "misc/tasker" }
 cakap2 = { path = "misc/cakap2" }
 lunabase-lib = { path = "lunabotics/lunabase-lib" }

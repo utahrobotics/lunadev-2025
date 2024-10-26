@@ -11,14 +11,14 @@ urobotics-smach = { workspace = true , optional = true }
 urobotics-video = { workspace = true , optional = true }
 urobotics-py = { workspace = true , optional = true }
 urobotics-camera = { workspace = true , optional = true, features = ["standalone"]}
-urobotics-realsense = { workspace = true , optional = true }
+# urobotics-realsense = { workspace = true , optional = true }
 
 [features]
-all = ["app", "serial", "smach", "video", "python", "camera", "realsense"]
+all = ["app", "serial", "smach", "video", "python", "camera"]
 app = ["urobotics-app"]
 serial = ["urobotics-serial"]
 smach = ["urobotics-smach"]
 video = ["urobotics-video"]
 python = ["urobotics-py"]
 camera = ["urobotics-camera"]
-realsense = ["urobotics-realsense"]
+# realsense = ["urobotics-realsense"]
