@@ -22,8 +22,7 @@ pub struct GpuWriteLock<'a> {
     pub(crate) device: &'static wgpu::Device,
 }
 
-pub trait WritableGpuBuffer: GpuBuffer
-{
+pub trait WritableGpuBuffer: GpuBuffer {
     fn write(
         &mut self,
         data: &Self::Data,
@@ -32,7 +31,13 @@ pub trait WritableGpuBuffer: GpuBuffer
     ) {
         let bytes = data.to_bytes();
         staging_belt
-            .write_buffer(encoder, self.get_buffer(), 0, NonZeroU64::new(bytes.len() as u64).unwrap(), device)
+            .write_buffer(
+                encoder,
+                self.get_buffer(),
+                0,
+                NonZeroU64::new(bytes.len() as u64).unwrap(),
+                device,
+            )
             .copy_from_slice(bytes);
     }
 }
@@ -41,7 +46,6 @@ pub struct GpuReadLock<'a> {
     pub(crate) encoder: &'a mut wgpu::CommandEncoder,
     pub(crate) device: &'static wgpu::Device,
 }
-
 
 pub trait GpuBufferTuple {
     fn create_layouts() -> Box<[wgpu::BindGroupLayoutEntry]>;
@@ -68,7 +72,7 @@ macro_rules! tuple_impl {
                 )*
                 max
             }
-            
+
             fn pre_submission(&self, encoder: &mut CommandEncoder) {
                 $(
                     self.$index.pre_submission(encoder);
@@ -146,7 +150,7 @@ macro_rules! write_impl {
             $selected:WritableGpuBuffer
         {
             type Data = $selected::Data;
-            
+
             fn write_to(&mut self, data: &Self::Data, lock: &mut GpuWriteLock) {
                 self.buffers.$index.write(data, lock, &mut self.staging_belt);
             }
@@ -161,11 +165,15 @@ write_impl!(1 B, A B);
 impl<S: GpuBufferTuple> GpuBufferSet<S> {
     pub fn write<const I: usize, T>(&mut self, data: &T, lock: &mut GpuWriteLock)
     where
-        Self: WriteableGpuBufferInSet<I, Data = T>
+        Self: WriteableGpuBufferInSet<I, Data = T>,
     {
         self.write_to(data, lock);
     }
-    pub(crate) fn set_into_compute_pass<'a>(&'a self, index: u32, pass: &mut wgpu::ComputePass<'a>) {
+    pub(crate) fn set_into_compute_pass<'a>(
+        &'a self,
+        index: u32,
+        pass: &mut wgpu::ComputePass<'a>,
+    ) {
         pass.set_bind_group(index, &self.bind_group, &[]);
     }
     pub(crate) fn pre_submission(&mut self, encoder: &mut CommandEncoder) {

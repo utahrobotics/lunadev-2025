@@ -58,7 +58,7 @@ fn type_resolver(s: &str, uint_consts: &FxHashMap<&str, Option<u32>>) -> String 
         "vec4i" => return "gputter::types::AlignedVec4<i32>".into(),
         _ => {}
     }
-    
+
     if let Some(inner) = unformat!("array<{}>", s) {
         if let Some((ty, mut count)) = unformat!("{},{}", inner) {
             count = count.trim();
@@ -81,7 +81,7 @@ fn type_resolver(s: &str, uint_consts: &FxHashMap<&str, Option<u32>>) -> String 
         // There is no count
         return format!("[{}]", type_resolver(inner.trim(), uint_consts));
     }
-    
+
     // It is some custom type that is used verbatim in the shader and the host
     s.into()
 }
@@ -101,45 +101,52 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
     };
 
     let re = Regex::new(r"@compute[\s@a-zA-Z0-9\(\)_,]+fn\s+([a-zA-Z0-9]+)\s*\(").unwrap();
-    let compute_fns: Vec<_> = re.captures_iter(&shader).map(|caps| {
-        let (_, [fn_name]) = caps.extract();
-        fn_name
-    }).collect();
-    
-    let re = Regex::new(
-            r"const\s*([a-zA-Z0-9]+)\s*:\s*([a-zA-Z0-9]+)\s*=\s*([\{\}a-zA-Z0-9]+)\s*;?",
-        )
-        .unwrap();
+    let compute_fns: Vec<_> = re
+        .captures_iter(&shader)
+        .map(|caps| {
+            let (_, [fn_name]) = caps.extract();
+            fn_name
+        })
+        .collect();
 
-    let uint_consts: FxHashMap<_, _> = re.captures_iter(&shader).filter_map(|caps| {
-        let (_, [const_name, const_ty, const_val]) = caps.extract();
-        if const_ty != "u32" && const_ty != "NonZeroU32" {
-            return None;
-        }
+    let re =
+        Regex::new(r"const\s*([a-zA-Z0-9]+)\s*:\s*([a-zA-Z0-9]+)\s*=\s*([\{\}a-zA-Z0-9]+)\s*;?")
+            .unwrap();
 
-        if const_val.starts_with("{{") && const_val.ends_with("}}") {
-            return Some((const_name, None));
-        }
+    let uint_consts: FxHashMap<_, _> = re
+        .captures_iter(&shader)
+        .filter_map(|caps| {
+            let (_, [const_name, const_ty, const_val]) = caps.extract();
+            if const_ty != "u32" && const_ty != "NonZeroU32" {
+                return None;
+            }
 
-        let Ok(n) = u32::from_str(&const_val) else {
-            panic!(r#"Constant "{const_name}" is not a valid u32 (was {const_val})"#);
-        };
-        Some((const_name, Some(n)))
-    })
-    .collect();
+            if const_val.starts_with("{{") && const_val.ends_with("}}") {
+                return Some((const_name, None));
+            }
+
+            let Ok(n) = u32::from_str(&const_val) else {
+                panic!(r#"Constant "{const_name}" is not a valid u32 (was {const_val})"#);
+            };
+            Some((const_name, Some(n)))
+        })
+        .collect();
 
     let re = Regex::new(r"#\[buffer\(([a-zA-Z0-9]+)\)\]").unwrap();
 
-    let buffer_rw_modes: Vec<_> = re.captures_iter(&shader).map(|caps| {
-        let (_, [rw_mode]) = caps.extract();
-        match rw_mode {
-            "HostHidden" => "HostHidden",
-            "HostReadOnly" => "HostReadOnly",
-            "HostWriteOnly" => "HostWriteOnly",
-            "HostReadWrite" => "HostReadWrite",
-            _ => panic!("Unsupported buffer host read-write mode: {rw_mode}"),
-        }
-    }).collect();
+    let buffer_rw_modes: Vec<_> = re
+        .captures_iter(&shader)
+        .map(|caps| {
+            let (_, [rw_mode]) = caps.extract();
+            match rw_mode {
+                "HostHidden" => "HostHidden",
+                "HostReadOnly" => "HostReadOnly",
+                "HostWriteOnly" => "HostWriteOnly",
+                "HostReadWrite" => "HostReadWrite",
+                _ => panic!("Unsupported buffer host read-write mode: {rw_mode}"),
+            }
+        })
+        .collect();
 
     let mut buffer_storage_types = vec![];
     let mut buffer_types = vec![];
@@ -244,8 +251,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         .collect();
 
     // Check that it compiles
-    init_gputter_blocking()
-        .expect("Failed to initialize gputter");
+    init_gputter_blocking().expect("Failed to initialize gputter");
     let GpuDevice { device, .. } = get_device();
     if let Err(panic) = catch_unwind(AssertUnwindSafe(|| {
         device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -305,11 +311,13 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
     let buffer_idents = buffer_names.iter().map(|&name| format_ident!("{name}"));
 
     let compute_count = compute_fns.len();
-    let compile_out = compute_fns.iter()
-        .map(|&name| {
-            proc_macro2::TokenStream::from_str(&format!("gputter::shader::ComputeFn::new_unchecked(shader.clone(), {name:?})")).unwrap()
-        });
-    
+    let compile_out = compute_fns.iter().map(|&name| {
+        proc_macro2::TokenStream::from_str(&format!(
+            "gputter::shader::ComputeFn::new_unchecked(shader.clone(), {name:?})"
+        ))
+        .unwrap()
+    });
+
     // Build the output, possibly using quasi-quotation
     let expanded = quote! {
         #vis struct #name<S> {

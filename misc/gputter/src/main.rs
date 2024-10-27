@@ -4,9 +4,14 @@ use gputter::{
     buffers::{
         storage::{
             HostHidden, HostReadOnly, HostReadWrite, ShaderReadOnly, ShaderReadWrite, StorageBuffer,
-            
-        }, uniform::UniformBuffer, GpuBufferSet, 
-    }, compute::ComputePipeline, init_gputter, shader::BufferGroupBinding, types::AlignedVec2
+        },
+        uniform::UniformBuffer,
+        GpuBufferSet,
+    },
+    compute::ComputePipeline,
+    init_gputter,
+    shader::BufferGroupBinding,
+    types::AlignedVec2,
 };
 use gputter_macros::build_shader;
 use pollster::FutureExt;
@@ -50,26 +55,15 @@ fn main() {
     let [main_fn] = test.compile();
     let pipeline = ComputePipeline::new([&main_fn]);
     let mut bind_grps = (
-        GpuBufferSet::from(
-            (
-                UniformBuffer::new(),
-                StorageBuffer::new(),
-            )
-        ),
-        GpuBufferSet::from(
-            (
-                StorageBuffer::new(),
-                StorageBuffer::new(),
-            )
-        ),
+        GpuBufferSet::from((UniformBuffer::new(), StorageBuffer::new())),
+        GpuBufferSet::from((StorageBuffer::new(), StorageBuffer::new())),
     );
-    pipeline.new_pass(|mut lock| {
-        bind_grps.0.write::<0, _>(
-            &32,
-            &mut lock
-        );
-        bind_grps
-    }).finish();
+    pipeline
+        .new_pass(|mut lock| {
+            bind_grps.0.write::<0, _>(&32, &mut lock);
+            bind_grps
+        })
+        .finish();
     loop {
         std::thread::park();
     }

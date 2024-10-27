@@ -3,7 +3,6 @@ pub trait StaticIndexable<const I: usize> {
     fn get(&self) -> &Self::Output;
 }
 
-
 macro_rules! tuple_idx_impl {
     ($index: tt $selected: ident $($ty:ident),+) => {
         impl<$($ty),*> StaticIndexable<$index> for ($($ty,)*) {

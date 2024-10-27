@@ -84,7 +84,7 @@ impl<T, HM, SM> StorageBuffer<T, HM, SM>
 where
     T: GpuType<Size = StaticSize<T>>,
     HM: HostStorageBufferMode,
-    SM: ShaderStorageBufferMode
+    SM: ShaderStorageBufferMode,
 {
     pub fn new() -> Self {
         const {
@@ -99,7 +99,7 @@ where
             usage: HM::get_usage(),
             mapped_at_creation: false,
         });
-        
+
         // Only allocate a read buffer if the host can read and the shader can write
         let read_buffer = if const { HM::HOST_CAN_READ && !SM::READONLY } {
             Some(device.create_buffer(&wgpu::BufferDescriptor {
@@ -246,7 +246,9 @@ where
 impl<T, SM> WritableGpuBuffer for StorageBuffer<T, HostWriteOnly, SM>
 where
     T: GpuType + ?Sized,
-    SM: ShaderStorageBufferMode, {}
+    SM: ShaderStorageBufferMode,
+{
+}
 
 impl<T, SM> GpuBuffer for StorageBuffer<T, HostReadOnly, SM>
 where
@@ -285,7 +287,9 @@ where
     fn post_submission(&self) {
         if !SM::READONLY {
             let read_buffer = self.read_buffer.as_ref().unwrap();
-            read_buffer.slice(..).map_async(wgpu::MapMode::Read, |result| {result.unwrap()});
+            read_buffer
+                .slice(..)
+                .map_async(wgpu::MapMode::Read, |result| result.unwrap());
         }
     }
 }
@@ -327,7 +331,9 @@ where
     fn post_submission(&self) {
         if !SM::READONLY {
             let read_buffer = self.read_buffer.as_ref().unwrap();
-            read_buffer.slice(..).map_async(wgpu::MapMode::Read, |result| {result.unwrap()});
+            read_buffer
+                .slice(..)
+                .map_async(wgpu::MapMode::Read, |result| result.unwrap());
         }
     }
 }
@@ -335,16 +341,24 @@ where
 impl<T, SM> WritableGpuBuffer for StorageBuffer<T, HostReadWrite, SM>
 where
     T: GpuType + ?Sized,
-    SM: ShaderStorageBufferMode, {}
-
+    SM: ShaderStorageBufferMode,
+{
+}
 
 impl<T, HM, SM> StorageBuffer<T, HM, SM>
 where
     T: GpuType,
-    HM: HostStorageBufferMode<HOST_CAN_READ=true>,
-    SM: ShaderStorageBufferMode<READONLY=false>
+    HM: HostStorageBufferMode<HOST_CAN_READ = true>,
+    SM: ShaderStorageBufferMode<READONLY = false>,
 {
     pub fn read(&self, into: &mut T) {
-        into.from_bytes(&self.read_buffer.as_ref().unwrap().slice(..).get_mapped_range());
+        into.from_bytes(
+            &self
+                .read_buffer
+                .as_ref()
+                .unwrap()
+                .slice(..)
+                .get_mapped_range(),
+        );
     }
 }

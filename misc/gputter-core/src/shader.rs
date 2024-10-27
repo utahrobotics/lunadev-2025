@@ -2,7 +2,10 @@ use std::{marker::PhantomData, sync::Arc};
 
 use wgpu::ShaderModule;
 
-use crate::{buffers::{GpuBufferSet, GpuBufferTuple}, tuple::StaticIndexable};
+use crate::{
+    buffers::{GpuBufferSet, GpuBufferTuple},
+    tuple::StaticIndexable,
+};
 
 /// A list (tuple) of [`GpuBufferTuple`].
 pub trait IndexGpuBufferTupleList<const GRP_IDX: u32, const BIND_IDX: u32> {
@@ -17,7 +20,6 @@ pub trait GpuBufferTupleList {
     fn post_submission(&self);
     fn set_into_compute_pass<'a>(&'a self, pass: &mut wgpu::ComputePass<'a>);
 }
-
 
 macro_rules! tuple_impl {
     ($count: literal, $($index: tt $ty:ident),+) => {

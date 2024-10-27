@@ -8,8 +8,8 @@ pub mod buffers;
 pub mod compute;
 pub mod shader;
 pub mod size;
-pub mod types;
 pub mod tuple;
+pub mod types;
 
 pub struct GpuDevice {
     pub device: wgpu::Device,

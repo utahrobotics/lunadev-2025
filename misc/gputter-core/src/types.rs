@@ -122,7 +122,8 @@ where
 }
 
 impl<T: 'static> GpuType for [T]
-where T: bytemuck::NoUninit + bytemuck::AnyBitPattern
+where
+    T: bytemuck::NoUninit + bytemuck::AnyBitPattern,
 {
     type Size = DynamicSize<T>;
 
