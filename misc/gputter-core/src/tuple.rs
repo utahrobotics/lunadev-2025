@@ -27,3 +27,16 @@ tuple_idx_impl!(0 A A, B, C, D);
 tuple_idx_impl!(1 B A, B, C, D);
 tuple_idx_impl!(2 C A, B, C, D);
 tuple_idx_impl!(3 D A, B, C, D);
+
+tuple_idx_impl!(0 A A, B, C, D, E);
+tuple_idx_impl!(1 B A, B, C, D, E);
+tuple_idx_impl!(2 C A, B, C, D, E);
+tuple_idx_impl!(3 D A, B, C, D, E);
+tuple_idx_impl!(4 E A, B, C, D, E);
+
+tuple_idx_impl!(0 A A, B, C, D, E, F);
+tuple_idx_impl!(1 B A, B, C, D, E, F);
+tuple_idx_impl!(2 C A, B, C, D, E, F);
+tuple_idx_impl!(3 D A, B, C, D, E, F);
+tuple_idx_impl!(4 E A, B, C, D, E, F);
+tuple_idx_impl!(5 F A, B, C, D, E, F);

@@ -24,8 +24,6 @@ pub trait GpuBufferTupleList {
 macro_rules! tuple_impl {
     ($count: literal, $($index: tt $ty:ident),+) => {
         impl<$($ty: GpuBufferTuple),*> GpuBufferTupleList for ($(GpuBufferSet<$ty>,)*)
-        // where
-        // $(GpuBufferSet<$ty>: ValidGpuBufferSet,)*
         {
             fn create_layout_entries() -> Box<[Box<[wgpu::BindGroupLayoutEntry]>]> {
                 Box::new(
@@ -57,11 +55,6 @@ macro_rules! tuple_impl {
     }
 }
 
-tuple_impl!(1, 0 A);
-tuple_impl!(2, 0 A, 1 B);
-tuple_impl!(3, 0 A, 1 B, 2 C);
-tuple_impl!(4, 0 A, 1 B, 2 C, 3 D);
-
 macro_rules! tuple_idx_impl {
     ($index1: tt $selected: ident $index2: tt $($ty:ident),+) => {
         impl<$($ty: GpuBufferTuple),*> IndexGpuBufferTupleList<$index1, $index2> for ($(GpuBufferSet<$ty>,)*)
@@ -79,20 +72,6 @@ macro_rules! tuple_idx_impl {
         }
     }
 }
-
-tuple_idx_impl!(0 A 0 A);
-tuple_idx_impl!(0 A 1 A);
-tuple_idx_impl!(0 A 2 A);
-tuple_idx_impl!(0 A 3 A);
-
-tuple_idx_impl!(0 A 0 A, B);
-tuple_idx_impl!(0 A 1 A, B);
-tuple_idx_impl!(0 A 2 A, B);
-tuple_idx_impl!(0 A 3 A, B);
-tuple_idx_impl!(1 B 0 A, B);
-tuple_idx_impl!(1 B 1 A, B);
-tuple_idx_impl!(1 B 2 A, B);
-tuple_idx_impl!(1 B 3 A, B);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BufferGroupBinding<B, S> {
@@ -166,3 +145,51 @@ impl<S> ComputeFn<S> {
         assert_eq!(name, self.name);
     }
 }
+
+
+tuple_impl!(1, 0 A);
+tuple_impl!(2, 0 A, 1 B);
+tuple_impl!(3, 0 A, 1 B, 2 C);
+tuple_impl!(4, 0 A, 1 B, 2 C, 3 D);
+tuple_impl!(5, 0 A, 1 B, 2 C, 3 D, 4 E);
+tuple_impl!(6, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F);
+
+
+tuple_idx_impl!(0 A 0 A);
+tuple_idx_impl!(0 A 1 A);
+tuple_idx_impl!(0 A 2 A);
+tuple_idx_impl!(0 A 3 A);
+tuple_idx_impl!(0 A 4 A);
+tuple_idx_impl!(0 A 5 A);
+
+tuple_idx_impl!(0 A 0 A, B);
+tuple_idx_impl!(0 A 1 A, B);
+tuple_idx_impl!(0 A 2 A, B);
+tuple_idx_impl!(0 A 3 A, B);
+tuple_idx_impl!(0 A 4 A, B);
+tuple_idx_impl!(0 A 5 A, B);
+tuple_idx_impl!(1 B 0 A, B);
+tuple_idx_impl!(1 B 1 A, B);
+tuple_idx_impl!(1 B 2 A, B);
+tuple_idx_impl!(1 B 3 A, B);
+tuple_idx_impl!(1 B 4 A, B);
+tuple_idx_impl!(1 B 5 A, B);
+
+tuple_idx_impl!(0 A 0 A, B, C);
+tuple_idx_impl!(0 A 1 A, B, C);
+tuple_idx_impl!(0 A 2 A, B, C);
+tuple_idx_impl!(0 A 3 A, B, C);
+tuple_idx_impl!(0 A 4 A, B, C);
+tuple_idx_impl!(0 A 5 A, B, C);
+tuple_idx_impl!(1 B 0 A, B, C);
+tuple_idx_impl!(1 B 1 A, B, C);
+tuple_idx_impl!(1 B 2 A, B, C);
+tuple_idx_impl!(1 B 3 A, B, C);
+tuple_idx_impl!(1 B 4 A, B, C);
+tuple_idx_impl!(1 B 5 A, B, C);
+tuple_idx_impl!(2 C 0 A, B, C);
+tuple_idx_impl!(2 C 1 A, B, C);
+tuple_idx_impl!(2 C 2 A, B, C);
+tuple_idx_impl!(2 C 3 A, B, C);
+tuple_idx_impl!(2 C 4 A, B, C);
+tuple_idx_impl!(2 C 5 A, B, C);

@@ -179,7 +179,6 @@ where
     SM: ShaderStorageBufferMode,
 {
     type PostSubmission<'a> = () where Self: 'a;
-    const READABLE: bool = false;
     type Data = T;
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -216,7 +215,6 @@ where
     SM: ShaderStorageBufferMode,
 {
     type PostSubmission<'a> = () where Self: 'a;
-    const READABLE: bool = false;
     type Data = T;
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -278,7 +276,6 @@ where
     T: GpuType + ?Sized,
 {
     type PostSubmission<'a> = wgpu::BufferSlice<'a> where Self: 'a;
-    const READABLE: bool = true;
     type Data = T;
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -309,7 +306,6 @@ where
     T: GpuType + ?Sized,
 {
     type PostSubmission<'a> = wgpu::BufferSlice<'a> where Self: 'a;
-    const READABLE: bool = true;
     type Data = T;
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
