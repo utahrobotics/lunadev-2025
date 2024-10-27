@@ -2,12 +2,14 @@ use std::num::NonZeroU32;
 
 use gputter::{
     buffers::{
-        storage::{
-            HostHidden, HostReadOnly, HostReadWrite, ShaderReadWrite, StorageBuffer
-        },
+        storage::{HostHidden, HostReadOnly, HostReadWrite, ShaderReadWrite, StorageBuffer},
         uniform::UniformBuffer,
         GpuBufferSet,
-    }, compute::ComputePipeline, init_gputter_blocking, shader::BufferGroupBinding, types::AlignedVec2
+    },
+    compute::ComputePipeline,
+    init_gputter_blocking,
+    shader::BufferGroupBinding,
+    types::AlignedVec2,
 };
 use gputter_macros::build_shader;
 build_shader!(

@@ -262,13 +262,12 @@ macro_rules! read_impl {
         fn post_submission(&self) -> Self::PostSubmission<'_> {
             let read_buffer = self.read_buffer.as_ref().unwrap();
             let slice = read_buffer.slice(..);
-            slice
-                .map_async(wgpu::MapMode::Read, |result| {
-                    result.unwrap();
-                });
+            slice.map_async(wgpu::MapMode::Read, |result| {
+                result.unwrap();
+            });
             slice
         }
-    }
+    };
 }
 
 impl<T> GpuBuffer for StorageBuffer<T, HostReadOnly, ShaderReadWrite>
@@ -283,9 +282,7 @@ where
             binding,
             visibility: wgpu::ShaderStages::COMPUTE,
             ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage {
-                    read_only: false,
-                },
+                ty: wgpu::BufferBindingType::Storage { read_only: false },
                 has_dynamic_offset: false,
                 min_binding_size: None,
             },
@@ -313,9 +310,7 @@ where
             binding,
             visibility: wgpu::ShaderStages::COMPUTE,
             ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage {
-                    read_only: false,
-                },
+                ty: wgpu::BufferBindingType::Storage { read_only: false },
                 has_dynamic_offset: false,
                 min_binding_size: None,
             },
@@ -335,7 +330,7 @@ impl<T, SM> WritableGpuBuffer for StorageBuffer<T, HostReadWrite, SM>
 where
     T: GpuType + ?Sized,
     SM: ShaderStorageBufferMode,
-    Self: GpuBuffer
+    Self: GpuBuffer,
 {
 }
 

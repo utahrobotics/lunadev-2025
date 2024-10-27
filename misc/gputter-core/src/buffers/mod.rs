@@ -9,7 +9,9 @@ pub mod uniform;
 
 pub trait GpuBuffer {
     type Data: GpuType + ?Sized;
-    type PostSubmission<'a> where Self: 'a;
+    type PostSubmission<'a>
+    where
+        Self: 'a;
 
     fn get_buffer(&self) -> &wgpu::Buffer;
     fn pre_submission(&self, encoder: &mut CommandEncoder);
@@ -45,7 +47,9 @@ pub trait WritableGpuBuffer: GpuBuffer {
 }
 
 pub trait GpuBufferTuple {
-    type PostSubmission<'a> where Self: 'a;
+    type PostSubmission<'a>
+    where
+        Self: 'a;
     fn create_layouts() -> Box<[wgpu::BindGroupLayoutEntry]>;
     fn get_max_writable_size(&self) -> u64;
     fn pre_submission(&self, encoder: &mut CommandEncoder);
@@ -148,7 +152,6 @@ macro_rules! write_impl {
     }
 }
 
-
 impl<S: GpuBufferTuple> GpuBufferSet<S> {
     pub fn write<const I: usize, T>(&mut self, data: &T, lock: &mut GpuWriteLock)
     where
@@ -173,7 +176,6 @@ impl<S: GpuBufferTuple> GpuBufferSet<S> {
     }
 }
 
-
 tuple_impl!(1, 0 A);
 tuple_impl!(2, 0 A, 1 B);
 tuple_impl!(3, 0 A, 1 B, 2 C);
@@ -181,14 +183,12 @@ tuple_impl!(4, 0 A, 1 B, 2 C, 3 D);
 tuple_impl!(5, 0 A, 1 B, 2 C, 3 D, 4 E);
 tuple_impl!(6, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F);
 
-
 set_impl!(1, 0 A);
 set_impl!(2, 0 A, 1 B);
 set_impl!(3, 0 A, 1 B, 2 C);
 set_impl!(4, 0 A, 1 B, 2 C, 3 D);
 set_impl!(5, 0 A, 1 B, 2 C, 3 D, 4 E);
 set_impl!(6, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F);
-
 
 write_impl!(0 A, A);
 

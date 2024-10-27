@@ -146,14 +146,12 @@ impl<S> ComputeFn<S> {
     }
 }
 
-
 tuple_impl!(1, 0 A);
 tuple_impl!(2, 0 A, 1 B);
 tuple_impl!(3, 0 A, 1 B, 2 C);
 tuple_impl!(4, 0 A, 1 B, 2 C, 3 D);
 tuple_impl!(5, 0 A, 1 B, 2 C, 3 D, 4 E);
 tuple_impl!(6, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F);
-
 
 tuple_idx_impl!(0 A 0 A);
 tuple_idx_impl!(0 A 1 A);

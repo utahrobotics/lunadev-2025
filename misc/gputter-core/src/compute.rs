@@ -54,7 +54,10 @@ impl<S: GpuBufferTupleList, const SIZE: usize> ComputePipeline<S, SIZE> {
         }
     }
 
-    pub fn new_pass<'a, 'b>(&'a self, bind_group_fn: impl FnOnce(GpuWriteLock) -> &'b mut S) -> ComputePass<'a, 'b, S, SIZE> {
+    pub fn new_pass<'a, 'b>(
+        &'a self,
+        bind_group_fn: impl FnOnce(GpuWriteLock) -> &'b mut S,
+    ) -> ComputePass<'a, 'b, S, SIZE> {
         let GpuDevice { device, .. } = get_device();
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
