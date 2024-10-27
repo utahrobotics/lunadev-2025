@@ -1,14 +1,14 @@
-use crate::size::{DynamicSize, StaticSize};
+use crate::size::{BufferSize, DynamicSize, StaticSize};
 use crate::{get_device, GpuDevice};
 
-use super::{GpuBuffer, ReadableGpuBuffer, WritableGpuBuffer};
+use super::{GpuBuffer, WritableGpuBuffer};
 
 use crate::types::GpuType;
 
 use std::marker::PhantomData;
 
 /// Uniform Buffers can only be read from shaders, and written to by the host.
-pub struct UniformBuffer<T: GpuType +  ?Sized> {
+pub struct UniformBuffer<T: GpuType + ?Sized> {
     pub(crate) buffer: wgpu::Buffer,
     size: T::Size,
     pub(crate) phantom: PhantomData<T>,
@@ -16,12 +16,6 @@ pub struct UniformBuffer<T: GpuType +  ?Sized> {
 
 impl<T: GpuType + ?Sized> GpuBuffer for UniformBuffer<T> {
     type Data = T;
-    type ReadBuffer = ();
-    type Size = T::Size;
-
-    fn make_read_buffer(_size: Self::Size, _device: &wgpu::Device) -> Self::ReadBuffer {
-        
-    }
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
@@ -38,9 +32,11 @@ impl<T: GpuType + ?Sized> GpuBuffer for UniformBuffer<T> {
     fn get_buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
-    fn get_size(&self) -> Self::Size {
-        self.size
+    fn get_writable_size(&self) -> u64 {
+        self.size.size()
     }
+    fn pre_submission(&self, _encoder: &mut wgpu::CommandEncoder) {}
+    fn post_submission(&self) { }
 }
 
 impl<T: GpuType<Size=StaticSize<T>>> UniformBuffer<T> {
@@ -66,7 +62,6 @@ impl<T: GpuType<Size=StaticSize<T>>> UniformBuffer<T> {
 }
 
 impl<T: GpuType +  ?Sized> WritableGpuBuffer for UniformBuffer<T> {}
-impl<T: GpuType +  ?Sized> ReadableGpuBuffer for UniformBuffer<T> {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TooLargeForUniform;

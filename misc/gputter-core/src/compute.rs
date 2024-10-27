@@ -53,7 +53,8 @@ impl<S: GpuBufferTupleList, const SIZE: usize> ComputePipeline<S, SIZE> {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: None,
         });
-        let bind_group_set = bind_group_fn(GpuWriteLock { encoder: &mut encoder, device });
+        let mut bind_group_set = bind_group_fn(GpuWriteLock { encoder: &mut encoder, device });
+        bind_group_set.pre_submission(&mut encoder);
         ComputePass {
             bind_group_set,
             encoder,
@@ -72,6 +73,7 @@ pub struct ComputePass<'a, S, const SIZE: usize> {
 
 impl<'a, S: GpuBufferTupleList, const SIZE: usize> ComputePass<'a, S, SIZE> {
     pub fn finish(mut self) {
+        let GpuDevice { queue, .. } = get_device();
         for (pipeline, workgroups) in self.compute_pipelines.iter().zip(self.workgroups) {
             let mut compute_pass =
                 self.encoder
@@ -88,5 +90,7 @@ impl<'a, S: GpuBufferTupleList, const SIZE: usize> ComputePass<'a, S, SIZE> {
                 workgroups.2,
             );
         }
+        queue.submit(Some(self.encoder.finish()));
+        // self.bind_group_set.post_submission();
     }
 }

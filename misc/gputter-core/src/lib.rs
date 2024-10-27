@@ -1,3 +1,4 @@
+#![feature(associated_const_equality)]
 use std::sync::OnceLock;
 
 use pollster::FutureExt;
@@ -8,6 +9,7 @@ pub mod compute;
 pub mod shader;
 pub mod size;
 pub mod types;
+pub mod tuple;
 
 pub struct GpuDevice {
     pub device: wgpu::Device,

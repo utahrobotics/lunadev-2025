@@ -2,7 +2,7 @@ use std::{marker::PhantomData, sync::Arc};
 
 use wgpu::ShaderModule;
 
-use crate::buffers::{GpuBufferSet, GpuBufferTuple, StaticIndexable, ValidGpuBufferSet};
+use crate::{buffers::{GpuBufferSet, GpuBufferTuple}, tuple::StaticIndexable};
 
 /// A list (tuple) of [`GpuBufferTuple`].
 pub trait IndexGpuBufferTupleList<const GRP_IDX: u32, const BIND_IDX: u32> {
@@ -13,6 +13,8 @@ pub trait IndexGpuBufferTupleList<const GRP_IDX: u32, const BIND_IDX: u32> {
 
 pub trait GpuBufferTupleList {
     fn create_layout_entries() -> Box<[Box<[wgpu::BindGroupLayoutEntry]>]>;
+    fn pre_submission(&mut self, encoder: &mut wgpu::CommandEncoder);
+    fn post_submission(&self);
     fn set_into_compute_pass<'a>(&'a self, pass: &mut wgpu::ComputePass<'a>);
 }
 
@@ -20,8 +22,8 @@ pub trait GpuBufferTupleList {
 macro_rules! tuple_impl {
     ($count: literal, $($index: tt $ty:ident),+) => {
         impl<$($ty: GpuBufferTuple),*> GpuBufferTupleList for ($(GpuBufferSet<$ty>,)*)
-        where
-        $(GpuBufferSet<$ty>: ValidGpuBufferSet,)*
+        // where
+        // $(GpuBufferSet<$ty>: ValidGpuBufferSet,)*
         {
             fn create_layout_entries() -> Box<[Box<[wgpu::BindGroupLayoutEntry]>]> {
                 Box::new(
@@ -35,6 +37,17 @@ macro_rules! tuple_impl {
             fn set_into_compute_pass<'a>(&'a self, pass: &mut wgpu::ComputePass<'a>) {
                 $(
                     self.$index.set_into_compute_pass($index, pass);
+                )*
+            }
+            fn pre_submission(&mut self, encoder: &mut wgpu::CommandEncoder) {
+                $(
+                    self.$index.pre_submission(encoder);
+                )*
+            }
+
+            fn post_submission(&self) {
+                $(
+                    self.$index.buffers.post_submission();
                 )*
             }
         }
