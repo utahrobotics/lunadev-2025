@@ -47,39 +47,54 @@ fn type_resolver(s: &str, uint_consts: &FxHashMap<&str, Option<u32>>) -> String 
         "f32" => return "f32".into(),
         "u32" => return "u32".into(),
         "i32" => return "i32".into(),
-        "vec2f" => return "gputter::types::AlignedVec2<f32>".into(),
-        "vec3f" => return "gputter::types::AlignedVec3<f32>".into(),
-        "vec4f" => return "gputter::types::AlignedVec4<f32>".into(),
-        "vec2u" => return "gputter::types::AlignedVec2<u32>".into(),
-        "vec3u" => return "gputter::types::AlignedVec3<u32>".into(),
-        "vec4u" => return "gputter::types::AlignedVec4<u32>".into(),
-        "vec2i" => return "gputter::types::AlignedVec2<i32>".into(),
-        "vec3i" => return "gputter::types::AlignedVec3<i32>".into(),
-        "vec4i" => return "gputter::types::AlignedVec4<i32>".into(),
         _ => {}
     }
 
-    if let Some(inner) = unformat!("array<{}>", s) {
-        if let Some((ty, mut count)) = unformat!("{},{}", inner) {
-            count = count.trim();
-            if let Ok(count) = usize::from_str(count) {
-                // count is a literal integer
-                return format!("[{}; {}]", type_resolver(ty.trim(), uint_consts), count);
-            } else if let Some(&count) = uint_consts.get(count) {
-                if let Some(count) = count {
-                    // count is a constant value
+    {
+        let delimited = &format!("{s}?");
+        if let Some(inner) = unformat!("array<{}>?", delimited) {
+            if let Some((ty, mut count)) = unformat!("{},{}", inner) {
+                count = count.trim();
+                if let Ok(count) = usize::from_str(count) {
+                    // count is a literal integer
                     return format!("[{}; {}]", type_resolver(ty.trim(), uint_consts), count);
+                } else if let Some(&count) = uint_consts.get(count) {
+                    if let Some(count) = count {
+                        // count is a constant value
+                        return format!("[{}; {}]", type_resolver(ty.trim(), uint_consts), count);
+                    } else {
+                        // If count is None, it is a build time constant that is not known at compile time
+                        // of the host code
+                        return format!("[{}]", type_resolver(ty.trim(), uint_consts));
+                    }
                 } else {
-                    // If count is None, it is a build time constant that is not known at compile time
-                    // of the host code
-                    return format!("[{}]", type_resolver(ty.trim(), uint_consts));
+                    panic!("Invalid array count: {count} in {s} {uint_consts:?}");
                 }
+            }
+            // There is no count
+            return format!("[{}]", type_resolver(inner.trim(), uint_consts));
+        }
+        if let Some(inner) = unformat!("atomic<{}>?", delimited) {
+            // Atomic types in the shader do not need to be atomic in the host
+            return type_resolver(inner.trim(), uint_consts);
+        }
+        if let Some(mut inner) = unformat!("vec{}?", delimited) {
+            inner = inner.trim();
+            if let Some((n, ty)) = unformat!("{}<{}>", inner) {
+                return format!("gputter::types::AlignedVec{n}<{ty}>")
+            } else if inner.len() != 2 {
+                panic!("Invalid vector type: {s}");
             } else {
-                panic!("Invalid array count: {count} in {s} {uint_consts:?}");
+                let (n, mut ty) = inner.split_at(1);
+                ty = match ty {
+                    "f" => "f32",
+                    "u" => "u32",
+                    "i" => "i32",
+                    _ => panic!("Invalid vector type: {s}"),
+                };
+                return format!("gputter::types::AlignedVec{n}<{ty}>");
             }
         }
-        // There is no count
-        return format!("[{}]", type_resolver(inner.trim(), uint_consts));
     }
 
     // It is some custom type that is used verbatim in the shader and the host
@@ -93,6 +108,9 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         vis, name, shader, ..
     } = parse_macro_input!(input as BuildShader);
 
+    // Add aliases to the start
+    // This helps with later steps if the first symbol in the shader
+    // is a buffer annotation
     let shader = {
         let mut tmp = String::with_capacity(shader.value().len() + 1);
         tmp.push_str("alias NonZeroU32 = u32;\nalias NonZeroI32 = i32;\n");
@@ -100,6 +118,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         tmp
     };
 
+    // Find all compute functions
     let re = Regex::new(r"@compute[\s@a-zA-Z0-9\(\)_,]+fn\s+([a-zA-Z0-9]+)\s*\(").unwrap();
     let compute_fns: Vec<_> = re
         .captures_iter(&shader)
@@ -109,6 +128,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Find all u32 constants as they can be used for array lengths
     let re =
         Regex::new(r"const\s*([a-zA-Z0-9]+)\s*:\s*([a-zA-Z0-9]+)\s*=\s*([\{\}a-zA-Z0-9]+)\s*;?")
             .unwrap();
@@ -132,6 +152,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Split by buffer annotations
     let re = Regex::new(r"#\[buffer\(([a-zA-Z0-9]+)\)\]").unwrap();
 
     let buffer_rw_modes: Vec<_> = re
@@ -148,6 +169,10 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Parse all buffer definitions
+    // They should come immediately after the buffer annotation,
+    // and the first split element can be ignore as it is definitely the aliases
+    // defined earlier
     let mut buffer_storage_types = vec![];
     let mut buffer_types = vec![];
     let splitted: Vec<_> = re.split(&shader).collect();
@@ -196,6 +221,8 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Find all build time constants
+    // These constants can be filled by the host before the shader is compiled
     let re = Regex::new(
         r"(const\s+[a-zA-Z0-9]+\s*:\s*([a-zA-Z0-9]+)\s*=\s*)\{\{([a-zA-Z0-9]+)\}\}\s*(;?)",
     )
@@ -205,6 +232,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
     let mut const_names = vec![];
     let mut binding_index = 0usize;
 
+    // Prepare shader for substitution
     let shader: Vec<_> = splitted
         .into_iter()
         .map(String::from)
@@ -234,6 +262,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Substitute parameters with reasonable defaults
     let tmp_shader: String = shader
         .iter()
         .map(|s| {
@@ -271,6 +300,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         );
     }
 
+    // Replace substitutions with variable names
     let mut binding_index = 0usize;
     let mut const_index = 0usize;
 
@@ -286,11 +316,13 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                 const_index += 1;
                 out
             } else {
+                // Replace regular braces with double braces
                 s.replace('{', "{{").replace('}', "}}")
             }
         })
         .collect();
 
+    // Define actual buffer types as they appear to the host
     let buffer_def: Vec<_> = buffer_names
         .iter()
         .zip(buffer_types.iter())
@@ -307,6 +339,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Define actual constant types as they appear to the host
     let const_def = const_names
         .iter()
         .zip(const_types.iter())
@@ -315,6 +348,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
     let const_idents = const_names.iter().map(|name| format_ident!("{name}"));
     let buffer_idents = buffer_names.iter().map(|&name| format_ident!("{name}"));
 
+    // Create a ComputeFn for each compute function
     let compute_count = compute_fns.len();
     let compile_out = compute_fns.iter().map(|&name| {
         proc_macro2::TokenStream::from_str(&format!(
@@ -323,7 +357,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         .unwrap()
     });
 
-    // Build the output, possibly using quasi-quotation
+    // Build the output
     let expanded = quote! {
         #vis struct #name<S> {
             #(#buffer_def,)*
