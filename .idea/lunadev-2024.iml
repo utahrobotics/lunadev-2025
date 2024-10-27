@@ -25,6 +25,33 @@
       <sourceFolder url="file://$MODULE_DIR$/unros-macros/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/unros/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/usb-pluggy/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/examples/urobotics-tool/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lunabotics/common/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lunabotics/heightmap/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lunabotics/lunabase-lib/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lunabotics/lunabot-ai/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lunabotics/lunabot/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lunabotics/lunasim-lib/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lunabotics/pathfinding/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/misc/ares-bt/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/misc/cakap2/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/misc/compute-shader/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/misc/fitter/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/misc/gputter-core/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/misc/gputter-macros/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/misc/gputter/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/misc/k/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/misc/recycler/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/misc/tasker/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/urobotics/urobotics-app/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/urobotics/urobotics-apriltag/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/urobotics/urobotics-camera/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/urobotics/urobotics-core/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/urobotics/urobotics-py/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/urobotics/urobotics-serial/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/urobotics/urobotics-smach/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/urobotics/urobotics-video/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/urobotics/urobotics/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

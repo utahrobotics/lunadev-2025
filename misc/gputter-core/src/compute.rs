@@ -1,5 +1,7 @@
 use std::marker::PhantomData;
 
+use nalgebra::Vector3;
+
 use crate::{
     buffers::GpuWriteLock,
     get_device,
@@ -9,7 +11,7 @@ use crate::{
 
 pub struct ComputePipeline<S, const SIZE: usize> {
     compute_pipelines: [wgpu::ComputePipeline; SIZE],
-    pub workgroups: [(u32, u32, u32); SIZE],
+    pub workgroups: [Vector3<u32>; SIZE],
     phantom: PhantomData<fn() -> S>,
 }
 
@@ -47,20 +49,19 @@ impl<S: GpuBufferTupleList, const SIZE: usize> ComputePipeline<S, SIZE> {
 
         Self {
             compute_pipelines,
-            workgroups: [(1, 1, 1); SIZE],
+            workgroups: [Vector3::new(1, 1, 1); SIZE],
             phantom: PhantomData,
         }
     }
 
-    pub fn new_pass(&self, bind_group_fn: impl FnOnce(GpuWriteLock) -> S) -> ComputePass<S, SIZE> {
+    pub fn new_pass<'a, 'b>(&'a self, bind_group_fn: impl FnOnce(GpuWriteLock) -> &'b mut S) -> ComputePass<'a, 'b, S, SIZE> {
         let GpuDevice { device, .. } = get_device();
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        let mut bind_group_set = bind_group_fn(GpuWriteLock {
+        let bind_group_set = bind_group_fn(GpuWriteLock {
             encoder: &mut encoder,
             device,
         });
-        bind_group_set.pre_submission(&mut encoder);
         ComputePass {
             bind_group_set,
             encoder,
@@ -70,16 +71,16 @@ impl<S: GpuBufferTupleList, const SIZE: usize> ComputePipeline<S, SIZE> {
     }
 }
 
-pub struct ComputePass<'a, S, const SIZE: usize> {
-    bind_group_set: S,
+pub struct ComputePass<'a, 'b, S, const SIZE: usize> {
+    bind_group_set: &'b mut S,
     encoder: wgpu::CommandEncoder,
     compute_pipelines: &'a [wgpu::ComputePipeline; SIZE],
-    pub workgroups: [(u32, u32, u32); SIZE],
+    pub workgroups: [Vector3<u32>; SIZE],
 }
 
-impl<'a, S: GpuBufferTupleList, const SIZE: usize> ComputePass<'a, S, SIZE> {
+impl<'a, 'b, S: GpuBufferTupleList, const SIZE: usize> ComputePass<'a, 'b, S, SIZE> {
     pub fn finish(mut self) {
-        let GpuDevice { queue, .. } = get_device();
+        let GpuDevice { queue, device } = get_device();
         for (pipeline, workgroups) in self.compute_pipelines.iter().zip(self.workgroups) {
             let mut compute_pass = self
                 .encoder
@@ -90,9 +91,10 @@ impl<'a, S: GpuBufferTupleList, const SIZE: usize> ComputePass<'a, S, SIZE> {
 
             compute_pass.set_pipeline(pipeline);
             self.bind_group_set.set_into_compute_pass(&mut compute_pass);
-            compute_pass.dispatch_workgroups(workgroups.0, workgroups.1, workgroups.2);
+            compute_pass.dispatch_workgroups(workgroups.x, workgroups.y, workgroups.z);
         }
-        queue.submit(Some(self.encoder.finish()));
-        // self.bind_group_set.post_submission();
+        self.bind_group_set.pre_submission(&mut self.encoder);
+        let idx = queue.submit(Some(self.encoder.finish()));
+        self.bind_group_set.post_submission(device, idx);
     }
 }

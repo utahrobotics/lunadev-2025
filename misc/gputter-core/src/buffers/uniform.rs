@@ -15,6 +15,8 @@ pub struct UniformBuffer<T: GpuType + ?Sized> {
 }
 
 impl<T: GpuType + ?Sized> GpuBuffer for UniformBuffer<T> {
+    type PostSubmission<'a> = () where Self: 'a;
+    const READABLE: bool = false;
     type Data = T;
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -36,7 +38,7 @@ impl<T: GpuType + ?Sized> GpuBuffer for UniformBuffer<T> {
         self.size.size()
     }
     fn pre_submission(&self, _encoder: &mut wgpu::CommandEncoder) {}
-    fn post_submission(&self) {}
+    fn post_submission(&self) -> Self::PostSubmission<'_> {}
 }
 
 impl<T: GpuType<Size = StaticSize<T>>> UniformBuffer<T> {

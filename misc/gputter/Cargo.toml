@@ -6,4 +6,3 @@ edition = "2021"
 [dependencies]
 gputter-core.path = "../gputter-core"
 gputter-macros.path = "../gputter-macros"
-pollster = "0.3.0"

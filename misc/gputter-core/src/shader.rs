@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, sync::Arc};
 
-use wgpu::ShaderModule;
+use wgpu::{ShaderModule, SubmissionIndex};
 
 use crate::{
     buffers::{GpuBufferSet, GpuBufferTuple},
@@ -17,7 +17,7 @@ pub trait IndexGpuBufferTupleList<const GRP_IDX: u32, const BIND_IDX: u32> {
 pub trait GpuBufferTupleList {
     fn create_layout_entries() -> Box<[Box<[wgpu::BindGroupLayoutEntry]>]>;
     fn pre_submission(&mut self, encoder: &mut wgpu::CommandEncoder);
-    fn post_submission(&self);
+    fn post_submission(&mut self, device: &wgpu::Device, idx: SubmissionIndex);
     fn set_into_compute_pass<'a>(&'a self, pass: &mut wgpu::ComputePass<'a>);
 }
 
@@ -47,10 +47,11 @@ macro_rules! tuple_impl {
                 )*
             }
 
-            fn post_submission(&self) {
-                $(
-                    self.$index.buffers.post_submission();
-                )*
+            fn post_submission(&mut self, device: &wgpu::Device, idx: SubmissionIndex) {
+                let _slices = ($(
+                    self.$index.post_submission(),
+                )*);
+                device.poll(wgpu::Maintain::WaitForSubmissionIndex(idx));
             }
         }
     }
@@ -65,11 +66,9 @@ macro_rules! tuple_idx_impl {
     ($index1: tt $selected: ident $index2: tt $($ty:ident),+) => {
         impl<$($ty: GpuBufferTuple),*> IndexGpuBufferTupleList<$index1, $index2> for ($(GpuBufferSet<$ty>,)*)
         where
-            // <Self as StaticIndexable<$index1>>::Output: StaticIndexable<$index2>
             $selected: StaticIndexable<$index2>
         {
             type Binding = BufferGroupBinding<$selected::Output, Self>;
-            // type Output = ;
             fn get() -> Self::Binding {
                 BufferGroupBinding {
                     group_index: $index1,

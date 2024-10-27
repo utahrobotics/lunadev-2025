@@ -178,9 +178,14 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                         host_rw_mode,
                         shader_read_only: false,
                     },
-                    "read" => StorageType::Storage {
-                        host_rw_mode,
-                        shader_read_only: true,
+                    "read" => {
+                        if host_rw_mode != "HostWriteOnly" && host_rw_mode != "HostReadWrite" {
+                            panic!("Read only storage buffer must be writable by host (HostWriteOnly or HostReadWrite)");
+                        }
+                        StorageType::Storage {
+                            host_rw_mode,
+                            shader_read_only: true,
+                        }
                     },
                     _ => panic!("Unsupported shader read-write mode: {shader_rw_mode}"),
                 }

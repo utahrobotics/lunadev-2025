@@ -8,11 +8,13 @@ pub mod storage;
 pub mod uniform;
 
 pub trait GpuBuffer {
+    const READABLE: bool;
     type Data: GpuType + ?Sized;
+    type PostSubmission<'a> where Self: 'a;
 
     fn get_buffer(&self) -> &wgpu::Buffer;
     fn pre_submission(&self, encoder: &mut CommandEncoder);
-    fn post_submission(&self);
+    fn post_submission(&self) -> Self::PostSubmission<'_>;
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry;
     fn get_writable_size(&self) -> u64;
 }
@@ -42,21 +44,19 @@ pub trait WritableGpuBuffer: GpuBuffer {
     }
 }
 
-pub struct GpuReadLock<'a> {
-    pub(crate) encoder: &'a mut wgpu::CommandEncoder,
-    pub(crate) device: &'static wgpu::Device,
-}
-
 pub trait GpuBufferTuple {
+    type PostSubmission<'a> where Self: 'a;
     fn create_layouts() -> Box<[wgpu::BindGroupLayoutEntry]>;
     fn get_max_writable_size(&self) -> u64;
     fn pre_submission(&self, encoder: &mut CommandEncoder);
-    fn post_submission(&self);
+    fn post_submission<'a>(&'a self) -> Self::PostSubmission<'a>;
 }
 
 macro_rules! tuple_impl {
     ($count: literal, $($index: tt $ty:ident),+) => {
         impl<$($ty: GpuBuffer),*> GpuBufferTuple for ($($ty,)*) {
+            type PostSubmission<'a> = ($($ty::PostSubmission<'a>,)*) where Self: 'a;
+
             fn create_layouts() -> Box<[wgpu::BindGroupLayoutEntry]> {
                 Box::new([
                     $(
@@ -79,10 +79,10 @@ macro_rules! tuple_impl {
                 )*
             }
 
-            fn post_submission(&self) {
-                $(
-                    self.$index.post_submission();
-                )*
+            fn post_submission<'a>(&'a self) -> Self::PostSubmission<'a> {
+                ($(
+                    self.$index.post_submission(),
+                )*)
             }
         }
     }
@@ -179,5 +179,9 @@ impl<S: GpuBufferTuple> GpuBufferSet<S> {
     pub(crate) fn pre_submission(&mut self, encoder: &mut CommandEncoder) {
         self.staging_belt.finish();
         self.buffers.pre_submission(encoder);
+    }
+    pub(crate) fn post_submission<'a>(&'a mut self) -> S::PostSubmission<'a> {
+        self.staging_belt.recall();
+        self.buffers.post_submission()
     }
 }

@@ -1826,7 +1826,6 @@ version = "0.1.0"
 dependencies = [
  "gputter-core",
  "gputter-macros",
- "pollster",
 ]
 
 [[package]]

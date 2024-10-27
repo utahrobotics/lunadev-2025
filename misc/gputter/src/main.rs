@@ -3,23 +3,18 @@ use std::num::NonZeroU32;
 use gputter::{
     buffers::{
         storage::{
-            HostHidden, HostReadOnly, HostReadWrite, ShaderReadOnly, ShaderReadWrite, StorageBuffer,
+            HostHidden, HostReadOnly, HostReadWrite, ShaderReadWrite, StorageBuffer
         },
         uniform::UniformBuffer,
         GpuBufferSet,
-    },
-    compute::ComputePipeline,
-    init_gputter,
-    shader::BufferGroupBinding,
-    types::AlignedVec2,
+    }, compute::ComputePipeline, init_gputter_blocking, shader::BufferGroupBinding, types::AlignedVec2
 };
 use gputter_macros::build_shader;
-use pollster::FutureExt;
 build_shader!(
     Test,
     r#"
 #[buffer(HostHidden)] var<storage, read_write> heightmap: array<vec2f, COUNT2>;
-#[buffer(HostWriteOnly)] var<uniform> heightmap2: u32;
+#[buffer(HostReadWrite)] var<storage, read_write> counter: u32;
  
 const NUMBER: f32 = {{number}};
 const COUNT: NonZeroU32 = {{index}};
@@ -29,12 +24,28 @@ const COUNT2: u32 = 4;
 @workgroup_size(1, 1, COUNT)
 fn main(
     @builtin(workgroup_id) workgroup_id : vec3<u32>,
-) {}"#
+) {
+    var local = counter;
+    while true {
+        local += 1u;
+        var failed = false;
+        for (var i = 2u; i < local; i++) {
+            if local % i == 0u {
+                failed = true;
+                break;
+            }
+        }
+        if !failed {
+            break;
+        }
+    }
+    counter = local;
+}"#
 );
 
 type BindGroupA = (
     UniformBuffer<u32>,
-    StorageBuffer<f32, HostReadWrite, ShaderReadOnly>,
+    StorageBuffer<u32, HostReadWrite, ShaderReadWrite>,
 );
 
 type BindGroupB = (
@@ -45,10 +56,10 @@ type BindGroupB = (
 type BindGroupSet = (GpuBufferSet<BindGroupA>, GpuBufferSet<BindGroupB>);
 
 fn main() {
-    init_gputter().block_on().unwrap();
+    init_gputter_blocking().unwrap();
     let test = Test {
         heightmap: BufferGroupBinding::<_, BindGroupSet>::get::<1, 1>(),
-        heightmap2: BufferGroupBinding::<_, BindGroupSet>::get::<0, 0>(),
+        counter: BufferGroupBinding::<_, BindGroupSet>::get::<0, 1>(),
         number: 2.2,
         index: NonZeroU32::new(1).unwrap(),
     };
@@ -58,13 +69,17 @@ fn main() {
         GpuBufferSet::from((UniformBuffer::new(), StorageBuffer::new())),
         GpuBufferSet::from((StorageBuffer::new(), StorageBuffer::new())),
     );
-    pipeline
-        .new_pass(|mut lock| {
-            bind_grps.0.write::<0, _>(&32, &mut lock);
-            bind_grps
-        })
-        .finish();
-    loop {
-        std::thread::park();
+    for i in 0..10 {
+        pipeline
+            .new_pass(|mut lock| {
+                if i == 0 {
+                    bind_grps.0.write::<1, _>(&1146643, &mut lock);
+                }
+                &mut bind_grps
+            })
+            .finish();
+        let mut counter = 0u32;
+        bind_grps.0.buffers.1.read(&mut counter);
+        println!("Counter: {}", counter);
     }
 }

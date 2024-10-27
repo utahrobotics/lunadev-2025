@@ -178,6 +178,8 @@ where
     T: GpuType + ?Sized,
     SM: ShaderStorageBufferMode,
 {
+    type PostSubmission<'a> = () where Self: 'a;
+    const READABLE: bool = false;
     type Data = T;
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -203,7 +205,7 @@ where
     fn pre_submission(&self, _encoder: &mut wgpu::CommandEncoder) {
         debug_assert!(self.read_buffer.is_none());
     }
-    fn post_submission(&self) {
+    fn post_submission(&self) -> Self::PostSubmission<'_> {
         debug_assert!(self.read_buffer.is_none());
     }
 }
@@ -213,6 +215,8 @@ where
     T: GpuType + ?Sized,
     SM: ShaderStorageBufferMode,
 {
+    type PostSubmission<'a> = () where Self: 'a;
+    const READABLE: bool = false;
     type Data = T;
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -238,7 +242,7 @@ where
     fn pre_submission(&self, _encoder: &mut wgpu::CommandEncoder) {
         debug_assert!(self.read_buffer.is_none());
     }
-    fn post_submission(&self) {
+    fn post_submission(&self) -> Self::PostSubmission<'_> {
         debug_assert!(self.read_buffer.is_none());
     }
 }
@@ -250,11 +254,31 @@ where
 {
 }
 
-impl<T, SM> GpuBuffer for StorageBuffer<T, HostReadOnly, SM>
+macro_rules! read_impl {
+    () => {
+        fn pre_submission(&self, encoder: &mut wgpu::CommandEncoder) {
+            let read_buffer = self.read_buffer.as_ref().unwrap();
+            read_buffer.unmap();
+            encoder.copy_buffer_to_buffer(&self.buffer, 0, read_buffer, 0, self.size.size());
+        }
+        fn post_submission(&self) -> Self::PostSubmission<'_> {
+            let read_buffer = self.read_buffer.as_ref().unwrap();
+            let slice = read_buffer.slice(..);
+            slice
+                .map_async(wgpu::MapMode::Read, |result| {
+                    result.unwrap();
+                });
+            slice
+        }
+    }
+}
+
+impl<T> GpuBuffer for StorageBuffer<T, HostReadOnly, ShaderReadWrite>
 where
     T: GpuType + ?Sized,
-    SM: ShaderStorageBufferMode,
 {
+    type PostSubmission<'a> = wgpu::BufferSlice<'a> where Self: 'a;
+    const READABLE: bool = true;
     type Data = T;
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -263,7 +287,7 @@ where
             visibility: wgpu::ShaderStages::COMPUTE,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage {
-                    read_only: SM::READONLY,
+                    read_only: false,
                 },
                 has_dynamic_offset: false,
                 min_binding_size: None,
@@ -277,28 +301,15 @@ where
     fn get_writable_size(&self) -> u64 {
         0
     }
-    fn pre_submission(&self, encoder: &mut wgpu::CommandEncoder) {
-        if !SM::READONLY {
-            let read_buffer = self.read_buffer.as_ref().unwrap();
-            read_buffer.unmap();
-            encoder.copy_buffer_to_buffer(&self.buffer, 0, read_buffer, 0, self.size.size());
-        }
-    }
-    fn post_submission(&self) {
-        if !SM::READONLY {
-            let read_buffer = self.read_buffer.as_ref().unwrap();
-            read_buffer
-                .slice(..)
-                .map_async(wgpu::MapMode::Read, |result| result.unwrap());
-        }
-    }
+    read_impl!();
 }
 
-impl<T, SM> GpuBuffer for StorageBuffer<T, HostReadWrite, SM>
+impl<T> GpuBuffer for StorageBuffer<T, HostReadWrite, ShaderReadWrite>
 where
     T: GpuType + ?Sized,
-    SM: ShaderStorageBufferMode,
 {
+    type PostSubmission<'a> = wgpu::BufferSlice<'a> where Self: 'a;
+    const READABLE: bool = true;
     type Data = T;
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -307,7 +318,7 @@ where
             visibility: wgpu::ShaderStages::COMPUTE,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage {
-                    read_only: SM::READONLY,
+                    read_only: false,
                 },
                 has_dynamic_offset: false,
                 min_binding_size: None,
@@ -321,27 +332,14 @@ where
     fn get_writable_size(&self) -> u64 {
         self.size.size()
     }
-    fn pre_submission(&self, encoder: &mut wgpu::CommandEncoder) {
-        if !SM::READONLY {
-            let read_buffer = self.read_buffer.as_ref().unwrap();
-            read_buffer.unmap();
-            encoder.copy_buffer_to_buffer(&self.buffer, 0, read_buffer, 0, self.size.size());
-        }
-    }
-    fn post_submission(&self) {
-        if !SM::READONLY {
-            let read_buffer = self.read_buffer.as_ref().unwrap();
-            read_buffer
-                .slice(..)
-                .map_async(wgpu::MapMode::Read, |result| result.unwrap());
-        }
-    }
+    read_impl!();
 }
 
 impl<T, SM> WritableGpuBuffer for StorageBuffer<T, HostReadWrite, SM>
 where
     T: GpuType + ?Sized,
     SM: ShaderStorageBufferMode,
+    Self: GpuBuffer
 {
 }
 
