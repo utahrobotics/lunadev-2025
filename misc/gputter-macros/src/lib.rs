@@ -12,7 +12,9 @@ use quote::{format_ident, quote};
 use regex::Regex;
 use syn::{
     parse::{Parse, ParseStream},
-    parse_macro_input, token, Ident, LitStr, Visibility,
+    parse_macro_input,
+    token::{self},
+    Ident, LitStr, Visibility,
 };
 use unfmt::unformat;
 
@@ -50,50 +52,48 @@ fn type_resolver(s: &str, uint_consts: &FxHashMap<&str, Option<u32>>) -> String 
         _ => {}
     }
 
-    {
-        let delimited = &format!("{s}?");
-        if let Some(inner) = unformat!("array<{}>?", delimited) {
-            if let Some((ty, mut count)) = unformat!("{},{}", inner) {
-                count = count.trim();
-                if let Ok(count) = usize::from_str(count) {
-                    // count is a literal integer
+    let delimited = &format!("{s}?");
+    if let Some(inner) = unformat!("array<{}>?", delimited) {
+        if let Some((ty, mut count)) = unformat!("{},{}", inner) {
+            count = count.trim();
+            if let Ok(count) = usize::from_str(count) {
+                // count is a literal integer
+                return format!("[{}; {}]", type_resolver(ty.trim(), uint_consts), count);
+            } else if let Some(&count) = uint_consts.get(count) {
+                if let Some(count) = count {
+                    // count is a constant value
                     return format!("[{}; {}]", type_resolver(ty.trim(), uint_consts), count);
-                } else if let Some(&count) = uint_consts.get(count) {
-                    if let Some(count) = count {
-                        // count is a constant value
-                        return format!("[{}; {}]", type_resolver(ty.trim(), uint_consts), count);
-                    } else {
-                        // If count is None, it is a build time constant that is not known at compile time
-                        // of the host code
-                        return format!("[{}]", type_resolver(ty.trim(), uint_consts));
-                    }
                 } else {
-                    panic!("Invalid array count: {count} in {s} {uint_consts:?}");
+                    // If count is None, it is a build time constant that is not known at compile time
+                    // of the host code
+                    return format!("[{}]", type_resolver(ty.trim(), uint_consts));
                 }
-            }
-            // There is no count
-            return format!("[{}]", type_resolver(inner.trim(), uint_consts));
-        }
-        if let Some(inner) = unformat!("atomic<{}>?", delimited) {
-            // Atomic types in the shader do not need to be atomic in the host
-            return type_resolver(inner.trim(), uint_consts);
-        }
-        if let Some(mut inner) = unformat!("vec{}?", delimited) {
-            inner = inner.trim();
-            if let Some((n, ty)) = unformat!("{}<{}>", inner) {
-                return format!("gputter::types::AlignedVec{n}<{ty}>")
-            } else if inner.len() != 2 {
-                panic!("Invalid vector type: {s}");
             } else {
-                let (n, mut ty) = inner.split_at(1);
-                ty = match ty {
-                    "f" => "f32",
-                    "u" => "u32",
-                    "i" => "i32",
-                    _ => panic!("Invalid vector type: {s}"),
-                };
-                return format!("gputter::types::AlignedVec{n}<{ty}>");
+                panic!("Invalid array count: {count} in {s}");
             }
+        }
+        // There is no count
+        return format!("[{}]", type_resolver(inner.trim(), uint_consts));
+    }
+    if let Some(inner) = unformat!("atomic<{}>?", delimited) {
+        // Atomic types in the shader do not need to be atomic in the host
+        return type_resolver(inner.trim(), uint_consts);
+    }
+    if let Some(mut inner) = unformat!("vec{}?", delimited) {
+        inner = inner.trim();
+        if let Some((n, ty)) = unformat!("{}<{}>", inner) {
+            return format!("gputter::types::AlignedVec{n}<{ty}>");
+        } else if inner.len() != 2 {
+            panic!("Invalid vector type: {s}");
+        } else {
+            let (n, mut ty) = inner.split_at(1);
+            ty = match ty {
+                "f" => "f32",
+                "u" => "u32",
+                "i" => "i32",
+                _ => panic!("Invalid vector type: {s}"),
+            };
+            return format!("gputter::types::AlignedVec{n}<{ty}>");
         }
     }
 
