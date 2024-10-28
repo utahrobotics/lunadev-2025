@@ -119,6 +119,9 @@ fn type_resolver(s: &str, uint_consts: &FxHashMap<&str, Option<u32>>) -> String 
     s.into()
 }
 
+// Eventually check errors like these
+// Shader entry point's workgroup size [36, 24, 1] (864 total invocations) must be less or equal to the per-dimension limit [256, 256, 64] and the total invocation limit 256
+
 #[proc_macro]
 pub fn build_shader(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree

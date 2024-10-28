@@ -12,7 +12,6 @@ build_shader!(
     const CELL_SIZE: f32 = {{cell_size}};
     const CELL_COUNT: NonZeroU32 = {{cell_count}};
     const POINT_COUNT: NonZeroU32 = {{point_count}}; /!/ sub with 32
-    const TRI_COUNT: u32 = 2 * (PROJECTION_WIDTH - 1) * (POINT_COUNT / PROJECTION_WIDTH - 1);
     
     fn barycentric(pv1: vec3f, pv2: vec3f, pv3: vec3f, pp: vec2f) -> vec3f {
         let v0 = vec3f(pv1.x, pv1.z, 0.0);
@@ -35,14 +34,14 @@ build_shader!(
     }
     
     @compute
-    @workgroup_size(HEIGHTMAP_WIDTH, CELL_COUNT / HEIGHTMAP_WIDTH, TRI_COUNT)
+    @workgroup_size(1, 1, 1)
     fn main(
-        @builtin(local_invocation_id) local_invocation_id : vec3u,
+        @builtin(workgroup_id) workgroup_id : vec3u,
     ) {
-        let heightmap_x = f32(local_invocation_id.x) * CELL_SIZE;
-        let heightmap_y = f32(local_invocation_id.y) * CELL_SIZE;
-        let heightmap_index = local_invocation_id.y * HEIGHTMAP_WIDTH + local_invocation_id.x;
-        let tri_index = local_invocation_id.z;
+        let heightmap_x = f32(workgroup_id.x) * CELL_SIZE;
+        let heightmap_y = f32(workgroup_id.y) * CELL_SIZE;
+        let heightmap_index = workgroup_id.y * HEIGHTMAP_WIDTH + workgroup_id.x;
+        let tri_index = workgroup_id.z;
         let half_layer_index = tri_index / (PROJECTION_WIDTH - 1);
         let layer_index = half_layer_index / 2;
         let projection_x = tri_index % (PROJECTION_WIDTH - 1);

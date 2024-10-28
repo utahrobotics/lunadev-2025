@@ -2,7 +2,6 @@ use std::num::NonZeroU32;
 
 use bytemuck::cast_slice_mut;
 use depth2pcl::Depth2Pcl;
-use gputter::tuple::StaticIndexable;
 use gputter::{
     buffers::{
         storage::{HostReadOnly, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, StorageBuffer},
@@ -13,7 +12,7 @@ use gputter::{
     shader::BufferGroupBinding,
     types::{AlignedMatrix4, AlignedVec4},
 };
-use nalgebra::Vector2;
+use nalgebra::{Vector2, Vector3};
 use pcl2height::Pcl2Height;
 
 pub mod depth2pcl;
@@ -89,8 +88,19 @@ impl ThalassicBuilder {
             point_count: self.pixel_count,
         }
         .compile();
-
-        let pipeline = ComputePipeline::new([&depth_fn, &height_fn]);
+        let mut pipeline = ComputePipeline::new([&depth_fn, &height_fn]);
+        pipeline.workgroups = [
+            Vector3::new(
+                self.image_width.get(),
+                self.pixel_count.get() / self.image_width,
+                1,
+            ),
+            Vector3::new(
+                self.heightmap_width.get(),
+                self.cell_count.get() / self.heightmap_width,
+                2 * (self.image_width.get() - 1) * (self.pixel_count.get() / self.image_width - 1)
+            )
+        ];
         ThalassicPipeline {
             pipeline,
             bind_grps,

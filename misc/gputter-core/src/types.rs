@@ -74,17 +74,39 @@ macro_rules! define_aligned {
                 &mut self.vec
             }
         }
-
-        impl<N> std::fmt::Display for $name<N>
-        where
-            N: std::fmt::Display,
+        
+        impl std::fmt::Display for $name<f32>
         {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "vec{}<", $count)?;
+                write!(f, "vec{}f(", $count)?;
                 for i in 0..$count {
-                    write!(f, "{},", self.vec.data.0[0][i])?;
+                    write!(f, "{}f,", self.vec.data.0[0][i])?;
                 }
-                write!(f, ">")?;
+                write!(f, ")")?;
+                Ok(())
+            }
+        }
+        
+        impl std::fmt::Display for $name<u32>
+        {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "vec{}u(", $count)?;
+                for i in 0..$count {
+                    write!(f, "{}u,", self.vec.data.0[0][i])?;
+                }
+                write!(f, ")")?;
+                Ok(())
+            }
+        }
+        
+        impl std::fmt::Display for $name<i32>
+        {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "vec{}i(", $count)?;
+                for i in 0..$count {
+                    write!(f, "{}i,", self.vec.data.0[0][i])?;
+                }
+                write!(f, ")")?;
                 Ok(())
             }
         }

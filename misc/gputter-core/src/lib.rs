@@ -62,3 +62,7 @@ pub fn get_device() -> &'static GpuDevice {
 pub fn init_gputter_blocking() -> anyhow::Result<()> {
     init_gputter().block_on()
 }
+
+pub fn is_gputter_initialized() -> bool {
+    GPU_DEVICE.get().is_some()
+}

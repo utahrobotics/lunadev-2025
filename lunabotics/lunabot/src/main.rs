@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use apps::{LunabotApp, LunasimbotApp};
+use apps::{LunasimbotApp};
 use urobotics::{
     app::{adhoc_app, application},
     camera, python, serial,
@@ -13,9 +13,10 @@ use urobotics::{
 mod apps;
 mod localization;
 mod motors;
-mod obstacles;
+// mod obstacles;
 mod teleop;
 mod utils;
+mod pipelines;
 
 fn info_app() {
     match list_media_input().block_on() {
@@ -48,7 +49,7 @@ fn main() {
     app.add_app::<serial::SerialConnection>()
         .add_app::<python::PythonVenvBuilder>()
         .add_app::<camera::CameraConnectionBuilder>()
-        .add_app::<LunabotApp>()
+        // .add_app::<LunabotApp>()
         .add_app::<InfoApp>()
         .add_app::<LunasimbotApp>()
         .run();

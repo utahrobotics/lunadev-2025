@@ -10,12 +10,11 @@ use common::{
     LunabotStage,
 };
 use crossbeam::atomic::AtomicCell;
-use fitter::utils::CameraProjection;
+use gputter::init_gputter_blocking;
 use lunabot_ai::{run_ai, Action, Input};
-use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4};
-use recycler::Recycler;
+use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
-use urobotics::tokio::{self, task::block_in_place};
+use urobotics::tokio;
 use urobotics::{
     app::Application,
     callbacks::caller::CallbacksStorage,
@@ -29,11 +28,10 @@ use urobotics::{
     BlockOn,
 };
 
-use crate::{localization::Localizer, obstacles::heightmap::heightmap_strategy, LunabotApp};
+use crate::{localization::Localizer, pipelines::thalassic::spawn_thalassic_pipeline};
 
 use super::{
-    create_packet_builder, create_robot_chain, log_teleop_messages, wait_for_ctrl_c,
-    PointCloudCallbacks,
+    create_packet_builder, create_robot_chain, log_teleop_messages, wait_for_ctrl_c, LunabotApp,
 };
 
 fn_alias! {
@@ -83,6 +81,9 @@ impl Application for LunasimbotApp {
 
     fn run(mut self) {
         log_teleop_messages();
+        if let Err(e) = init_gputter_blocking() {
+            error!("Failed to initialize gputter: {e}");
+        }
 
         let mut cmd = if self.simulation_command.is_empty() {
             let mut cmd = Command::new("godot");
@@ -208,17 +209,9 @@ impl Application for LunasimbotApp {
         let localizer = Localizer::new(robot_chain.clone(), Some(lunasim_stdin.clone()));
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
-
-        let depth_project = match CameraProjection::new(10.392, PROJECTION_SIZE, 0.01).block_on() {
-            Ok(x) => Some(Arc::new(x)),
-            Err(e) => {
-                error!("Failed to create camera projector: {e}");
-                None
-            }
-        };
-
+        
         let camera_link = robot_chain.find_link("depth_camera_link").unwrap().clone();
-        let points_buffer_recycler = Recycler::<Box<[Vector4<f32>]>>::default();
+        let (depth_map_buffer, pcl_callbacks, heightmap_callbacks) = spawn_thalassic_pipeline(10.392, 0.01, PROJECTION_SIZE, camera_link);
 
         let axis_angle = |axis: [f32; 3], angle: f32| {
             let axis = UnitVector3::new_normalize(Vector3::new(
@@ -230,12 +223,9 @@ impl Application for LunasimbotApp {
             UnitQuaternion::from_axis_angle(&axis, angle as f64)
         };
 
-        let raw_pcl_callbacks = Arc::new(PointCloudCallbacks::default());
-        let raw_pcl_callbacks_ref = raw_pcl_callbacks.get_ref();
-
         let lunasim_stdin2 = lunasim_stdin.clone();
         let mut bitcode_buffer = bitcode::Buffer::new();
-        raw_pcl_callbacks_ref.add_dyn_fn_mut(Box::new(move |point_cloud| {
+        pcl_callbacks.add_dyn_fn_mut(Box::new(move |point_cloud| {
             let msg =
                 FromLunasimbot::PointCloud(point_cloud.iter().map(|p| [p.x, p.y, p.z]).collect());
             let bytes = bitcode_buffer.encode(&msg);
@@ -258,24 +248,8 @@ impl Application for LunasimbotApp {
                 localizer_ref.set_angular_velocity(axis_angle(axis, angle));
             }
             common::lunasim::FromLunasim::DepthMap(depths) => {
-                let Some(depth_project) = &depth_project else {
-                    return;
-                };
-                let Some(camera_transform) = camera_link.world_transform() else {
-                    return;
-                };
-                let mut points_buffer = points_buffer_recycler
-                    .get_or_else(|| vec![Vector4::default(); 36 * 24].into_boxed_slice());
-                let depth_project = depth_project.clone();
-                let raw_pcl_callbacks = raw_pcl_callbacks.clone();
-
-                get_tokio_handle().spawn(async move {
-                    depth_project
-                        .project_buffer(&depths, camera_transform.cast(), &mut **points_buffer)
-                        .await;
-                    block_in_place(|| {
-                        raw_pcl_callbacks.call_immut(&points_buffer);
-                    });
+                depth_map_buffer.write(|buffer| {
+                    buffer.copy_from_slice(&depths);
                 });
             }
             common::lunasim::FromLunasim::ExplicitApriltag {
@@ -296,10 +270,9 @@ impl Application for LunasimbotApp {
             }
         });
 
-        let heightmap_ref = heightmap_strategy(PROJECTION_SIZE, &raw_pcl_callbacks_ref);
         let lunasim_stdin2 = lunasim_stdin.clone();
         let mut bitcode_buffer = bitcode::Buffer::new();
-        heightmap_ref.add_dyn_fn_mut(Box::new(move |heightmap| {
+        heightmap_callbacks.add_dyn_fn_mut(Box::new(move |heightmap| {
             let bytes = bitcode_buffer.encode(&FromLunasimbot::HeightMap(
                 heightmap.to_vec().into_boxed_slice(),
             ));

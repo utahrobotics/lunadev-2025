@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "misc/compute-shader",
     "urobotics/urobotics-core",
     "urobotics/urobotics-smach",
     "urobotics/urobotics-video",
@@ -16,11 +15,10 @@ members = [
     "lunabotics/common",
     "lunabotics/pathfinding",
     # "urobotics/urobotics-learning",
-    "misc/fitter",
     "lunabotics/lunabase-lib",
     "lunabotics/lunasim-lib",
     "misc/k",
-    "lunabotics/heightmap", "lunabotics/lunabot-ai", "misc/ares-bt", "misc/cakap2", "misc/recycler", "misc/gputter-core", "misc/gputter-macros", "misc/gputter", "misc/thalassic",
+    "lunabotics/lunabot-ai", "misc/ares-bt", "misc/cakap2", "misc/recycler", "misc/gputter-core", "misc/gputter-macros", "misc/gputter", "misc/thalassic",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]
@@ -70,9 +68,6 @@ k = { path = "misc/k" }
 fitter = { path = "misc/fitter" }
 bincode = "1.3.3"
 
-# regex = "1.10.6"
-
-compute-shader = { path = "misc/compute-shader" }
 urobotics-core = { path = "urobotics/urobotics-core" }
 urobotics-app = { path = "urobotics/urobotics-app" }
 urobotics-serial = { path = "urobotics/urobotics-serial" }
@@ -89,6 +84,7 @@ ares-bt = { path = "misc/ares-bt" }
 thiserror = "1.0.64"
 recycler = { path = "misc/recycler" }
 gputter = { path = "misc/gputter" }
+thalassic = { path = "misc/thalassic" }
 
 [profile.dev.package.lunabot]
 opt-level = 3

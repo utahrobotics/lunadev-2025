@@ -4,22 +4,17 @@ mod sim;
 use std::{
     fs::File,
     net::SocketAddr,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::Arc,
     time::Duration,
 };
 
 use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
 use k::Chain;
-use nalgebra::Vector4;
 pub use production::LunabotApp;
 pub use sim::{LunasimStdin, LunasimbotApp};
 use urobotics::{
-    define_callbacks, fn_alias,
-    log::{error, info, warn},
+    log::{error, warn},
     tokio::{
         self,
         sync::{mpsc, watch},
@@ -62,10 +57,6 @@ fn create_robot_chain() -> Arc<Chain<f64>> {
     Arc::new(Chain::<f64>::from_urdf_file("urdf/lunabot.urdf").expect("Failed to load urdf"))
 }
 
-fn_alias! {
-    pub type PointCloudCallbacksRef = CallbacksRef(&[Vector4<f32>]) + Send + Sync
-}
-define_callbacks!(PointCloudCallbacks => Fn(point_cloud: &[Vector4<f32>]) + Send + Sync);
 
 #[derive(Clone)]
 struct LunabotConnected {

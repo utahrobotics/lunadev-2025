@@ -807,21 +807,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "compute-shader"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytemuck",
- "crossbeam",
- "env_logger",
- "futures",
- "fxhash",
- "nalgebra 0.32.6",
- "tokio",
- "wgpu",
-]
-
-[[package]]
 name = "console_error_panic_hook"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1209,29 +1194,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
 
 [[package]]
-name = "env_filter"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f2c92ceda6ceec50f43169f9ee8424fe2db276791afde7b2cd8bc084cb376ab"
-dependencies = [
- "log",
- "regex",
-]
-
-[[package]]
-name = "env_logger"
-version = "0.11.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13fa619b91fb2381732789fc5de83b45675e882f66623b7d8cb4f643017018d"
-dependencies = [
- "anstream",
- "anstyle",
- "env_filter",
- "humantime",
- "log",
-]
-
-[[package]]
 name = "equivalent"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1295,17 +1257,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4bd1e249e0ceeb0f5c9f84a3c6941c3bde3ebc2815f4b94531a7e806af61c4c0"
 dependencies = [
  "anyhow",
-]
-
-[[package]]
-name = "fitter"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "compute-shader",
- "crossbeam",
- "log",
- "nalgebra 0.32.6",
 ]
 
 [[package]]
@@ -1926,16 +1877,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
-name = "heightmap"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "compute-shader",
- "log",
- "nalgebra 0.32.6",
-]
-
-[[package]]
 name = "hermit-abi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1961,12 +1902,6 @@ checksum = "e3d1354bf6b7235cb4a0576c2619fd4ed18183f689b12b006a0ee7329eeff9a5"
 dependencies = [
  "windows-sys 0.52.0",
 ]
-
-[[package]]
-name = "humantime"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "iana-time-zone"
@@ -2419,11 +2354,9 @@ dependencies = [
  "bitcode",
  "cakap2",
  "common",
- "compute-shader",
  "crossbeam",
- "fitter",
  "fxhash",
- "heightmap",
+ "gputter",
  "k",
  "lunabot-ai",
  "nalgebra 0.32.6",
@@ -2431,6 +2364,7 @@ dependencies = [
  "recycler",
  "serde",
  "spin_sleep",
+ "thalassic",
  "urobotics",
  "vesc_translator",
 ]
