@@ -88,7 +88,7 @@ impl ThalassicBuilder {
             point_count: self.pixel_count,
         }
         .compile();
-        
+
         let mut pipeline = ComputePipeline::new([&depth_fn, &height_fn]);
         pipeline.workgroups = [
             Vector3::new(
@@ -99,8 +99,8 @@ impl ThalassicBuilder {
             Vector3::new(
                 self.heightmap_width.get(),
                 self.cell_count.get() / self.heightmap_width,
-                2 * (self.image_width.get() - 1) * (self.pixel_count.get() / self.image_width - 1)
-            )
+                2 * (self.image_width.get() - 1) * (self.pixel_count.get() / self.image_width - 1),
+            ),
         ];
         ThalassicPipeline {
             pipeline,

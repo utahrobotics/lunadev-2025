@@ -74,9 +74,8 @@ macro_rules! define_aligned {
                 &mut self.vec
             }
         }
-        
-        impl std::fmt::Display for $name<f32>
-        {
+
+        impl std::fmt::Display for $name<f32> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(f, "vec{}f(", $count)?;
                 for i in 0..$count {
@@ -86,9 +85,8 @@ macro_rules! define_aligned {
                 Ok(())
             }
         }
-        
-        impl std::fmt::Display for $name<u32>
-        {
+
+        impl std::fmt::Display for $name<u32> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(f, "vec{}u(", $count)?;
                 for i in 0..$count {
@@ -98,9 +96,8 @@ macro_rules! define_aligned {
                 Ok(())
             }
         }
-        
-        impl std::fmt::Display for $name<i32>
-        {
+
+        impl std::fmt::Display for $name<i32> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(f, "vec{}i(", $count)?;
                 for i in 0..$count {

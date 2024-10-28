@@ -15,9 +15,7 @@ use urobotics::{
     app::Application, callbacks::caller::CallbacksStorage, log::error, tokio, BlockOn,
 };
 
-use crate::{
-    apps::log_teleop_messages, localization::Localizer, pipelines::PointCloudCallbacks,
-};
+use crate::{apps::log_teleop_messages, localization::Localizer, pipelines::PointCloudCallbacks};
 
 use super::{create_packet_builder, create_robot_chain, wait_for_ctrl_c};
 

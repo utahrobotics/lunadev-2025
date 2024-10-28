@@ -209,9 +209,10 @@ impl Application for LunasimbotApp {
         let localizer = Localizer::new(robot_chain.clone(), Some(lunasim_stdin.clone()));
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
-        
+
         let camera_link = robot_chain.find_link("depth_camera_link").unwrap().clone();
-        let (depth_map_buffer, pcl_callbacks, heightmap_callbacks) = spawn_thalassic_pipeline(10.392, 0.01, PROJECTION_SIZE, camera_link);
+        let (depth_map_buffer, pcl_callbacks, heightmap_callbacks) =
+            spawn_thalassic_pipeline(10.392, 0.01, PROJECTION_SIZE, camera_link);
 
         let axis_angle = |axis: [f32; 3], angle: f32| {
             let axis = UnitVector3::new_normalize(Vector3::new(

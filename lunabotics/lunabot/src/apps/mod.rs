@@ -1,12 +1,7 @@
 mod production;
 mod sim;
 
-use std::{
-    fs::File,
-    net::SocketAddr,
-    sync::Arc,
-    time::Duration,
-};
+use std::{fs::File, net::SocketAddr, sync::Arc, time::Duration};
 
 use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
@@ -56,7 +51,6 @@ fn log_teleop_messages() {
 fn create_robot_chain() -> Arc<Chain<f64>> {
     Arc::new(Chain::<f64>::from_urdf_file("urdf/lunabot.urdf").expect("Failed to load urdf"))
 }
-
 
 #[derive(Clone)]
 struct LunabotConnected {

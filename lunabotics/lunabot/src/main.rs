@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use apps::{LunasimbotApp};
+use apps::LunasimbotApp;
 use urobotics::{
     app::{adhoc_app, application},
     camera, python, serial,
@@ -14,9 +14,9 @@ mod apps;
 mod localization;
 mod motors;
 // mod obstacles;
+mod pipelines;
 mod teleop;
 mod utils;
-mod pipelines;
 
 fn info_app() {
     match list_media_input().block_on() {
