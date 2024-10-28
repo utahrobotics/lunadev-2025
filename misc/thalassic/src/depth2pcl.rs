@@ -1,7 +1,7 @@
 use gputter::build_shader;
 
 build_shader!(
-    Depth2Pcl,
+    pub(crate) Depth2Pcl,
     r#"
 #[buffer(HostWriteOnly)] var<storage, read> depths: array<u32, PIXEL_COUNT>;
 #[buffer(HostReadOnly)] var<storage, read_write> points: array<vec4f, PIXEL_COUNT>;

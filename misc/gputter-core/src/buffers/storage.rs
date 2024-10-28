@@ -1,4 +1,4 @@
-use super::{GpuBuffer, WritableGpuBuffer};
+use super::{GpuBuffer, GpuWriteLock, WritableGpuBuffer};
 
 use crate::size::{BufferSize, DynamicSize};
 
@@ -335,18 +335,20 @@ where
 }
 
 impl<T, HM, SM> StorageBuffer<T, HM, SM>
-where
-    T: GpuType,
-    HM: HostStorageBufferMode<HOST_CAN_READ = true>,
+where 
+    T: GpuType
 {
-    pub fn read(&self, into: &mut T) {
-        into.from_bytes(
-            &self
-                .read_buffer
-                .as_ref()
-                .unwrap()
-                .slice(..)
-                .get_mapped_range(),
-        );
+    pub fn cast<U: GpuType<Size=StaticSize<U>>>(self) -> StorageBuffer<U, HM, SM> {
+        const {
+            if size_of::<T>() != size_of::<U>() {
+                panic!("Attempted to cast between types of different sizes");
+            }
+        }
+        StorageBuffer {
+            buffer: self.buffer,
+            size: StaticSize::new(),
+            phantom: PhantomData,
+            read_buffer: self.read_buffer,
+        }
     }
 }

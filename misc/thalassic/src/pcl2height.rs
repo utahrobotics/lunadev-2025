@@ -1,11 +1,11 @@
 use gputter::build_shader;
 
 build_shader!(
-    Pcl2Height,
+    pub(crate) Pcl2Height,
     r#"
     #[buffer(HostReadOnly)] var<storage, read_write> heightmap: array<atomic<u32>, CELL_COUNT>;
     #[buffer(HostReadOnly)] var<storage, read> points: array<vec4f, POINT_COUNT>;
-    #[buffer(HostReadOnly)] var<storage, read> original_heightmap: array<f32, CELL_COUNT>;
+    #[buffer(HostWriteOnly)] var<storage, read> original_heightmap: array<f32, CELL_COUNT>;
     
     const PROJECTION_WIDTH: NonZeroU32 = {{projection_width}}; /!/ sub with 12
     const HEIGHTMAP_WIDTH: NonZeroU32 = {{heightmap_width}};

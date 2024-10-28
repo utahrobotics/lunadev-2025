@@ -143,7 +143,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
     };
 
     // Find all compute functions
-    let re = Regex::new(r"@compute[\s@a-zA-Z0-9\(\)_,]+fn\s+([a-zA-Z0-9]+)\s*\(").unwrap();
+    let re = Regex::new(r"@compute[\s@a-zA-Z0-9\(\)_,\*\+\-/%]+fn\s+([a-zA-Z0-9]+)\s*\(").unwrap();
     let compute_fns: Vec<_> = re
         .captures_iter(&shader)
         .map(|caps| {
@@ -398,10 +398,10 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         .zip(buffer_storage_types.iter())
         .map(|((&name, ty), storage_ty)| {
             let stream = match storage_ty {
-                StorageType::Uniform => format!("{name}: gputter::shader::BufferGroupBinding<gputter::buffers::uniform::UniformBuffer<{ty}>, S>"),
+                StorageType::Uniform => format!("pub {name}: gputter::shader::BufferGroupBinding<gputter::buffers::uniform::UniformBuffer<{ty}>, S>"),
                 StorageType::Storage { host_rw_mode, shader_read_only } => {
                     let shader_read_only = if *shader_read_only { "ShaderReadOnly" } else { "ShaderReadWrite" };
-                    format!("{name}: gputter::shader::BufferGroupBinding<gputter::buffers::storage::StorageBuffer<{ty}, gputter::buffers::storage::{host_rw_mode}, gputter::buffers::storage::{shader_read_only}>, S>")
+                    format!("pub {name}: gputter::shader::BufferGroupBinding<gputter::buffers::storage::StorageBuffer<{ty}, gputter::buffers::storage::{host_rw_mode}, gputter::buffers::storage::{shader_read_only}>, S>")
                 }
             };
             proc_macro2::TokenStream::from_str(&stream).unwrap()
@@ -412,7 +412,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
     let const_def = const_names
         .iter()
         .zip(const_types.iter())
-        .map(|(name, ty)| proc_macro2::TokenStream::from_str(&format!("{name}: {ty}")).unwrap());
+        .map(|(name, ty)| proc_macro2::TokenStream::from_str(&format!("pub {name}: {ty}")).unwrap());
 
     let const_idents = const_names.iter().map(|name| format_ident!("{name}"));
     let buffer_idents = buffer_names.iter().map(|&name| format_ident!("{name}"));

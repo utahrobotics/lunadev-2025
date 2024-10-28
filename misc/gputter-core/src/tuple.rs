@@ -1,3 +1,5 @@
+use crate::buffers::GpuBufferSet;
+
 pub trait StaticIndexable<const I: usize> {
     type Output;
     fn get(&self) -> &Self::Output;
@@ -11,6 +13,12 @@ macro_rules! tuple_idx_impl {
                 &self.$index
             }
         }
+        impl<$($ty),*> StaticIndexable<$index> for GpuBufferSet<($($ty,)*)> {
+                type Output = $selected;
+                fn get(&self) -> &Self::Output {
+                    &self.$index
+                }
+            }
     }
 }
 

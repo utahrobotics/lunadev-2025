@@ -7,6 +7,11 @@ pub trait BufferSize: Copy + Default + Send + 'static {
 
 /// A buffer size that is statically known as `T` is statically sized.
 pub struct StaticSize<T>(PhantomData<fn() -> T>);
+impl<T> StaticSize<T> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
 
 impl<T> Default for StaticSize<T> {
     fn default() -> Self {

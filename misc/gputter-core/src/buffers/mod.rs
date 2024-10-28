@@ -155,6 +155,7 @@ macro_rules! write_impl {
 impl<S: GpuBufferTuple> GpuBufferSet<S> {
     pub fn write<const I: usize, T>(&mut self, data: &T, lock: &mut GpuWriteLock)
     where
+        T: ?Sized,
         Self: WriteableGpuBufferInSet<I, Data = T>,
     {
         self.write_to(data, lock);
