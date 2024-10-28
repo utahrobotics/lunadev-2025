@@ -68,14 +68,17 @@ macro_rules! define_aligned {
                 &self.vec
             }
         }
-        
+
         impl<N> DerefMut for $name<N> {
             fn deref_mut(&mut self) -> &mut Self::Target {
                 &mut self.vec
             }
         }
-        
-        impl<N> std::fmt::Display for $name<N> where N: std::fmt::Display {
+
+        impl<N> std::fmt::Display for $name<N>
+        where
+            N: std::fmt::Display,
+        {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(f, "vec{}<", $count)?;
                 for i in 0..$count {

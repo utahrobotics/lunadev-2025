@@ -1,6 +1,5 @@
 use gputter::build_shader;
 
-
 build_shader!(
     Pcl2Height,
     r#"

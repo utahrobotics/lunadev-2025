@@ -169,7 +169,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
             Some((const_name, Some(n)))
         })
         .collect();
-    
+
     // Split by buffer annotations
     let re = Regex::new(r"#\[buffer\(([a-zA-Z0-9]+)\)\]").unwrap();
 
@@ -230,7 +230,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                             host_rw_mode,
                             shader_read_only: true,
                         }
-                    },
+                    }
                     _ => panic!("Unsupported shader read-write mode: {shader_rw_mode}"),
                 }
             } else {
@@ -273,8 +273,9 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                 const_names.push(const_name.to_owned());
                 // panic!("A {:?}", caps.next());
                 const_custom_sub.push(
-                    caps.next().flatten().map(
-                        |_| {
+                    caps.next()
+                        .flatten()
+                        .map(|_| {
                             // If the outer capture group is present, the inner capture group is also present
                             // refer to regex for proof
                             let cap = caps.next().unwrap().unwrap().as_str().trim();
@@ -283,9 +284,8 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                             } else {
                                 Some(cap.to_owned())
                             }
-                        }
-                    )
-                    .flatten()
+                        })
+                        .flatten(),
                 )
             });
             let mut const_index = 0usize;
@@ -329,13 +329,13 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                             let sub = match ty {
                                 "f32" => "0.0".to_owned(),
                                 "u32" | "i32" => "0".to_owned(),
-                                _ => panic!("Unsupported type for substitution: {}", ty)
+                                _ => panic!("Unsupported type for substitution: {}", ty),
                             };
                             return match n {
                                 "2" => format!("vec2<{ty}>({sub}, {sub})"),
                                 "3" => format!("vec3<{ty}>({sub}, {sub}, {sub})"),
                                 "4" => format!("vec4<{ty}>({sub}, {sub}, {sub}, {sub})"),
-                                _ => panic!("Unsupported type for substitution: {}", ty)
+                                _ => panic!("Unsupported type for substitution: {}", ty),
                             };
                         }
                         panic!("Unsupported type for substitution: {}", ty)
