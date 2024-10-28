@@ -14,7 +14,7 @@ use gputter::{
 use gputter_macros::build_shader;
 build_shader!(
     Test,
-    r#"
+    r#" 
 #[buffer(HostHidden)] var<storage, read_write> heightmap: array<vec2<f32>, COUNT2>;
 const COUNT: NonZeroU32 = {{index}};
 #[buffer(HostReadWrite)] var<storage, read_write> counter: u32;

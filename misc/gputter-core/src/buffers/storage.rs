@@ -338,7 +338,6 @@ impl<T, HM, SM> StorageBuffer<T, HM, SM>
 where
     T: GpuType,
     HM: HostStorageBufferMode<HOST_CAN_READ = true>,
-    SM: ShaderStorageBufferMode<READONLY = false>,
 {
     pub fn read(&self, into: &mut T) {
         into.from_bytes(

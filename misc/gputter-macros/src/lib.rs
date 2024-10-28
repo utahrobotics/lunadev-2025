@@ -49,6 +49,8 @@ fn type_resolver(s: &str, uint_consts: &FxHashMap<&str, Option<u32>>) -> String 
         "f32" => return "f32".into(),
         "u32" => return "u32".into(),
         "i32" => return "i32".into(),
+        "NonZeroU32" => return "std::num::NonZeroU32".into(),
+        "NonZeroI32" => return "std::num::NonZeroI32".into(),
         _ => {}
     }
 
@@ -69,7 +71,7 @@ fn type_resolver(s: &str, uint_consts: &FxHashMap<&str, Option<u32>>) -> String 
                     return format!("[{}]", type_resolver(ty.trim(), uint_consts));
                 }
             } else {
-                panic!("Invalid array count: {count} in {s}");
+                panic!("Invalid array count: {count} in {s} {uint_consts:?}");
             }
         }
         // There is no count
@@ -94,6 +96,22 @@ fn type_resolver(s: &str, uint_consts: &FxHashMap<&str, Option<u32>>) -> String 
                 _ => panic!("Invalid vector type: {s}"),
             };
             return format!("gputter::types::AlignedVec{n}<{ty}>");
+        }
+    }
+    if let Some((dim1, dim2)) = unformat!("mat{}x{}?", delimited) {
+        if let Some((dim2, ty)) = unformat!("{}<{}>", dim2.trim_end()) {
+            return format!("gputter::types::AlignedMatrix{dim1}x{dim2}<{ty}>");
+        } else if dim2.len() != 2 {
+            panic!("Invalid matrix type: {s}");
+        } else {
+            let (dim2, mut ty) = dim2.split_at(1);
+            ty = match ty {
+                "f" => "f32",
+                "u" => "u32",
+                "i" => "i32",
+                _ => panic!("Invalid matrix type: {s}"),
+            };
+            return format!("gputter::types::AlignedMatrix{dim1}x{dim2}<{ty}>");
         }
     }
 
@@ -130,7 +148,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
 
     // Find all u32 constants as they can be used for array lengths
     let re =
-        Regex::new(r"const\s*([a-zA-Z0-9]+)\s*:\s*([a-zA-Z0-9]+)\s*=\s*([\{\}a-zA-Z0-9]+)\s*;?")
+        Regex::new(r"const\s*([a-zA-Z0-9_]+)\s*:\s*([a-zA-Z0-9]+)\s*=\s*([\{\}a-zA-Z0-9_]+)\s*;?")
             .unwrap();
 
     let uint_consts: FxHashMap<_, _> = re
@@ -151,7 +169,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
             Some((const_name, Some(n)))
         })
         .collect();
-
+    
     // Split by buffer annotations
     let re = Regex::new(r"#\[buffer\(([a-zA-Z0-9]+)\)\]").unwrap();
 
@@ -204,9 +222,10 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                         shader_read_only: false,
                     },
                     "read" => {
-                        if host_rw_mode != "HostWriteOnly" && host_rw_mode != "HostReadWrite" {
-                            panic!("Read only storage buffer must be writable by host (HostWriteOnly or HostReadWrite)");
-                        }
+                        // relaxed for now, maybe forever
+                        // if host_rw_mode != "HostWriteOnly" && host_rw_mode != "HostReadWrite" {
+                        //     panic!("Read only storage buffer must be writable by host (HostWriteOnly or HostReadWrite)");
+                        // }
                         StorageType::Storage {
                             host_rw_mode,
                             shader_read_only: true,
@@ -224,12 +243,13 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
     // Find all build time constants
     // These constants can be filled by the host before the shader is compiled
     let re = Regex::new(
-        r"(const\s+[a-zA-Z0-9]+\s*:\s*([a-zA-Z0-9]+)\s*=\s*)\{\{([a-zA-Z0-9]+)\}\}\s*(;?)",
+        r"(const\s+[a-zA-Z0-9_]+\s*:\s*([a-zA-Z0-9]+)\s*=\s*)\{\{([a-zA-Z0-9_]+)\}\}\s*(;?)(\s*\/\/\s*(\S+)\n)?",
     )
     .unwrap();
 
     let mut const_types = vec![];
     let mut const_names = vec![];
+    let mut const_custom_sub = vec![];
     let mut binding_index = 0usize;
 
     // Prepare shader for substitution
@@ -237,15 +257,36 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         .into_iter()
         .map(String::from)
         .intersperse_with(|| {
-            let out = format!("<<GRP_SUBSTITUTE{binding_index}>>");
+            let out = format!("<<GRP_SUBSTITUTE{binding_index}?>>");
             binding_index += 1;
             out
         })
         .flat_map(|s| {
             re.captures_iter(&s).for_each(|caps| {
-                let (_, [_, type_name, const_name, _]) = caps.extract();
-                const_types.push(type_name.to_owned());
+                let mut caps = caps.iter();
+                let _whole = caps.next();
+                let _declaration = caps.next();
+                let type_name = caps.next().unwrap().unwrap().as_str();
+                let const_name = caps.next().unwrap().unwrap().as_str();
+                let _semicolon = caps.next();
+                const_types.push(type_resolver(type_name, &uint_consts));
                 const_names.push(const_name.to_owned());
+                // panic!("A {:?}", caps.next());
+                const_custom_sub.push(
+                    caps.next().flatten().map(
+                        |_| {
+                            // If the outer capture group is present, the inner capture group is also present
+                            // refer to regex for proof
+                            let cap = caps.next().unwrap().unwrap().as_str().trim();
+                            if cap.is_empty() {
+                                None
+                            } else {
+                                Some(cap.to_owned())
+                            }
+                        }
+                    )
+                    .flatten()
+                )
             });
             let mut const_index = 0usize;
             let splitted: Vec<_> = re
@@ -253,7 +294,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                 .split("<<SUBSTITUTE>>")
                 .map(String::from)
                 .intersperse_with(|| {
-                    let out = format!("<<SUBSTITUTE{}>>", const_types[const_index]);
+                    let out = format!("<<SUBSTITUTE{}?>>", const_types[const_index]);
                     const_index += 1;
                     out
                 })
@@ -262,21 +303,43 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         })
         .collect();
 
+    let mut const_sub_idx = 0usize;
+
     // Substitute parameters with reasonable defaults
     let tmp_shader: String = shader
         .iter()
         .map(|s| {
-            if let Some(i) = unformat!("<<GRP_SUBSTITUTE{}>>", s) {
+            if let Some(i) = unformat!("<<GRP_SUBSTITUTE{}?>>", s) {
                 format!("@group(0) @binding({i})")
-            } else if let Some(ty) = unformat!("<<SUBSTITUTE{}>>", s) {
+            } else if let Some(ty) = unformat!("<<SUBSTITUTE{}?>>", s) {
+                if let Some(custom_sub) = &const_custom_sub[const_sub_idx] {
+                    const_sub_idx += 1;
+                    return custom_sub.clone();
+                }
+                const_sub_idx += 1;
                 match ty {
                     "f32" => "0.0".to_owned(),
                     "u32" => "0".to_owned(),
                     "i32" => "0".to_owned(),
                     "bool" => "false".to_owned(),
-                    "NonZeroU32" => "1".to_owned(),
-                    "NonZeroI32" => "1".to_owned(),
-                    _ => panic!("Unsupported type for substitution: {}", ty),
+                    "std::num::NonZeroU32" => "1".to_owned(),
+                    "std::num::NonZeroI32" => "1".to_owned(),
+                    _ => {
+                        if let Some((n, ty)) = unformat!("gputter::types::AlignedVec{}<{}>", ty) {
+                            let sub = match ty {
+                                "f32" => "0.0".to_owned(),
+                                "u32" | "i32" => "0".to_owned(),
+                                _ => panic!("Unsupported type for substitution: {}", ty)
+                            };
+                            return match n {
+                                "2" => format!("vec2<{ty}>({sub}, {sub})"),
+                                "3" => format!("vec3<{ty}>({sub}, {sub}, {sub})"),
+                                "4" => format!("vec4<{ty}>({sub}, {sub}, {sub}, {sub})"),
+                                _ => panic!("Unsupported type for substitution: {}", ty)
+                            };
+                        }
+                        panic!("Unsupported type for substitution: {}", ty)
+                    }
                 }
             } else {
                 s.clone()

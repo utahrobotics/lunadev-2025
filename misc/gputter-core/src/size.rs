@@ -34,7 +34,7 @@ pub struct DynamicSize<T: ?Sized>(pub usize, PhantomData<fn() -> T>);
 
 impl<T: 'static> BufferSize for DynamicSize<T> {
     fn size(&self) -> u64 {
-        let stride = size_of::<T>().next_multiple_of(align_of::<T>()) as u64;
+        let stride = size_of::<T>() as u64;
         self.0 as u64 * stride
     }
 }

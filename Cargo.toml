@@ -20,7 +20,7 @@ members = [
     "lunabotics/lunabase-lib",
     "lunabotics/lunasim-lib",
     "misc/k",
-    "lunabotics/heightmap", "lunabotics/lunabot-ai", "misc/ares-bt", "misc/cakap2", "misc/recycler", "misc/gputter-core", "misc/gputter-macros", "misc/gputter",
+    "lunabotics/heightmap", "lunabotics/lunabot-ai", "misc/ares-bt", "misc/cakap2", "misc/recycler", "misc/gputter-core", "misc/gputter-macros", "misc/gputter", "misc/thalassic",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/"]
@@ -88,6 +88,7 @@ lunabase-lib = { path = "lunabotics/lunabase-lib" }
 ares-bt = { path = "misc/ares-bt" }
 thiserror = "1.0.64"
 recycler = { path = "misc/recycler" }
+gputter = { path = "misc/gputter" }
 
 [profile.dev.package.lunabot]
 opt-level = 3

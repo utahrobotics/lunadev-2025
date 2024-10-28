@@ -4256,6 +4256,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "thalassic"
+version = "0.1.0"
+dependencies = [
+ "gputter",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
