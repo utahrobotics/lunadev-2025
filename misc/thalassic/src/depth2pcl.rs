@@ -14,7 +14,6 @@ const DEPTH_SCALE: f32 = {{depth_scale}};
 const PIXEL_COUNT: NonZeroU32 = {{pixel_count}};
 
 @compute
-// @workgroup_size(IMAGE_WIDTH, PIXEL_COUNT / IMAGE_WIDTH, 1)
 @workgroup_size(1, 1, 1)
 fn main(
     @builtin(workgroup_id) workgroup_id : vec3u,

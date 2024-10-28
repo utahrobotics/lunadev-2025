@@ -55,7 +55,7 @@ pub fn spawn_thalassic_pipeline(
         let mut pipeline = ThalassicBuilder {
             image_width: NonZeroU32::new(projection_size.x).unwrap(),
             focal_length_px,
-            principal_point_px: projection_size.cast() / 2.0,
+            principal_point_px: (projection_size - Vector2::new(1, 1)).cast() / 2.0,
             depth_scale,
             pixel_count: NonZeroU32::new(projection_size.x * projection_size.y).unwrap(),
             heightmap_width: NonZeroU32::new(64).unwrap(),
