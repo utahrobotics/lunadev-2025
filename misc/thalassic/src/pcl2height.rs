@@ -7,11 +7,11 @@ build_shader!(
     #[buffer(HostReadOnly)] var<storage, read> points: array<vec4f, POINT_COUNT>;
     #[buffer(HostReadOnly)] var<storage, read> original_heightmap: array<f32, CELL_COUNT>;
     
-    const PROJECTION_WIDTH: NonZeroU32 = {{projection_width}}; // 16
+    const PROJECTION_WIDTH: NonZeroU32 = {{projection_width}}; /!/ sub with 12
     const HEIGHTMAP_WIDTH: NonZeroU32 = {{heightmap_width}};
     const CELL_SIZE: f32 = {{cell_size}};
     const CELL_COUNT: NonZeroU32 = {{cell_count}};
-    const POINT_COUNT: NonZeroU32 = {{point_count}}; // 32
+    const POINT_COUNT: NonZeroU32 = {{point_count}}; /!/ sub with 32
     const TRI_COUNT: u32 = 2 * (PROJECTION_WIDTH - 1) * (POINT_COUNT / PROJECTION_WIDTH - 1);
     
     fn barycentric(pv1: vec3f, pv2: vec3f, pv3: vec3f, pp: vec2f) -> vec3f {
@@ -66,7 +66,6 @@ build_shader!(
         let bc = barycentric(v1.xyz, v2.xyz, v3.xyz, vec2(heightmap_x, heightmap_y));
     
         if (bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0) {
-            // atomicStore(&heightmap[heightmap_index], bitcast<u32>(f32(3.0)));
             return;
         }
     

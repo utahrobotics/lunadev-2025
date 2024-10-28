@@ -126,13 +126,19 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         vis, name, shader, ..
     } = parse_macro_input!(input as BuildShader);
 
+    // remove comments
+    let re = Regex::new(r"//[[[:blank:]]\S]*\n").unwrap();
+
+    let shader = shader.value();
+    let shader = re.replace_all(&shader, "\n");
+
     // Add aliases to the start
     // This helps with later steps if the first symbol in the shader
     // is a buffer annotation
     let shader = {
-        let mut tmp = String::with_capacity(shader.value().len() + 1);
+        let mut tmp = String::with_capacity(shader.len() + 1);
         tmp.push_str("alias NonZeroU32 = u32;\nalias NonZeroI32 = i32;\n");
-        tmp.push_str(&shader.value());
+        tmp.push_str(&shader);
         tmp
     };
 
@@ -243,7 +249,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
     // Find all build time constants
     // These constants can be filled by the host before the shader is compiled
     let re = Regex::new(
-        r"(const\s+[a-zA-Z0-9_]+\s*:\s*([a-zA-Z0-9]+)\s*=\s*)\{\{([a-zA-Z0-9_]+)\}\}\s*(;?)(\s*\/\/\s*(\S+)\n)?",
+        r"(const\s+[a-zA-Z0-9_]+\s*:\s*([a-zA-Z0-9]+)\s*=\s*)\{\{([a-zA-Z0-9_]+)\}\}\s*(;?)(\s*/!/\s*sub\s*with\s*(\S+))?(\n)?",
     )
     .unwrap();
 
@@ -290,7 +296,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
             });
             let mut const_index = 0usize;
             let splitted: Vec<_> = re
-                .replace_all(&s, "$1<<SUBSTITUTE>>$4")
+                .replace_all(&s, "$1<<SUBSTITUTE>>$4$7")
                 .split("<<SUBSTITUTE>>")
                 .map(String::from)
                 .intersperse_with(|| {
