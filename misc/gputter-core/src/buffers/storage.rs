@@ -335,10 +335,36 @@ where
 }
 
 impl<T, HM, SM> StorageBuffer<T, HM, SM>
-where 
-    T: GpuType
+where
+    T: GpuType + ?Sized,
+    HM: HostStorageBufferMode<HOST_CAN_READ = true>,
 {
-    pub fn cast<U: GpuType<Size=StaticSize<U>>>(self) -> StorageBuffer<U, HM, SM> {
+    pub fn read(&self, into: &mut T) {
+        into.from_bytes(
+            &self
+                .read_buffer
+                .as_ref()
+                .unwrap()
+                .slice(..)
+                .get_mapped_range(),
+        );
+    }
+    pub fn copy_into(&self, other: &mut impl WritableGpuBuffer, lock: &mut GpuWriteLock) {
+        lock.encoder.copy_buffer_to_buffer(
+            &self.buffer,
+            0,
+            other.get_buffer(),
+            0,
+            self.size.size(),
+        );
+    }
+}
+
+impl<T, HM, SM> StorageBuffer<T, HM, SM>
+where
+    T: GpuType,
+{
+    pub fn cast<U: GpuType<Size = StaticSize<U>>>(self) -> StorageBuffer<U, HM, SM> {
         const {
             if size_of::<T>() != size_of::<U>() {
                 panic!("Attempted to cast between types of different sizes");

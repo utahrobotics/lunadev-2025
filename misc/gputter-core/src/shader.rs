@@ -55,7 +55,6 @@ macro_rules! tuple_impl {
     }
 }
 
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BufferGroupBinding<B, S> {
     group_index: u32,
@@ -136,19 +135,19 @@ tuple_impl!(4, 0 A, 1 B, 2 C, 3 D);
 tuple_impl!(5, 0 A, 1 B, 2 C, 3 D, 4 E);
 tuple_impl!(6, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F);
 
-
 impl<S, const I1: usize, const I2: usize> IndexGpuBufferTupleList<I1, I2> for S
 where
     S: StaticIndexable<I1>,
     <S as StaticIndexable<I1>>::Output: StaticIndexable<I2>,
 {
-    type Binding = BufferGroupBinding<<<S as StaticIndexable<I1>>::Output as StaticIndexable<I2>>::Output, S>;
+    type Binding =
+        BufferGroupBinding<<<S as StaticIndexable<I1>>::Output as StaticIndexable<I2>>::Output, S>;
 
     fn get() -> Self::Binding {
         BufferGroupBinding {
             group_index: I1 as u32,
             binding_index: I2 as u32,
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 }

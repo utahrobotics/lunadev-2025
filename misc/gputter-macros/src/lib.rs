@@ -412,7 +412,9 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
     let const_def = const_names
         .iter()
         .zip(const_types.iter())
-        .map(|(name, ty)| proc_macro2::TokenStream::from_str(&format!("pub {name}: {ty}")).unwrap());
+        .map(|(name, ty)| {
+            proc_macro2::TokenStream::from_str(&format!("pub {name}: {ty}")).unwrap()
+        });
 
     let const_idents = const_names.iter().map(|name| format_ident!("{name}"));
     let buffer_idents = buffer_names.iter().map(|&name| format_ident!("{name}"));

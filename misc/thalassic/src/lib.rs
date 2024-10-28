@@ -2,7 +2,17 @@ use std::num::NonZeroU32;
 
 use bytemuck::cast_slice_mut;
 use depth2pcl::Depth2Pcl;
-use gputter::{buffers::{storage::{HostReadOnly, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, StorageBuffer}, uniform::UniformBuffer, GpuBufferSet}, compute::ComputePipeline, shader::BufferGroupBinding, tuple::StaticIndexable, types::{AlignedMatrix4, AlignedVec4}};
+use gputter::tuple::StaticIndexable;
+use gputter::{
+    buffers::{
+        storage::{HostReadOnly, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, StorageBuffer},
+        uniform::UniformBuffer,
+        GpuBufferSet,
+    },
+    compute::ComputePipeline,
+    shader::BufferGroupBinding,
+    types::{AlignedMatrix4, AlignedVec4},
+};
 use nalgebra::Vector2;
 use pcl2height::Pcl2Height;
 
@@ -13,23 +23,17 @@ pub mod pcl2height;
 /// 2. Transform
 type DepthBindGrp = (
     StorageBuffer<[u32], HostWriteOnly, ShaderReadOnly>,
-    UniformBuffer<AlignedMatrix4<f32>>
+    UniformBuffer<AlignedMatrix4<f32>>,
 );
 
 /// Points used by depth2pcl and pcl2height
-type PointsBindGrp = (
-    StorageBuffer<[AlignedVec4<f32>], HostReadOnly, ShaderReadWrite>,
-);
+type PointsBindGrp = (StorageBuffer<[AlignedVec4<f32>], HostReadOnly, ShaderReadWrite>,);
 
 /// Heightmap used by pcl2height and height2grad
-type HeightMapBindGrp = (
-    StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,
-);
+type HeightMapBindGrp = (StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,);
 
 /// Original heightmap used by pcl2height
-type PclBindGrp = (
-    StorageBuffer<[f32], HostWriteOnly, ShaderReadOnly>,
-);
+type PclBindGrp = (StorageBuffer<[f32], HostWriteOnly, ShaderReadOnly>,);
 
 type BindGroups = (
     GpuBufferSet<DepthBindGrp>,
@@ -55,19 +59,13 @@ impl ThalassicBuilder {
         let bind_grps = (
             GpuBufferSet::from((
                 StorageBuffer::new_dyn(self.pixel_count.get() as usize).unwrap(),
-                UniformBuffer::new()
+                UniformBuffer::new(),
             )),
-            GpuBufferSet::from((
-                StorageBuffer::new_dyn(self.pixel_count.get() as usize).unwrap(),
-            )),
-            GpuBufferSet::from((
-                StorageBuffer::new_dyn(self.cell_count.get() as usize).unwrap(),
-            )),
-            GpuBufferSet::from((
-                StorageBuffer::new_dyn(self.cell_count.get() as usize).unwrap(),
-            )),
+            GpuBufferSet::from((StorageBuffer::new_dyn(self.pixel_count.get() as usize).unwrap(),)),
+            GpuBufferSet::from((StorageBuffer::new_dyn(self.cell_count.get() as usize).unwrap(),)),
+            GpuBufferSet::from((StorageBuffer::new_dyn(self.cell_count.get() as usize).unwrap(),)),
         );
-        
+
         let [depth_fn] = Depth2Pcl {
             depths: BufferGroupBinding::<_, BindGroups>::get::<0, 0>(),
             points: BufferGroupBinding::<_, BindGroups>::get::<1, 0>(),
@@ -77,8 +75,9 @@ impl ThalassicBuilder {
             principal_point_px: self.principal_point_px.into(),
             depth_scale: self.depth_scale,
             pixel_count: self.pixel_count,
-        }.compile();
-        
+        }
+        .compile();
+
         let [height_fn] = Pcl2Height {
             points: BufferGroupBinding::<_, BindGroups>::get::<1, 0>(),
             heightmap: BufferGroupBinding::<_, BindGroups>::get::<2, 0>(),
@@ -88,28 +87,47 @@ impl ThalassicBuilder {
             original_heightmap: BufferGroupBinding::<_, BindGroups>::get::<3, 0>(),
             projection_width: self.image_width,
             point_count: self.pixel_count,
-        }.compile();
-        
+        }
+        .compile();
+
         let pipeline = ComputePipeline::new([&depth_fn, &height_fn]);
-        ThalassicPipeline { pipeline, bind_grps }
+        ThalassicPipeline {
+            pipeline,
+            bind_grps,
+        }
     }
 }
 
 pub struct ThalassicPipeline {
     pipeline: ComputePipeline<BindGroups, 2>,
-    bind_grps: BindGroups
+    bind_grps: BindGroups,
 }
 
 impl ThalassicPipeline {
-    pub fn provide_depths(&mut self, depths: &[u32], camera_transform: &AlignedMatrix4<f32>, out_pcl: &mut [AlignedVec4<f32>], out_heightmap: &mut [f32]) {
+    pub fn provide_depths(
+        &mut self,
+        depths: &[u32],
+        camera_transform: &AlignedMatrix4<f32>,
+        out_pcl: &mut [AlignedVec4<f32>],
+        out_heightmap: &mut [f32],
+    ) {
         self.pipeline
             .new_pass(|mut lock| {
                 self.bind_grps.0.write::<0, _>(depths, &mut lock);
                 self.bind_grps.0.write::<1, _>(camera_transform, &mut lock);
+                self.bind_grps
+                    .2
+                    .buffers
+                    .0
+                    .copy_into(&mut self.bind_grps.3.buffers.0, &mut lock);
                 &mut self.bind_grps
             })
             .finish();
         self.bind_grps.1.buffers.0.read(out_pcl);
-        self.bind_grps.2.buffers.0.read(cast_slice_mut(out_heightmap));
+        self.bind_grps
+            .2
+            .buffers
+            .0
+            .read(cast_slice_mut(out_heightmap));
     }
 }
