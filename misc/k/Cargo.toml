@@ -22,38 +22,3 @@ tracing = "0.1"
 urdf-rs = "0.8"
 
 serde = { version = "1.0", features = ["derive"], optional = true }
-
-[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
-clap = { version = "4", features = ["derive"] }
-criterion = "0.5"
-kiss3d = "0.35"
-rand = "0.8"
-
-[target.'cfg(target_family = "wasm")'.dev-dependencies]
-wasm-bindgen-test = "0.3"
-
-# [[bench]]
-# name = "fk"
-# harness = false
-
-# [[bench]]
-# name = "ik"
-# harness = false
-
-#[profile.release]
-#debug = true
-
-#[profile.bench]
-#debug = true
-
-# [lints]
-# workspace = true
-
-# [workspace.lints.rust]
-# missing_debug_implementations = "warn"
-# # missing_docs = "warn" # TODO
-# rust_2018_idioms = "warn"
-# single_use_lifetimes = "warn"
-# unreachable_pub = "warn"
-# [workspace.lints.clippy]
-# lint_groups_priority = { level = "allow", priority = 1 } # https://github.com/rust-lang/rust-clippy/issues/12920
