@@ -218,6 +218,9 @@ pub fn log_to_console() -> LogFilter {
         if record.target() == "panic" || record.level() > filter.get() {
             return;
         }
+        if record.target() == "wgpu_core::device::resource" {
+            return;
+        }
         let secs = get_program_time().as_secs_f32();
         let msg = record.args().to_string();
         let mins = (secs / 60.0).floor() as usize;

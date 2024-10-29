@@ -44,6 +44,7 @@ pub async fn init_gputter() -> anyhow::Result<()> {
                 } else {
                     wgpu::Limits::default()
                 },
+                memory_hints: wgpu::MemoryHints::Performance,
                 label: None,
             },
             None, // Trace path
