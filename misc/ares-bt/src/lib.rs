@@ -175,6 +175,32 @@ pub trait CancelSafe {
     fn reset(&mut self);
 }
 
+impl<T> From<InfallibleStatus<T>> for Status<T> {
+    fn from(value: InfallibleStatus<T>) -> Self {
+        match value {
+            InfallibleStatus::Running(t) => Status::Running(t),
+            InfallibleStatus::Success => Status::Success,
+        }
+    }
+}
+
+impl<T> From<FallibleStatus<T>> for Status<T> {
+    fn from(value: FallibleStatus<T>) -> Self {
+        match value {
+            FallibleStatus::Running(t) => Status::Running(t),
+            FallibleStatus::Failure => Status::Failure,
+        }
+    }
+}
+
+impl<T> From<EternalStatus<T>> for Status<T> {
+    fn from(value: EternalStatus<T>) -> Self {
+        match value {
+            EternalStatus::Running(t) => Status::Running(t),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use looping::WhileLoop;
