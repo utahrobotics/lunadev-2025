@@ -1,8 +1,7 @@
-// #![feature(never_type)]
 #![feature(unboxed_closures)]
 #![feature(tuple_trait)]
 #![feature(never_type)]
-// #![feature(const_option)]
+#![feature(get_mut_unchecked)]
 
 use std::{
     backtrace::Backtrace,
@@ -25,6 +24,7 @@ use tokio::{runtime::Handle, sync::Notify};
 
 pub mod callbacks;
 pub mod task;
+pub mod shared;
 
 #[derive(Clone, Copy)]
 pub struct TokioRuntimeConfig {
