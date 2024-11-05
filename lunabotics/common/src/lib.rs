@@ -67,42 +67,41 @@ impl FromLunabot {
     }
 }
 
-const MAX_STEERING: u8 = 14;
-
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq)]
 pub struct Steering(u8);
 
 impl std::fmt::Debug for Steering {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let (drive, steering) = self.get_drive_and_steering();
+        let (left, right) = self.get_left_and_right();
         f.debug_struct("Steering")
-            .field("drive", &drive)
-            .field("steering", &steering)
+            .field("left", &left)
+            .field("right", &right)
             .finish()
     }
 }
 
 impl Steering {
     pub fn new(mut drive: f64, mut steering: f64) -> Self {
-        steering *= drive.signum();
-        drive = drive.abs();
         if drive > 1.0 {
             drive = 1.0;
+        } else if drive < -1.0 {
+            drive = -1.0;
         }
         if steering < -1.0 {
             steering = -1.0;
         } else if steering > 1.0 {
             steering = 1.0;
         }
-        let drive = ((drive + 1.0) / 2.0 * MAX_STEERING as f64).round() as u8;
-        let steering = ((steering + 1.0) / 2.0 * MAX_STEERING as f64).round() as u8;
 
-        Self(drive << 4 | steering)
+        let drive = (drive * 7.0 + 7.0).round() as u8;
+        let steering = (steering * 8.0 + 8.0).round() as u8;
+
+        Self(drive * (steering + 1))
     }
 
     pub fn get_drive_and_steering(self) -> (f64, f64) {
-        let drive = (self.0 >> 4) as f64 / MAX_STEERING as f64 * 2.0 - 1.0;
-        let steering = (self.0 & 0b00001111) as f64 / MAX_STEERING as f64 * 2.0 - 1.0;
+        let drive = ((self.0 / 17) as f64 - 7.0) / 7.0;
+        let steering = -((self.0 % 17) as f64 - 8.0) / 8.0;
         (drive, steering)
     }
 
@@ -119,7 +118,7 @@ impl Steering {
 
     pub fn new_left_right(left: f64, right: f64) -> Self {
         let drive = (left.abs() + right.abs()) / 2.0;
-        let steering = (left - right) / 2.0;
+        let steering = (right - left) / 2.0;
         Self::new(drive, steering)
     }
 }
@@ -143,13 +142,13 @@ mod tests {
     #[test]
     fn left_right02() {
         let s = Steering::new(1.0, 1.0);
-        assert_eq!(s, Steering::new_left_right(1.0, -1.0));
+        assert_eq!(s, Steering::new_left_right(-1.0, 1.0));
     }
 
     #[test]
     fn left_right03() {
         let s = Steering::new(-1.0, -1.0);
-        assert_eq!(s, Steering::new_left_right(1.0, -1.0));
+        assert_eq!(s, Steering::new_left_right(-1.0, 1.0));
     }
 
     #[test]
@@ -172,6 +171,7 @@ mod tests {
     fn invertibility01() {
         let s = Steering::new(1.0, 1.0);
         let (left, right) = s.get_left_and_right();
+        assert_eq!((left, right), (-1.0, 1.0));
         assert_eq!(s, Steering::new_left_right(left, right));
     }
 }
