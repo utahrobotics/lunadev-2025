@@ -84,9 +84,9 @@ impl std::fmt::Debug for Steering {
 
 impl Steering {
     pub fn new(mut drive: f64, mut steering: f64) -> Self {
-        if drive < -1.0 {
-            drive = -1.0;
-        } else if drive > 1.0 {
+        steering *= drive.signum();
+        drive = drive.abs();
+        if drive > 1.0 {
             drive = 1.0;
         }
         if steering < -1.0 {
@@ -116,10 +116,62 @@ impl Steering {
             (drive, drive * opposite_drive)
         }
     }
+
+    pub fn new_left_right(left: f64, right: f64) -> Self {
+        let drive = (left.abs() + right.abs()) / 2.0;
+        let steering = (left - right) / 2.0;
+        Self::new(drive, steering)
+    }
 }
 
 impl Default for Steering {
     fn default() -> Self {
         Self::new(0.0, 0.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Steering;
+
+    #[test]
+    fn left_right01() {
+        let s = Steering::new(0.0, 0.0);
+        assert_eq!(s, Steering::new_left_right(0.0, 0.0));
+    }
+
+    #[test]
+    fn left_right02() {
+        let s = Steering::new(1.0, 1.0);
+        assert_eq!(s, Steering::new_left_right(1.0, -1.0));
+    }
+
+    #[test]
+    fn left_right03() {
+        let s = Steering::new(-1.0, -1.0);
+        assert_eq!(s, Steering::new_left_right(1.0, -1.0));
+    }
+
+    #[test]
+    fn equality01() {
+        assert_eq!(
+            Steering::new(1.0, 1.0).get_left_and_right(),
+            Steering::new(-1.0, -1.0).get_left_and_right()
+        );
+    }
+
+    #[test]
+    fn equality02() {
+        assert_eq!(
+            Steering::new(1.0, 1.0),
+            Steering::new(-1.0, -1.0)
+        );
+    }
+
+    #[test]
+    fn invertibility01() {
+        let s = Steering::new(1.0, 1.0);
+        let (left, right) = s.get_left_and_right();
+        assert_eq!(s, Steering::new_left_right(left, right));
     }
 }
