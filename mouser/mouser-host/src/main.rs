@@ -1,10 +1,11 @@
-use std::{collections::HashMap, net::SocketAddrV4, path::PathBuf, process::ExitCode, sync::{atomic::{AtomicBool, Ordering}, Arc}, time::Duration};
+#![feature(iterator_try_collect)]
+use std::{collections::HashMap, net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4}, path::PathBuf, process::ExitCode, sync::{atomic::{AtomicBool, Ordering}, Arc}, time::Duration};
 
-use axum::{body::Body, extract::{ws::Message, Path, WebSocketUpgrade}, response::{Html, Response}, routing::get, Router};
+use axum::{body::Body, extract::{ws::Message, ConnectInfo, Path, WebSocketUpgrade}, response::{Html, Response}, routing::{get, post}, Router};
 use crossbeam::queue::SegQueue;
-use fxhash::FxBuildHasher;
+use fxhash::{FxBuildHasher, FxHashSet};
 use serde::Deserialize;
-use tokio::{net::UdpSocket, process::Command, sync::Notify, time::Instant};
+use tokio::{fs::File, io::AsyncWriteExt, net::UdpSocket, process::Command, sync::{Notify, RwLock}, time::Instant};
 
 #[derive(Deserialize)]
 struct Config {
@@ -75,11 +76,48 @@ async fn main() -> ExitCode {
     let wait_queue: &SegQueue<Arc<Notify>> = Box::leak(Box::new(SegQueue::new()));
     let robot_conns: &_ = Box::leak(Box::new(robot_conns));
 
-
     if !config.go2rtc_path.exists() {
         eprintln!("{:#?} not found", config.go2rtc_path);
         return ExitCode::FAILURE;
     }
+
+    let address_log: FxHashSet<IpAddr>;
+    let address_log_file = if std::path::Path::new("address_log.txt").exists() {
+        let text = match tokio::fs::read_to_string("address_log.txt").await {
+            Ok(x) => x,
+            Err(e) => {
+                eprintln!("Error opening address log file: {}", e);
+                return ExitCode::FAILURE;
+            }
+        };
+
+        address_log = match text.lines().map(|x| x.parse()).try_collect() {
+            Ok(x) => x,
+            Err(e) => {
+                eprintln!("Error parsing address log file: {}", e);
+                return ExitCode::FAILURE;
+            }
+        };
+        
+        match File::options().append(true).open("address_log.txt").await {
+            Ok(x) => x,
+            Err(e) => {
+                eprintln!("Error creating address log file: {}", e);
+                return ExitCode::FAILURE;
+            }
+        }
+    } else {
+        address_log = FxHashSet::default();
+        match File::create("address_log.txt").await {
+            Ok(x) => x,
+            Err(e) => {
+                eprintln!("Error creating address log file: {}", e);
+                return ExitCode::FAILURE;
+            }
+        }
+    };
+    let addresses = RwLock::new((address_log, address_log_file));
+    let addresses: &_ = Box::leak(Box::new(addresses));
 
     let canonicalized = match config.go2rtc_path.canonicalize() {
         Ok(x) => x,
@@ -104,6 +142,33 @@ async fn main() -> ExitCode {
     });
 
     let app = Router::new()
+        .route("/log_ip", post(move |ConnectInfo(addr): ConnectInfo<SocketAddr>| async move {
+            let ip = addr.ip();
+            if ip == IpAddr::V4(Ipv4Addr::LOCALHOST) || ip == IpAddr::V4(Ipv4Addr::LOCALHOST) {
+                return Response::builder()
+                    .header("Content-Type", "application/json")
+                    .body(Body::from("{}"))
+                    .unwrap();
+            }
+            let mut new_ip = {
+                !addresses.read().await.0.contains(&ip)
+            };
+            if new_ip {
+                let mut writer = addresses.write().await;
+                new_ip = writer.0.insert(ip);
+                if new_ip {
+                    if let Err(e) = writer.1.write_all(ip.to_string().as_bytes()).await {
+                        eprintln!("Error writing to address log file: {}", e);
+                    } else {
+                        let _ = writer.1.flush().await;
+                    }
+                }
+            }
+            Response::builder()
+                .header("Content-Type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap()
+        }))
         .route("/ws/", get(move |ws: WebSocketUpgrade,| async move {
             ws.on_upgrade(move |mut ws| async move {
                 let (name, instance) = 'main: loop {
@@ -226,6 +291,6 @@ async fn main() -> ExitCode {
         }));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:80").await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
     unreachable!()
 }

@@ -27,3 +27,4 @@ playlist.m3u8
 playlist*.ts
 mouser-config.toml
 /go2rtc*
+/address_log.txt

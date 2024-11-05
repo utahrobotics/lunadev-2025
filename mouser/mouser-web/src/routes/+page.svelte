@@ -1,23 +1,29 @@
-<script>
-    let socket = null;
-    socket = new WebSocket("/ws/");
-    // Connection opened
-    socket.addEventListener("open", (event) => {
-        socket.send("W");
-    });
+<script lang=ts>
+	import { enhance } from "$app/forms";
+
+    let socket: WebSocket | null = null;
 
     let queued = true;
     let robotName = "";
 
-    // Listen for messages
-    socket.addEventListener("message", (event) => {
-        if (event.data === "Queued") {
-            queued = true;
-        } else {
-            robotName = event.data;
-            queued = false;
-        }
-    });
+    function connect() {
+        socket = new WebSocket("/ws/");
+        // Listen for messages
+        socket.addEventListener("message", (event) => {
+            if (event.data === "Queued") {
+                queued = true;
+            } else {
+                robotName = event.data;
+                queued = false;
+            }
+        });
+
+        socket.addEventListener("close", (event) => {
+            socket = null;
+        });
+    }
+
+    let ip_logged = false;
 </script>
 <svelte:head>
     <title>Mouse Robot</title>
@@ -27,20 +33,39 @@
     <embed src="http://localhost:1984/stream.html?src=macos_facetime&mode=webrtc,mse,hls,mjpeg">
 </div>
 
-{#if queued}
+{#if socket === null}
+    <button on:click={connect}>Join Queue</button>
+{:else if queued}
     <p>Waiting in queue...</p>
 {:else}
     <p>Connected to {robotName}</p>
     <section id="controls">
-        <button on:click={() => socket.send("W")}>W</button>
+        <button on:click={() => socket!.send("W")}>W</button>
         <div>
-            <button on:click={() => socket.send("A")}>A</button>
-            <button on:click={() => socket.send("S")}>S</button>
-            <button on:click={() => socket.send("D")}>D</button>
+            <button on:click={() => socket!.send("A")}>A</button>
+            <button on:click={() => socket!.send("S")}>S</button>
+            <button on:click={() => socket!.send("D")}>D</button>
         </div>
     </section>
 {/if}
 
+{#if ip_logged}
+    <h1>Participation</h1>
+    <p>Thank you for participating!</p>
+{:else}
+    <form action="/log_ip" method="post" use:enhance={() => {
+        ip_logged = true;
+    }}>
+        <h1>Participation</h1>
+        <p>
+            Mouse Robots is an outreach event by Utah Student Robotics, and we would love it if you could participate!
+            You are always welcome to use this web app, but clicking the button below will allow us to log your IP address
+            to help us keep track of how many people have visited this site. Your IP address is kept private, and only the
+            number of unique IPs is examined, not their geographical location or any other identifying information.
+        </p>
+        <button type="submit">Participate</button>
+    </form>
+{/if}
 
 <style>
     #mouse-cam {
