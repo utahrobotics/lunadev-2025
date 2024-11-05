@@ -29,7 +29,6 @@ use urobotics_core::{
     BlockOn,
 };
 use urobotics_py::{PyRepl, PythonValue, PythonVenvBuilder};
-use urobotics_video::VideoDataDump;
 
 fn_alias! {
     pub type ImageCallbacksRef = CallbacksRef(&Arc<DynamicImage>) + Send
@@ -86,6 +85,10 @@ macro_rules! cam_impl {
                     .py_venv_builder
                     .packages_to_install
                     .push("cv2_enumerate_cameras".to_string());
+                $self
+                    .py_venv_builder
+                    .packages_to_install
+                    .push("opencv-python".to_string());
                 let mut repl = $self
                     .py_venv_builder
                     .build()
@@ -216,7 +219,7 @@ pub struct PendingCameraConnection {
 impl PendingCameraConnection {
     pub fn spawn(mut self) -> Result<CameraInfo, nokhwa::NokhwaError> {
         let (info_tx, info_rx) = std::sync::mpsc::sync_channel(1);
-
+        
         std::thread::spawn(move || {
             macro_rules! unwrap {
                 ($result: expr) => {
@@ -278,7 +281,7 @@ impl urobotics_app::Application for CameraConnectionBuilder {
                 #[cfg(debug_assertions)]
                 urobotics_core::log::warn!(target: Self::APP_NAME, "Release mode is recommended when using camera as an app");
 
-                let mut dump = VideoDataDump::new_display(camera_info.camera_name, camera.camera_format().width(), camera.camera_format().height(), true).expect("Failed to initialize video data dump");
+                let mut dump = urobotics_video::VideoDataDump::new_display(camera_info.camera_name, camera.camera_format().width(), camera.camera_format().height(), true).expect("Failed to initialize video data dump");
 
                 camera.open_stream().expect("Failed to open camera stream");
                 loop {

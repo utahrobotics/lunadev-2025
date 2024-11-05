@@ -42,7 +42,7 @@ fn default_venv_path() -> PathBuf {
 }
 
 fn default_system_interpreter() -> OsString {
-    "python".into()
+    "python3".into()
 }
 
 impl Default for PythonVenvBuilder {
@@ -77,7 +77,7 @@ impl PythonVenvBuilder {
             }
         }
         let venv = PythonVenv {
-            path: Path::new(&self.venv_path).join("Scripts//python"),
+            path: Path::new(&self.venv_path).join("bin/python"),
         };
 
         for package in &self.packages_to_install {

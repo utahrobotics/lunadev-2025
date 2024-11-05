@@ -29,3 +29,17 @@ args = ["run", "-p", "lunabot", "--", "main"]
 workspace = false
 command = "cargo"
 args = ["run", "-p", "urobotics-tool", "--", "delete-cabinet"]
+
+[tasks.mouser-web]
+workspace = false
+command = "npm"
+cwd = "mouser/mouser-web"
+args = ["run", "build"]
+
+[tasks.mouser-host]
+workspace = false
+command = "cargo"
+dependencies = [
+    "mouser-web",
+]
+args = ["run", "-p", "mouser-host"]
