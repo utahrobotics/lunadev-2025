@@ -82,44 +82,38 @@ impl std::fmt::Debug for Steering {
 
 impl Steering {
     pub fn new(mut drive: f64, mut steering: f64) -> Self {
-        if drive > 1.0 {
-            drive = 1.0;
-        } else if drive < -1.0 {
-            drive = -1.0;
-        }
-        if steering < -1.0 {
-            steering = -1.0;
-        } else if steering > 1.0 {
-            steering = 1.0;
-        }
+        drive = drive.max(-1.0).min(1.0);
+        steering = steering.max(-1.0).min(1.0);
 
-        let drive = (drive * 7.0 + 7.0).round() as u8;
-        let steering = (steering * 8.0 + 8.0).round() as u8;
-
-        Self(drive * (steering + 1))
-    }
-
-    pub fn get_drive_and_steering(self) -> (f64, f64) {
-        let drive = ((self.0 / 17) as f64 - 7.0) / 7.0;
-        let steering = -((self.0 % 17) as f64 - 8.0) / 8.0;
-        (drive, steering)
-    }
-
-    pub fn get_left_and_right(self) -> (f64, f64) {
-        let (drive, steering) = self.get_drive_and_steering();
         let opposite_drive = 1.0 - 2.0 * steering.abs();
 
-        if steering >= 0.0 {
+        let (left, right) = if steering >= 0.0 {
             (drive * opposite_drive, drive)
         } else {
             (drive, drive * opposite_drive)
-        }
+        };
+
+        Self::new_left_right(left, right)
     }
 
-    pub fn new_left_right(left: f64, right: f64) -> Self {
-        let drive = (left.abs() + right.abs()) / 2.0;
-        let steering = (right - left) / 2.0;
-        Self::new(drive, steering)
+    pub fn get_left_and_right(self) -> (f64, f64) {
+        let mut left = ((self.0 >> 4) as f64 - 7.0) / 7.0;
+        let mut right = ((self.0 & 0b1111) as f64 - 7.0) / 7.0;
+
+        left = left.min(1.0);
+        right = right.min(1.0);
+
+        (left, right)
+    }
+
+    pub fn new_left_right(mut left: f64, mut right: f64) -> Self {
+        left = left.max(-1.0).min(1.0);
+        right = right.max(-1.0).min(1.0);
+
+        let left = (left * 7.0 + 7.0).round() as u8;
+        let right = (right * 7.0 + 7.0).round() as u8;
+
+        Self(left << 4 | right)
     }
 }
 
