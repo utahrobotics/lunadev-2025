@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, ops::{Deref, DerefMut}, sync::Arc};
+use std::{marker::PhantomData, mem::MaybeUninit, ops::{Deref, DerefMut}, sync::Arc};
 
 use crossbeam::queue::SegQueue;
 use parking_lot::{Condvar, Mutex};
@@ -52,7 +52,7 @@ impl<T> MonoQueue<T> {
 
 
 struct DataInner<T> {
-    data: T,
+    data: MaybeUninit<T>,
     released_mut: Mutex<()>,
     released_condvar: Condvar,
 }
@@ -88,7 +88,9 @@ impl<T> DataHandle<T> {
     }
 }
 
+/// An uninitialized heap allocation for `T`.
 pub struct UninitOwnedData<T> {
+    inner: Arc<DataInner<T>>,
     callbacks: Vec<Box<dyn FnMut(&T) + Send>>,
     data_handle: Arc<DataHandleInner<T>>,
     lendees: Vec<Arc<MonoQueue<Arc<DataInner<T>>>>>,
@@ -118,13 +120,12 @@ impl<T> UninitOwnedData<T> {
     }
 
     /// Initializes the data.
-    pub fn init(self, data: T) -> OwnedData<T> {
+    pub fn init(mut self, data: T) -> OwnedData<T> {
+        unsafe {
+            Arc::get_mut_unchecked(&mut self.inner).data.write(data);
+        }
         OwnedData {
-            inner: Arc::new(DataInner {
-                data,
-                released_condvar: Condvar::new(),
-                released_mut: Mutex::new(()),
-            }),
+            inner: self.inner,
             callbacks: self.callbacks,
             data_handle: self.data_handle,
             lendees: self.lendees,
@@ -135,6 +136,11 @@ impl<T> UninitOwnedData<T> {
 impl<T> Default for UninitOwnedData<T> {
     fn default() -> Self {
         Self {
+            inner: Arc::new(DataInner {
+                data: MaybeUninit::uninit(),
+                released_condvar: Condvar::new(),
+                released_mut: Mutex::new(()),
+            }),
             callbacks: Vec::new(),
             data_handle: Arc::new(DataHandleInner {
                 new_callbacks: SegQueue::new(),
@@ -160,7 +166,7 @@ impl<T> From<T> for OwnedData<T> {
     fn from(value: T) -> Self {
         Self {
             inner: Arc::new(DataInner {
-                data: value,
+                data: MaybeUninit::new(value),
                 released_condvar: Condvar::new(),
                 released_mut: Mutex::new(()),
             }),
@@ -179,7 +185,9 @@ impl<T> Deref for OwnedData<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner.data
+        unsafe {
+            self.inner.data.assume_init_ref()
+        }
     }
 }
 
@@ -187,7 +195,7 @@ impl<T> Deref for OwnedData<T> {
 impl<T> DerefMut for OwnedData<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe {
-            &mut Arc::get_mut_unchecked(&mut self.inner).data
+            Arc::get_mut_unchecked(&mut self.inner).data.assume_init_mut()
         }
     }
 }
@@ -197,20 +205,22 @@ impl<T> OwnedData<T> {
     /// Unwraps the data.
     pub fn unwrap(self) -> T {
         unsafe {
-            Arc::try_unwrap(self.inner).unwrap_unchecked().data
+            Arc::try_unwrap(self.inner).unwrap_unchecked().data.assume_init()
         }
     }
+
     /// Unitinializes self and returns the data.
     pub fn uninit(self) -> (T, UninitOwnedData<T>) {
-        let data = unsafe {
-            Arc::try_unwrap(self.inner).unwrap_unchecked().data
-        };
-        (data, UninitOwnedData {
-            callbacks: self.callbacks,
-            data_handle: self.data_handle,
-            lendees: self.lendees,
-            phantom: PhantomData
-        })
+        unsafe {
+            let data = self.inner.data.assume_init_read();
+            (data, UninitOwnedData {
+                inner: self.inner,
+                callbacks: self.callbacks,
+                data_handle: self.data_handle,
+                lendees: self.lendees,
+                phantom: PhantomData
+            })
+        }
     }
 
     /// Adds a callback to be called when [`share`] is called.
@@ -244,7 +254,7 @@ impl<T> OwnedData<T> {
         }
 
         for callback in &mut self.callbacks {
-            callback(&self.inner.data);
+            callback(unsafe { self.inner.data.assume_init_ref() });
         }
 
         self.lendees.reserve(self.data_handle.new_lendees.len());
@@ -275,7 +285,7 @@ impl<T> OwnedData<T> {
         }
 
         for callback in &mut self.callbacks {
-            callback(&self.inner.data);
+            callback(unsafe { self.inner.data.assume_init_ref() });
         }
 
         self.lendees.reserve(self.data_handle.new_lendees.len());
@@ -369,7 +379,7 @@ impl<T> LoanedData<T> {
         }
 
         let inner = Arc::new(DataInner {
-            data: new_data,
+            data: MaybeUninit::new(new_data),
             released_condvar: Condvar::new(),
             released_mut: Mutex::new(()),
         });
@@ -381,13 +391,31 @@ impl<T> LoanedData<T> {
             lendees: self.lendees,
         }
     }
+
+    /// Creates a new uninit object that maintains the callbacks and lendees.
+    /// 
+    /// This is different from [`OwnedData::uninit`], which reuses the heap allocation. This
+    /// makes a new heap allocation.
+    pub fn deinit(self) -> UninitOwnedData<T> {
+        UninitOwnedData {
+            inner: Arc::new(DataInner {
+                data: MaybeUninit::uninit(),
+                released_condvar: Condvar::new(),
+                released_mut: Mutex::new(()),
+            }),
+            callbacks: self.callbacks,
+            data_handle: self.data_handle,
+            lendees: self.lendees,
+            phantom: PhantomData
+        }
+    }
 }
 
 impl<T> Deref for LoanedData<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner.data
+        unsafe { self.inner.data.assume_init_ref() }
     }
 }
 
@@ -403,7 +431,7 @@ impl<T> Deref for SharedData<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner.data
+        unsafe { self.inner.data.assume_init_ref() }
     }
 }
 
