@@ -1,4 +1,4 @@
-use std::{ops::{Deref, DerefMut}, sync::Arc};
+use std::{marker::PhantomData, ops::{Deref, DerefMut}, sync::Arc};
 
 use crossbeam::queue::SegQueue;
 use parking_lot::{Condvar, Mutex};
@@ -58,7 +58,7 @@ struct DataInner<T> {
 }
 
 struct DataHandleInner<T> {
-    new_callbacks: SegQueue<Box<dyn FnMut(&T)>>,
+    new_callbacks: SegQueue<Box<dyn FnMut(&T) + Send>>,
     new_lendees: SegQueue<Arc<MonoQueue<Arc<DataInner<T>>>>>,
 }
 
@@ -74,7 +74,7 @@ pub struct DataHandle<T> {
 
 impl<T> DataHandle<T> {
     /// Adds a callback to be called when [`OwnedData::share`] is called.
-    pub fn add_callback(&self, callback: impl FnMut(&T) + 'static) {
+    pub fn add_callback(&self, callback: impl FnMut(&T) + Send + 'static) {
         self.inner.new_callbacks.push(Box::new(callback));
     }
 
@@ -88,11 +88,69 @@ impl<T> DataHandle<T> {
     }
 }
 
+pub struct UninitOwnedData<T> {
+    callbacks: Vec<Box<dyn FnMut(&T) + Send>>,
+    data_handle: Arc<DataHandleInner<T>>,
+    lendees: Vec<Arc<MonoQueue<Arc<DataInner<T>>>>>,
+    phantom: PhantomData<fn() -> T>
+}
+
+impl<T> UninitOwnedData<T> {
+    /// Adds a callback to be called when [`share`] is called.
+    pub fn add_callback(&mut self, callback: impl FnMut(&T) + Send + 'static) {
+        self.callbacks.push(Box::new(callback));
+    }
+
+    /// Creates a lendee to receive the data when [`share`] is called.
+    pub fn create_lendee(&mut self) -> SharedDataReceiver<T> {
+        let queue: Arc<MonoQueue<Arc<DataInner<T>>>> = Default::default();
+        self.lendees.push(queue.clone());
+        SharedDataReceiver {
+            queue
+        }
+    }
+
+    /// Returns a reference to the handle.
+    pub fn get_data_handle(&self) -> &DataHandle<T> {
+        unsafe {
+            std::mem::transmute(&self.data_handle)
+        }
+    }
+
+    /// Initializes the data.
+    pub fn init(self, data: T) -> OwnedData<T> {
+        OwnedData {
+            inner: Arc::new(DataInner {
+                data,
+                released_condvar: Condvar::new(),
+                released_mut: Mutex::new(()),
+            }),
+            callbacks: self.callbacks,
+            data_handle: self.data_handle,
+            lendees: self.lendees,
+        }
+    }
+}
+
+impl<T> Default for UninitOwnedData<T> {
+    fn default() -> Self {
+        Self {
+            callbacks: Vec::new(),
+            data_handle: Arc::new(DataHandleInner {
+                new_callbacks: SegQueue::new(),
+                new_lendees: SegQueue::new(),
+            }),
+            lendees: Vec::new(),
+            phantom: PhantomData
+        }
+    }
+}
+
 /// A smart pointer to `T` that can invoke callbacks
 /// and temporarily lend the data to other threads.
 pub struct OwnedData<T> {
     inner: Arc<DataInner<T>>,
-    callbacks: Vec<Box<dyn FnMut(&T)>>,
+    callbacks: Vec<Box<dyn FnMut(&T) + Send>>,
     data_handle: Arc<DataHandleInner<T>>,
     lendees: Vec<Arc<MonoQueue<Arc<DataInner<T>>>>>
 }
@@ -142,9 +200,21 @@ impl<T> OwnedData<T> {
             Arc::try_unwrap(self.inner).unwrap_unchecked().data
         }
     }
+    /// Unitinializes self and returns the data.
+    pub fn uninit(self) -> (T, UninitOwnedData<T>) {
+        let data = unsafe {
+            Arc::try_unwrap(self.inner).unwrap_unchecked().data
+        };
+        (data, UninitOwnedData {
+            callbacks: self.callbacks,
+            data_handle: self.data_handle,
+            lendees: self.lendees,
+            phantom: PhantomData
+        })
+    }
 
     /// Adds a callback to be called when [`share`] is called.
-    pub fn add_callback(&mut self, callback: impl FnMut(&T) + 'static) {
+    pub fn add_callback(&mut self, callback: impl FnMut(&T) + Send + 'static) {
         self.callbacks.push(Box::new(callback));
     }
 
@@ -234,14 +304,14 @@ impl<T> OwnedData<T> {
 pub struct LoanedData<T> {
     inner: Arc<DataInner<T>>,
     data_handle: Arc<DataHandleInner<T>>,
-    callbacks: Vec<Box<dyn FnMut(&T)>>,
+    callbacks: Vec<Box<dyn FnMut(&T) + Send>>,
     lendees: Vec<Arc<MonoQueue<Arc<DataInner<T>>>>>
 }
 
 
 impl<T> LoanedData<T> {
     /// Adds a callback to be called when [`share`] is called.
-    pub fn add_callback(&mut self, callback: impl FnMut(&T) + 'static) {
+    pub fn add_callback(&mut self, callback: impl FnMut(&T) + Send + 'static) {
         self.callbacks.push(Box::new(callback));
     }
 
@@ -395,7 +465,7 @@ impl<T> MaybeOwned<T> {
     }
     
     /// Adds a callback to be called when [`share`] is called.
-    pub fn add_callback(&mut self, callback: impl FnMut(&T) + 'static) {
+    pub fn add_callback(&mut self, callback: impl FnMut(&T) + Send + 'static) {
         match self {
             Self::Owned(owned) => owned.add_callback(callback),
             Self::Loaned(loaned) => loaned.add_callback(callback),

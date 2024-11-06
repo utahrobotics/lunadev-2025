@@ -21,19 +21,9 @@ use nokhwa::{
 use serde::Deserialize;
 use unfmt::unformat;
 use urobotics_core::{
-    define_callbacks, fn_alias,
-    log::error,
-    service::ServiceExt,
-    task::Loggable,
-    tokio::sync::{Mutex, OnceCell},
-    BlockOn,
+    log::error, service::ServiceExt, shared::{DataHandle, UninitOwnedData}, tokio::sync::{Mutex, OnceCell}
 };
 use urobotics_py::{PyRepl, PythonValue, PythonVenvBuilder};
-
-fn_alias! {
-    pub type ImageCallbacksRef = CallbacksRef(&Arc<DynamicImage>) + Send
-}
-define_callbacks!(ImageCallbacks => Fn(image: &Arc<DynamicImage>) + Send);
 
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum CameraIdentifier {
@@ -64,7 +54,7 @@ pub struct CameraConnectionBuilder {
     #[serde(default)]
     pub py_venv_builder: PythonVenvBuilder,
     #[serde(skip)]
-    image_received: ImageCallbacks,
+    image_received: UninitOwnedData<DynamicImage>,
     #[serde(skip)]
     camera_info: Arc<OnceLock<CameraInfo>>,
 }
@@ -184,7 +174,7 @@ impl CameraConnectionBuilder {
             fps: 0,
             image_width: 0,
             image_height: 0,
-            image_received: ImageCallbacks::default(),
+            image_received: UninitOwnedData::default(),
             camera_info: Arc::default(),
             py_venv_builder: PythonVenvBuilder::default(),
         }
@@ -194,9 +184,8 @@ impl CameraConnectionBuilder {
         PendingCameraInfo(self.camera_info.clone())
     }
 
-    /// Gets a reference to the `Signal` that represents received images.
-    pub fn image_received_ref(&self) -> ImageCallbacksRef {
-        self.image_received.get_ref()
+    pub fn image_received_handle(&self) -> &DataHandle<DynamicImage> {
+        self.image_received.get_data_handle()
     }
 
     pub async fn resolve(mut self) -> Result<PendingCameraConnection, nokhwa::NokhwaError> {
@@ -213,11 +202,11 @@ impl CameraConnectionBuilder {
 pub struct PendingCameraConnection {
     camera_index: CameraIndex,
     requested: RequestedFormat<'static>,
-    image_received: ImageCallbacks,
+    image_received: UninitOwnedData<DynamicImage>,
 }
 
 impl PendingCameraConnection {
-    pub fn spawn(mut self) -> Result<CameraInfo, nokhwa::NokhwaError> {
+    pub fn spawn(self) -> Result<CameraInfo, nokhwa::NokhwaError> {
         let (info_tx, info_rx) = std::sync::mpsc::sync_channel(1);
         
         std::thread::spawn(move || {
@@ -239,21 +228,31 @@ impl PendingCameraConnection {
             unwrap!(camera.open_stream());
             let _ = info_tx.send(Ok(camera_info));
 
-            loop {
-                let frame = match camera.frame() {
-                    Ok(x) => x,
-                    Err(e) => {
-                        error!(target: &camera.info().human_name(), "Failed to get frame: {:?}", e);
-                        break;
+            macro_rules! get_img {
+                () => {
+                    {
+                        let frame = match camera.frame() {
+                            Ok(x) => x,
+                            Err(e) => {
+                                error!(target: &camera.info().human_name(), "Failed to get frame: {:?}", e);
+                                return;
+                            }
+                        };
+                        let decoded = frame.decode_image::<RgbFormat>().unwrap();
+                        DynamicImage::ImageRgb8(
+                            ImageBuffer::from_raw(decoded.width(), decoded.height(), decoded.into_raw())
+                                .unwrap(),
+                        )
                     }
-                };
-                let decoded = frame.decode_image::<RgbFormat>().unwrap();
-                let img = DynamicImage::ImageRgb8(
-                    ImageBuffer::from_raw(decoded.width(), decoded.height(), decoded.into_raw())
-                        .unwrap(),
-                );
-                let img = Arc::new(img);
-                self.image_received.call(&img);
+                }
+            }
+
+            let owned = self.image_received.init(get_img!());
+            let mut unowned = owned.pessimistic_share();
+
+            loop {
+                let img = get_img!();
+                unowned = unowned.replace(img).pessimistic_share();
             }
         });
 
@@ -267,6 +266,7 @@ impl urobotics_app::Application for CameraConnectionBuilder {
     const APP_NAME: &'static str = "camera";
 
     fn run(mut self) {
+        use urobotics_core::{BlockOn, task::Loggable};
         (async move {
                 let (index, requested) = cam_impl!(self);
 

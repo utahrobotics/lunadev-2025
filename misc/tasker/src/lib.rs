@@ -21,6 +21,7 @@ pub use parking_lot;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 pub use tokio;
 use tokio::{runtime::Handle, sync::Notify};
+pub use log;
 
 pub mod callbacks;
 pub mod task;
@@ -311,4 +312,19 @@ pub fn attach_drop_guard() {
 /// exit.
 pub fn detach_drop_guard() -> Option<RuntimeDropGuard> {
     DROP_NOTIFY.with_borrow_mut(Option::take)
+}
+
+#[macro_export]
+macro_rules! duration_warning {
+    ($inner: block within $duration: expr) => {
+        {
+            let start = std::time::Instant::now();
+            let result = $inner;
+            let duration = start.elapsed();
+            if duration > Duration::from_secs(1) {
+                $crate::log::warn!("{} took {:.1} seconds", stringify!($inner), duration.as_secs_f32());
+            }
+            result
+        }
+    };
 }
