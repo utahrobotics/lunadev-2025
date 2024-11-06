@@ -25,6 +25,10 @@ window/size/viewport_width=648
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[dotnet]
+
+project/assembly_name="Lunabase"
+
 [rendering]
 
-environment/defaults/default_clear_color=Color(0.114897, 0.114897, 0.114897, 1)
+environment/defaults/default_clear_color=Color(0.74902, 0.74902, 0.74902, 1)

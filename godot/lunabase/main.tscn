@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://53po1wtuhcem"]
+[gd_scene load_steps=15 format=3 uid="uid://53po1wtuhcem"]
 
 [sub_resource type="GDScript" id="GDScript_2pc2q"]
 script/source = "extends Label
@@ -86,40 +86,39 @@ rings = 16
 [sub_resource type="CircleShape2D" id="CircleShape2D_e3oq2"]
 radius = 0.5
 
-[sub_resource type="GDScript" id="GDScript_6i0s1"]
-script/source = "extends TabContainer
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_q8uky"]
+bg_color = Color(0.1373, 0.308156, 0, 1)
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_qdids"]
+bg_color = Color(0.403568, 0.646297, 0, 1)
 
-func _ready():
-	Lunabot.entered_soft_stop.connect(
-		func():
-			current_tab = 0
-			
-	)
-	Lunabot.entered_manual.connect(
-		func():
-			current_tab = 1
-	)
-	_on_tab_changed(current_tab)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_u8rpt"]
+bg_color = Color(0.474969, 0.344098, 0.00166792, 1)
 
-
-func _on_tab_changed(tab: int) -> void:
-	$\"../Label\".text = get_child(tab).name
-"
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ot2om"]
+bg_color = Color(0.897235, 0.662065, 0.00793041, 1)
 
 [sub_resource type="GDScript" id="GDScript_vk3if"]
 script/source = "extends Button
 
 
 func _on_pressed() -> void:
+	$\"../Buttons Label\".text = \"Current Stage: TeleOp\"
 	Lunabot.continue_mission()
 "
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pf330"]
+bg_color = Color(0.49024, 0.0312444, 2.40654e-07, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_l3tko"]
+bg_color = Color(1, 0.235075, 0.108649, 1)
 
 [sub_resource type="GDScript" id="GDScript_hiw1g"]
 script/source = "extends Button
 
 
 func _on_pressed() -> void:
+	$\"../Buttons Label\".text = \"Current Stage: Stopped\"
 	Lunabot.soft_stop()
 "
 
@@ -142,14 +141,10 @@ script = SubResource("GDScript_2pc2q")
 
 [node name="CenterContainer" type="CenterContainer" parent="."]
 layout_mode = 1
-anchors_preset = -1
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_left = 20.0
-offset_top = -200.0
-offset_right = 200.0
-offset_bottom = -20.0
-grow_vertical = 0
+offset_left = 55.0
+offset_top = 110.0
+offset_right = 235.0
+offset_bottom = 290.0
 script = SubResource("GDScript_jbt8y")
 
 [node name="Control" type="Control" parent="CenterContainer"]
@@ -170,56 +165,52 @@ mesh = SubResource("SphereMesh_7mlwg")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="CenterContainer/Control/JoystickBase/Joystick"]
 shape = SubResource("CircleShape2D_e3oq2")
+debug_color = Color(4.90934e-06, 0.677673, 0.803029, 1)
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.73
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 0
-grow_vertical = 2
-theme_override_constants/margin_left = 10
-theme_override_constants/margin_top = 10
-theme_override_constants/margin_right = 10
-theme_override_constants/margin_bottom = 10
-
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
 layout_mode = 2
+offset_left = 290.0
+offset_top = 10.0
+offset_right = 621.0
+offset_bottom = 327.0
+theme_override_constants/separation = 20
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer"]
+[node name="Buttons Label" type="Label" parent="VBoxContainer"]
 layout_mode = 2
-text = "Stage"
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 30
+text = "Current State: Stopped"
 horizontal_alignment = 1
 
-[node name="TabContainer" type="TabContainer" parent="MarginContainer/VBoxContainer"]
+[node name="Auto Button" type="Button" parent="VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
-current_tab = 0
-tabs_visible = false
-script = SubResource("GDScript_6i0s1")
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 25
+theme_override_styles/pressed = SubResource("StyleBoxFlat_q8uky")
+theme_override_styles/normal = SubResource("StyleBoxFlat_qdids")
+text = "Auto"
 
-[node name="Software Stop" type="VBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer"]
+[node name="Continue Mission Button" type="Button" parent="VBoxContainer"]
 layout_mode = 2
-theme_override_constants/separation = 10
-metadata/_tab_index = 0
-
-[node name="Button" type="Button" parent="MarginContainer/VBoxContainer/TabContainer/Software Stop"]
-layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 25
+theme_override_styles/pressed = SubResource("StyleBoxFlat_u8rpt")
+theme_override_styles/normal = SubResource("StyleBoxFlat_ot2om")
 text = "Continue Mission"
 script = SubResource("GDScript_vk3if")
 
-[node name="Manual Control" type="VBoxContainer" parent="MarginContainer/VBoxContainer/TabContainer"]
-visible = false
+[node name="Software Stop Button" type="Button" parent="VBoxContainer"]
 layout_mode = 2
-metadata/_tab_index = 1
-
-[node name="Button" type="Button" parent="MarginContainer/VBoxContainer/TabContainer/Manual Control"]
-layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 25
+theme_override_styles/pressed = SubResource("StyleBoxFlat_pf330")
+theme_override_styles/normal = SubResource("StyleBoxFlat_l3tko")
 text = "Software Stop"
 script = SubResource("GDScript_hiw1g")
 
 [connection signal="resized" from="CenterContainer" to="CenterContainer" method="_on_resized"]
-[connection signal="tab_changed" from="MarginContainer/VBoxContainer/TabContainer" to="MarginContainer/VBoxContainer/TabContainer" method="_on_tab_changed"]
-[connection signal="pressed" from="MarginContainer/VBoxContainer/TabContainer/Software Stop/Button" to="MarginContainer/VBoxContainer/TabContainer/Software Stop/Button" method="_on_pressed"]
-[connection signal="pressed" from="MarginContainer/VBoxContainer/TabContainer/Manual Control/Button" to="MarginContainer/VBoxContainer/TabContainer/Manual Control/Button" method="_on_pressed"]
+[connection signal="pressed" from="VBoxContainer/Continue Mission Button" to="VBoxContainer/Continue Mission Button" method="_on_pressed"]
+[connection signal="pressed" from="VBoxContainer/Software Stop Button" to="VBoxContainer/Software Stop Button" method="_on_pressed"]

@@ -29,6 +29,10 @@ file_logging/enable_file_logging=true
 window/stretch/aspect="expand"
 window/stretch/scale=1.3
 
+[dotnet]
+
+project/assembly_name="Lunasim"
+
 [global_group]
 
 Apriltags=""
