@@ -1,4 +1,6 @@
-[gd_scene load_steps=15 format=3 uid="uid://53po1wtuhcem"]
+[gd_scene load_steps=16 format=3 uid="uid://53po1wtuhcem"]
+
+[ext_resource type="Script" path="res://auto_button.gd" id="1_ic2iy"]
 
 [sub_resource type="GDScript" id="GDScript_2pc2q"]
 script/source = "extends Label
@@ -72,7 +74,7 @@ func _input_event(_viewport: Viewport, event: InputEvent, _shape_idx: int) -> vo
 
 
 func _process(_delta: float) -> void:
-	var travel: Vector2 = (global_position - get_parent().global_position) / MAX_DISTANCE
+	var travel: Vector2=(global_position - get_parent().global_position) / MAX_DISTANCE
 	var angle := travel.angle()
 	var travel_scale := Vector2(absf(cos(angle)), absf(sin(angle)))
 	travel /= travel_scale[travel_scale.max_axis_index()]
@@ -104,6 +106,7 @@ script/source = "extends Button
 
 func _on_pressed() -> void:
 	$\"../Buttons Label\".text = \"Current Stage: TeleOp\"
+	$\"../../StateInfoTabContainer\".current_tab=1
 	Lunabot.continue_mission()
 "
 
@@ -119,6 +122,7 @@ script/source = "extends Button
 
 func _on_pressed() -> void:
 	$\"../Buttons Label\".text = \"Current Stage: Stopped\"
+	$\"../../StateInfoTabContainer\".current_tab=2
 	Lunabot.soft_stop()
 "
 
@@ -190,6 +194,7 @@ theme_override_font_sizes/font_size = 25
 theme_override_styles/pressed = SubResource("StyleBoxFlat_q8uky")
 theme_override_styles/normal = SubResource("StyleBoxFlat_qdids")
 text = "Auto"
+script = ExtResource("1_ic2iy")
 
 [node name="Continue Mission Button" type="Button" parent="VBoxContainer"]
 layout_mode = 2
@@ -211,6 +216,61 @@ theme_override_styles/normal = SubResource("StyleBoxFlat_l3tko")
 text = "Software Stop"
 script = SubResource("GDScript_hiw1g")
 
+[node name="GamepadToggle" type="CheckButton" parent="."]
+visible = false
+layout_mode = 0
+offset_left = 61.5
+offset_top = 70.0
+offset_right = 231.5
+offset_bottom = 101.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+text = "Using Gamepad"
+
+[node name="StateInfoTabContainer" type="TabContainer" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -298.0
+offset_bottom = 2.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/side_margin = 90
+tab_alignment = 2
+current_tab = 0
+
+[node name="Auto" type="TabBar" parent="StateInfoTabContainer"]
+layout_mode = 2
+metadata/_tab_index = 0
+
+[node name="Label" type="Label" parent="StateInfoTabContainer/Auto"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 23.0
+text = "Auto data goes here"
+
+[node name="TeleOp" type="TabBar" parent="StateInfoTabContainer"]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 1
+
+[node name="Label" type="Label" parent="StateInfoTabContainer/TeleOp"]
+offset_right = 40.0
+offset_bottom = 23.0
+text = "TeleOp data goes here"
+
+[node name="Stopped" type="TabBar" parent="StateInfoTabContainer"]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 2
+
+[node name="Label" type="Label" parent="StateInfoTabContainer/Stopped"]
+offset_right = 40.0
+offset_bottom = 23.0
+text = "Stopped data goes here"
+
 [connection signal="resized" from="CenterContainer" to="CenterContainer" method="_on_resized"]
+[connection signal="pressed" from="VBoxContainer/Auto Button" to="VBoxContainer/Auto Button" method="_on_pressed"]
 [connection signal="pressed" from="VBoxContainer/Continue Mission Button" to="VBoxContainer/Continue Mission Button" method="_on_pressed"]
 [connection signal="pressed" from="VBoxContainer/Software Stop Button" to="VBoxContainer/Software Stop Button" method="_on_pressed"]
