@@ -1,3 +1,4 @@
+use core::str;
 use std::{
     cmp::Ordering,
     collections::VecDeque,
@@ -10,7 +11,7 @@ use common::{
     LunabotStage,
 };
 use crossbeam::atomic::AtomicCell;
-use gputter::init_gputter_blocking;
+use gputter::{init_gputter_blocking, wgpu::hal::auxil::db};
 use lunabot_ai::{run_ai, Action, Input};
 use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
@@ -64,7 +65,7 @@ impl LunasimStdin {
 }
 
 #[cfg(target_os = "windows")]
-const DELIMIT: &[u8] = b"READY\n\r";
+const DELIMIT: &[u8] = b"READY\r\n";
 
 #[cfg(not(target_os = "windows"))]
 const DELIMIT: &[u8] = b"READY\n";
