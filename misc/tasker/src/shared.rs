@@ -1,4 +1,4 @@
-use std::{mem::MaybeUninit, ops::{Deref, DerefMut}, sync::Arc};
+use std::{ops::{Deref, DerefMut}, sync::Arc};
 
 use crossbeam::queue::SegQueue;
 use parking_lot::{Condvar, Mutex};
@@ -52,13 +52,13 @@ impl<T> MonoQueue<T> {
 
 
 struct DataInner<T> {
-    data: MaybeUninit<T>,
+    data: T,
     released_mut: Mutex<()>,
     released_condvar: Condvar,
 }
 
 struct DataHandleInner<T> {
-    new_callbacks: SegQueue<Box<dyn FnMut(&T) + Send>>,
+    new_callbacks: SegQueue<Box<dyn FnMut(&T)>>,
     new_lendees: SegQueue<Arc<MonoQueue<Arc<DataInner<T>>>>>,
 }
 
@@ -74,7 +74,7 @@ pub struct DataHandle<T> {
 
 impl<T> DataHandle<T> {
     /// Adds a callback to be called when [`OwnedData::share`] is called.
-    pub fn add_callback(&self, callback: impl FnMut(&T) + Send + 'static) {
+    pub fn add_callback(&self, callback: impl FnMut(&T) + 'static) {
         self.inner.new_callbacks.push(Box::new(callback));
     }
 
@@ -88,73 +88,11 @@ impl<T> DataHandle<T> {
     }
 }
 
-/// An uninitialized heap allocation for `T`.
-pub struct UninitOwnedData<T> {
-    inner: Arc<DataInner<T>>,
-    callbacks: Vec<Box<dyn FnMut(&T) + Send>>,
-    data_handle: Arc<DataHandleInner<T>>,
-    lendees: Vec<Arc<MonoQueue<Arc<DataInner<T>>>>>,
-}
-
-impl<T> UninitOwnedData<T> {
-    /// Adds a callback to be called when [`share`] is called.
-    pub fn add_callback(&mut self, callback: impl FnMut(&T) + Send + 'static) {
-        self.callbacks.push(Box::new(callback));
-    }
-
-    /// Creates a lendee to receive the data when [`share`] is called.
-    pub fn create_lendee(&mut self) -> SharedDataReceiver<T> {
-        let queue: Arc<MonoQueue<Arc<DataInner<T>>>> = Default::default();
-        self.lendees.push(queue.clone());
-        SharedDataReceiver {
-            queue
-        }
-    }
-
-    /// Returns a reference to the handle.
-    pub fn get_data_handle(&self) -> &DataHandle<T> {
-        unsafe {
-            std::mem::transmute(&self.data_handle)
-        }
-    }
-
-    /// Initializes the data.
-    pub fn init(mut self, data: T) -> OwnedData<T> {
-        unsafe {
-            Arc::get_mut_unchecked(&mut self.inner).data.write(data);
-        }
-        OwnedData {
-            inner: self.inner,
-            callbacks: self.callbacks,
-            data_handle: self.data_handle,
-            lendees: self.lendees,
-        }
-    }
-}
-
-impl<T> Default for UninitOwnedData<T> {
-    fn default() -> Self {
-        Self {
-            inner: Arc::new(DataInner {
-                data: MaybeUninit::uninit(),
-                released_condvar: Condvar::new(),
-                released_mut: Mutex::new(()),
-            }),
-            callbacks: Vec::new(),
-            data_handle: Arc::new(DataHandleInner {
-                new_callbacks: SegQueue::new(),
-                new_lendees: SegQueue::new(),
-            }),
-            lendees: Vec::new(),
-        }
-    }
-}
-
 /// A smart pointer to `T` that can invoke callbacks
 /// and temporarily lend the data to other threads.
 pub struct OwnedData<T> {
     inner: Arc<DataInner<T>>,
-    callbacks: Vec<Box<dyn FnMut(&T) + Send>>,
+    callbacks: Vec<Box<dyn FnMut(&T)>>,
     data_handle: Arc<DataHandleInner<T>>,
     lendees: Vec<Arc<MonoQueue<Arc<DataInner<T>>>>>
 }
@@ -164,7 +102,7 @@ impl<T> From<T> for OwnedData<T> {
     fn from(value: T) -> Self {
         Self {
             inner: Arc::new(DataInner {
-                data: MaybeUninit::new(value),
+                data: value,
                 released_condvar: Condvar::new(),
                 released_mut: Mutex::new(()),
             }),
@@ -183,9 +121,7 @@ impl<T> Deref for OwnedData<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe {
-            self.inner.data.assume_init_ref()
-        }
+        &self.inner.data
     }
 }
 
@@ -193,15 +129,8 @@ impl<T> Deref for OwnedData<T> {
 impl<T> DerefMut for OwnedData<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe {
-            Arc::get_mut_unchecked(&mut self.inner).data.assume_init_mut()
+            &mut Arc::get_mut_unchecked(&mut self.inner).data
         }
-    }
-}
-
-
-impl<T> Drop for OwnedData<T> {
-    fn drop(&mut self) {
-        unsafe { Arc::get_mut_unchecked(&mut self.inner).data.assume_init_drop() };
     }
 }
 
@@ -210,31 +139,12 @@ impl<T> OwnedData<T> {
     /// Unwraps the data.
     pub fn unwrap(self) -> T {
         unsafe {
-            self.inner.data.assume_init_read()
-        }
-    }
-
-    /// Unitinializes self and returns the data.
-    pub fn uninit(self) -> (T, UninitOwnedData<T>) {
-        unsafe {
-            let data = self.inner.data.assume_init_read();
-            let tmp = MaybeUninit::new(self);
-            let tmp = tmp.as_ptr();
-            let inner = &raw const (*tmp).inner;
-            let callbacks = &raw const (*tmp).callbacks;
-            let data_handle = &raw const (*tmp).data_handle;
-            let lendees = &raw const (*tmp).lendees;
-            (data, UninitOwnedData {
-                inner: inner.read(),
-                callbacks: callbacks.read(),
-                data_handle: data_handle.read(),
-                lendees: lendees.read(),
-            })
+            Arc::try_unwrap(self.inner).unwrap_unchecked().data
         }
     }
 
     /// Adds a callback to be called when [`share`] is called.
-    pub fn add_callback(&mut self, callback: impl FnMut(&T) + Send + 'static) {
+    pub fn add_callback(&mut self, callback: impl FnMut(&T) + 'static) {
         self.callbacks.push(Box::new(callback));
     }
 
@@ -264,7 +174,7 @@ impl<T> OwnedData<T> {
         }
 
         for callback in &mut self.callbacks {
-            callback(unsafe { self.inner.data.assume_init_ref() });
+            callback(&self.inner.data);
         }
 
         self.lendees.reserve(self.data_handle.new_lendees.len());
@@ -276,20 +186,11 @@ impl<T> OwnedData<T> {
             lendee.set(self.inner.clone());
         }
 
-        unsafe {
-            let tmp = MaybeUninit::new(self);
-            let tmp = tmp.as_ptr();
-            let inner = &raw const (*tmp).inner;
-            let callbacks = &raw const (*tmp).callbacks;
-            let data_handle = &raw const (*tmp).data_handle;
-            let lendees = &raw const (*tmp).lendees;
-    
-            LoanedData {
-                inner: inner.read(),
-                data_handle: data_handle.read(),
-                callbacks: callbacks.read(),
-                lendees: lendees.read(),
-            }
+        LoanedData {
+            inner: self.inner,
+            data_handle: self.data_handle,
+            callbacks: self.callbacks,
+            lendees: self.lendees,
         }
     }
 
@@ -304,7 +205,7 @@ impl<T> OwnedData<T> {
         }
 
         for callback in &mut self.callbacks {
-            callback(unsafe { self.inner.data.assume_init_ref() });
+            callback(&self.inner.data);
         }
 
         self.lendees.reserve(self.data_handle.new_lendees.len());
@@ -319,21 +220,12 @@ impl<T> OwnedData<T> {
                 lendee.set(self.inner.clone());
             }
     
-            unsafe {
-                let tmp = MaybeUninit::new(self);
-                let tmp = tmp.as_ptr();
-                let inner = &raw const (*tmp).inner;
-                let callbacks = &raw const (*tmp).callbacks;
-                let data_handle = &raw const (*tmp).data_handle;
-                let lendees = &raw const (*tmp).lendees;
-        
-                Err(LoanedData {
-                    inner: inner.read(),
-                    data_handle: data_handle.read(),
-                    callbacks: callbacks.read(),
-                    lendees: lendees.read(),
-                })
-            }
+            Err(LoanedData {
+                inner: self.inner,
+                data_handle: self.data_handle,
+                callbacks: self.callbacks,
+                lendees: self.lendees,
+            })
         }
     }
 }
@@ -342,14 +234,14 @@ impl<T> OwnedData<T> {
 pub struct LoanedData<T> {
     inner: Arc<DataInner<T>>,
     data_handle: Arc<DataHandleInner<T>>,
-    callbacks: Vec<Box<dyn FnMut(&T) + Send>>,
+    callbacks: Vec<Box<dyn FnMut(&T)>>,
     lendees: Vec<Arc<MonoQueue<Arc<DataInner<T>>>>>
 }
 
 
 impl<T> LoanedData<T> {
     /// Adds a callback to be called when [`share`] is called.
-    pub fn add_callback(&mut self, callback: impl FnMut(&T) + Send + 'static) {
+    pub fn add_callback(&mut self, callback: impl FnMut(&T) + 'static) {
         self.callbacks.push(Box::new(callback));
     }
 
@@ -381,21 +273,11 @@ impl<T> LoanedData<T> {
                 debug_assert_eq!(Arc::strong_count(&self.inner), 1);
             }
         }
-
-        unsafe {
-            let tmp = MaybeUninit::new(self);
-            let tmp = tmp.as_ptr();
-            let inner = &raw const (*tmp).inner;
-            let callbacks = &raw const (*tmp).callbacks;
-            let data_handle = &raw const (*tmp).data_handle;
-            let lendees = &raw const (*tmp).lendees;
-    
-            OwnedData {
-                inner: inner.read(),
-                data_handle: data_handle.read(),
-                callbacks: callbacks.read(),
-                lendees: lendees.read(),
-            }
+        OwnedData {
+            inner: self.inner,
+            data_handle: self.data_handle,
+            callbacks: self.callbacks,
+            lendees: self.lendees,
         }
     }
 
@@ -406,70 +288,27 @@ impl<T> LoanedData<T> {
             lendee.try_clear();
         }
         if Arc::strong_count(&self.inner) == 1 {
-            let mut owned = unsafe {
-                let tmp = MaybeUninit::new(self);
-                let tmp = tmp.as_ptr();
-                let inner = &raw const (*tmp).inner;
-                let callbacks = &raw const (*tmp).callbacks;
-                let data_handle = &raw const (*tmp).data_handle;
-                let lendees = &raw const (*tmp).lendees;
-        
-                OwnedData {
-                    inner: inner.read(),
-                    data_handle: data_handle.read(),
-                    callbacks: callbacks.read(),
-                    lendees: lendees.read(),
-                }
+            let mut owned = OwnedData {
+                inner: self.inner,
+                data_handle: self.data_handle,
+                callbacks: self.callbacks,
+                lendees: self.lendees,
             };
             *owned = new_data;
             return owned;
         }
 
         let inner = Arc::new(DataInner {
-            data: MaybeUninit::new(new_data),
+            data: new_data,
             released_condvar: Condvar::new(),
             released_mut: Mutex::new(()),
         });
 
-        unsafe {
-            let tmp = MaybeUninit::new(self);
-            let tmp = tmp.as_ptr();
-            let callbacks = &raw const (*tmp).callbacks;
-            let data_handle = &raw const (*tmp).data_handle;
-            let lendees = &raw const (*tmp).lendees;
-    
-            OwnedData {
-                inner,
-                data_handle: data_handle.read(),
-                callbacks: callbacks.read(),
-                lendees: lendees.read(),
-            }
-        }
-    }
-
-    /// Creates a new uninit object that maintains the callbacks and lendees.
-    /// 
-    /// This is different from [`OwnedData::uninit`], which reuses the heap allocation. This
-    /// makes a new heap allocation.
-    pub fn deinit(self) -> UninitOwnedData<T> {
-        let inner = Arc::new(DataInner {
-            data: MaybeUninit::uninit(),
-            released_condvar: Condvar::new(),
-            released_mut: Mutex::new(()),
-        });
-        unsafe {
-            let tmp = MaybeUninit::new(self);
-            let tmp = tmp.as_ptr();
-            let callbacks = &raw const (*tmp).callbacks;
-            let data_handle = &raw const (*tmp).data_handle;
-            let lendees = &raw const (*tmp).lendees;
-    
-            UninitOwnedData {
-                inner,
-                data_handle: data_handle.read(),
-                callbacks: callbacks.read(),
-                lendees: lendees.read(),
-            }
+        OwnedData {
+            inner,
+            data_handle: self.data_handle,
+            callbacks: self.callbacks,
+            lendees: self.lendees,
         }
     }
 }
@@ -478,20 +317,7 @@ impl<T> Deref for LoanedData<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { self.inner.data.assume_init_ref() }
-    }
-}
-
-impl<T> Drop for LoanedData<T> {
-    fn drop(&mut self) {
-        let inner = std::mem::replace(&mut self.inner, Arc::new(DataInner {
-            data: MaybeUninit::uninit(),
-            released_condvar: Condvar::new(),
-            released_mut: Mutex::new(()),
-        }));
-        if let Ok(mut tmp) = Arc::try_unwrap(inner) {
-            unsafe { tmp.data.assume_init_drop() };
-        }
+        &self.inner.data
     }
 }
 
@@ -507,20 +333,13 @@ impl<T> Deref for SharedData<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { self.inner.data.assume_init_ref() }
+        &self.inner.data
     }
 }
 
 impl<T> Drop for SharedData<T> {
     fn drop(&mut self) {
-        let inner = std::mem::replace(&mut self.inner, Arc::new(DataInner {
-            data: MaybeUninit::uninit(),
-            released_condvar: Condvar::new(),
-            released_mut: Mutex::new(()),
-        }));
-        if let Ok(mut tmp) = Arc::try_unwrap(inner) {
-            unsafe { tmp.data.assume_init_drop() };
-        } else if Arc::strong_count(&self.inner) == 2 {
+        if Arc::strong_count(&self.inner) == 2 {
             let _guard = self.inner.released_mut.lock();
             self.inner.released_condvar.notify_one();
         }
@@ -576,7 +395,7 @@ impl<T> MaybeOwned<T> {
     }
     
     /// Adds a callback to be called when [`share`] is called.
-    pub fn add_callback(&mut self, callback: impl FnMut(&T) + Send + 'static) {
+    pub fn add_callback(&mut self, callback: impl FnMut(&T) + 'static) {
         match self {
             Self::Owned(owned) => owned.add_callback(callback),
             Self::Loaned(loaned) => loaned.add_callback(callback),
