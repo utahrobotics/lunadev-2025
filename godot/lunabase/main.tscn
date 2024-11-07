@@ -256,6 +256,7 @@ layout_mode = 2
 metadata/_tab_index = 1
 
 [node name="Label" type="Label" parent="StateInfoTabContainer/TeleOp"]
+layout_mode = 0
 offset_right = 40.0
 offset_bottom = 23.0
 text = "TeleOp data goes here"
@@ -266,6 +267,7 @@ layout_mode = 2
 metadata/_tab_index = 2
 
 [node name="Label" type="Label" parent="StateInfoTabContainer/Stopped"]
+layout_mode = 0
 offset_right = 40.0
 offset_bottom = 23.0
 text = "Stopped data goes here"

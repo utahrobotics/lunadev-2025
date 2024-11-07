@@ -59,5 +59,7 @@ pan_camera={
 
 [rendering]
 
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=0
+lights_and_shadows/positional_shadow/soft_shadow_filter_quality=0
 textures/decals/filter=0
 environment/defaults/default_clear_color=Color(0.0885598, 0.08856, 0.0885599, 1)

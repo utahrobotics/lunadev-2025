@@ -14,6 +14,19 @@ func _ready() -> void:
 	get_viewport().disable_3d = true
 "
 
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_s0tqm"]
+sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
+ground_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
+
+[sub_resource type="Sky" id="Sky_rwqwj"]
+sky_material = SubResource("ProceduralSkyMaterial_s0tqm")
+
+[sub_resource type="Environment" id="Environment_tv5af"]
+background_mode = 2
+sky = SubResource("Sky_rwqwj")
+tonemap_mode = 2
+glow_enabled = true
+
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wujp8"]
 shading_mode = 0
 albedo_color = Color(0.904334, 0.364874, 0.918573, 1)
@@ -142,16 +155,6 @@ size = Vector3(2, 2, 4)
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_reayg"]
 size = Vector2(2, 4)
-
-[sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_e6mxc"]
-energy_multiplier = 2.0
-
-[sub_resource type="Sky" id="Sky_1xo37"]
-sky_material = SubResource("PhysicalSkyMaterial_e6mxc")
-
-[sub_resource type="Environment" id="Environment_4hw3w"]
-background_mode = 2
-sky = SubResource("Sky_1xo37")
 
 [sub_resource type="GDScript" id="GDScript_x4sn7"]
 script/source = "extends TabContainer
@@ -291,6 +294,15 @@ func _on_pressed() -> void:
 [node name="Node3D" type="Node3D"]
 script = SubResource("GDScript_lj4gt")
 
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_tv5af")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="WorldEnvironment"]
+transform = Transform3D(-0.866023, -0.433016, 0.250001, 0, 0.499998, 0.866027, -0.500003, 0.749999, -0.43301, 0, 8.16029, 0)
+shadow_enabled = true
+
+[node name="ReflectionProbe" type="ReflectionProbe" parent="WorldEnvironment"]
+
 [node name="HeightMap" type="MultiMeshInstance3D" parent="."]
 top_level = true
 layers = 4
@@ -385,12 +397,6 @@ remote_path = NodePath("../../CanvasLayer/TabContainer/RearCamera/AspectRatioCon
 
 [node name="RaycastOrigin" parent="Robot" index="10"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.459583, 0, -0.502181)
-
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
-environment = SubResource("Environment_4hw3w")
-
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="WorldEnvironment"]
-transform = Transform3D(0.926909, 0.34775, -0.141101, 0.330633, -0.57883, 0.745411, 0.177544, -0.737581, -0.6515, -2.51144, 3.72433, 0)
 
 [node name="Apriltag" parent="." instance=ExtResource("2_nhvh2")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.610044, 0.50416)
