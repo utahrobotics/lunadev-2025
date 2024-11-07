@@ -44,6 +44,7 @@ const MAX_DISTANCE := 80.0
 var _pressed := false
 var _relative_at_start: Vector2
 
+@onready var state_indicator_text := $\"../../../../VBoxContainer/Buttons Label\"
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
@@ -75,6 +76,8 @@ func _input_event(_viewport: Viewport, event: InputEvent, _shape_idx: int) -> vo
 
 func _process(_delta: float) -> void:
 	var travel: Vector2=(global_position - get_parent().global_position) / MAX_DISTANCE
+	var state_color = Color.RED if not Lunabot.current_state == Lunabot.State.TELEOP and not travel == Vector2.ZERO else Color.BLACK
+	state_indicator_text.set(\"theme_override_colors/font_color\",state_color)
 	var angle := travel.angle()
 	var travel_scale := Vector2(absf(cos(angle)), absf(sin(angle)))
 	travel /= travel_scale[travel_scale.max_axis_index()]
@@ -105,6 +108,7 @@ script/source = "extends Button
 
 
 func _on_pressed() -> void:
+	Lunabot.current_state=Lunabot.State.TELEOP
 	$\"../Buttons Label\".text = \"Current Stage: TeleOp\"
 	$\"../../StateInfoTabContainer\".current_tab=1
 	Lunabot.continue_mission()
@@ -121,6 +125,7 @@ script/source = "extends Button
 
 
 func _on_pressed() -> void:
+	Lunabot.current_state=Lunabot.State.STOPPED
 	$\"../Buttons Label\".text = \"Current Stage: Stopped\"
 	$\"../../StateInfoTabContainer\".current_tab=2
 	Lunabot.soft_stop()
