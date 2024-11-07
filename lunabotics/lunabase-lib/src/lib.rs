@@ -298,10 +298,8 @@ impl LunabotConn {
     #[signal]
     fn entered_dump(&self);
 
-    #[func]
-    fn set_steering(&mut self, drive: f64, steering: f64) {
+    fn set_steering(&mut self, new_steering: Steering) {
         if let Some(inner) = &mut self.inner {
-            let new_steering = Steering::new(drive, steering);
             let mut last_steering_reliable_idx = None;
             if let Some((old_steering, old_idx)) = inner.last_steering {
                 last_steering_reliable_idx = Some(old_idx);
@@ -327,6 +325,16 @@ impl LunabotConn {
                 }
             }
         }
+    }
+
+    #[func]
+    fn set_steering_drive_steering(&mut self, drive: f64, steering: f64) {
+        self.set_steering(Steering::new(drive, steering));
+    }
+
+    #[func]
+    fn set_steering_left_right(&mut self, left: f64, right: f64) {
+        self.set_steering(Steering::new_left_right(left, right));
     }
 
     #[func]
