@@ -1,6 +1,6 @@
 [gd_scene load_steps=16 format=3 uid="uid://53po1wtuhcem"]
 
-[ext_resource type="Script" path="res://auto_button.gd" id="1_ic2iy"]
+[ext_resource type="Script" path="res://auto_button.gd" id="1_q8470"]
 
 [sub_resource type="GDScript" id="GDScript_2pc2q"]
 script/source = "extends Label
@@ -221,7 +221,7 @@ theme_override_font_sizes/font_size = 25
 theme_override_styles/pressed = SubResource("StyleBoxFlat_q8uky")
 theme_override_styles/normal = SubResource("StyleBoxFlat_qdids")
 text = "Auto"
-script = ExtResource("1_ic2iy")
+script = ExtResource("1_q8470")
 
 [node name="Continue Mission Button" type="Button" parent="VBoxContainer"]
 layout_mode = 2
