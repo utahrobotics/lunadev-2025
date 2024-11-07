@@ -406,8 +406,6 @@ impl<T> LoanedData<T> {
             lendee.try_clear();
         }
         if Arc::strong_count(&self.inner) == 1 {
-
-
             let mut owned = unsafe {
                 let tmp = MaybeUninit::new(self);
                 let tmp = tmp.as_ptr();

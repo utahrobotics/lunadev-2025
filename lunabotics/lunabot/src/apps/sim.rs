@@ -63,6 +63,12 @@ impl LunasimStdin {
     }
 }
 
+#[cfg(target_os = "windows")]
+const DELIMIT: &[u8] = b"READY\n\r";
+
+#[cfg(not(target_os = "windows"))]
+const DELIMIT: &[u8] = b"READY\n";
+
 #[derive(Serialize, Deserialize)]
 pub struct LunasimbotApp {
     #[serde(flatten)]
@@ -152,7 +158,7 @@ impl Application for LunasimbotApp {
                 // Read lunasim stdout
                 handle.spawn(async move {
                     {
-                        let mut bytes = VecDeque::with_capacity(7);
+                        let mut bytes = VecDeque::with_capacity(DELIMIT.len());
                         let mut buf = [0u8];
                         loop {
                             match stdout.read_exact(&mut buf).await {
@@ -162,12 +168,12 @@ impl Application for LunasimbotApp {
                                 }
                                 Err(e) => error!(target: "lunasim", "Faced the following error while reading stdout: {e}"),
                             }
-                            match bytes.len().cmp(&6) {
+                            match bytes.len().cmp(&DELIMIT.len()) {
                                 Ordering::Equal => {}
                                 Ordering::Greater => {bytes.pop_front();}
                                 Ordering::Less => continue,
                             }
-                            if bytes == b"READY\n" {
+                            if bytes == DELIMIT {
                                 break;
                             }
                         }
