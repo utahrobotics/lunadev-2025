@@ -354,6 +354,7 @@ layers = 3
 mesh = SubResource("PlaneMesh_reayg")
 
 [node name="Rocks" type="Node3D" parent="Arena"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.28805, 0, -6.70101)
 
 [node name="Rock" type="Node3D" parent="Arena/Rocks"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.861442, 2.20208, -1.0874)
@@ -368,10 +369,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.71816, 2.20208, -1.0874)
 script = ExtResource("3_5i5qc")
 
 [node name="Robot" parent="." instance=ExtResource("1_y4wm8")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.459583, 0, -0.502181)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -1)
 
 [node name="OriginOnly" parent="Robot" index="0"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.459583, 0, -0.502181)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -1)
 
 [node name="ExternalView" parent="Robot/OriginOnly/CameraPivot" index="0"]
 remote_path = NodePath("../../../../CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport/ExternalCamera")
@@ -384,7 +385,7 @@ script = null
 remote_path = NodePath("../../CanvasLayer/TabContainer/RearCamera/AspectRatioContainer/SubviewportContainer/SubViewport/RearCamera")
 
 [node name="RaycastOrigin" parent="Robot" index="10"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.459583, 0, -0.502181)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -1)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_4hw3w")
@@ -426,7 +427,7 @@ size = Vector2i(1132, 597)
 render_target_update_mode = 4
 
 [node name="ExternalCamera" type="Camera3D" parent="CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport"]
-transform = Transform3D(0.283078, -0.220396, 0.93343, -1.77252e-08, 0.973239, 0.229795, -0.959097, -0.0650499, 0.275503, 2.77329, 1.29588, 0.452004)
+transform = Transform3D(0.283078, -0.220396, 0.93343, -1.77252e-08, 0.973239, 0.229795, -0.959097, -0.0650499, 0.275503, 2.23287, 1.29588, -0.0458146)
 
 [node name="DepthCamera1" type="MarginContainer" parent="CanvasLayer/TabContainer"]
 visible = false
@@ -451,7 +452,7 @@ size = Vector2i(2, 2)
 render_target_update_mode = 0
 
 [node name="DepthCamera" type="Camera3D" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport"]
-transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, -0.459583, 0.572526, -0.80037)
+transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, -1, 0.572526, -1.29819)
 cull_mask = 1048571
 fov = 120.0
 script = ExtResource("3_n7k3i")
@@ -479,7 +480,7 @@ size = Vector2i(2, 2)
 render_target_update_mode = 0
 
 [node name="RearCamera" type="Camera3D" parent="CanvasLayer/TabContainer/RearCamera/AspectRatioContainer/SubviewportContainer/SubViewport"]
-transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, -0.459583, 0.572526, -0.25353)
+transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, -1, 0.572526, -0.751349)
 cull_mask = 1048571
 fov = 120.0
 script = ExtResource("3_n7k3i")

@@ -70,13 +70,36 @@ func _input_event(_viewport: Viewport, event: InputEvent, _shape_idx: int) -> vo
 			Input.mouse_mode = Input.MOUSE_MODE_CONFINED
 			_relative_at_start = get_global_mouse_position() - global_position
 
-
 func _process(_delta: float) -> void:
-	var travel: Vector2 = (global_position - get_parent().global_position) / MAX_DISTANCE
-	var angle := travel.angle()
+	var joystick: Vector2 = (global_position - get_parent().global_position) / MAX_DISTANCE
+
+	move_smooth(joystick)
+	#move_strict(joystick)
+	
+
+## move robot with joystick position
+func move_smooth(joystick: Vector2):
+	joystick.y *= -1
+		
+	# when trying to back up and turn at the same time, flipping the turning direction feels more natural:
+	# 	(bottom right joystick -> back up while turning left)
+	# if joystick height is within 0.2 from the center - assume driver wants to turn in place - don't flip turning direction 
+	if joystick.y < -0.2:
+		joystick.x *= -1
+	
+	Lunabot.set_steering_left_right(
+		joystick.y + joystick.x, 
+		joystick.y - joystick.x
+	)
+
+## move robot with joystick position
+## must either move straight or turn in place
+func move_strict(joystick: Vector2): 
+	var angle := joystick.angle()
 	var travel_scale := Vector2(absf(cos(angle)), absf(sin(angle)))
-	travel /= travel_scale[travel_scale.max_axis_index()]
-	Lunabot.set_steering(-travel.y, -travel.x)
+	joystick /= travel_scale[travel_scale.max_axis_index()]
+	Lunabot.set_steering_drive_steering(-joystick.y, -joystick.x)
+	
 "
 
 [sub_resource type="SphereMesh" id="SphereMesh_7mlwg"]
