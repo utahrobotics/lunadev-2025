@@ -1,5 +1,6 @@
-[gd_scene load_steps=29 format=3 uid="uid://bxmnthetrtkso"]
+[gd_scene load_steps=32 format=3 uid="uid://bxmnthetrtkso"]
 
+[ext_resource type="Script" path="res://path_manager.gd" id="1_ohl8f"]
 [ext_resource type="PackedScene" uid="uid://leqgym66qbuo" path="res://robot.tscn" id="1_y4wm8"]
 [ext_resource type="PackedScene" uid="uid://y0gvb4s2mi2x" path="res://apriltag.tscn" id="2_nhvh2"]
 [ext_resource type="Script" path="res://rocks/rock.gd" id="3_5i5qc"]
@@ -13,6 +14,12 @@ script/source = "extends Node3D
 func _ready() -> void:
 	get_viewport().disable_3d = true
 "
+
+[sub_resource type="Curve3D" id="Curve3D_yjb38"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_k0m8n"]
+transparency = 1
+albedo_color = Color(0.439216, 0.647059, 0, 0.498039)
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_s0tqm"]
 sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
@@ -293,6 +300,26 @@ func _on_pressed() -> void:
 
 [node name="Node3D" type="Node3D"]
 script = SubResource("GDScript_lj4gt")
+
+[node name="PathManager" type="Path3D" parent="."]
+curve = SubResource("Curve3D_yjb38")
+script = ExtResource("1_ohl8f")
+test_path = Array[Vector2]([Vector2(-2.5, -3.5), Vector2(-2, -6)])
+height = 0.5
+
+[node name="CSGPolygon3D" type="CSGPolygon3D" parent="PathManager"]
+polygon = PackedVector2Array(0, 0, 0, 0.05, 0.05, 0.05, 0.05, 0)
+mode = 2
+path_node = NodePath("..")
+path_interval_type = 0
+path_interval = 1.0
+path_simplify_angle = 0.0
+path_rotation = 2
+path_local = false
+path_continuous_u = true
+path_u_distance = 1.0
+path_joined = false
+material = SubResource("StandardMaterial3D_k0m8n")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_tv5af")
