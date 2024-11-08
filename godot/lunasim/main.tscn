@@ -13,6 +13,11 @@ script/source = "extends Node3D
 
 func _ready() -> void:
 	get_viewport().disable_3d = true
+
+
+func _on_check_button_toggled(toggled_on: bool) -> void:
+	if toggled_on: $PathManager.show()
+	else: $PathManager.hide()
 "
 
 [sub_resource type="Curve3D" id="Curve3D_yjb38"]
@@ -617,6 +622,14 @@ focus_mode = 1
 text = "0.0"
 script = SubResource("GDScript_f6nnu")
 
+[node name="Label6" type="Label" parent="CanvasLayer/Control/VBoxContainer"]
+layout_mode = 2
+text = "Show Path"
+
+[node name="CheckButton" type="CheckButton" parent="CanvasLayer/Control/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 0
+
 [node name="Control3D" type="Control" parent="CanvasLayer/Control" node_paths=PackedStringArray("node3d", "camera")]
 anchors_preset = 0
 offset_right = 40.0
@@ -640,6 +653,7 @@ script = SubResource("GDScript_6xoh2")
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit3" to="CanvasLayer/Control/VBoxContainer/LineEdit3" method="_on_text_submitted"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit4" to="CanvasLayer/Control/VBoxContainer/LineEdit4" method="_on_text_submitted"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit5" to="CanvasLayer/Control/VBoxContainer/LineEdit5" method="_on_text_submitted"]
+[connection signal="toggled" from="CanvasLayer/Control/VBoxContainer/CheckButton" to="." method="_on_check_button_toggled"]
 [connection signal="pressed" from="CanvasLayer/Control/Control3D/Button" to="CanvasLayer/Control/Control3D/Button" method="_on_pressed"]
 
 [editable path="Robot"]
