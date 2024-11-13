@@ -88,6 +88,7 @@ lunabase-lib = { path = "lunabotics/lunabase-lib" }
 ares-bt = { path = "misc/ares-bt" }
 thiserror = "1.0.64"
 recycler = { path = "misc/recycler" }
+vesc-translator = { path = "vesc-translator" }
 
 [profile.dev.package.lunabot]
 opt-level = 3

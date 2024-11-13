@@ -5,9 +5,7 @@ edition = "2021"
 
 [dependencies]
 crc = "3.2.1"
-socketcan = { version = "3.3.0", optional = true }
 
 [features]
 default = ["messages"]
 messages = []
-comms = ["messages", "dep:socketcan"]

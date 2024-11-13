@@ -23,8 +23,10 @@ nalgebra = { workspace = true }
 k = { workspace = true }
 # indexmap = "2.2.6"
 fxhash = { workspace = true }
+vesc-translator = { workspace = true }
 fitter = { workspace = true }
 recycler = { workspace = true }
 bitcode = { workspace = true }
 heightmap = { path = "../heightmap" }
 lunabot-ai = { path = "../lunabot-ai" }
+tokio-serial = "5"
