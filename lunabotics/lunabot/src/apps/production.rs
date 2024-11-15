@@ -30,7 +30,7 @@ fn default_max_pong_delay_ms() -> u64 {
     1500
 }
 
-const PROJECTION_SIZE: Vector2<u32> = Vector2::new(36, 24);
+// const PROJECTION_SIZE: Vector2<u32> = Vector2::new(36, 24);
 
 impl Application for LunabotApp {
     const APP_NAME: &'static str = "main";

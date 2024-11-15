@@ -4,7 +4,7 @@ use common::FromLunabase;
 use k::Chain;
 use nalgebra::{Isometry3, Point3};
 
-use crate::{autonomy::Autonomy, Action};
+use crate::{autonomy::Autonomy, Action, PollWhen};
 
 pub enum Input {
     FromLunabase(FromLunabase),
@@ -20,7 +20,8 @@ pub(crate) struct LunabotBlackboard {
     chain: Arc<Chain<f64>>,
     path: Vec<Point3<f64>>,
     lunabase_disconnected: bool,
-    actions: Vec<Action>
+    actions: Vec<Action>,
+    poll_when: PollWhen
 }
 
 impl LunabotBlackboard {
@@ -32,7 +33,8 @@ impl LunabotBlackboard {
             path: vec![],
             chain,
             lunabase_disconnected: true,
-            actions: vec![]
+            actions: vec![],
+            poll_when: PollWhen::NoDelay
         }
     }
 }
@@ -48,6 +50,10 @@ impl LunabotBlackboard {
 
     pub fn get_autonomy(&mut self) -> &mut Autonomy {
         &mut self.autonomy
+    }
+
+    pub fn get_poll_when(&mut self) -> &mut PollWhen {
+        &mut self.poll_when
     }
 
     pub fn get_robot_isometry(&self) -> Isometry3<f64> {

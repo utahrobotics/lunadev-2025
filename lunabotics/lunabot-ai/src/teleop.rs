@@ -5,7 +5,7 @@ use log::{error, warn};
 use crate::{
     autonomy::{Autonomy, AutonomyStage},
     blackboard::LunabotBlackboard,
-    Action,
+    Action, PollWhen,
 };
 
 pub fn teleop() -> impl Behavior<LunabotBlackboard> {
@@ -37,7 +37,7 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard> {
                     _ => {}
                 }
             }
-            blackboard.enqueue_action(Action::WaitForLunabase);
+            *blackboard.get_poll_when() = PollWhen::ReceivedLunabase;
             Status::Running
         },
     ))

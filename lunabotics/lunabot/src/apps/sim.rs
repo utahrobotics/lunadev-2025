@@ -12,7 +12,7 @@ use common::{
 };
 use crossbeam::atomic::AtomicCell;
 use gputter::init_gputter_blocking;
-use lunabot_ai::{run_ai, Action, Input};
+use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use urobotics::tokio;
@@ -298,22 +298,62 @@ impl Application for LunasimbotApp {
         let mut bitcode_buffer = bitcode::Buffer::new();
 
         std::thread::spawn(move || {
-            run_ai(robot_chain, |action, inputs| {
-                debug_assert!(inputs.is_empty());
-                let wait_disconnect = async {
-                    if lunabot_stage.load() == LunabotStage::SoftStop {
-                        std::future::pending::<()>().await;
-                    } else {
-                        connected.wait_disconnect().await;
-                    }
-                };
-
-                match action {
-                    Action::WaitForLunabase => {
-                        while let Ok(msg) = from_lunabase_rx.try_recv() {
-                            inputs.push(Input::FromLunabase(msg));
+            run_ai(
+                robot_chain,
+                |action, inputs| {
+                    match action {
+                        Action::SetStage(stage) => {
+                            lunabot_stage.store(stage);
                         }
-                        if inputs.is_empty() {
+                        Action::SetSteering(steering) => {
+                            let (left, right) = steering.get_left_and_right();
+                            let bytes = bitcode_buffer.encode(&FromLunasimbot::Drive {
+                                left: left as f32,
+                                right: right as f32,
+                            });
+                            lunasim_stdin.write(bytes);
+                        }
+                        Action::CalculatePath { from, to, mut into } => {
+                            into.push(from);
+                            into.push(to);
+                            inputs.push(Input::PathCalculated(into));
+                        }
+                    }
+                },
+                |poll_when, inputs| {
+                    let wait_disconnect = async {
+                        if lunabot_stage.load() == LunabotStage::SoftStop {
+                            std::future::pending::<()>().await;
+                        } else {
+                            connected.wait_disconnect().await;
+                        }
+                    };
+
+                    match poll_when {
+                        PollWhen::ReceivedLunabase => {
+                            while let Ok(msg) = from_lunabase_rx.try_recv() {
+                                inputs.push(Input::FromLunabase(msg));
+                            }
+                            if inputs.is_empty() {
+                                async {
+                                    tokio::select! {
+                                        result = from_lunabase_rx.recv() => {
+                                            let Some(msg) = result else {
+                                                error!("Lunabase message channel closed");
+                                                std::future::pending::<()>().await;
+                                                unreachable!();
+                                            };
+                                            inputs.push(Input::FromLunabase(msg));
+                                        }
+                                        _ = wait_disconnect => {
+                                            inputs.push(Input::LunabaseDisconnected);
+                                        }
+                                    }
+                                }
+                                .block_on();
+                            }
+                        }
+                        PollWhen::Instant(deadline) => {
                             async {
                                 tokio::select! {
                                     result = from_lunabase_rx.recv() => {
@@ -324,6 +364,7 @@ impl Application for LunasimbotApp {
                                         };
                                         inputs.push(Input::FromLunabase(msg));
                                     }
+                                    _ = tokio::time::sleep_until(deadline.into()) => {}
                                     _ = wait_disconnect => {
                                         inputs.push(Input::LunabaseDisconnected);
                                     }
@@ -331,44 +372,13 @@ impl Application for LunasimbotApp {
                             }
                             .block_on();
                         }
-                    }
-                    Action::SetStage(stage) => {
-                        lunabot_stage.store(stage);
-                    }
-                    Action::SetSteering(steering) => {
-                        let (left, right) = steering.get_left_and_right();
-                        let bytes = bitcode_buffer.encode(&FromLunasimbot::Drive {
-                            left: left as f32,
-                            right: right as f32,
-                        });
-                        lunasim_stdin.write(bytes);
-                    }
-                    Action::CalculatePath { from, to, mut into } => {
-                        into.push(from);
-                        into.push(to);
-                        inputs.push(Input::PathCalculated(into));
-                    }
-                    Action::WaitUntil(deadline) => {
-                        async {
-                            tokio::select! {
-                                result = from_lunabase_rx.recv() => {
-                                    let Some(msg) = result else {
-                                        error!("Lunabase message channel closed");
-                                        std::future::pending::<()>().await;
-                                        unreachable!();
-                                    };
-                                    inputs.push(Input::FromLunabase(msg));
-                                }
-                                _ = tokio::time::sleep_until(deadline.into()) => {}
-                                _ = wait_disconnect => {
-                                    inputs.push(Input::LunabaseDisconnected);
-                                }
-                            }
+                        PollWhen::NoDelay => {
+                            // Helps prevent freezing when `NoDelay` is used frequently
+                            std::thread::yield_now();
                         }
-                        .block_on();
                     }
                 }
-            });
+            );
         });
 
         wait_for_ctrl_c();

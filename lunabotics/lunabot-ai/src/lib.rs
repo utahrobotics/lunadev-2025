@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Instant, vec};
+use std::{sync::Arc, time::{Duration, Instant}, vec};
 
 use ares_bt::{
     action::AlwaysSucceed, branching::TryCatch, converters::{CatchPanic, Invert}, looping::WhileLoop, sequence::Sequence, EternalBehavior, FallibleStatus, InfallibleStatus
@@ -19,8 +19,6 @@ pub use blackboard::Input;
 
 #[derive(Debug, Clone)]
 pub enum Action {
-    /// Wait indefinitely for a message from lunabase.
-    WaitForLunabase,
     SetSteering(Steering),
     SetStage(LunabotStage),
     CalculatePath {
@@ -28,11 +26,19 @@ pub enum Action {
         to: Point3<f64>,
         into: Vec<Point3<f64>>,
     },
-    /// Wait until the given instant for any input, otherwise poll the ai again.
-    WaitUntil(Instant),
 }
 
-pub fn run_ai(chain: Arc<Chain<f64>>, mut on_action: impl FnMut(Action, &mut Vec<Input>)) {
+#[derive(Debug, Clone, Copy)]
+pub enum PollWhen {
+    /// Wait indefinitely for a message from lunabase.
+    ReceivedLunabase,
+    /// Wait until the given instant for any input, otherwise poll the ai again.
+    Instant(Instant),
+    /// Poll instantly.
+    NoDelay,
+}
+
+pub fn run_ai(chain: Arc<Chain<f64>>, mut on_action: impl FnMut(Action, &mut Vec<Input>), mut polling: impl FnMut(PollWhen, &mut Vec<Input>)) {
     let mut blackboard = LunabotBlackboard::new(chain);
     let mut b = WhileLoop::new(
         AlwaysSucceed,
@@ -55,7 +61,7 @@ pub fn run_ai(chain: Arc<Chain<f64>>, mut on_action: impl FnMut(Action, &mut Vec
                             _ => {}
                         }
                     }
-                    blackboard.enqueue_action(Action::WaitForLunabase);
+                    *blackboard.get_poll_when() = PollWhen::ReceivedLunabase;
                     FallibleStatus::Running
                 },
             )),
@@ -74,8 +80,14 @@ pub fn run_ai(chain: Arc<Chain<f64>>, mut on_action: impl FnMut(Action, &mut Vec
     loop {
         b.run_eternal(&mut blackboard);
         for action in blackboard.drain_actions() {
+            std::thread::sleep(std::time::Duration::from_millis(16));
             on_action(action, &mut inputs);
         }
+        for input in inputs.drain(..) {
+            blackboard.digest_input(input);
+        }
+        polling(*blackboard.get_poll_when(), &mut inputs);
+        *blackboard.get_poll_when() = PollWhen::NoDelay;
         for input in inputs.drain(..) {
             blackboard.digest_input(input);
         }
@@ -93,25 +105,25 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
     // path must not intersect with itself
 
     //DEMO: MOVING IN STRAIGHT LINES 
-    let path = &[ 
-        OPoint::<f64, Const<3>>::new(-1.0, 0.0, -1.0),
-        OPoint::<f64, Const<3>>::new(-3.0, 0.0, -1.0),
-        OPoint::<f64, Const<3>>::new(-3.0, 0.0, -3.0),
-        OPoint::<f64, Const<3>>::new(-1.0, 0.0, -3.0),
-        OPoint::<f64, Const<3>>::new(-1.0, 0.0, -5.0),
-        OPoint::<f64, Const<3>>::new(-3.0, 0.0, -5.0),
-    ];
+    // let path = &[ 
+    //     OPoint::<f64, Const<3>>::new(-1.0, 0.0, -1.0),
+    //     OPoint::<f64, Const<3>>::new(-3.0, 0.0, -1.0),
+    //     OPoint::<f64, Const<3>>::new(-3.0, 0.0, -3.0),
+    //     OPoint::<f64, Const<3>>::new(-1.0, 0.0, -3.0),
+    //     OPoint::<f64, Const<3>>::new(-1.0, 0.0, -5.0),
+    //     OPoint::<f64, Const<3>>::new(-3.0, 0.0, -5.0),
+    // ];
 
-    // DEMO: MOVING CONTINUOUSLY IN AN ARC 
-    let path = &[
-        OPoint::<f64, Const<3>>::new(-1.0, 0.0, -1.0),
-        OPoint::<f64, Const<3>>::new(-1.2, 0.0, -1.6),
-        OPoint::<f64, Const<3>>::new(-1.4, 0.0, -2.0),
-        OPoint::<f64, Const<3>>::new(-1.6, 0.0, -2.2),
-        OPoint::<f64, Const<3>>::new(-1.8, 0.0, -2.4),
-        OPoint::<f64, Const<3>>::new(-2.2, 0.0, -2.6),
-        OPoint::<f64, Const<3>>::new(-2.8, 0.0, -2.8),
-    ];
+    // // DEMO: MOVING CONTINUOUSLY IN AN ARC 
+    // let path = &[
+    //     OPoint::<f64, Const<3>>::new(-1.0, 0.0, -1.0),
+    //     OPoint::<f64, Const<3>>::new(-1.2, 0.0, -1.6),
+    //     OPoint::<f64, Const<3>>::new(-1.4, 0.0, -2.0),
+    //     OPoint::<f64, Const<3>>::new(-1.6, 0.0, -2.2),
+    //     OPoint::<f64, Const<3>>::new(-1.8, 0.0, -2.4),
+    //     OPoint::<f64, Const<3>>::new(-2.2, 0.0, -2.6),
+    //     OPoint::<f64, Const<3>>::new(-2.8, 0.0, -2.8),
+    // ];
 
     // DEMO: MIXED PATH WITH CLUSTERED POINTS IN ARC SHAPE AND LONG STRAIGHT SEGMENTS  
     let path = &[
@@ -143,6 +155,8 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
             let to_first_point = 
                 if heading.x < 0.0  { rotate_v2_ccw(to_first_point,  heading_angle) }
                 else                { rotate_v2_ccw(to_first_point, -heading_angle) };
+            
+            *blackboard.get_poll_when() = PollWhen::Instant(Instant::now() + Duration::from_millis(16));
 
             // when approaching an arc turn gradually
             if distance(&pos, &path[i].xz()) < ARC_THRESHOLD && within_arc(path, i) {

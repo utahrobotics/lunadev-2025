@@ -12,8 +12,8 @@ urobotics = { workspace = true, features = [
     "video",
 ] }
 serde = { workspace = true }
-spin_sleep = { workspace = true }
 cakap2 = { workspace = true }
+spin_sleep.workspace = true
 anyhow = { workspace = true }
 crossbeam = { workspace = true }
 common = { path = "../common" }
