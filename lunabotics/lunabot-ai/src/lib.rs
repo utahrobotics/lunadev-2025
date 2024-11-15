@@ -61,7 +61,7 @@ pub fn run_ai(chain: Arc<Chain<f64>>, mut on_action: impl FnMut(Action, &mut Vec
                     FallibleStatus::Running(Action::WaitForLunabase)
                 },
             )),
-            // |blackboard: &mut LunabotBlackboard| follow_path(blackboard),
+            follow_path,
             TryCatch::new(
                 WhileLoop::new(
                     AlwaysSucceed,

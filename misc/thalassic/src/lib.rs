@@ -17,6 +17,8 @@ use pcl2height::Pcl2Height;
 
 pub mod depth2pcl;
 pub mod pcl2height;
+mod clustering;
+pub use clustering::Clusterer;
 
 /// 1. Depths
 /// 2. Transform
