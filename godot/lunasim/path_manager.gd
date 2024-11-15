@@ -8,9 +8,12 @@ var markers :=[]
 
 func _ready() -> void:
 	line_mesh.material=path_mat
-	#create_path(test_path) # Comment this when implementing with rust
-
+	#create_path([Vector3(-1.5,0.5,-4),Vector3(-2.5,0.5,-5)]) # Comment this when implementing with rust
+	#create_path(test_path)
 func create_path(path:Array[Vector3]):
+	for marker in markers:
+		marker.queue_free()
+	markers.clear()
 	self.curve.clear_points()
 	self.curve.add_point(Vector3(robot.position.x, robot.position.y+0.5, robot.position.z))
 	for i in path.size():
@@ -22,7 +25,6 @@ func create_path(path:Array[Vector3]):
 # x and z parameters are for marker position
 #num is for identifying which marker is being placed
 func place_marker(pos:Vector3,num:String):
-	markers.clear()
 	var marker = CSGCylinder3D.new()
 	marker.position=Vector3(pos.x,(pos.y/2)+0.05,pos.z)
 	marker.height=pos.y
