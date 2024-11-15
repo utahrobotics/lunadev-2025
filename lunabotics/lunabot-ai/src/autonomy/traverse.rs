@@ -1,8 +1,5 @@
 use ares_bt::{
-    action::AlwaysSucceed,
-    branching::IfElse,
-    converters::AssertCancelSafe,
-    sequence::Sequence,
+    action::AlwaysSucceed, branching::IfElse, converters::AssertCancelSafe, sequence::Sequence,
     Behavior, CancelSafe, Status,
 };
 use common::LunabotStage;

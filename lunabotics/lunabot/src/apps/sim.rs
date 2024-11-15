@@ -300,24 +300,22 @@ impl Application for LunasimbotApp {
         std::thread::spawn(move || {
             run_ai(
                 robot_chain,
-                |action, inputs| {
-                    match action {
-                        Action::SetStage(stage) => {
-                            lunabot_stage.store(stage);
-                        }
-                        Action::SetSteering(steering) => {
-                            let (left, right) = steering.get_left_and_right();
-                            let bytes = bitcode_buffer.encode(&FromLunasimbot::Drive {
-                                left: left as f32,
-                                right: right as f32,
-                            });
-                            lunasim_stdin.write(bytes);
-                        }
-                        Action::CalculatePath { from, to, mut into } => {
-                            into.push(from);
-                            into.push(to);
-                            inputs.push(Input::PathCalculated(into));
-                        }
+                |action, inputs| match action {
+                    Action::SetStage(stage) => {
+                        lunabot_stage.store(stage);
+                    }
+                    Action::SetSteering(steering) => {
+                        let (left, right) = steering.get_left_and_right();
+                        let bytes = bitcode_buffer.encode(&FromLunasimbot::Drive {
+                            left: left as f32,
+                            right: right as f32,
+                        });
+                        lunasim_stdin.write(bytes);
+                    }
+                    Action::CalculatePath { from, to, mut into } => {
+                        into.push(from);
+                        into.push(to);
+                        inputs.push(Input::PathCalculated(into));
                     }
                 },
                 |poll_when, inputs| {
@@ -377,7 +375,7 @@ impl Application for LunasimbotApp {
                             std::thread::yield_now();
                         }
                     }
-                }
+                },
             );
         });
 

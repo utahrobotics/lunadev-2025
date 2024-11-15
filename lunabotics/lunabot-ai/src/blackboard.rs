@@ -21,7 +21,7 @@ pub(crate) struct LunabotBlackboard {
     path: Vec<Point3<f64>>,
     lunabase_disconnected: bool,
     actions: Vec<Action>,
-    poll_when: PollWhen
+    poll_when: PollWhen,
 }
 
 impl LunabotBlackboard {
@@ -34,7 +34,7 @@ impl LunabotBlackboard {
             chain,
             lunabase_disconnected: true,
             actions: vec![],
-            poll_when: PollWhen::NoDelay
+            poll_when: PollWhen::NoDelay,
         }
     }
 }

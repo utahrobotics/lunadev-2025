@@ -21,7 +21,10 @@ use nokhwa::{
 use serde::Deserialize;
 use unfmt::unformat;
 use urobotics_core::{
-    log::error, service::ServiceExt, shared::{DataHandle, UninitOwnedData}, tokio::sync::{Mutex, OnceCell}
+    log::error,
+    service::ServiceExt,
+    shared::{DataHandle, UninitOwnedData},
+    tokio::sync::{Mutex, OnceCell},
 };
 use urobotics_py::{PyRepl, PythonValue, PythonVenvBuilder};
 
@@ -208,7 +211,7 @@ pub struct PendingCameraConnection {
 impl PendingCameraConnection {
     pub fn spawn(self) -> Result<CameraInfo, nokhwa::NokhwaError> {
         let (info_tx, info_rx) = std::sync::mpsc::sync_channel(1);
-        
+
         std::thread::spawn(move || {
             macro_rules! unwrap {
                 ($result: expr) => {
@@ -266,7 +269,7 @@ impl urobotics_app::Application for CameraConnectionBuilder {
     const APP_NAME: &'static str = "camera";
 
     fn run(mut self) {
-        use urobotics_core::{BlockOn, task::Loggable};
+        use urobotics_core::{task::Loggable, BlockOn};
         (async move {
                 let (index, requested) = cam_impl!(self);
 
