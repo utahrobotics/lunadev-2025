@@ -10,7 +10,7 @@ use dump::dump;
 use log::error;
 use traverse::traverse;
 
-use crate::{blackboard::LunabotBlackboard, Action};
+use crate::blackboard::LunabotBlackboard;
 
 mod dig;
 mod dump;
@@ -46,7 +46,7 @@ impl Autonomy {
     }
 }
 
-pub fn autonomy() -> impl Behavior<LunabotBlackboard, Action> {
+pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
     WhileLoop::new(
         |blackboard: &mut LunabotBlackboard| (*blackboard.get_autonomy() != Autonomy::None).into(),
         ParallelAny::new((
@@ -65,7 +65,7 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard, Action> {
                         _ => blackboard.pop_from_lunabase(),
                     };
                 }
-                Status::Running(Action::PollAgain)
+                Status::Running
             }),
             Sequence::new((dig(), dump(), traverse())),
         )),

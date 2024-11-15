@@ -29,22 +29,22 @@ where
     }
 }
 
-impl<A, B, D, T> Behavior<D, T> for WhileLoop<A, B>
+impl<A, B, D> Behavior<D> for WhileLoop<A, B>
 where
-    A: Behavior<D, T>,
-    B: Behavior<D, T>,
+    A: Behavior<D>,
+    B: Behavior<D>,
 {
-    fn run(&mut self, blackboard: &mut D) -> Status<T> {
+    fn run(&mut self, blackboard: &mut D) -> Status {
         loop {
             if self.check_condition {
                 match self.condition.run(blackboard) {
-                    Status::Running(t) => return Status::Running(t),
+                    Status::Running => return Status::Running,
                     Status::Success => self.check_condition = false,
                     Status::Failure => return Status::Success,
                 }
             }
             match self.body.run(blackboard) {
-                Status::Running(t) => return Status::Running(t),
+                Status::Running => return Status::Running,
                 Status::Success => self.check_condition = true,
                 Status::Failure => {
                     self.check_condition = true;
@@ -67,21 +67,21 @@ where
     }
 }
 
-impl<A, B, D, T> FallibleBehavior<D, T> for WhileLoop<A, B>
+impl<A, B, D> FallibleBehavior<D> for WhileLoop<A, B>
 where
-    A: InfallibleBehavior<D, T>,
-    B: FallibleBehavior<D, T>,
+    A: InfallibleBehavior<D>,
+    B: FallibleBehavior<D>,
 {
-    fn run_fallible(&mut self, blackboard: &mut D) -> FallibleStatus<T> {
+    fn run_fallible(&mut self, blackboard: &mut D) -> FallibleStatus {
         loop {
             if self.check_condition {
                 match self.condition.run_infallible(blackboard) {
-                    InfallibleStatus::Running(t) => return FallibleStatus::Running(t),
+                    InfallibleStatus::Running => return FallibleStatus::Running,
                     InfallibleStatus::Success => self.check_condition = false,
                 }
             }
             match self.body.run_fallible(blackboard) {
-                FallibleStatus::Running(t) => return FallibleStatus::Running(t),
+                FallibleStatus::Running => return FallibleStatus::Running,
                 FallibleStatus::Failure => {
                     self.check_condition = true;
                     return FallibleStatus::Failure;
@@ -91,43 +91,43 @@ where
     }
 }
 
-impl<A, B, D, T> InfallibleBehavior<D, T> for WhileLoop<A, B>
+impl<A, B, D> InfallibleBehavior<D> for WhileLoop<A, B>
 where
-    A: Behavior<D, T>,
-    B: InfallibleBehavior<D, T>,
+    A: Behavior<D>,
+    B: InfallibleBehavior<D>,
 {
-    fn run_infallible(&mut self, blackboard: &mut D) -> InfallibleStatus<T> {
+    fn run_infallible(&mut self, blackboard: &mut D) -> InfallibleStatus {
         loop {
             if self.check_condition {
                 match self.condition.run(blackboard) {
-                    Status::Running(t) => return InfallibleStatus::Running(t),
+                    Status::Running => return InfallibleStatus::Running,
                     Status::Success => self.check_condition = false,
                     Status::Failure => return InfallibleStatus::Success,
                 }
             }
             match self.body.run_infallible(blackboard) {
-                InfallibleStatus::Running(t) => return InfallibleStatus::Running(t),
+                InfallibleStatus::Running => return InfallibleStatus::Running,
                 InfallibleStatus::Success => self.check_condition = true,
             }
         }
     }
 }
 
-impl<A, B, D, T> EternalBehavior<D, T> for WhileLoop<A, B>
+impl<A, B, D> EternalBehavior<D> for WhileLoop<A, B>
 where
-    A: InfallibleBehavior<D, T>,
-    B: InfallibleBehavior<D, T>,
+    A: InfallibleBehavior<D>,
+    B: InfallibleBehavior<D>,
 {
-    fn run_eternal(&mut self, blackboard: &mut D) -> EternalStatus<T> {
+    fn run_eternal(&mut self, blackboard: &mut D) -> EternalStatus {
         loop {
             if self.check_condition {
                 match self.condition.run_infallible(blackboard) {
-                    InfallibleStatus::Running(t) => return EternalStatus::Running(t),
+                    InfallibleStatus::Running => return EternalStatus::Running,
                     InfallibleStatus::Success => self.check_condition = false,
                 }
             }
             match self.body.run_infallible(blackboard) {
-                InfallibleStatus::Running(t) => return EternalStatus::Running(t),
+                InfallibleStatus::Running => return EternalStatus::Running,
                 InfallibleStatus::Success => self.check_condition = true,
             }
         }

@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Instant, vec};
 
 use ares_bt::{
-    action::{AlwaysSucceed, RunOnce},
+    action::AlwaysSucceed,
     branching::TryCatch,
     converters::{CatchPanic, Invert},
     looping::WhileLoop,
@@ -35,7 +35,6 @@ pub enum Action {
     },
     /// Wait until the given instant for any input, otherwise poll the ai again.
     WaitUntil(Instant),
-    PollAgain,
 }
 
 pub fn run_ai(chain: Arc<Chain<f64>>, mut on_action: impl FnMut(Action, &mut Vec<Input>)) {
@@ -43,8 +42,11 @@ pub fn run_ai(chain: Arc<Chain<f64>>, mut on_action: impl FnMut(Action, &mut Vec
     let mut b = WhileLoop::new(
         AlwaysSucceed,
         Sequence::new((
-            RunOnce::from(|| Action::SetStage(LunabotStage::SoftStop)),
-            RunOnce::from(|| Action::SetSteering(Steering::default())),
+            |blackboard: &mut LunabotBlackboard| {
+                blackboard.enqueue_action(Action::SetStage(LunabotStage::SoftStop));
+                blackboard.enqueue_action(Action::SetSteering(Steering::default()));
+                InfallibleStatus::Success
+            },
             Invert(WhileLoop::new(
                 AlwaysSucceed,
                 |blackboard: &mut LunabotBlackboard| {
@@ -58,7 +60,8 @@ pub fn run_ai(chain: Arc<Chain<f64>>, mut on_action: impl FnMut(Action, &mut Vec
                             _ => {}
                         }
                     }
-                    FallibleStatus::Running(Action::WaitForLunabase)
+                    blackboard.enqueue_action(Action::WaitForLunabase);
+                    FallibleStatus::Running
                 },
             )),
             Sequence::new((
@@ -77,14 +80,17 @@ pub fn run_ai(chain: Arc<Chain<f64>>, mut on_action: impl FnMut(Action, &mut Vec
 
     let mut inputs = vec![];
     loop {
-        on_action(b.run_eternal(&mut blackboard).unwrap(), &mut inputs);
+        b.run_eternal(&mut blackboard);
+        for action in blackboard.drain_actions() {
+            on_action(action, &mut inputs);
+        }
         for input in inputs.drain(..) {
             blackboard.digest_input(input);
         }
     }
 }
 
-fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus<Action> {
+fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
     // if let None = blackboard.get_path() {
     //     return InfallibleStatus::Success
     // }
@@ -138,91 +144,27 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus<Action> {
     match find_target_point(pos, path) {
         Some(i) => {
 
-            let heading_angle = heading.angle(&Vector2::new(0.0, -1.0));
-            let to_first_point = (path[i].xz() - pos).normalize();
-        
-            // direction to first point of path, from robot's pov 
-            let to_first_point = 
-                if heading.x < 0.0  { rotate_v2_ccw(to_first_point,  heading_angle) }
-                else                { rotate_v2_ccw(to_first_point, -heading_angle) };
+    let heading_angle = heading.angle(&Vector2::new(0.0, -1.0));
+    let to_first_point = (first_point - Vector2::new(robot.translation.x, robot.translation.z)).coords.normalize();
 
-            // when approaching an arc turn gradually
-            if distance(&pos, &path[i].xz()) < ARC_THRESHOLD && within_arc(path, i) {
-                let (l, r) = scaled_clamp(-to_first_point.y + to_first_point.x, -to_first_point.y - to_first_point.x, 0.8);
-                return InfallibleStatus::Running(Action::SetSteering(Steering::new_left_right(l, r)));
-            }
-        
-            return if to_first_point.angle(&Vector2::new(0.0, -1.0)) > 0.1 {
-                if to_first_point.x > 0.0    
-                    { InfallibleStatus::Running(Action::SetSteering(Steering::new_left_right( 1.0, -1.0))) }
-                else
-                    { InfallibleStatus::Running(Action::SetSteering(Steering::new_left_right(-1.0,  1.0))) }
-            }
-            else 
-                { InfallibleStatus::Running(Action::SetSteering(Steering::new_left_right( 1.0, 1.0))) }
-        
-        } 
-        None => InfallibleStatus::Success
+    // direction to first point of path, from robot's pov 
+    let to_first_point = 
+        if heading.x < 0.0  { rotate_v2_ccw(to_first_point,  heading_angle) }
+        else                { rotate_v2_ccw(to_first_point, -heading_angle) };
+
+    return if to_first_point.angle(&Vector2::new(0.0, -1.0)) > 0.1 {
+        if to_first_point.x > 0.0    
+            { InfallibleStatus::Running(Action::SetSteering(Steering::new_left_right( 1.0, -1.0))) }
+        else
+            { InfallibleStatus::Running(Action::SetSteering(Steering::new_left_right(-1.0,  1.0))) }
     }
-}
+    else 
+        { InfallibleStatus::Running(Action::SetSteering(Steering::new_left_right( 1.0, 1.0))) }
 
-/// min distance for 2 path points to be considered part of an arc
-const ARC_THRESHOLD: f64 = 0.7;
 
-/// is this point considered part of an arc?
-fn within_arc(path: &[OPoint<f64, Const<3>>], i: usize) -> bool {
-    return 
-        if      path.len() == 1     { false }
-        else if i == path.len()-1   { distance(&path[i].xz(), &path[i-1].xz()) < ARC_THRESHOLD } 
-        else                        { distance(&path[i].xz(), &path[i+1].xz()) < ARC_THRESHOLD }
-}
-
-/// min distance for robot to be considered at a point
-const AT_POINT_THRESHOLD: f64 = 0.1;
-
-/// find index of the next point the robot should move towards, based on which path segment the robot is closest to
-/// 
-/// returns `None` if robot is at the last point
-fn find_target_point(pos: Point2<f64>, path: &[OPoint<f64, Const<3>>]) -> Option<usize> {
-
-    for i in 0..path.len() {
-        if distance(&pos, &path[i].xz()) < AT_POINT_THRESHOLD {
-            return 
-                if i == path.len()-1 { None }
-                else { Some(i+1) }
-        }
-    }
-    
-    let mut min_dist = distance(&pos, &path[0].xz());
-    let mut target_point = 0;
-
-    for i in 1..path.len() {
-
-        let dist = dist_to_segment(pos, path[i-1].xz(), path[i].xz());
-
-        if dist < min_dist {
-            min_dist = dist;
-            target_point = i;
-        }
-    }
-
-    Some(target_point)
-}
-
-fn dist_to_segment(point: Point2<f64>, a: Point2<f64>, b: Point2<f64>) -> f64 {
-    let mut line_from_origin = b - a; // move line segment to origin
-    let mut point = point - a; // move point the same amount
-
-    let angle = -line_from_origin.y.signum() * line_from_origin.angle( &Vector2::new(1.0, 0.0) );
-
-    // rotate both until segment lines up with the x axis
-    line_from_origin = rotate_v2_ccw(line_from_origin, angle);
-    point = rotate_v2_ccw(point, angle);
-
-    return 
-        if      point.x <= 0.0 { point.magnitude() }
-        else if point.x >= line_from_origin.x { (point - Vector2::new(line_from_origin.x, 0.0)).magnitude() }
-        else    { point.y.abs() }
+    // gradually turn towards next point - avoid frequent stopping to turn for path points in an arc shape
+    // let (l, r) = scaled_clamp(-to_first_point.y + to_first_point.x, -to_first_point.y - to_first_point.x, 1.0);
+    // InfallibleStatus::Running(Action::SetSteering(Steering::new_left_right(l, r)))
 }
 
 fn rotate_v2_ccw(vector2: Vector2<f64>, theta: f64) -> Vector2<f64> {

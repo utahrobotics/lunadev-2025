@@ -11,7 +11,7 @@ use common::{
     LunabotStage,
 };
 use crossbeam::atomic::AtomicCell;
-use gputter::{init_gputter_blocking, wgpu::hal::auxil::db};
+use gputter::init_gputter_blocking;
 use lunabot_ai::{run_ai, Action, Input};
 use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
@@ -367,7 +367,6 @@ impl Application for LunasimbotApp {
                         }
                         .block_on();
                     }
-                    Action::PollAgain => {}
                 }
             });
         });
