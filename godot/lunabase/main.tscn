@@ -1,7 +1,5 @@
 [gd_scene load_steps=16 format=3 uid="uid://53po1wtuhcem"]
 
-[ext_resource type="Script" path="res://auto_button.gd" id="1_q8470"]
-
 [sub_resource type="GDScript" id="GDScript_2pc2q"]
 script/source = "extends Label
 
@@ -119,6 +117,17 @@ bg_color = Color(0.1373, 0.308156, 0, 1)
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_qdids"]
 bg_color = Color(0.403568, 0.646297, 0, 1)
 
+[sub_resource type="GDScript" id="GDScript_d303i"]
+script/source = "extends Button
+
+
+func _on_pressed() -> void:
+	Lunabot.current_state = Lunabot.State.AUTO
+	$\"../Buttons Label\".text = \"Current Stage: TeleOp\"
+	$\"../../StateInfoTabContainer\".current_tab = 0
+	#Lunabot.run_auto()
+"
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_u8rpt"]
 bg_color = Color(0.474969, 0.344098, 0.00166792, 1)
 
@@ -221,7 +230,7 @@ theme_override_font_sizes/font_size = 25
 theme_override_styles/pressed = SubResource("StyleBoxFlat_q8uky")
 theme_override_styles/normal = SubResource("StyleBoxFlat_qdids")
 text = "Auto"
-script = ExtResource("1_q8470")
+script = SubResource("GDScript_d303i")
 
 [node name="Continue Mission Button" type="Button" parent="VBoxContainer"]
 layout_mode = 2
