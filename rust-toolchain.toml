@@ -1,5 +1,2 @@
 [toolchain]
-channel = "nightly-2024-11-08"
-components = [
-  "cargo",
-]
+channel = "nightly-2024-09-05"
