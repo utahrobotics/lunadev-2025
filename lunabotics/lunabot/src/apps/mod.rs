@@ -1,3 +1,4 @@
+#[cfg(feature = "production")]
 mod production;
 mod sim;
 
@@ -6,7 +7,6 @@ use std::{fs::File, net::SocketAddr, sync::Arc, time::Duration};
 use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
 use k::Chain;
-pub use production::LunabotApp;
 pub use sim::{LunasimStdin, LunasimbotApp};
 use urobotics::{
     log::{error, warn},
@@ -18,6 +18,10 @@ use urobotics::{
 };
 
 use crate::teleop::{LunabaseConn, PacketBuilder};
+
+fn default_max_pong_delay_ms() -> u64 {
+    1500
+}
 
 fn wait_for_ctrl_c() {
     match tokio::signal::ctrl_c().block_on() {

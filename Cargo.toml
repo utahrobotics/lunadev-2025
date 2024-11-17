@@ -10,6 +10,7 @@ members = [
     "urobotics/urobotics-camera",
     "urobotics/urobotics-py",
     "urobotics/urobotics-apriltag",
+    "urobotics/urobotics-realsense",
     "misc/tasker",
     "lunabotics/lunabot",
     "lunabotics/common",
@@ -76,7 +77,8 @@ urobotics-video = { path = "urobotics/urobotics-video" }
 urobotics = { path = "urobotics/urobotics" }
 urobotics-camera = { path = "urobotics/urobotics-camera" }
 urobotics-py = { path = "urobotics/urobotics-py" }
-# urobotics-realsense = { path = "urobotics/urobotics-realsense" }
+urobotics-realsense = { path = "urobotics/urobotics-realsense" }
+urobotics-apriltag = { path = "urobotics/urobotics-apriltag" }
 tasker = { path = "misc/tasker" }
 cakap2 = { path = "misc/cakap2" }
 lunabase-lib = { path = "lunabotics/lunabase-lib" }

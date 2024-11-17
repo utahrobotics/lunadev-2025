@@ -28,3 +28,4 @@ playlist*.ts
 mouser-config.toml
 /go2rtc*
 /address_log.txt
+.DS_Store

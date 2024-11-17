@@ -1,9 +1,6 @@
 use core::str;
 use std::{
-    cmp::Ordering,
-    collections::VecDeque,
-    process::Stdio,
-    sync::{Arc, Mutex},
+    cmp::Ordering, collections::VecDeque, net::SocketAddr, process::Stdio, sync::{Arc, Mutex}
 };
 
 use common::{
@@ -32,7 +29,7 @@ use urobotics::{
 use crate::{localization::Localizer, pipelines::thalassic::spawn_thalassic_pipeline};
 
 use super::{
-    create_packet_builder, create_robot_chain, log_teleop_messages, wait_for_ctrl_c, LunabotApp,
+    create_packet_builder, create_robot_chain, log_teleop_messages, wait_for_ctrl_c,
 };
 
 fn_alias! {
@@ -72,8 +69,9 @@ const DELIMIT: &[u8] = b"READY\n";
 
 #[derive(Serialize, Deserialize)]
 pub struct LunasimbotApp {
-    #[serde(flatten)]
-    app: LunabotApp,
+    pub lunabase_address: SocketAddr,
+    #[serde(default = "super::default_max_pong_delay_ms")]
+    pub max_pong_delay_ms: u64,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     simulation_command: Vec<String>,
@@ -290,9 +288,9 @@ impl Application for LunasimbotApp {
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
         let (packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
-            self.app.lunabase_address,
+            self.lunabase_address,
             lunabot_stage.clone(),
-            self.app.max_pong_delay_ms,
+            self.max_pong_delay_ms,
         );
 
         let mut bitcode_buffer = bitcode::Buffer::new();

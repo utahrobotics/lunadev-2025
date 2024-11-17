@@ -265,7 +265,7 @@ impl RealSenseCamera {
         #[cfg(unix)]
         {
             use std::os::unix::ffi::OsStrExt;
-            Path::new(OsStr::from_bytes(path)).to_owned()
+            Path::new(std::ffi::OsStr::from_bytes(path)).to_owned()
         }
         #[cfg(windows)]
         {
@@ -285,7 +285,7 @@ impl RealSenseCamera {
         #[cfg(unix)]
         {
             use std::os::unix::ffi::OsStrExt;
-            OsStr::from_bytes(path).to_owned()
+            std::ffi::OsStr::from_bytes(path).to_owned()
         }
         #[cfg(windows)]
         {

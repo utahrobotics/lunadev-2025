@@ -5,7 +5,7 @@ use std::path::Path;
 use apps::LunasimbotApp;
 use urobotics::{
     app::{adhoc_app, application},
-    camera, python, serial,
+    python, serial,
     video::info::list_media_input,
     BlockOn,
 };
@@ -46,11 +46,13 @@ fn main() {
     app.cabinet_builder.create_symlink_for("target");
     app.cabinet_builder.create_symlink_for("urdf");
 
-    app.add_app::<serial::SerialConnection>()
+    app = app.add_app::<serial::SerialConnection>()
         .add_app::<python::PythonVenvBuilder>()
-        .add_app::<camera::CameraConnectionBuilder>()
-        // .add_app::<LunabotApp>()
         .add_app::<InfoApp>()
-        .add_app::<LunasimbotApp>()
-        .run();
+        .add_app::<LunasimbotApp>();
+    #[cfg(feature = "production")]
+    {
+        app = app.add_app::<apps::production::LunabotApp>();
+    }
+    app.run();
 }
