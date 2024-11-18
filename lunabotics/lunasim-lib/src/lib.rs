@@ -156,10 +156,8 @@ impl INode for Lunasim {
                     let [x, y, z] = origin;
                     let origin = Vector3 { x, y, z };
 
-                    self.base_mut().emit_signal(
-                        "transform",
-                        &[Transform3D { basis, origin }.to_variant()],
-                    );
+                    self.base_mut()
+                        .emit_signal("transform", &[Transform3D { basis, origin }.to_variant()]);
                 }
                 FromLunasimbot::Drive { left, right } => {
                     self.base_mut()

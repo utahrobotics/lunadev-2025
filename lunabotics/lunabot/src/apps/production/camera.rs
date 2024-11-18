@@ -20,7 +20,7 @@ pub struct CameraInfo {
 
 pub fn enumerate_cameras(
     localizer_ref: LocalizerRef,
-    serial_to_chain: impl IntoIterator<Item=(String, CameraInfo)>,
+    serial_to_chain: impl IntoIterator<Item = (String, CameraInfo)>,
 ) -> anyhow::Result<()> {
     let mut serial_to_chain: FxHashMap<String, Option<_>> = serial_to_chain
         .into_iter()

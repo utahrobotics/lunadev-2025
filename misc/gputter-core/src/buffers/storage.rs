@@ -361,7 +361,7 @@ where
                 .get_mapped_range(),
         );
     }
-    pub fn copy_into(&self, other: &mut impl WritableGpuBuffer, lock: &mut GpuWriteLock) {
+    pub fn copy_into_unchecked(&self, other: &mut impl WritableGpuBuffer, lock: &mut GpuWriteLock) {
         lock.encoder.copy_buffer_to_buffer(
             &self.buffer,
             0,

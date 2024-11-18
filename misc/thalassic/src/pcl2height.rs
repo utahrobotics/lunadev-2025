@@ -4,14 +4,14 @@ build_shader!(
     pub(crate) Pcl2Height,
     r#"
     #[buffer(HostReadOnly)] var<storage, read_write> heightmap: array<atomic<u32>, CELL_COUNT>;
-    #[buffer(HostReadOnly)] var<storage, read_write> points: array<vec4f, POINT_COUNT>;
+    #[buffer(HostReadOnly)] var<storage, read_write> points: array<vec4f, MAX_POINT_COUNT>;
     #[buffer(HostWriteOnly)] var<storage, read> original_heightmap: array<f32, CELL_COUNT>;
+    #[buffer(HostWriteOnly)] var<uniform> projection_width: u32;
     
-    const PROJECTION_WIDTH: NonZeroU32 = {{projection_width}}; /!/ sub with 12
     const HEIGHTMAP_WIDTH: NonZeroU32 = {{heightmap_width}};
     const CELL_SIZE: f32 = {{cell_size}};
     const CELL_COUNT: NonZeroU32 = {{cell_count}};
-    const POINT_COUNT: NonZeroU32 = {{point_count}}; /!/ sub with 32
+    const MAX_POINT_COUNT: NonZeroU32 = {{max_point_count}}; /!/ sub with 32
     
     fn barycentric(pv1: vec3f, pv2: vec3f, pv3: vec3f, pp: vec2f) -> vec3f {
         let v0 = vec3f(pv1.x, pv1.z, 0.0);
@@ -42,20 +42,20 @@ build_shader!(
         let heightmap_y = f32(workgroup_id.y) * CELL_SIZE;
         let heightmap_index = workgroup_id.y * HEIGHTMAP_WIDTH + workgroup_id.x;
         let tri_index = workgroup_id.z;
-        let half_layer_index = tri_index / (PROJECTION_WIDTH - 1);
+        let half_layer_index = tri_index / (projection_width - 1);
         let layer_index = half_layer_index / 2;
-        let projection_x = tri_index % (PROJECTION_WIDTH - 1);
-        let v1_index = layer_index * PROJECTION_WIDTH + projection_x;
+        let projection_x = tri_index % (projection_width - 1);
+        let v1_index = layer_index * projection_width + projection_x;
         let v1 = points[v1_index];
         var v2: vec4f;
         var v3: vec4f;
     
         if half_layer_index % 2 == 0 {
             v2 = points[v1_index + 1];
-            v3 = points[v1_index + 1 + PROJECTION_WIDTH];
+            v3 = points[v1_index + 1 + projection_width];
         } else {
-            v2 = points[v1_index + PROJECTION_WIDTH];
-            v3 = points[v1_index + 1 + PROJECTION_WIDTH];
+            v2 = points[v1_index + projection_width];
+            v3 = points[v1_index + 1 + projection_width];
         }
         
         if v1.w == 0.0 || v2.w == 0.0 || v3.w == 0.0 {

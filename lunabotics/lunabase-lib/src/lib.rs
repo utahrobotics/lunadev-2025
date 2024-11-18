@@ -244,8 +244,7 @@ impl INode for LunabotConn {
             }
 
             if received {
-                self.base_mut()
-                    .emit_signal("something_received", &[]);
+                self.base_mut().emit_signal("something_received", &[]);
             }
         }
     }

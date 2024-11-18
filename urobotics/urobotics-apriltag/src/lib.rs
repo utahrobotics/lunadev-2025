@@ -9,7 +9,9 @@ use apriltag_nalgebra::PoseExt;
 use fxhash::FxHashMap;
 use nalgebra::{Isometry3, Point3, UnitQuaternion, Vector3};
 use urobotics_core::{
-    define_callbacks, fn_alias, log::{error, warn}, shared::SharedDataReceiver
+    define_callbacks, fn_alias,
+    log::{error, warn},
+    shared::SharedDataReceiver,
 };
 
 pub use apriltag_image::image;
@@ -90,7 +92,12 @@ impl AprilTagDetector {
     ///
     /// As such, it is strongly encouraged that the subscription
     /// should not be a sum of multiple subscriptions.
-    pub fn new(focal_length_px: f64, image_width: u32, image_height: u32, img_subscriber: SharedDataReceiver<ImageBuffer<image::Luma<u8>, Vec<u8>>>) -> Self {
+    pub fn new(
+        focal_length_px: f64,
+        image_width: u32,
+        image_height: u32,
+        img_subscriber: SharedDataReceiver<ImageBuffer<image::Luma<u8>, Vec<u8>>>,
+    ) -> Self {
         Self {
             img_subscriber,
             detection_callbacks: DetectionCallbacks::default(),

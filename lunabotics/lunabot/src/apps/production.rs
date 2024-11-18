@@ -29,6 +29,7 @@ use crate::{
 use super::{create_packet_builder, create_robot_chain, wait_for_ctrl_c};
 
 mod camera;
+mod depth;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct CameraInfo {
@@ -78,29 +79,27 @@ impl Application for LunabotApp {
 
         if let Err(e) = enumerate_cameras(
             localizer_ref,
-            self.cameras
-                .into_iter()
-                .map(
-                    |(
+            self.cameras.into_iter().map(
+                |(
+                    serial,
+                    CameraInfo {
+                        link_name,
+                        focal_length_px,
+                    },
+                )| {
+                    (
                         serial,
-                        CameraInfo {
-                            link_name,
+                        camera::CameraInfo {
+                            k_node: robot_chain
+                                .find_link(&link_name)
+                                .context("Failed to find camera link")
+                                .unwrap()
+                                .clone(),
                             focal_length_px,
                         },
-                    )| {
-                        (
-                            serial,
-                            camera::CameraInfo {
-                                k_node: robot_chain
-                                    .find_link(&link_name)
-                                    .context("Failed to find camera link")
-                                    .unwrap()
-                                    .clone(),
-                                focal_length_px,
-                            },
-                        )
-                    },
-                )
+                    )
+                },
+            ),
         ) {
             error!("Failed to enumerate cameras: {e}");
         }

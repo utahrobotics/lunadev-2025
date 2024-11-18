@@ -346,29 +346,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bindgen"
-version = "0.69.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "271383c67ccabffb7381723dea0672a673f292304fcb45c01cc648c7a8d58088"
-dependencies = [
- "bitflags 2.6.0",
- "cexpr",
- "clang-sys",
- "itertools 0.12.1",
- "lazy_static",
- "lazycell",
- "log",
- "prettyplease",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash",
- "shlex",
- "syn 2.0.87",
- "which",
-]
-
-[[package]]
 name = "bit-set"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2338,6 +2315,8 @@ dependencies = [
  "lunabot-ai",
  "nalgebra",
  "pathfinding",
+ "rayon",
+ "realsense-rust",
  "recycler",
  "serde",
  "spin_sleep",
@@ -2345,7 +2324,6 @@ dependencies = [
  "udev",
  "urobotics",
  "urobotics-apriltag",
- "urobotics-realsense",
  "v4l",
  "vesc_translator",
 ]
@@ -3443,7 +3421,6 @@ version = "2.54.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "855bca798af2cf2dc22bddfbb17ef43a834311c55e644e054af9d78a72a7f94e"
 dependencies = [
- "bindgen 0.69.5",
  "pkg-config",
 ]
 
@@ -4478,7 +4455,6 @@ dependencies = [
  "urobotics-camera",
  "urobotics-core",
  "urobotics-py",
- "urobotics-realsense",
  "urobotics-serial",
  "urobotics-smach",
  "urobotics-video",
@@ -4551,17 +4527,6 @@ dependencies = [
  "bytes",
  "serde",
  "urobotics-app",
- "urobotics-core",
-]
-
-[[package]]
-name = "urobotics-realsense"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "image 0.25.5",
- "nalgebra",
- "realsense-rust",
  "urobotics-core",
 ]
 
@@ -4649,7 +4614,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6779878362b9bacadc7893eac76abe69612e8837ef746573c4a5239daf11990b"
 dependencies = [
- "bindgen 0.65.1",
+ "bindgen",
 ]
 
 [[package]]
