@@ -9,12 +9,12 @@
             "extensions": [
                 "rust-lang.rust-analyzer",
                 "tamasfe.even-better-toml"
-            ]
-        },
-        "settings": {
-            "rust-analyzer.cargo.features": [
-                "production"
-            ]
+            ],
+            "settings": {
+                "rust-analyzer.cargo.features": [
+                    "production"
+                ]
+            }
         }
     },
     "hostRequirements": {

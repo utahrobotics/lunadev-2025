@@ -24,7 +24,21 @@ RUN apt-get install -y \
     vulkan-tools
 
 RUN apt-get -y install ffmpeg
+RUN cargo install --force cargo-make
 
 ENV PKG_CONFIG_PATH=/vcpkg/installed/arm64-linux/lib/pkgconfig/
 
+# RUN apt-get install -y obs-studio
+# RUN apt-get install -y pipx
+# RUN pipx install obs-cli
+# RUN pipx ensurepath
 
+# Install go
+# RUN curl -L https://go.dev/dl/go1.23.3.linux-amd64.tar.gz > go1.23.3.linux-amd64.tar.gz && \
+#     tar -C /usr/local -xzf go1.23.3.linux-amd64.tar.gz && \
+#     rm go1.23.3.linux-amd64.tar.gz
+
+# ENV PATH=$PATH:/usr/local/go/bin
+
+# RUN go install github.com/muesli/obs-cli@latest
+# RUN apt-get install linux-headers-generic

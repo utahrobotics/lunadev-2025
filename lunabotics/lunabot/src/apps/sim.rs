@@ -1,6 +1,10 @@
 use core::str;
 use std::{
-    cmp::Ordering, collections::VecDeque, net::SocketAddr, process::Stdio, sync::{Arc, Mutex}
+    cmp::Ordering,
+    collections::VecDeque,
+    net::SocketAddr,
+    process::Stdio,
+    sync::{Arc, Mutex},
 };
 
 use common::{
@@ -28,9 +32,7 @@ use urobotics::{
 
 use crate::{localization::Localizer, pipelines::thalassic::spawn_thalassic_pipeline};
 
-use super::{
-    create_packet_builder, create_robot_chain, log_teleop_messages, wait_for_ctrl_c,
-};
+use super::{create_packet_builder, create_robot_chain, log_teleop_messages, wait_for_ctrl_c};
 
 fn_alias! {
     pub type FromLunasimRef = CallbacksRef(FromLunasim) + Send

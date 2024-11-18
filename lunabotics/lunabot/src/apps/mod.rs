@@ -7,6 +7,8 @@ use std::{fs::File, net::SocketAddr, sync::Arc, time::Duration};
 use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
 use k::Chain;
+#[cfg(feature = "production")]
+pub use production::LunabotApp;
 pub use sim::{LunasimStdin, LunasimbotApp};
 use urobotics::{
     log::{error, warn},

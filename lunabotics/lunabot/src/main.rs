@@ -46,13 +46,14 @@ fn main() {
     app.cabinet_builder.create_symlink_for("target");
     app.cabinet_builder.create_symlink_for("urdf");
 
-    app = app.add_app::<serial::SerialConnection>()
+    app = app
+        .add_app::<serial::SerialConnection>()
         .add_app::<python::PythonVenvBuilder>()
         .add_app::<InfoApp>()
         .add_app::<LunasimbotApp>();
     #[cfg(feature = "production")]
     {
-        app = app.add_app::<apps::production::LunabotApp>();
+        app = app.add_app::<apps::LunabotApp>();
     }
     app.run();
 }

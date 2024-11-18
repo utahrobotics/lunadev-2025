@@ -1,19 +1,18 @@
 //! This crate provides a node that can identify apriltags
 //! in images.
 
-use std::{f64::consts::PI, fmt::Debug, num::NonZeroUsize, sync::Arc};
+use std::{f64::consts::PI, fmt::Debug};
 
 use apriltag::{families::Tag16h5, DetectorBuilder, Image, TagParams};
-use apriltag_image::{image::DynamicImage, ImageExt};
+use apriltag_image::{image::ImageBuffer, ImageExt};
 use apriltag_nalgebra::PoseExt;
 use fxhash::FxHashMap;
 use nalgebra::{Isometry3, Point3, UnitQuaternion, Vector3};
 use urobotics_core::{
-    callbacks::callee::Subscriber,
-    define_callbacks, fn_alias,
-    log::{error, warn},
-    BlockOn,
+    define_callbacks, fn_alias, log::{error, warn}, shared::SharedDataReceiver
 };
+
+pub use apriltag_image::image;
 
 define_callbacks!(DetectionCallbacks => Fn(detection: TagObservation) + Send + Sync);
 fn_alias! {
@@ -73,7 +72,7 @@ struct KnownTag {
 /// Actual detection does not occur until the node
 /// is running.
 pub struct AprilTagDetector {
-    img_subscriber: Subscriber<Arc<DynamicImage>>,
+    img_subscriber: SharedDataReceiver<ImageBuffer<image::Luma<u8>, Vec<u8>>>,
     detection_callbacks: DetectionCallbacks,
     known_tags: FxHashMap<usize, KnownTag>,
     pub focal_length_px: f64,
@@ -91,13 +90,9 @@ impl AprilTagDetector {
     ///
     /// As such, it is strongly encouraged that the subscription
     /// should not be a sum of multiple subscriptions.
-    pub fn new(focal_length_px: f64, image_width: u32, image_height: u32) -> Self {
+    pub fn new(focal_length_px: f64, image_width: u32, image_height: u32, img_subscriber: SharedDataReceiver<ImageBuffer<image::Luma<u8>, Vec<u8>>>) -> Self {
         Self {
-            img_subscriber: Subscriber::new(
-                std::thread::available_parallelism()
-                    .map(NonZeroUsize::get)
-                    .unwrap_or(16),
-            ),
+            img_subscriber,
             detection_callbacks: DetectionCallbacks::default(),
             known_tags: Default::default(),
             focal_length_px,
@@ -146,10 +141,7 @@ impl AprilTagDetector {
             .unwrap();
 
         loop {
-            let Some(img) = self.img_subscriber.recv().block_on() else {
-                break;
-            };
-            let img = img.to_luma8();
+            let img = self.img_subscriber.get();
             if img.width() != self.image_width || img.height() != self.image_height {
                 error!(
                     "Received incorrectly sized image: {}x{}",
