@@ -3,8 +3,8 @@ use std::{marker::PhantomData, sync::Arc};
 use wgpu::{ShaderModule, SubmissionIndex};
 
 use crate::{
-    buffers::{GpuBufferSet, GpuBufferTuple},
-    tuple::StaticIndexable,
+    buffers::{storage::StorageBuffer, uniform::UniformBuffer, GpuBufferSet, GpuBufferTuple},
+    tuple::StaticIndexable, types::GpuType,
 };
 
 /// A list (tuple) of [`GpuBufferTuple`].
@@ -76,6 +76,26 @@ impl<B, S> BufferGroupBinding<B, S> {
         S: IndexGpuBufferTupleList<GRP_IDX, BIND_IDX, Binding = Self>,
     {
         S::get()
+    }
+}
+
+impl<T: GpuType, S> BufferGroupBinding<UniformBuffer<T>, S> {
+    pub const fn unchecked_cast<U: GpuType>(self) -> BufferGroupBinding<UniformBuffer<U>, S> {
+        BufferGroupBinding {
+            group_index: self.group_index,
+            binding_index: self.binding_index,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<T: GpuType, HM, SM, S> BufferGroupBinding<StorageBuffer<T, HM, SM>, S> {
+    pub const fn unchecked_cast<U: GpuType>(self) -> BufferGroupBinding<StorageBuffer<U, HM, SM>, S> {
+        BufferGroupBinding {
+            group_index: self.group_index,
+            binding_index: self.binding_index,
+            phantom: PhantomData,
+        }
     }
 }
 
