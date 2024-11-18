@@ -69,6 +69,7 @@ impl DepthProjectorBuilder {
             focal_length_px: self.focal_length_px,
             principal_point_px: self.principal_point_px.into(),
             pixel_count: NonZeroU32::new(pixel_count).unwrap(),
+            half_pixel_count: NonZeroU32::new(pixel_count / 2).unwrap(),
         }
         .compile();
 
@@ -82,7 +83,7 @@ impl DepthProjectorBuilder {
             image_size: self.image_size,
             pipeline,
             bind_grp: Some(GpuBufferSet::from((
-                StorageBuffer::new_dyn(pixel_count as usize).unwrap(),
+                StorageBuffer::new_dyn(pixel_count as usize / 2).unwrap(),
                 UniformBuffer::new(),
                 UniformBuffer::new(),
             ))),
@@ -132,8 +133,6 @@ impl DepthProjector {
         mut points_storage: PointCloudStorage,
         depth_scale: f32
     ) -> PointCloudStorage {
-        let depths = bytemuck::cast_slice(depths);
-        todo!("Fix the shader code to bitmask u32");
         debug_assert_eq!(self.image_size, points_storage.image_size);
         let depth_grp = self.bind_grp.take().unwrap();
 
@@ -141,7 +140,7 @@ impl DepthProjector {
 
         self.pipeline
             .new_pass(|mut lock| {
-                bind_grps.0.write::<0, _>(depths, &mut lock);
+                bind_grps.0.write::<0, _>(bytemuck::cast_slice(depths), &mut lock);
                 bind_grps.0.write::<1, _>(camera_transform, &mut lock);
                 bind_grps.0.write::<2, _>(&depth_scale, &mut lock);
                 bind_grps

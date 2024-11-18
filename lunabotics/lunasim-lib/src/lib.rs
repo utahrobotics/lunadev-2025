@@ -211,7 +211,7 @@ impl Lunasim {
             .map(|d| {
                 (randfn(d as f64, (d as f64).powi(2) * self.depth_deviation).abs() as f32
                     / DEPTH_SCALE)
-                    .round() as u32
+                    .round() as u16
             })
             .collect();
 
