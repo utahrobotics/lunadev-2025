@@ -22,9 +22,11 @@ pub use clustering::Clusterer;
 
 /// 1. Depths
 /// 2. Transform
+/// 3. Depth Scale
 type DepthBindGrp = (
     StorageBuffer<[u32], HostWriteOnly, ShaderReadOnly>,
     UniformBuffer<AlignedMatrix4<f32>>,
+    UniformBuffer<f32>,
 );
 
 /// Points used by depth2pcl and pcl2height
@@ -53,7 +55,6 @@ pub struct DepthProjectorBuilder {
     pub image_size: Vector2<NonZeroU32>,
     pub focal_length_px: f32,
     pub principal_point_px: Vector2<f32>,
-    pub depth_scale: f32,
 }
 
 impl DepthProjectorBuilder {
@@ -63,10 +64,10 @@ impl DepthProjectorBuilder {
             depths: BufferGroupBinding::<_, AlphaBindGroups>::get::<0, 0>(),
             points: BufferGroupBinding::<_, AlphaBindGroups>::get::<1, 0>(),
             transform: BufferGroupBinding::<_, AlphaBindGroups>::get::<0, 1>(),
+            depth_scale: BufferGroupBinding::<_, AlphaBindGroups>::get::<0, 2>(),
             image_width: self.image_size.x,
             focal_length_px: self.focal_length_px,
             principal_point_px: self.principal_point_px.into(),
-            depth_scale: self.depth_scale,
             pixel_count: NonZeroU32::new(pixel_count).unwrap(),
         }
         .compile();
@@ -82,6 +83,7 @@ impl DepthProjectorBuilder {
             pipeline,
             bind_grp: Some(GpuBufferSet::from((
                 StorageBuffer::new_dyn(pixel_count as usize).unwrap(),
+                UniformBuffer::new(),
                 UniformBuffer::new(),
             ))),
         }
@@ -125,10 +127,13 @@ pub struct DepthProjector {
 impl DepthProjector {
     pub fn project(
         &mut self,
-        depths: &[u32],
+        depths: &[u16],
         camera_transform: &AlignedMatrix4<f32>,
         mut points_storage: PointCloudStorage,
+        depth_scale: f32
     ) -> PointCloudStorage {
+        let depths = bytemuck::cast_slice(depths);
+        todo!("Fix the shader code to bitmask u32");
         debug_assert_eq!(self.image_size, points_storage.image_size);
         let depth_grp = self.bind_grp.take().unwrap();
 
@@ -138,6 +143,7 @@ impl DepthProjector {
             .new_pass(|mut lock| {
                 bind_grps.0.write::<0, _>(depths, &mut lock);
                 bind_grps.0.write::<1, _>(camera_transform, &mut lock);
+                bind_grps.0.write::<2, _>(&depth_scale, &mut lock);
                 bind_grps
                     .1
                     .write::<1, _>(&self.image_size.x.get(), &mut lock);
@@ -148,6 +154,14 @@ impl DepthProjector {
         self.bind_grp = Some(depth_grp);
         points_storage.points_grp = points_grp;
         points_storage
+    }
+
+    pub fn get_image_size(&self) -> Vector2<NonZeroU32> {
+        self.image_size
+    }
+
+    pub fn get_pixel_count(&self) -> NonZeroU32 {
+        NonZeroU32::new(self.image_size.x.get() * self.image_size.y.get()).unwrap()
     }
 }
 

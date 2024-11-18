@@ -6,11 +6,11 @@ build_shader!(
 #[buffer(HostWriteOnly)] var<storage, read> depths: array<u32, PIXEL_COUNT>;
 #[buffer(HostReadOnly)] var<storage, read_write> points: array<vec4f, PIXEL_COUNT>;
 #[buffer(HostWriteOnly)] var<uniform> transform: mat4x4f;
+#[buffer(HostWriteOnly)] var<uniform> depth_scale: f32;
 
 const IMAGE_WIDTH: NonZeroU32 = {{image_width}};
 const FOCAL_LENGTH_PX: f32 = {{focal_length_px}};
 const PRINCIPAL_POINT_PX: vec2f = {{principal_point_px}};
-const DEPTH_SCALE: f32 = {{depth_scale}};
 const PIXEL_COUNT: NonZeroU32 = {{pixel_count}};
 
 @compute
@@ -25,7 +25,7 @@ fn main(
         return;
     }
 
-    let depth = f32(depths[i]) * DEPTH_SCALE;
+    let depth = f32(depths[i]) * depth_scale;
     let x = (f32(workgroup_id.x) - PRINCIPAL_POINT_PX.x) / FOCAL_LENGTH_PX;
     let y = (f32(workgroup_id.y) - PRINCIPAL_POINT_PX.y) / FOCAL_LENGTH_PX;
 

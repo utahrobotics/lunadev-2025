@@ -49,7 +49,7 @@ pub fn enumerate_cameras(
                 continue;
             };
             let Some(cam_info) = serial_to_chain.get_mut(serial_num) else {
-                warn!("Unexpected camera with serial number {:?}", serial_num);
+                warn!("Unexpected camera with serial number {}", serial_num);
                 continue;
             };
             let Some(CameraInfo {
@@ -58,7 +58,7 @@ pub fn enumerate_cameras(
             }) = cam_info.take()
             else {
                 warn!(
-                    "Camera with serial number {:?} already enumerated",
+                    "Camera with serial number {} already enumerated",
                     serial_num
                 );
                 continue;

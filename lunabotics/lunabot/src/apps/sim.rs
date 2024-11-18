@@ -229,7 +229,6 @@ impl Application for LunasimbotApp {
             image_size: Vector2::new(NonZeroU32::new(36).unwrap(), NonZeroU32::new(24).unwrap()),
             focal_length_px: 10.392,
             principal_point_px: Vector2::new(17.5, 11.5),
-            depth_scale: 0.01,
         };
         let mut point_cloud: Box<[_]> =
             std::iter::repeat_n(AlignedVec4::from(Vector4::default()), 36 * 24).collect();
@@ -276,7 +275,7 @@ impl Application for LunasimbotApp {
                 let Some(mut pcl_storage) = pcl_storage_channel.get_finished() else {
                     return;
                 };
-                pcl_storage = depth_projecter.project(&depths, &camera_transform, pcl_storage);
+                pcl_storage = depth_projecter.project(&depths, &camera_transform, pcl_storage, 0.01);
                 pcl_storage.read(&mut point_cloud);
                 pcl_storage_channel.set_projected(pcl_storage);
                 let msg = FromLunasimbot::PointCloud(

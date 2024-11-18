@@ -9,6 +9,7 @@ use anyhow::Context;
 use camera::enumerate_cameras;
 use common::LunabotStage;
 use crossbeam::atomic::AtomicCell;
+use depth::enumerate_depth_cameras;
 use fxhash::FxHashMap;
 use gputter::init_gputter_blocking;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
@@ -21,9 +22,8 @@ use urobotics::{
 };
 
 use crate::{
-    apps::log_teleop_messages,
-    localization::Localizer,
-    pipelines::{thalassic::spawn_thalassic_pipeline, PointCloudCallbacks},
+    apps::log_teleop_messages, localization::Localizer,
+    pipelines::thalassic::spawn_thalassic_pipeline,
 };
 
 use super::{create_packet_builder, create_robot_chain, wait_for_ctrl_c};
@@ -40,6 +40,7 @@ struct CameraInfo {
 #[derive(Serialize, Deserialize, Debug)]
 struct DepthCameraInfo {
     link_name: String,
+    observe_apriltags: bool
 }
 
 #[derive(Serialize, Deserialize)]
@@ -73,12 +74,8 @@ impl Application for LunabotApp {
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
 
-        // let camera_link = robot_chain.find_link("depth_camera_link").unwrap().clone();
-        // let (depth_map_buffer, pcl_callbacks, heightmap_callbacks) =
-        //     spawn_thalassic_pipeline(10.392, 0.01, PROJECTION_SIZE, camera_link);
-
         if let Err(e) = enumerate_cameras(
-            localizer_ref,
+            localizer_ref.clone(),
             self.cameras.into_iter().map(
                 |(
                     serial,
@@ -102,6 +99,35 @@ impl Application for LunabotApp {
             ),
         ) {
             error!("Failed to enumerate cameras: {e}");
+        }
+
+        let (heightmap_callbacks, result) = enumerate_depth_cameras(
+            localizer_ref,
+            self.depth_cameras.into_iter().map(
+                |(
+                    serial,
+                    DepthCameraInfo {
+                        link_name,
+                        observe_apriltags,
+                    },
+                )| {
+                    (
+                        serial,
+                        depth::DepthCameraInfo {
+                            k_node: robot_chain
+                                .find_link(&link_name)
+                                .context("Failed to find camera link")
+                                .unwrap()
+                                .clone(),
+                            observe_apriltags,
+                        },
+                    )
+                },
+            ),
+        );
+
+        if let Err(e) = result {
+            error!("Failed to enumerate depth cameras: {e}");
         }
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));

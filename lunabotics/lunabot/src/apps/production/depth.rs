@@ -1,318 +1,299 @@
-//! This crate provides a node that can connect to RealSense cameras and interpret
-//! depth and color images.
-#![feature(never_type, once_cell_try)]
-
 use std::{
     ffi::OsString,
+    num::NonZeroU32,
     ops::Deref,
     path::{Path, PathBuf},
-    sync::{Mutex, OnceLock},
+    sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
-use image::{ImageBuffer, Luma, Rgb};
+use anyhow::Context;
+use fxhash::FxHashMap;
+use gputter::types::{AlignedMatrix4, AlignedVec4};
+use nalgebra::{Vector2, Vector4};
+// use image::{ImageBuffer, Luma, Rgb};
 pub use realsense_rust;
 use realsense_rust::{
     config::{Config, ConfigurationError},
-    context::{Context, ContextConstructionError},
+    context::ContextConstructionError,
     device::Device,
     frame::{ColorFrame, DepthFrame, PixelKind},
     kind::{Rs2CameraInfo, Rs2Format, Rs2ProductLine, Rs2StreamKind},
     pipeline::{ActivePipeline, FrameWaitError, InactivePipeline},
 };
-use urobotics_core::{
-    define_callbacks, fn_alias,
-    log::{error, warn},
+use thalassic::DepthProjectorBuilder;
+use urobotics::log::{error, warn};
+
+use crate::{
+    localization::LocalizerRef,
+    pipelines::thalassic::{spawn_thalassic_pipeline, HeightMapCallbacksRef, PointsStorageChannel},
 };
 
-define_callbacks!(ColorCallbacks => CloneFn(color_img: ImageBuffer<Rgb<u8>, &[u8]>) + Send);
-define_callbacks!(DepthCallbacks => CloneFn(depth_img: ImageBuffer<Luma<u16>, &[u16]>) + Send);
-fn_alias! {
-    pub type ColorCallbacksRef = CallbacksRef(ImageBuffer<Rgb<u8>, &[u8]>) + Send
-}
-fn_alias! {
-    pub type DepthCallbacksRef = CallbacksRef(ImageBuffer<Luma<u16>, &[u16]>) + Send
+pub struct DepthCameraInfo {
+    pub k_node: k::Node<f64>,
+    pub observe_apriltags: bool
 }
 
-static CONTEXT: OnceLock<Mutex<Context>> = OnceLock::new();
-
-enum CameraSource {
-    Path(PathBuf),
-    Device(Device),
-}
-
-fn get_context() -> Result<&'static Mutex<Context>, ContextConstructionError> {
-    CONTEXT.get_or_try_init(|| Context::new().map(Mutex::new))
-}
-
-pub struct RealSenseCameraBuilder {
-    source: CameraSource,
-    color_img_callbacks: ColorCallbacks,
-    depth_img_callbacks: DepthCallbacks,
-    pub color_image_width: u32,
-    pub color_image_height: u32,
-    pub color_fps: usize,
-    pub depth_image_width: u32,
-    pub depth_image_height: u32,
-    pub depth_fps: usize,
-}
-
-impl RealSenseCameraBuilder {
-    /// Attempts to connect to the camera at the given `dev` path.
-    pub fn new(path: impl AsRef<Path>) -> Self {
-        Self {
-            source: CameraSource::Path(path.as_ref().to_path_buf()),
-            color_img_callbacks: ColorCallbacks::default(),
-            depth_img_callbacks: DepthCallbacks::default(),
-            color_image_width: 0,
-            color_image_height: 0,
-            color_fps: 0,
-            depth_image_width: 0,
-            depth_image_height: 0,
-            depth_fps: 0,
-        }
-    }
-
-    pub fn color_callbacks_ref(&self) -> ColorCallbacksRef {
-        self.color_img_callbacks.get_ref()
-    }
-
-    pub fn depth_callbacks_ref(&self) -> DepthCallbacksRef {
-        self.depth_img_callbacks.get_ref()
-    }
-
-    pub fn build(self) -> Result<RealSenseCamera, RealSenseBuildError> {
-        let mut context = get_context()?.lock().unwrap();
-        let device = match self.source {
-            CameraSource::Path(path) => context
-                .add_device(path)
-                .map_err(|e| RealSenseBuildError::DeviceError(e.into()))?,
-            CameraSource::Device(device) => device,
+/// Returns an iterator over all the RealSense cameras that were identified.
+pub fn enumerate_depth_cameras(
+    localizer_ref: LocalizerRef,
+    serial_to_chain: impl IntoIterator<Item = (String, DepthCameraInfo)>,
+) -> (HeightMapCallbacksRef, anyhow::Result<()>) {
+    let context =
+        match realsense_rust::context::Context::new().context("Failed to get RealSense Context") {
+            Ok(x) => x,
+            Err(e) => {
+                return (spawn_thalassic_pipeline(Box::new([])).0, Err(e).into());
+            }
         };
-        let pipeline = InactivePipeline::try_from(context.deref())
-            .map_err(|e| RealSenseBuildError::PipelineError(e.into()))?;
+    let devices = context.query_devices(Some(Rs2ProductLine::Depth).into_iter().collect());
+    let mut pcl_storage_channels = vec![];
+
+    let mut serial_to_chain: FxHashMap<String, Option<_>> = serial_to_chain
+        .into_iter()
+        .map(|(serial, chain)| (serial, Some(chain)))
+        .collect();
+
+    for device in devices {
+        let port = device.info(Rs2CameraInfo::PhysicalPort);
+        let Some(serial_cstr) = device.info(Rs2CameraInfo::SerialNumber) else {
+            if let Some(port) = port {
+                error!("Failed to get serial number for {:?}", port);
+            } else {
+                error!("Failed to get serial number and port for depth camera");
+            }
+            continue;
+        };
+        let Ok(serial) = serial_cstr.to_str() else {
+            if let Some(port) = port {
+                error!(
+                    "Failed to parse serial number {:?} for {:?}",
+                    serial_cstr, port
+                );
+            } else {
+                error!("Failed to parse serial number {:?}", serial_cstr);
+            }
+            continue;
+        };
+        let serial = serial.to_string();
+
+        let Some(cam_info) = serial_to_chain.get_mut(&serial) else {
+            warn!("Unexpected depth camera with serial number {:?}", serial);
+            continue;
+        };
+        let Some(DepthCameraInfo {
+            k_node,
+            observe_apriltags
+        }) = cam_info.take()
+        else {
+            error!(
+                "Depth Camera {} already enumerated",
+                serial
+            );
+            continue;
+        };
+
         let mut config = Config::new();
 
-        let usb_cstr = device.info(Rs2CameraInfo::UsbTypeDescriptor).unwrap();
-        let usb_val: f32 = usb_cstr.to_str().unwrap().parse().unwrap();
-        if usb_val >= 3.0 {
-            config
-                .enable_device_from_serial(device.info(Rs2CameraInfo::SerialNumber).unwrap())?
-                .disable_all_streams()?
-                .enable_stream(
-                    Rs2StreamKind::Depth,
-                    None,
-                    self.depth_image_width as usize,
-                    self.depth_image_width as usize,
-                    Rs2Format::Z16,
-                    self.depth_fps,
-                )?
-                .enable_stream(
-                    Rs2StreamKind::Color,
-                    None,
-                    self.color_image_width as usize,
-                    self.color_image_height as usize,
-                    Rs2Format::Rgb8,
-                    self.color_fps,
-                )?;
-        } else {
-            warn!("This Realsense camera is not attached to a USB 3.0 port");
-            config
-                .enable_device_from_serial(device.info(Rs2CameraInfo::SerialNumber).unwrap())?
-                .disable_all_streams()?
-                .enable_stream(
-                    Rs2StreamKind::Depth,
-                    None,
-                    self.depth_image_width as usize,
-                    self.depth_image_width as usize,
-                    Rs2Format::Z16,
-                    self.depth_fps,
-                )?;
+        let Some(usb_cstr) = device.info(Rs2CameraInfo::UsbTypeDescriptor) else {
+            error!("Failed to read USB type descriptor for depth camera {serial}");
+            continue;
+        };
+        let Ok(usb_str) = usb_cstr.to_str() else {
+            error!("USB type descriptor for depth camera {serial} is not utf-8");
+            continue;
+        };
+        let Ok(usb_val) = usb_str.parse::<f32>() else {
+            error!("USB type descriptor for depth camera {serial} is not f32");
+            continue;
+        };
+
+        if let Err(e) = config.enable_device_from_serial(serial_cstr) {
+            error!("Failed to enable depth camera {serial}: {e}");
+            continue;
         }
 
-        let pipeline = pipeline
-            .start(Some(config))
-            .map_err(|e| RealSenseBuildError::PipelineError(e.into()))?;
-        Ok(RealSenseCamera {
-            color_img_callbacks: self.color_img_callbacks,
-            depth_img_callbacks: self.depth_img_callbacks,
-            pipeline,
-        })
-    }
-}
+        if let Err(e) = config.disable_all_streams() {
+            error!("Failed to disable all streams in depth camera {serial}: {e}");
+            continue;
+        }
 
-pub enum RealSenseBuildError {
-    ConfigurationError(ConfigurationError),
-    ContextConstructionError(ContextConstructionError),
-    PipelineError(Box<dyn std::error::Error + Send + Sync>),
-    DeviceError(Box<dyn std::error::Error + Send + Sync>),
-}
+        if let Err(e) = config.enable_stream(Rs2StreamKind::Depth, None, 0, 0, Rs2Format::Z16, 0) {
+            error!("Failed to enable depth stream in depth camera {serial}: {e}");
+            continue;
+        }
 
-impl From<ConfigurationError> for RealSenseBuildError {
-    fn from(e: ConfigurationError) -> Self {
-        RealSenseBuildError::ConfigurationError(e)
-    }
-}
+        if usb_val >= 3.0 {
+            if let Err(e) =
+                config.enable_stream(Rs2StreamKind::Color, None, 0, 0, Rs2Format::Rgb8, 0)
+            {
+                error!("Failed to enable color stream in depth camera {serial}: {e}");
+            } else {
 
-impl From<ContextConstructionError> for RealSenseBuildError {
-    fn from(e: ContextConstructionError) -> Self {
-        RealSenseBuildError::ContextConstructionError(e)
-    }
-}
+            }
+        } else {
+            warn!("Depth camera {serial} is not connected to USB {usb_val}");
+        }
 
-pub struct RealSenseCamera {
-    color_img_callbacks: ColorCallbacks,
-    depth_img_callbacks: DepthCallbacks,
-    pipeline: ActivePipeline,
-}
-
-impl RealSenseCamera {
-    pub fn poll(&mut self, max_duration: Option<Duration>) -> Result<(), FrameWaitError> {
-        let frames = self.pipeline.wait(max_duration)?;
-
-        for frame in frames.frames_of_type::<ColorFrame>() {
-            let rgb_buf: Vec<_>;
-            let img = match frame.get(0, 0) {
-                Some(PixelKind::Rgb8 { .. }) => unsafe {
-                    debug_assert_eq!(frame.bits_per_pixel(), 24);
-
-                    let data: *const _ = frame.get_data();
-                    let slice =
-                        std::slice::from_raw_parts(data.cast::<u8>(), frame.get_data_size());
-
-                    ImageBuffer::<Rgb<u8>, _>::from_raw(
-                        frame.width() as u32,
-                        frame.height() as u32,
-                        slice,
-                    )
-                    .unwrap()
-                },
-                Some(PixelKind::Bgr8 { .. }) => {
-                    rgb_buf = frame
-                        .iter()
-                        .flat_map(|px| {
-                            let PixelKind::Bgr8 { r, g, b } = px else {
-                                unreachable!()
-                            };
-                            [*r, *g, *b]
-                        })
-                        .collect();
-                    ImageBuffer::<Rgb<u8>, _>::from_raw(
-                        frame.width() as u32,
-                        frame.height() as u32,
-                        rgb_buf.as_slice(),
-                    )
-                    .unwrap()
+        let pipeline = match InactivePipeline::try_from(&context) {
+            Ok(x) => x,
+            Err(e) => {
+                warn!("Failed to open pipeline for depth camera {serial}: {e}");
+                continue;
+            }
+        };
+        let mut pipeline = match pipeline.start(Some(config)) {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to start pipeline for depth camera {serial}: {e}");
+                continue;
+            }
+        };
+        let mut depth_projecter = None;
+        for stream in pipeline.profile().streams() {
+            let is_depth = match stream.format() {
+                Rs2Format::Rgb8 => false,
+                Rs2Format::Z16 => {
+                    if depth_projecter.is_some() {
+                        error!("Already handled depth stream for depth camera {serial}");
+                        continue;
+                    }
+                    true
                 }
-                Some(px) => {
-                    error!("Unexpected color pixel kind: {px:?}");
+                format => {
+                    error!("Unexpected format {format:?} for {serial}");
                     continue;
                 }
-                None => continue,
             };
-            self.color_img_callbacks.call(img);
+            let intrinsics = match stream.intrinsics() {
+                Ok(x) => x,
+                Err(e) => {
+                    if is_depth {
+                        error!("Failed to get depth intrinsics for depth camera {serial}: {e}");
+                    } else {
+                        error!("Failed to get color intrinsics for depth camera {serial}: {e}");
+                    }
+                    continue;
+                }
+            };
+            let focal_length_px;
+
+            if intrinsics.fx() != intrinsics.fy() {
+                warn!("Depth camera {serial} has unequal fx and fy");
+                focal_length_px = (intrinsics.fx() + intrinsics.fy()) / 2.0;
+            } else {
+                focal_length_px = intrinsics.fx();
+            }
+
+            if is_depth {
+                let depth_projecter_builder = DepthProjectorBuilder {
+                    image_size: Vector2::new(NonZeroU32::new(intrinsics.width() as u32).unwrap(), NonZeroU32::new(intrinsics.height() as u32).unwrap()),
+                    focal_length_px,
+                    principal_point_px: Vector2::new(intrinsics.ppx(), intrinsics.ppy()),
+                };
+                let pcl_storage = depth_projecter_builder.make_points_storage();
+                let pcl_storage_channel = Arc::new(PointsStorageChannel::new_for(&pcl_storage));
+                pcl_storage_channel.set_projected(pcl_storage);
+                pcl_storage_channels.push(pcl_storage_channel.clone());
+                depth_projecter = Some((depth_projecter_builder.build(), pcl_storage_channel));
+            }
         }
+        let Some((mut depth_projecter, pcl_storage_channel)) = depth_projecter else {
+            error!("Depth stream missing after initialization of {serial}");
+            continue;
+        };
+        let mut point_cloud: Box<[_]> =
+            std::iter::repeat_n(AlignedVec4::from(Vector4::default()), depth_projecter.get_pixel_count().get() as usize).collect();
+        
+        std::thread::spawn(move || loop {
+            let frames = match pipeline.wait(None) {
+                Ok(x) => x,
+                Err(e) => {
+                    error!("Failed to get frame from depth camera {serial}: {e}");
+                    break;
+                }
+            };
 
-        for frame in frames.frames_of_type::<DepthFrame>() {
-            let img = match frame.get(0, 0) {
-                Some(PixelKind::Z16 { .. }) => unsafe {
-                    debug_assert_eq!(frame.bits_per_pixel(), 16);
-                    debug_assert_eq!(frame.width() * frame.height() * 2, frame.get_data_size());
+            // for frame in frames.frames_of_type::<ColorFrame>() {
+            //     let rgb_buf: Vec<_>;
+            //     let img = match frame.get(0, 0) {
+            //         Some(PixelKind::Rgb8 { .. }) => unsafe {
+            //             debug_assert_eq!(frame.bits_per_pixel(), 24);
 
+            //             let data: *const _ = frame.get_data();
+            //             let slice =
+            //                 std::slice::from_raw_parts(data.cast::<u8>(), frame.get_data_size());
+
+            //             ImageBuffer::<Rgb<u8>, _>::from_raw(
+            //                 frame.width() as u32,
+            //                 frame.height() as u32,
+            //                 slice,
+            //             )
+            //             .unwrap()
+            //         },
+            //         Some(PixelKind::Bgr8 { .. }) => {
+            //             rgb_buf = frame
+            //                 .iter()
+            //                 .flat_map(|px| {
+            //                     let PixelKind::Bgr8 { r, g, b } = px else {
+            //                         unreachable!()
+            //                     };
+            //                     [*r, *g, *b]
+            //                 })
+            //                 .collect();
+            //             ImageBuffer::<Rgb<u8>, _>::from_raw(
+            //                 frame.width() as u32,
+            //                 frame.height() as u32,
+            //                 rgb_buf.as_slice(),
+            //             )
+            //             .unwrap()
+            //         }
+            //         Some(px) => {
+            //             error!("Unexpected color pixel kind: {px:?}");
+            //             continue;
+            //         }
+            //         None => continue,
+            //     };
+            //     self.color_img_callbacks.call(img);
+            // }
+
+            for frame in frames.frames_of_type::<DepthFrame>() {
+                if !matches!(frame.get(0, 0), Some(PixelKind::Z16 { .. })) {
+                    error!("Unexpected depth pixel kind: {:?}", frame.get(0, 0));
+                }
+                debug_assert_eq!(frame.bits_per_pixel(), 16);
+                debug_assert_eq!(frame.width() * frame.height() * 2, frame.get_data_size());
+                unsafe {
                     let data: *const _ = frame.get_data();
                     let slice = std::slice::from_raw_parts(
                         data.cast::<u16>(),
                         frame.width() * frame.height(),
                     );
 
-                    ImageBuffer::<Luma<u16>, _>::from_raw(
-                        frame.width() as u32,
-                        frame.height() as u32,
-                        slice,
-                    )
-                    .unwrap()
-                },
-                Some(px) => {
-                    error!("Unexpected depth pixel kind: {px:?}");
-                    continue;
+                    let Some(camera_transform) = k_node.world_transform() else {
+                        continue;
+                    };
+                    let camera_transform: AlignedMatrix4<f32> =
+                        camera_transform.to_homogeneous().cast::<f32>().into();
+                    let Some(mut pcl_storage) = pcl_storage_channel.get_finished() else {
+                        return;
+                    };
+                    let depth_scale = match frame.depth_units() {
+                        Ok(x) => x,
+                        Err(e) => {
+                            error!("Failed to get depth scale from depth camera {serial}: {e}");
+                            continue;
+                        }
+                    };
+                    pcl_storage = depth_projecter.project(slice, &camera_transform, pcl_storage, depth_scale);
+                    pcl_storage.read(&mut point_cloud);
+                    pcl_storage_channel.set_projected(pcl_storage);
                 }
-                None => continue,
-            };
-            self.depth_img_callbacks.call(img);
-        }
-
-        Ok(())
-    }
-
-    pub fn poll_until(&mut self, deadline: Instant) -> Result<(), FrameWaitError> {
-        let now = Instant::now();
-        loop {
-            if now >= deadline {
-                break Ok(());
             }
-            self.poll(Some(deadline - now))?;
-        }
+        });
     }
 
-    pub fn get_path(&self) -> PathBuf {
-        let path = self
-            .pipeline
-            .profile()
-            .device()
-            .info(Rs2CameraInfo::PhysicalPort)
-            .expect("Failed to query camera port")
-            .to_bytes();
-        #[cfg(unix)]
-        {
-            use std::os::unix::ffi::OsStrExt;
-            Path::new(std::ffi::OsStr::from_bytes(path)).to_owned()
-        }
-        #[cfg(windows)]
-        {
-            use std::os::windows::ffi::OsStringExt;
-            Path::new(&OsString::from_wide(bytemuck::cast_slice(path))).to_owned()
-        }
-    }
+    let (heightmap_callbacks,) = spawn_thalassic_pipeline(pcl_storage_channels.into_boxed_slice());
 
-    pub fn get_name(&self) -> OsString {
-        let path = self
-            .pipeline
-            .profile()
-            .device()
-            .info(Rs2CameraInfo::Name)
-            .expect("Failed to query camera name")
-            .to_bytes();
-        #[cfg(unix)]
-        {
-            use std::os::unix::ffi::OsStrExt;
-            std::ffi::OsStr::from_bytes(path).to_owned()
-        }
-        #[cfg(windows)]
-        {
-            use std::os::windows::ffi::OsStringExt;
-            OsString::from_wide(bytemuck::cast_slice(path))
-        }
-    }
-}
-
-/// Returns an iterator over all the RealSense cameras that were identified.
-pub fn discover_all_realsense(
-    product_mask: impl IntoIterator<Item = Rs2ProductLine>,
-) -> Result<impl Iterator<Item = RealSenseCameraBuilder>, RealSenseBuildError> {
-    let context = get_context()?.lock().unwrap();
-    let devices = context.query_devices(product_mask.into_iter().collect());
-
-    Ok(devices
-        .into_iter()
-        .map(move |device| RealSenseCameraBuilder {
-            source: CameraSource::Device(device),
-            color_img_callbacks: ColorCallbacks::default(),
-            depth_img_callbacks: DepthCallbacks::default(),
-            color_image_width: 0,
-            color_image_height: 0,
-            color_fps: 0,
-            depth_image_width: 0,
-            depth_image_height: 0,
-            depth_fps: 0,
-        }))
+    (heightmap_callbacks, Ok(()))
 }
