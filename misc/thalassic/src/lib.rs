@@ -69,7 +69,7 @@ impl DepthProjectorBuilder {
             focal_length_px: self.focal_length_px,
             principal_point_px: self.principal_point_px.into(),
             pixel_count: NonZeroU32::new(pixel_count).unwrap(),
-            half_pixel_count: NonZeroU32::new(pixel_count / 2).unwrap(),
+            half_pixel_count: NonZeroU32::new(pixel_count.div_ceil(2)).unwrap(),
         }
         .compile();
 
@@ -140,7 +140,9 @@ impl DepthProjector {
 
         self.pipeline
             .new_pass(|mut lock| {
-                bind_grps.0.write::<0, _>(bytemuck::cast_slice(depths), &mut lock);
+                // We have to write raw bytes because we can only cast to [u32] if the number of
+                // depth pixels is even
+                bind_grps.0.write_raw::<0>(bytemuck::cast_slice(depths), &mut lock);
                 bind_grps.0.write::<1, _>(camera_transform, &mut lock);
                 bind_grps.0.write::<2, _>(&depth_scale, &mut lock);
                 bind_grps
