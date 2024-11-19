@@ -1,3 +1,5 @@
+use std::net::{Ipv4Addr, SocketAddrV4};
+
 use axum::{
     extract::{ws::Message, WebSocketUpgrade}, routing::get, Router
 };
@@ -13,13 +15,26 @@ async fn main() {
         .route("/udp-ws", get(|ws: WebSocketUpgrade| async {
             ws.on_upgrade(|mut socket| async move {
                 let mut send_to = None;
-                let udp = match UdpSocket::bind("127.0.0.1:0").await {
-                    Ok(x) => x,
-                    Err(e) => {
-                        eprintln!("Failed to bind UDP socket: {e}");
-                        return;
-                    },
-                };
+                let mut udp = None;
+                
+                for port in 30000..=30100 {
+                    let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+                    match UdpSocket::bind(addr).await {
+                        Ok(x) => {
+                            udp = Some(x);
+                            break;
+                        }
+                        Err(e) => {
+                            if port == 30100 {
+                                eprintln!("Failed to bind UDP socket: {e}");
+                                return;
+                            }
+                        },
+                    };
+                }
+
+                let udp = udp.unwrap();
+
                 let addr = match udp.local_addr() {
                     Ok(x) => x,
                     Err(e) => {
@@ -54,12 +69,9 @@ async fn main() {
                             }
                         }
                         result = udp.recv_from(&mut buf) => {
-                            let (n, from) = match result {
-                                Ok(x) => x,
-                                Err(e) => {
-                                    eprintln!("Failed to receive UDP packet: {e}");
-                                    break;
-                                },
+                            let Ok((n, from)) = result else {
+                                // Also could be down for many trivial reasons
+                                continue;
                             };
                             send_to = Some(from);
                             if let Err(e) = socket.send(Message::Binary(buf[..n].to_vec())).await {
