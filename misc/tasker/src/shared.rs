@@ -1,23 +1,25 @@
-use std::{mem::MaybeUninit, ops::{Deref, DerefMut}, sync::Arc};
+use std::{
+    mem::MaybeUninit,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use crossbeam::queue::SegQueue;
 use parking_lot::{Condvar, Mutex};
 
-
 struct MonoQueue<T> {
     data: Mutex<Option<T>>,
-    condvar: Condvar
+    condvar: Condvar,
 }
 
 impl<T> Default for MonoQueue<T> {
     fn default() -> Self {
         Self {
             data: Mutex::new(None),
-            condvar: Condvar::new()
+            condvar: Condvar::new(),
         }
     }
 }
-
 
 impl<T> MonoQueue<T> {
     fn try_clear(&self) {
@@ -39,9 +41,7 @@ impl<T> MonoQueue<T> {
         if lock.is_none() {
             self.condvar.wait(&mut lock);
         }
-        unsafe {
-            lock.take().unwrap_unchecked()
-        }
+        unsafe { lock.take().unwrap_unchecked() }
     }
 
     fn try_get(&self) -> Option<T> {
@@ -49,7 +49,6 @@ impl<T> MonoQueue<T> {
         lock.take()
     }
 }
-
 
 struct DataInner<T> {
     data: MaybeUninit<T>,
@@ -63,7 +62,7 @@ struct DataHandleInner<T> {
 }
 
 /// A handle to a shared data object.
-/// 
+///
 /// You can add callbacks to be called when the data is updated,
 /// and create lendees to receive the data.
 #[repr(transparent)]
@@ -82,9 +81,7 @@ impl<T> DataHandle<T> {
     pub fn create_lendee(&self) -> SharedDataReceiver<T> {
         let queue: Arc<MonoQueue<Arc<DataInner<T>>>> = Default::default();
         self.inner.new_lendees.push(queue.clone());
-        SharedDataReceiver {
-            queue
-        }
+        SharedDataReceiver { queue }
     }
 }
 
@@ -106,16 +103,12 @@ impl<T> UninitOwnedData<T> {
     pub fn create_lendee(&mut self) -> SharedDataReceiver<T> {
         let queue: Arc<MonoQueue<Arc<DataInner<T>>>> = Default::default();
         self.lendees.push(queue.clone());
-        SharedDataReceiver {
-            queue
-        }
+        SharedDataReceiver { queue }
     }
 
     /// Returns a reference to the handle.
     pub fn get_data_handle(&self) -> &DataHandle<T> {
-        unsafe {
-            std::mem::transmute(&self.data_handle)
-        }
+        unsafe { std::mem::transmute(&self.data_handle) }
     }
 
     /// Initializes the data.
@@ -156,9 +149,8 @@ pub struct OwnedData<T> {
     inner: Arc<DataInner<T>>,
     callbacks: Vec<Box<dyn FnMut(&T) + Send>>,
     data_handle: Arc<DataHandleInner<T>>,
-    lendees: Vec<Arc<MonoQueue<Arc<DataInner<T>>>>>
+    lendees: Vec<Arc<MonoQueue<Arc<DataInner<T>>>>>,
 }
-
 
 impl<T> From<T> for OwnedData<T> {
     fn from(value: T) -> Self {
@@ -178,40 +170,38 @@ impl<T> From<T> for OwnedData<T> {
     }
 }
 
-
 impl<T> Deref for OwnedData<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe {
-            self.inner.data.assume_init_ref()
-        }
+        unsafe { self.inner.data.assume_init_ref() }
     }
 }
-
 
 impl<T> DerefMut for OwnedData<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe {
-            Arc::get_mut_unchecked(&mut self.inner).data.assume_init_mut()
+            Arc::get_mut_unchecked(&mut self.inner)
+                .data
+                .assume_init_mut()
         }
     }
 }
 
-
 impl<T> Drop for OwnedData<T> {
     fn drop(&mut self) {
-        unsafe { Arc::get_mut_unchecked(&mut self.inner).data.assume_init_drop() };
+        unsafe {
+            Arc::get_mut_unchecked(&mut self.inner)
+                .data
+                .assume_init_drop()
+        };
     }
 }
-
 
 impl<T> OwnedData<T> {
     /// Unwraps the data.
     pub fn unwrap(self) -> T {
-        unsafe {
-            self.inner.data.assume_init_read()
-        }
+        unsafe { self.inner.data.assume_init_read() }
     }
 
     /// Unitinializes self and returns the data.
@@ -224,12 +214,15 @@ impl<T> OwnedData<T> {
             let callbacks = &raw const (*tmp).callbacks;
             let data_handle = &raw const (*tmp).data_handle;
             let lendees = &raw const (*tmp).lendees;
-            (data, UninitOwnedData {
-                inner: inner.read(),
-                callbacks: callbacks.read(),
-                data_handle: data_handle.read(),
-                lendees: lendees.read(),
-            })
+            (
+                data,
+                UninitOwnedData {
+                    inner: inner.read(),
+                    callbacks: callbacks.read(),
+                    data_handle: data_handle.read(),
+                    lendees: lendees.read(),
+                },
+            )
         }
     }
 
@@ -242,20 +235,16 @@ impl<T> OwnedData<T> {
     pub fn create_lendee(&mut self) -> SharedDataReceiver<T> {
         let queue: Arc<MonoQueue<Arc<DataInner<T>>>> = Default::default();
         self.lendees.push(queue.clone());
-        SharedDataReceiver {
-            queue
-        }
+        SharedDataReceiver { queue }
     }
 
     /// Returns a reference to the handle.
     pub fn get_data_handle(&self) -> &DataHandle<T> {
-        unsafe {
-            std::mem::transmute(&self.data_handle)
-        }
+        unsafe { std::mem::transmute(&self.data_handle) }
     }
 
     /// Invokes callbacks and lends the data to other threads.
-    /// 
+    ///
     /// Always assumes that ownership was shared.
     pub fn pessimistic_share(mut self) -> LoanedData<T> {
         self.callbacks.reserve(self.data_handle.new_callbacks.len());
@@ -283,7 +272,7 @@ impl<T> OwnedData<T> {
             let callbacks = &raw const (*tmp).callbacks;
             let data_handle = &raw const (*tmp).data_handle;
             let lendees = &raw const (*tmp).lendees;
-    
+
             LoanedData {
                 inner: inner.read(),
                 data_handle: data_handle.read(),
@@ -294,7 +283,7 @@ impl<T> OwnedData<T> {
     }
 
     /// Invokes callbacks and lends the data to other threads.
-    /// 
+    ///
     /// If no threads were registered to receive the data, ownership is returned.
     /// Otherwise, a `LoanedData` object is returned which only allows immutable access.
     pub fn share(mut self) -> Result<Self, LoanedData<T>> {
@@ -318,7 +307,7 @@ impl<T> OwnedData<T> {
             for lendee in &self.lendees {
                 lendee.set(self.inner.clone());
             }
-    
+
             unsafe {
                 let tmp = MaybeUninit::new(self);
                 let tmp = tmp.as_ptr();
@@ -326,7 +315,7 @@ impl<T> OwnedData<T> {
                 let callbacks = &raw const (*tmp).callbacks;
                 let data_handle = &raw const (*tmp).data_handle;
                 let lendees = &raw const (*tmp).lendees;
-        
+
                 Err(LoanedData {
                     inner: inner.read(),
                     data_handle: data_handle.read(),
@@ -343,9 +332,8 @@ pub struct LoanedData<T> {
     inner: Arc<DataInner<T>>,
     data_handle: Arc<DataHandleInner<T>>,
     callbacks: Vec<Box<dyn FnMut(&T) + Send>>,
-    lendees: Vec<Arc<MonoQueue<Arc<DataInner<T>>>>>
+    lendees: Vec<Arc<MonoQueue<Arc<DataInner<T>>>>>,
 }
-
 
 impl<T> LoanedData<T> {
     /// Adds a callback to be called when [`share`] is called.
@@ -357,16 +345,12 @@ impl<T> LoanedData<T> {
     pub fn create_lendee(&mut self) -> SharedDataReceiver<T> {
         let queue: Arc<MonoQueue<Arc<DataInner<T>>>> = Default::default();
         self.lendees.push(queue.clone());
-        SharedDataReceiver {
-            queue
-        }
+        SharedDataReceiver { queue }
     }
 
     /// Returns a reference to the handle.
     pub fn get_data_handle(&self) -> &DataHandle<T> {
-        unsafe {
-            std::mem::transmute(&self.data_handle)
-        }
+        unsafe { std::mem::transmute(&self.data_handle) }
     }
 
     /// Waits for other threads to drop their ownership of the data.
@@ -389,13 +373,43 @@ impl<T> LoanedData<T> {
             let callbacks = &raw const (*tmp).callbacks;
             let data_handle = &raw const (*tmp).data_handle;
             let lendees = &raw const (*tmp).lendees;
-    
+
             OwnedData {
                 inner: inner.read(),
                 data_handle: data_handle.read(),
                 callbacks: callbacks.read(),
                 lendees: lendees.read(),
             }
+        }
+    }
+
+    /// Waits for other threads to drop their ownership of the data.
+    pub fn try_recall(self) -> Result<OwnedData<T>, Self> {
+        for lendee in &self.lendees {
+            lendee.try_clear();
+        }
+        {
+            let lock = self.inner.released_mut.lock();
+            if Arc::strong_count(&self.inner) > 1 {
+                drop(lock);
+                return Err(self);
+            }
+        }
+
+        unsafe {
+            let tmp = MaybeUninit::new(self);
+            let tmp = tmp.as_ptr();
+            let inner = &raw const (*tmp).inner;
+            let callbacks = &raw const (*tmp).callbacks;
+            let data_handle = &raw const (*tmp).data_handle;
+            let lendees = &raw const (*tmp).lendees;
+
+            Ok(OwnedData {
+                inner: inner.read(),
+                data_handle: data_handle.read(),
+                callbacks: callbacks.read(),
+                lendees: lendees.read(),
+            })
         }
     }
 
@@ -413,7 +427,7 @@ impl<T> LoanedData<T> {
                 let callbacks = &raw const (*tmp).callbacks;
                 let data_handle = &raw const (*tmp).data_handle;
                 let lendees = &raw const (*tmp).lendees;
-        
+
                 OwnedData {
                     inner: inner.read(),
                     data_handle: data_handle.read(),
@@ -437,7 +451,7 @@ impl<T> LoanedData<T> {
             let callbacks = &raw const (*tmp).callbacks;
             let data_handle = &raw const (*tmp).data_handle;
             let lendees = &raw const (*tmp).lendees;
-    
+
             OwnedData {
                 inner,
                 data_handle: data_handle.read(),
@@ -448,7 +462,7 @@ impl<T> LoanedData<T> {
     }
 
     /// Creates a new uninit object that maintains the callbacks and lendees.
-    /// 
+    ///
     /// This is different from [`OwnedData::uninit`], which reuses the heap allocation. This
     /// makes a new heap allocation.
     pub fn deinit(self) -> UninitOwnedData<T> {
@@ -463,7 +477,7 @@ impl<T> LoanedData<T> {
             let callbacks = &raw const (*tmp).callbacks;
             let data_handle = &raw const (*tmp).data_handle;
             let lendees = &raw const (*tmp).lendees;
-    
+
             UninitOwnedData {
                 inner,
                 data_handle: data_handle.read(),
@@ -484,11 +498,14 @@ impl<T> Deref for LoanedData<T> {
 
 impl<T> Drop for LoanedData<T> {
     fn drop(&mut self) {
-        let inner = std::mem::replace(&mut self.inner, Arc::new(DataInner {
-            data: MaybeUninit::uninit(),
-            released_condvar: Condvar::new(),
-            released_mut: Mutex::new(()),
-        }));
+        let inner = std::mem::replace(
+            &mut self.inner,
+            Arc::new(DataInner {
+                data: MaybeUninit::uninit(),
+                released_condvar: Condvar::new(),
+                released_mut: Mutex::new(()),
+            }),
+        );
         if let Ok(mut tmp) = Arc::try_unwrap(inner) {
             unsafe { tmp.data.assume_init_drop() };
         }
@@ -496,7 +513,7 @@ impl<T> Drop for LoanedData<T> {
 }
 
 /// Temporary shared ownership of `T`.
-/// 
+///
 /// In most cases, a thread is waiting on all `SharedData` objects to be dropped,
 /// so dropping this object as early as possible is recommended.
 pub struct SharedData<T> {
@@ -513,11 +530,14 @@ impl<T> Deref for SharedData<T> {
 
 impl<T> Drop for SharedData<T> {
     fn drop(&mut self) {
-        let inner = std::mem::replace(&mut self.inner, Arc::new(DataInner {
-            data: MaybeUninit::uninit(),
-            released_condvar: Condvar::new(),
-            released_mut: Mutex::new(()),
-        }));
+        let inner = std::mem::replace(
+            &mut self.inner,
+            Arc::new(DataInner {
+                data: MaybeUninit::uninit(),
+                released_condvar: Condvar::new(),
+                released_mut: Mutex::new(()),
+            }),
+        );
         if let Ok(mut tmp) = Arc::try_unwrap(inner) {
             unsafe { tmp.data.assume_init_drop() };
         } else if Arc::strong_count(&self.inner) == 2 {
@@ -529,25 +549,25 @@ impl<T> Drop for SharedData<T> {
 
 /// A receiver for shared data.
 pub struct SharedDataReceiver<T> {
-    queue: Arc<MonoQueue<Arc<DataInner<T>>>>
+    queue: Arc<MonoQueue<Arc<DataInner<T>>>>,
 }
 
 impl<T> SharedDataReceiver<T> {
     /// Waits until the provider shares the data.
-    /// 
+    ///
     /// If the provider has already shared the data, the data is returned immediately.
     /// If the provider provides, then recalls, before this method is called, this method will
     /// wait until the provider shares the data again.
     pub fn get(&self) -> SharedData<T> {
         SharedData {
-            inner: self.queue.get()
+            inner: self.queue.get(),
         }
     }
 
     /// Tries to get the data without waiting.
     pub fn try_get(&self) -> Option<SharedData<T>> {
         Some(SharedData {
-            inner: self.queue.try_get()?
+            inner: self.queue.try_get()?,
         })
     }
 }
@@ -563,7 +583,7 @@ impl<T> MaybeOwned<T> {
     pub fn try_unwrap(self) -> Result<T, Self> {
         match self {
             Self::Owned(owned) => Ok(owned.unwrap()),
-            Self::Loaned(loaned) => Err(Self::Loaned(loaned))
+            Self::Loaned(loaned) => Err(Self::Loaned(loaned)),
         }
     }
 
@@ -571,10 +591,10 @@ impl<T> MaybeOwned<T> {
     pub fn get_mut(&mut self) -> Option<&mut T> {
         match self {
             Self::Owned(owned) => Some(owned),
-            _ => None
+            _ => None,
         }
     }
-    
+
     /// Adds a callback to be called when [`share`] is called.
     pub fn add_callback(&mut self, callback: impl FnMut(&T) + Send + 'static) {
         match self {
@@ -598,26 +618,24 @@ impl<T> MaybeOwned<T> {
             Self::Loaned(loaned) => loaned.get_data_handle(),
         }
     }
-    
+
     /// Invokes callbacks and lends the data to other threads.
-    /// 
+    ///
     /// If no threads were registered to receive the data, ownership is returned.
     /// Otherwise, a `LoanedData` object is returned which only allows immutable access.
     pub fn share(&mut self) {
         match self {
-            Self::Owned(owned) => {
-                unsafe {
-                    let owned_owned = std::ptr::read(owned);
-                    match owned_owned.share() {
-                        Ok(x) => {
-                            std::ptr::write(owned, x);
-                        }
-                        Err(x) => {
-                            std::ptr::write(self, Self::Loaned(x));
-                        }
+            Self::Owned(owned) => unsafe {
+                let owned_owned = std::ptr::read(owned);
+                match owned_owned.share() {
+                    Ok(x) => {
+                        std::ptr::write(owned, x);
+                    }
+                    Err(x) => {
+                        std::ptr::write(self, Self::Loaned(x));
                     }
                 }
-            }
+            },
             Self::Loaned(_) => {}
         }
     }
@@ -628,14 +646,12 @@ impl<T> MaybeOwned<T> {
         match self {
             Self::Owned(owned) => {
                 *owned.deref_mut() = new_data;
-            },
-            Self::Loaned(loaned) => {
-                unsafe {
-                    let owned_loaded = std::ptr::read(loaned);
-                    let owned = owned_loaded.replace(new_data);
-                    std::ptr::write(self, Self::Owned(owned));
-                }
             }
+            Self::Loaned(loaned) => unsafe {
+                let owned_loaded = std::ptr::read(loaned);
+                let owned = owned_loaded.replace(new_data);
+                std::ptr::write(self, Self::Owned(owned));
+            },
         }
     }
 
@@ -643,13 +659,11 @@ impl<T> MaybeOwned<T> {
     pub fn recall(&mut self) {
         match self {
             Self::Owned(_) => {}
-            Self::Loaned(loaned) => {
-                unsafe {
-                    let owned_loaded = std::ptr::read(loaned);
-                    let owned = owned_loaded.recall();
-                    std::ptr::write(self, Self::Owned(owned));
-                }
-            }
+            Self::Loaned(loaned) => unsafe {
+                let owned_loaded = std::ptr::read(loaned);
+                let owned = owned_loaded.recall();
+                std::ptr::write(self, Self::Owned(owned));
+            },
         }
     }
 }
@@ -665,13 +679,11 @@ impl<T> Deref for MaybeOwned<T> {
     }
 }
 
-
 impl<T> From<T> for MaybeOwned<T> {
     fn from(value: T) -> Self {
         Self::Owned(value.into())
     }
 }
-
 
 impl<T> From<OwnedData<T>> for MaybeOwned<T> {
     fn from(value: OwnedData<T>) -> Self {
@@ -685,12 +697,11 @@ impl<T> From<LoanedData<T>> for MaybeOwned<T> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::MaybeOwned;
-    use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
+    use std::sync::Arc;
 
     #[test]
     fn test01() {

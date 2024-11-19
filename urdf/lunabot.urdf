@@ -28,6 +28,18 @@
     </visual>
   </link>
 
+  <!-- Camera link -->
+  <link name="front_camera">
+    <visual>
+      <geometry>
+        <cylinder length="0.1" radius="0.05"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0 0 0 1"/>
+      </material>
+    </visual>
+  </link>
+
   <!-- Joint connecting base_link and camera_link -->
   <joint name="camera_joint" type="fixed">
     <parent link="base_link"/>

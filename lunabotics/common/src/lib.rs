@@ -155,10 +155,7 @@ mod tests {
 
     #[test]
     fn equality02() {
-        assert_eq!(
-            Steering::new(1.0, 1.0),
-            Steering::new(-1.0, -1.0)
-        );
+        assert_eq!(Steering::new(1.0, 1.0), Steering::new(-1.0, -1.0));
     }
 
     #[test]

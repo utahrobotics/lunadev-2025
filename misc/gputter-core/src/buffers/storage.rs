@@ -178,7 +178,10 @@ where
     T: GpuType + ?Sized,
     SM: ShaderStorageBufferMode,
 {
-    type PostSubmission<'a> = () where Self: 'a;
+    type PostSubmission<'a>
+        = ()
+    where
+        Self: 'a;
     type Data = T;
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -214,7 +217,10 @@ where
     T: GpuType + ?Sized,
     SM: ShaderStorageBufferMode,
 {
-    type PostSubmission<'a> = () where Self: 'a;
+    type PostSubmission<'a>
+        = ()
+    where
+        Self: 'a;
     type Data = T;
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -274,7 +280,10 @@ impl<T> GpuBuffer for StorageBuffer<T, HostReadOnly, ShaderReadWrite>
 where
     T: GpuType + ?Sized,
 {
-    type PostSubmission<'a> = wgpu::BufferSlice<'a> where Self: 'a;
+    type PostSubmission<'a>
+        = wgpu::BufferSlice<'a>
+    where
+        Self: 'a;
     type Data = T;
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -302,7 +311,10 @@ impl<T> GpuBuffer for StorageBuffer<T, HostReadWrite, ShaderReadWrite>
 where
     T: GpuType + ?Sized,
 {
-    type PostSubmission<'a> = wgpu::BufferSlice<'a> where Self: 'a;
+    type PostSubmission<'a>
+        = wgpu::BufferSlice<'a>
+    where
+        Self: 'a;
     type Data = T;
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -349,7 +361,7 @@ where
                 .get_mapped_range(),
         );
     }
-    pub fn copy_into(&self, other: &mut impl WritableGpuBuffer, lock: &mut GpuWriteLock) {
+    pub fn copy_into_unchecked(&self, other: &mut impl WritableGpuBuffer, lock: &mut GpuWriteLock) {
         lock.encoder.copy_buffer_to_buffer(
             &self.buffer,
             0,
@@ -362,7 +374,7 @@ where
 
 impl<T, HM, SM> StorageBuffer<T, HM, SM>
 where
-    T: GpuType,
+    T: GpuType<Size = StaticSize<T>>,
 {
     pub fn cast<U: GpuType<Size = StaticSize<U>>>(self) -> StorageBuffer<U, HM, SM> {
         const {
@@ -373,6 +385,28 @@ where
         StorageBuffer {
             buffer: self.buffer,
             size: StaticSize::new(),
+            phantom: PhantomData,
+            read_buffer: self.read_buffer,
+        }
+    }
+}
+
+impl<T, HM, SM> StorageBuffer<T, HM, SM>
+where
+    T: GpuType<Size = DynamicSize<T>>,
+{
+    pub fn cast_dyn<U: GpuType<Size = DynamicSize<U>>>(self) -> StorageBuffer<U, HM, SM> {
+        const {
+            if size_of::<T>() != size_of::<U>() {
+                panic!("Attempted to cast between types of different sizes");
+            }
+            if align_of::<T>() != align_of::<U>() {
+                panic!("Attempted to cast between types of different alignments");
+            }
+        }
+        StorageBuffer {
+            buffer: self.buffer,
+            size: DynamicSize::new(self.size.0),
             phantom: PhantomData,
             read_buffer: self.read_buffer,
         }

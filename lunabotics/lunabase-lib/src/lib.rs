@@ -125,19 +125,19 @@ impl INode for LunabotConn {
                         FromLunabot::Ping(stage) => {
                             match stage {
                                 LunabotStage::TeleOp => {
-                                    self.base_mut().emit_signal("entered_manual".into(), &[])
+                                    self.base_mut().emit_signal("entered_manual", &[])
                                 }
                                 LunabotStage::SoftStop => {
-                                    self.base_mut().emit_signal("entered_soft_stop".into(), &[])
+                                    self.base_mut().emit_signal("entered_soft_stop", &[])
                                 }
                                 LunabotStage::TraverseObstacles => self
                                     .base_mut()
-                                    .emit_signal("entered_traverse_obstacles".into(), &[]),
+                                    .emit_signal("entered_traverse_obstacles", &[]),
                                 LunabotStage::Dig => {
-                                    self.base_mut().emit_signal("entered_dig".into(), &[])
+                                    self.base_mut().emit_signal("entered_dig", &[])
                                 }
                                 LunabotStage::Dump => {
-                                    self.base_mut().emit_signal("entered_dump".into(), &[])
+                                    self.base_mut().emit_signal("entered_dump", &[])
                                 }
                             };
                             inner = self.inner.as_mut().unwrap();
@@ -244,8 +244,7 @@ impl INode for LunabotConn {
             }
 
             if received {
-                self.base_mut()
-                    .emit_signal("something_received".into(), &[]);
+                self.base_mut().emit_signal("something_received", &[]);
             }
         }
     }

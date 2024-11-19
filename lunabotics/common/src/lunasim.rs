@@ -11,7 +11,7 @@ pub enum FromLunasim {
         axis: [f32; 3],
         angle: f32,
     },
-    DepthMap(Box<[u32]>),
+    DepthMap(Box<[u16]>),
     ExplicitApriltag {
         robot_axis: [f32; 3],
         robot_angle: f32,

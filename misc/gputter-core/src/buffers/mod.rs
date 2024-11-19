@@ -26,13 +26,20 @@ pub struct GpuWriteLock<'a> {
 }
 
 pub trait WritableGpuBuffer: GpuBuffer {
-    fn write(
+    fn write_internal(
         &mut self,
         data: &Self::Data,
+        lock: &mut GpuWriteLock,
+        staging_belt: &mut StagingBelt,
+    ) {
+        self.write_raw(data.to_bytes(), lock, staging_belt);
+    }
+    fn write_raw(
+        &mut self,
+        bytes: &[u8],
         GpuWriteLock { encoder, device }: &mut GpuWriteLock,
         staging_belt: &mut StagingBelt,
     ) {
-        let bytes = data.to_bytes();
         let bytes = &bytes[0..self.get_buffer().size().try_into().unwrap()];
         staging_belt
             .write_buffer(
@@ -101,6 +108,7 @@ pub struct GpuBufferSet<S: GpuBufferTuple> {
 pub trait WriteableGpuBufferInSet<const I: usize> {
     type Data: ?Sized;
     fn write_to(&mut self, data: &Self::Data, lock: &mut GpuWriteLock);
+    fn write_raw_to(&mut self, data: &[u8], lock: &mut GpuWriteLock);
 }
 
 macro_rules! set_impl {
@@ -146,7 +154,11 @@ macro_rules! write_impl {
             type Data = $selected::Data;
 
             fn write_to(&mut self, data: &Self::Data, lock: &mut GpuWriteLock) {
-                self.buffers.$index.write(data, lock, &mut self.staging_belt);
+                self.buffers.$index.write_internal(data, lock, &mut self.staging_belt);
+            }
+
+            fn write_raw_to(&mut self, data: &[u8], lock: &mut GpuWriteLock) {
+                self.buffers.$index.write_raw(data, lock, &mut self.staging_belt);
             }
         }
     }
@@ -159,6 +171,12 @@ impl<S: GpuBufferTuple> GpuBufferSet<S> {
         Self: WriteableGpuBufferInSet<I, Data = T>,
     {
         self.write_to(data, lock);
+    }
+    pub fn write_raw<const I: usize>(&mut self, data: &[u8], lock: &mut GpuWriteLock)
+    where
+        Self: WriteableGpuBufferInSet<I>,
+    {
+        self.write_raw_to(data, lock);
     }
     pub(crate) fn set_into_compute_pass<'a>(
         &'a self,

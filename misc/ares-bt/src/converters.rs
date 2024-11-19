@@ -7,13 +7,13 @@ use crate::{
 
 pub struct InfallibleShim<A>(pub A);
 
-impl<A, B, T> Behavior<B, T> for InfallibleShim<A>
+impl<A, B> Behavior<B> for InfallibleShim<A>
 where
-    A: InfallibleBehavior<B, T>,
+    A: InfallibleBehavior<B>,
 {
-    fn run(&mut self, blackboard: &mut B) -> Status<T> {
+    fn run(&mut self, blackboard: &mut B) -> Status {
         match self.0.run_infallible(blackboard) {
-            InfallibleStatus::Running(t) => Status::Running(t),
+            InfallibleStatus::Running => Status::Running,
             InfallibleStatus::Success => Status::Success,
         }
     }
@@ -46,13 +46,13 @@ where
 
 pub struct FallibleShim<A>(pub A);
 
-impl<A, B, T> Behavior<B, T> for FallibleShim<A>
+impl<A, B> Behavior<B> for FallibleShim<A>
 where
-    A: FallibleBehavior<B, T>,
+    A: FallibleBehavior<B>,
 {
-    fn run(&mut self, blackboard: &mut B) -> Status<T> {
+    fn run(&mut self, blackboard: &mut B) -> Status {
         match self.0.run_fallible(blackboard) {
-            FallibleStatus::Running(t) => Status::Running(t),
+            FallibleStatus::Running => Status::Running,
             FallibleStatus::Failure => Status::Failure,
         }
     }
@@ -85,12 +85,12 @@ where
 
 pub struct EternalShim<A>(pub A);
 
-impl<A, B, T> Behavior<B, T> for EternalShim<A>
+impl<A, B> Behavior<B> for EternalShim<A>
 where
-    A: EternalBehavior<B, T>,
+    A: EternalBehavior<B>,
 {
-    fn run(&mut self, blackboard: &mut B) -> Status<T> {
-        Status::Running(self.0.run_eternal(blackboard).unwrap())
+    fn run(&mut self, blackboard: &mut B) -> Status {
+        self.0.run_eternal(blackboard).into()
     }
 }
 
@@ -118,15 +118,15 @@ where
 
 pub struct Invert<A>(pub A);
 
-impl<A, B, T> Behavior<B, T> for Invert<A>
+impl<A, B> Behavior<B> for Invert<A>
 where
-    A: Behavior<B, T>,
+    A: Behavior<B>,
 {
-    fn run(&mut self, blackboard: &mut B) -> Status<T> {
+    fn run(&mut self, blackboard: &mut B) -> Status {
         match self.0.run(blackboard) {
             Status::Failure => Status::Success,
             Status::Success => Status::Failure,
-            Status::Running(t) => Status::Running(t),
+            Status::Running => Status::Running,
         }
     }
 }
@@ -153,46 +153,46 @@ where
     }
 }
 
-impl<A, B, T> InfallibleBehavior<B, T> for Invert<A>
+impl<A, B> InfallibleBehavior<B> for Invert<A>
 where
-    A: FallibleBehavior<B, T>,
+    A: FallibleBehavior<B>,
 {
-    fn run_infallible(&mut self, blackboard: &mut B) -> InfallibleStatus<T> {
+    fn run_infallible(&mut self, blackboard: &mut B) -> InfallibleStatus {
         match self.0.run_fallible(blackboard) {
-            FallibleStatus::Running(t) => InfallibleStatus::Running(t),
+            FallibleStatus::Running => InfallibleStatus::Running,
             FallibleStatus::Failure => InfallibleStatus::Success,
         }
     }
 }
 
-impl<A, B, T> FallibleBehavior<B, T> for Invert<A>
+impl<A, B> FallibleBehavior<B> for Invert<A>
 where
-    A: InfallibleBehavior<B, T>,
+    A: InfallibleBehavior<B>,
 {
-    fn run_fallible(&mut self, blackboard: &mut B) -> FallibleStatus<T> {
+    fn run_fallible(&mut self, blackboard: &mut B) -> FallibleStatus {
         match self.0.run_infallible(blackboard) {
-            InfallibleStatus::Running(t) => FallibleStatus::Running(t),
+            InfallibleStatus::Running => FallibleStatus::Running,
             InfallibleStatus::Success => FallibleStatus::Failure,
         }
     }
 }
 
-impl<A, B, T> EternalBehavior<B, T> for Invert<A>
+impl<A, B> EternalBehavior<B> for Invert<A>
 where
-    A: EternalBehavior<B, T>,
+    A: EternalBehavior<B>,
 {
-    fn run_eternal(&mut self, blackboard: &mut B) -> EternalStatus<T> {
+    fn run_eternal(&mut self, blackboard: &mut B) -> EternalStatus {
         self.0.run_eternal(blackboard)
     }
 }
 
 pub struct CatchPanic<A>(pub A);
 
-impl<A, B, T> Behavior<B, T> for CatchPanic<A>
+impl<A, B> Behavior<B> for CatchPanic<A>
 where
-    A: Behavior<B, T>,
+    A: Behavior<B>,
 {
-    fn run(&mut self, blackboard: &mut B) -> Status<T> {
+    fn run(&mut self, blackboard: &mut B) -> Status {
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.0.run(blackboard))) {
             Ok(status) => status,
             Err(_) => Status::Failure,
@@ -209,11 +209,11 @@ where
     }
 }
 
-impl<A, B, T> FallibleBehavior<B, T> for CatchPanic<A>
+impl<A, B> FallibleBehavior<B> for CatchPanic<A>
 where
-    A: FallibleBehavior<B, T>,
+    A: FallibleBehavior<B>,
 {
-    fn run_fallible(&mut self, blackboard: &mut B) -> FallibleStatus<T> {
+    fn run_fallible(&mut self, blackboard: &mut B) -> FallibleStatus {
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             self.0.run_fallible(blackboard)
         })) {

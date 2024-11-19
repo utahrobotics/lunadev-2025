@@ -17,15 +17,15 @@ use std::{
 };
 
 use crossbeam::queue::SegQueue;
+pub use log;
 pub use parking_lot;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 pub use tokio;
 use tokio::{runtime::Handle, sync::Notify};
-pub use log;
 
 pub mod callbacks;
-pub mod task;
 pub mod shared;
+pub mod task;
 
 #[derive(Clone, Copy)]
 pub struct TokioRuntimeConfig {
@@ -316,15 +316,17 @@ pub fn detach_drop_guard() -> Option<RuntimeDropGuard> {
 
 #[macro_export]
 macro_rules! duration_warning {
-    ($inner: block within $duration: expr) => {
-        {
-            let start = std::time::Instant::now();
-            let result = $inner;
-            let duration = start.elapsed();
-            if duration > Duration::from_secs(1) {
-                $crate::log::warn!("{} took {:.1} seconds", stringify!($inner), duration.as_secs_f32());
-            }
-            result
+    ($inner: block within $duration: expr) => {{
+        let start = std::time::Instant::now();
+        let result = $inner;
+        let duration = start.elapsed();
+        if duration > Duration::from_secs(1) {
+            $crate::log::warn!(
+                "{} took {:.1} seconds",
+                stringify!($inner),
+                duration.as_secs_f32()
+            );
         }
-    };
+        result
+    }};
 }

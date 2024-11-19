@@ -48,7 +48,7 @@ rand = { version = "0.8", features = ["small_rng"] }
 futures = "0.3.30"
 serde-big-array = "0.5"
 rand_distr = "0.4"
-bytemuck = { version = "1", features = ["derive"] }
+bytemuck = { version = "1", features = ["derive", "extern_crate_alloc"] }
 log = { version = "0.4", features = ["std"] }
 # eigenvalues = { git = "https://github.com/Masterchef365/eigenvalues.git" }
 ffmpeg-sidecar = "1.0"
@@ -76,7 +76,7 @@ urobotics-video = { path = "urobotics/urobotics-video" }
 urobotics = { path = "urobotics/urobotics" }
 urobotics-camera = { path = "urobotics/urobotics-camera" }
 urobotics-py = { path = "urobotics/urobotics-py" }
-# urobotics-realsense = { path = "urobotics/urobotics-realsense" }
+urobotics-apriltag = { path = "urobotics/urobotics-apriltag" }
 tasker = { path = "misc/tasker" }
 cakap2 = { path = "misc/cakap2" }
 lunabase-lib = { path = "lunabotics/lunabase-lib" }

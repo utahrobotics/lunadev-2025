@@ -1,11 +1,34 @@
 #![feature(iterator_try_collect)]
-use std::{collections::HashMap, net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4}, path::PathBuf, process::ExitCode, sync::{atomic::{AtomicBool, Ordering}, Arc}, time::Duration};
+use std::{
+    collections::HashMap,
+    net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4},
+    path::PathBuf,
+    process::ExitCode,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
-use axum::{body::Body, extract::{ws::Message, ConnectInfo, Path, WebSocketUpgrade}, response::{Html, Response}, routing::{get, post}, Router};
+use axum::{
+    body::Body,
+    extract::{ws::Message, ConnectInfo, Path, WebSocketUpgrade},
+    response::{Html, Response},
+    routing::{get, post},
+    Router,
+};
 use crossbeam::queue::SegQueue;
 use fxhash::{FxBuildHasher, FxHashSet};
 use serde::Deserialize;
-use tokio::{fs::File, io::AsyncWriteExt, net::UdpSocket, process::Command, sync::{Notify, RwLock}, time::Instant};
+use tokio::{
+    fs::File,
+    io::AsyncWriteExt,
+    net::UdpSocket,
+    process::Command,
+    sync::{Notify, RwLock},
+    time::Instant,
+};
 
 #[derive(Deserialize)]
 struct Config {
@@ -14,21 +37,21 @@ struct Config {
     #[serde(default = "default_max_duration")]
     max_duration: Duration,
     #[serde(default = "default_go2rtc_path")]
-    go2rtc_path: PathBuf
+    go2rtc_path: PathBuf,
 }
 
 const fn default_max_duration() -> Duration {
     Duration::from_secs(300)
 }
 
-fn default_go2rtc_path() -> PathBuf{
+fn default_go2rtc_path() -> PathBuf {
     PathBuf::from("go2rtc")
 }
 
 #[derive(Deserialize)]
 struct RobotConfig {
     name: String,
-    addr: SocketAddrV4
+    addr: SocketAddrV4,
 }
 
 struct RobotInstance {
@@ -37,18 +60,22 @@ struct RobotInstance {
 }
 
 struct OnDrop<F: FnOnce()> {
-    f: Option<F>
+    f: Option<F>,
 }
 
-impl<F> From<F> for OnDrop<F> where F: FnOnce() {
+impl<F> From<F> for OnDrop<F>
+where
+    F: FnOnce(),
+{
     fn from(f: F) -> Self {
-        Self {
-            f: Some(f)
-        }
+        Self { f: Some(f) }
     }
 }
 
-impl<F> Drop for OnDrop<F> where F: FnOnce() {
+impl<F> Drop for OnDrop<F>
+where
+    F: FnOnce(),
+{
     fn drop(&mut self) {
         (self.f.take().unwrap())();
     }
@@ -62,15 +89,19 @@ async fn main() -> ExitCode {
     }
     let config = std::fs::read_to_string("mouser-config.toml").unwrap();
     let config: Config = toml::from_str(&config).unwrap();
-    let mut robot_conns = HashMap::with_capacity_and_hasher(config.robots.len(), FxBuildHasher::default());
+    let mut robot_conns =
+        HashMap::with_capacity_and_hasher(config.robots.len(), FxBuildHasher::default());
 
     for RobotConfig { name, addr } in config.robots {
         let socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
         socket.connect(addr).await.unwrap();
-        robot_conns.insert(name, RobotInstance {
-            socket,
-            reserved: AtomicBool::new(false),
-        });
+        robot_conns.insert(
+            name,
+            RobotInstance {
+                socket,
+                reserved: AtomicBool::new(false),
+            },
+        );
     }
 
     let wait_queue: &SegQueue<Arc<Notify>> = Box::leak(Box::new(SegQueue::new()));
@@ -98,7 +129,7 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         };
-        
+
         match File::options().append(true).open("address_log.txt").await {
             Ok(x) => x,
             Err(e) => {
@@ -128,169 +159,222 @@ async fn main() -> ExitCode {
     };
     let child = match Command::new(canonicalized)
         .current_dir("mouser/mouser-host")
-        .spawn() {
-            Ok(x) => x,
-            Err(e) => {
-                eprintln!("Error starting go2rtc: {}", e);
-                return ExitCode::FAILURE;
-            }
-        };
-        
+        .spawn()
+    {
+        Ok(x) => x,
+        Err(e) => {
+            eprintln!("Error starting go2rtc: {}", e);
+            return ExitCode::FAILURE;
+        }
+    };
+
     tokio::spawn(async move {
         let result = child.wait_with_output().await;
         eprintln!("go2rtc exited with: {:#?}", result);
     });
 
     let app = Router::new()
-        .route("/log_ip", post(move |ConnectInfo(addr): ConnectInfo<SocketAddr>| async move {
-            let ip = addr.ip();
-            if ip == IpAddr::V4(Ipv4Addr::LOCALHOST) || ip == IpAddr::V4(Ipv4Addr::LOCALHOST) {
-                return Response::builder()
-                    .header("Content-Type", "application/json")
-                    .body(Body::from("{}"))
-                    .unwrap();
-            }
-            let mut new_ip = {
-                !addresses.read().await.0.contains(&ip)
-            };
-            if new_ip {
-                let mut writer = addresses.write().await;
-                new_ip = writer.0.insert(ip);
-                if new_ip {
-                    if let Err(e) = writer.1.write_all(ip.to_string().as_bytes()).await {
-                        eprintln!("Error writing to address log file: {}", e);
-                    } else {
-                        let _ = writer.1.flush().await;
+        .route(
+            "/log_ip",
+            post(
+                move |ConnectInfo(addr): ConnectInfo<SocketAddr>| async move {
+                    let ip = addr.ip();
+                    if ip == IpAddr::V4(Ipv4Addr::LOCALHOST)
+                        || ip == IpAddr::V4(Ipv4Addr::LOCALHOST)
+                    {
+                        return Response::builder()
+                            .header("Content-Type", "application/json")
+                            .body(Body::from("{}"))
+                            .unwrap();
                     }
-                }
-            }
-            Response::builder()
-                .header("Content-Type", "application/json")
-                .body(Body::from("{}"))
-                .unwrap()
-        }))
-        .route("/ws/", get(move |ws: WebSocketUpgrade,| async move {
-            ws.on_upgrade(move |mut ws| async move {
-                let (name, instance) = 'main: loop {
-                    for (name, instance) in robot_conns {
-                        let was_reserved = instance.reserved.swap(true, Ordering::Relaxed);
-                        if !was_reserved {
-                            break 'main (name, instance);
+                    let mut new_ip = { !addresses.read().await.0.contains(&ip) };
+                    if new_ip {
+                        let mut writer = addresses.write().await;
+                        new_ip = writer.0.insert(ip);
+                        if new_ip {
+                            if let Err(e) = writer.1.write_all(ip.to_string().as_bytes()).await {
+                                eprintln!("Error writing to address log file: {}", e);
+                            } else {
+                                let _ = writer.1.flush().await;
+                            }
                         }
                     }
-                    if let Err(e) = ws.send("Queued".into()).await {
+                    Response::builder()
+                        .header("Content-Type", "application/json")
+                        .body(Body::from("{}"))
+                        .unwrap()
+                },
+            ),
+        )
+        .route(
+            "/ws/",
+            get(move |ws: WebSocketUpgrade| async move {
+                ws.on_upgrade(move |mut ws| async move {
+                    let (name, instance) = 'main: loop {
+                        for (name, instance) in robot_conns {
+                            let was_reserved = instance.reserved.swap(true, Ordering::Relaxed);
+                            if !was_reserved {
+                                break 'main (name, instance);
+                            }
+                        }
+                        if let Err(e) = ws.send("Queued".into()).await {
+                            eprintln!("Error sending message: {}", e);
+                            return;
+                        }
+                        let notify = Arc::new(Notify::new());
+                        let notified = notify.notified();
+                        wait_queue.push(notify.clone());
+                        notified.await;
+                    };
+                    let socket = &instance.socket;
+                    let _on_drop = OnDrop::from(|| {
+                        instance.reserved.store(false, Ordering::Relaxed);
+                        if let Some(waiting) = wait_queue.pop() {
+                            waiting.notify_one();
+                        }
+                    });
+                    if let Err(e) = ws.send(name.as_str().into()).await {
                         eprintln!("Error sending message: {}", e);
                         return;
                     }
-                    let notify = Arc::new(Notify::new());
-                    let notified = notify.notified();
-                    wait_queue.push(notify.clone());
-                    notified.await;
-                };
-                let socket = &instance.socket;
-                let _on_drop = OnDrop::from(|| {
-                    instance.reserved.store(false, Ordering::Relaxed);
-                    if let Some(waiting) = wait_queue.pop() {
-                        waiting.notify_one();
-                    }
-                });
-                if let Err(e) = ws.send(name.as_str().into()).await {
-                    eprintln!("Error sending message: {}", e);
-                    return;
-                }
-                let mut deadline = Instant::now() + config.max_duration;
-                loop {
-                    let result = tokio::select! {
-                        option = ws.recv() => {
-                            let Some(result) = option else { break; };
-                            result
-                        },
-                        _ = tokio::time::sleep_until(deadline) => {
-                            if let Some(waiting) = wait_queue.pop() {
-                                std::mem::forget(_on_drop);
-                                instance.reserved.store(false, Ordering::Relaxed);
-                                waiting.notify_one();
-                                break;
+                    let mut deadline = Instant::now() + config.max_duration;
+                    loop {
+                        let result = tokio::select! {
+                            option = ws.recv() => {
+                                let Some(result) = option else { break; };
+                                result
+                            },
+                            _ = tokio::time::sleep_until(deadline) => {
+                                if let Some(waiting) = wait_queue.pop() {
+                                    std::mem::forget(_on_drop);
+                                    instance.reserved.store(false, Ordering::Relaxed);
+                                    waiting.notify_one();
+                                    break;
+                                }
+                                deadline += config.max_duration;
+                                continue;
                             }
-                            deadline += config.max_duration;
-                            continue;
-                        }
-                    };
-                    let msg = match result {
-                        Ok(x) => x,
-                        Err(e) => {
-                            eprintln!("Error receiving message: {}", e);
-                            continue;
-                        }
-                    };
-                    match msg {
-                        Message::Text(text) => {
-                            match text.as_str() {
+                        };
+                        let msg = match result {
+                            Ok(x) => x,
+                            Err(e) => {
+                                eprintln!("Error receiving message: {}", e);
+                                continue;
+                            }
+                        };
+                        match msg {
+                            Message::Text(text) => match text.as_str() {
                                 "W" | "A" | "S" | "D" => {
                                     if let Err(e) = socket.send(text.as_bytes()).await {
-                                        eprintln!("Error sending message to {}: {}", socket.peer_addr().unwrap(), e);
+                                        eprintln!(
+                                            "Error sending message to {}: {}",
+                                            socket.peer_addr().unwrap(),
+                                            e
+                                        );
                                     }
                                 }
                                 _ => {
                                     eprintln!("Ignoring unknown message: {}", text);
                                 }
+                            },
+                            Message::Binary(_) => {
+                                eprintln!("Ignoring binary message");
                             }
+                            _ => {}
                         }
-                        Message::Binary(_) => {
-                            eprintln!("Ignoring binary message");
-                        }
-                        _ => {}
                     }
-                }
-            })
-        }))
-        .route("/", get(|| async {
-            Html(include_str!("../../mouser-web/build/index.html"))
-        }))
-        .route("/favicon.png", get(|| async {
-            let bytes: &[u8] = include_bytes!("../../mouser-web/build/favicon.png");
-            Response::builder()
-                .header("Content-Type", "image/png")
-                .body(Body::from(bytes))
-                .unwrap()
-        }))
-        .route("/_app/version.json", get(|| async {
-            Response::builder()
-                .header("Content-Type", "application/json")
-                .body(Body::from(include_str!("../../mouser-web/build/_app/version.json")))
-                .unwrap()
-        }))
-        .route("/_app/immutable/chunks/:path", get(|Path(path): Path<String>| async move {
-            let bytes = tokio::fs::read(format!("mouser/mouser-web/build/_app/immutable/chunks/{path}")).await.unwrap();
-            Response::builder()
-                .header("Content-Type", "application/javascript")
-                .body(Body::from(bytes))
-                .unwrap()
-        }))
-        .route("/_app/immutable/nodes/:path", get(|Path(path): Path<String>| async move {
-            let bytes = tokio::fs::read(format!("mouser/mouser-web/build/_app/immutable/nodes/{path}")).await.unwrap();
-            Response::builder()
-                .header("Content-Type", "application/javascript")
-                .body(Body::from(bytes))
-                .unwrap()
-        }))
-        .route("/_app/immutable/assets/:path", get(|Path(path): Path<String>| async move {
-            let bytes = tokio::fs::read(format!("mouser/mouser-web/build/_app/immutable/assets/{path}")).await.unwrap();
-            Response::builder()
-                // CSS
-                .header("Content-Type", "text/css")
-                .body(Body::from(bytes))
-                .unwrap()
-        }))
-        .route("/_app/immutable/entry/:path", get(|Path(path): Path<String>| async move {
-            let bytes = tokio::fs::read(format!("mouser/mouser-web/build/_app/immutable/entry/{path}")).await.unwrap();
-            Response::builder()
-                .header("Content-Type", "application/javascript")
-                .body(Body::from(bytes))
-                .unwrap()
-        }));
+                })
+            }),
+        )
+        .route(
+            "/",
+            get(|| async { Html(include_str!("../../mouser-web/build/index.html")) }),
+        )
+        .route(
+            "/favicon.png",
+            get(|| async {
+                let bytes: &[u8] = include_bytes!("../../mouser-web/build/favicon.png");
+                Response::builder()
+                    .header("Content-Type", "image/png")
+                    .body(Body::from(bytes))
+                    .unwrap()
+            }),
+        )
+        .route(
+            "/_app/version.json",
+            get(|| async {
+                Response::builder()
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(include_str!(
+                        "../../mouser-web/build/_app/version.json"
+                    )))
+                    .unwrap()
+            }),
+        )
+        .route(
+            "/_app/immutable/chunks/:path",
+            get(|Path(path): Path<String>| async move {
+                let bytes = tokio::fs::read(format!(
+                    "mouser/mouser-web/build/_app/immutable/chunks/{path}"
+                ))
+                .await
+                .unwrap();
+                Response::builder()
+                    .header("Content-Type", "application/javascript")
+                    .body(Body::from(bytes))
+                    .unwrap()
+            }),
+        )
+        .route(
+            "/_app/immutable/nodes/:path",
+            get(|Path(path): Path<String>| async move {
+                let bytes = tokio::fs::read(format!(
+                    "mouser/mouser-web/build/_app/immutable/nodes/{path}"
+                ))
+                .await
+                .unwrap();
+                Response::builder()
+                    .header("Content-Type", "application/javascript")
+                    .body(Body::from(bytes))
+                    .unwrap()
+            }),
+        )
+        .route(
+            "/_app/immutable/assets/:path",
+            get(|Path(path): Path<String>| async move {
+                let bytes = tokio::fs::read(format!(
+                    "mouser/mouser-web/build/_app/immutable/assets/{path}"
+                ))
+                .await
+                .unwrap();
+                Response::builder()
+                    // CSS
+                    .header("Content-Type", "text/css")
+                    .body(Body::from(bytes))
+                    .unwrap()
+            }),
+        )
+        .route(
+            "/_app/immutable/entry/:path",
+            get(|Path(path): Path<String>| async move {
+                let bytes = tokio::fs::read(format!(
+                    "mouser/mouser-web/build/_app/immutable/entry/{path}"
+                ))
+                .await
+                .unwrap();
+                Response::builder()
+                    .header("Content-Type", "application/javascript")
+                    .body(Body::from(bytes))
+                    .unwrap()
+            }),
+        );
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:80").await.unwrap();
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .unwrap();
     unreachable!()
 }

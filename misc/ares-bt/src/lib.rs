@@ -6,40 +6,40 @@ pub mod converters;
 pub mod looping;
 pub mod sequence;
 
-#[derive(Clone, Copy, Debug)]
-pub enum Status<T> {
-    Running(T),
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Status {
+    Running,
     Success,
     Failure,
 }
 
-impl<T> Status<T> {
-    pub const fn is_ok(&self) -> bool {
+impl Status {
+    pub const fn is_ok(self) -> bool {
         match self {
-            Self::Running(_) => false,
+            Self::Running => false,
             Self::Success => true,
             Self::Failure => false,
         }
     }
 
-    pub const fn is_err(&self) -> bool {
+    pub const fn is_err(self) -> bool {
         match self {
-            Self::Running(_) => false,
+            Self::Running => false,
             Self::Success => false,
             Self::Failure => true,
         }
     }
 
-    pub const fn is_running(&self) -> bool {
+    pub const fn is_running(self) -> bool {
         match self {
-            Self::Running(_) => true,
+            Self::Running => true,
             Self::Success => false,
             Self::Failure => false,
         }
     }
 }
 
-impl<T> From<bool> for Status<T> {
+impl From<bool> for Status {
     fn from(value: bool) -> Self {
         if value {
             Status::Success
@@ -49,123 +49,108 @@ impl<T> From<bool> for Status<T> {
     }
 }
 
-pub enum FallibleStatus<T> {
-    Running(T),
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FallibleStatus {
+    Running,
     Failure,
 }
 
-impl<T> FallibleStatus<T> {
-    pub const fn is_ok(&self) -> bool {
+impl FallibleStatus {
+    pub const fn is_ok(self) -> bool {
         match self {
-            Self::Running(_) => false,
+            Self::Running => false,
             Self::Failure => false,
         }
     }
 
-    pub const fn is_err(&self) -> bool {
+    pub const fn is_err(self) -> bool {
         match self {
-            Self::Running(_) => false,
+            Self::Running => false,
             Self::Failure => true,
         }
     }
 
-    pub const fn is_running(&self) -> bool {
+    pub const fn is_running(self) -> bool {
         match self {
-            Self::Running(_) => true,
+            Self::Running => true,
             Self::Failure => false,
         }
     }
 }
 
-pub enum InfallibleStatus<T> {
-    Running(T),
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InfallibleStatus {
+    Running,
     Success,
 }
 
-impl<T> InfallibleStatus<T> {
-    pub const fn is_ok(&self) -> bool {
+impl InfallibleStatus {
+    pub const fn is_ok(self) -> bool {
         match self {
-            Self::Running(_) => false,
+            Self::Running => false,
             Self::Success => true,
         }
     }
 
-    pub const fn is_err(&self) -> bool {
+    pub const fn is_err(self) -> bool {
         match self {
-            Self::Running(_) => false,
+            Self::Running => false,
             Self::Success => false,
         }
     }
 
-    pub const fn is_running(&self) -> bool {
+    pub const fn is_running(self) -> bool {
         match self {
-            Self::Running(_) => true,
+            Self::Running => true,
             Self::Success => false,
         }
     }
 }
 
-#[derive(Debug)]
-pub enum EternalStatus<T> {
-    Running(T),
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum EternalStatus {
+    #[default]
+    Running,
 }
 
-impl<T: Default> Default for EternalStatus<T> {
-    fn default() -> Self {
-        EternalStatus::Running(T::default())
-    }
-}
-
-impl<T> EternalStatus<T> {
-    pub const fn is_ok(&self) -> bool {
+impl EternalStatus {
+    pub const fn is_ok(self) -> bool {
         match self {
-            Self::Running(_) => false,
+            Self::Running => false,
         }
     }
 
-    pub const fn is_err(&self) -> bool {
+    pub const fn is_err(self) -> bool {
         match self {
-            Self::Running(_) => false,
+            Self::Running => false,
         }
     }
 
-    pub const fn is_running(&self) -> bool {
+    pub const fn is_running(self) -> bool {
         match self {
-            Self::Running(_) => true,
+            Self::Running => true,
         }
-    }
-
-    pub fn unwrap(self) -> T {
-        match self {
-            Self::Running(t) => t,
-        }
-    }
-}
-
-impl<T> From<T> for EternalStatus<T> {
-    fn from(value: T) -> Self {
-        EternalStatus::Running(value)
     }
 }
 
 /// A behavior that runs until it fails or succeeds.
-pub trait Behavior<B, T> {
-    fn run(&mut self, blackboard: &mut B) -> Status<T>;
+pub trait Behavior<B> {
+    fn run(&mut self, blackboard: &mut B) -> Status;
 }
 
 /// A behavior that runs until it succeeds.
-pub trait InfallibleBehavior<B, T> {
-    fn run_infallible(&mut self, blackboard: &mut B) -> InfallibleStatus<T>;
+pub trait InfallibleBehavior<B> {
+    fn run_infallible(&mut self, blackboard: &mut B) -> InfallibleStatus;
 }
 
 /// A behavior that runs until it fails.
-pub trait FallibleBehavior<B, T> {
-    fn run_fallible(&mut self, blackboard: &mut B) -> FallibleStatus<T>;
+pub trait FallibleBehavior<B> {
+    fn run_fallible(&mut self, blackboard: &mut B) -> FallibleStatus;
 }
 
 /// A behavior that runs forever.
-pub trait EternalBehavior<B, T> {
-    fn run_eternal(&mut self, blackboard: &mut B) -> EternalStatus<T>;
+pub trait EternalBehavior<B> {
+    fn run_eternal(&mut self, blackboard: &mut B) -> EternalStatus;
 }
 
 pub trait IntoRon {
@@ -175,28 +160,28 @@ pub trait CancelSafe {
     fn reset(&mut self);
 }
 
-impl<T> From<InfallibleStatus<T>> for Status<T> {
-    fn from(value: InfallibleStatus<T>) -> Self {
+impl From<InfallibleStatus> for Status {
+    fn from(value: InfallibleStatus) -> Self {
         match value {
-            InfallibleStatus::Running(t) => Status::Running(t),
+            InfallibleStatus::Running => Status::Running,
             InfallibleStatus::Success => Status::Success,
         }
     }
 }
 
-impl<T> From<FallibleStatus<T>> for Status<T> {
-    fn from(value: FallibleStatus<T>) -> Self {
+impl From<FallibleStatus> for Status {
+    fn from(value: FallibleStatus) -> Self {
         match value {
-            FallibleStatus::Running(t) => Status::Running(t),
+            FallibleStatus::Running => Status::Running,
             FallibleStatus::Failure => Status::Failure,
         }
     }
 }
 
-impl<T> From<EternalStatus<T>> for Status<T> {
-    fn from(value: EternalStatus<T>) -> Self {
+impl From<EternalStatus> for Status {
+    fn from(value: EternalStatus) -> Self {
         match value {
-            EternalStatus::Running(t) => Status::Running(t),
+            EternalStatus::Running => Status::Running,
         }
     }
 }
@@ -214,7 +199,7 @@ mod tests {
             |sum: &mut usize| (*sum < 10).into(),
             |sum: &mut usize| {
                 *sum += 1;
-                InfallibleStatus::<()>::Success
+                InfallibleStatus::Success
             },
         )
         .run_infallible(&mut sum)

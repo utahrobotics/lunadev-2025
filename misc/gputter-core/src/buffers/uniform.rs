@@ -15,7 +15,10 @@ pub struct UniformBuffer<T: GpuType + ?Sized> {
 }
 
 impl<T: GpuType + ?Sized> GpuBuffer for UniformBuffer<T> {
-    type PostSubmission<'a> = () where Self: 'a;
+    type PostSubmission<'a>
+        = ()
+    where
+        Self: 'a;
     type Data = T;
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
