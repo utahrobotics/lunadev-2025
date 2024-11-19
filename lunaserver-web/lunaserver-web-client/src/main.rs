@@ -1,6 +1,6 @@
 use futures_util::{SinkExt, TryStreamExt};
 use reqwest::Client;
-use reqwest_websocket::{Message, RequestBuilderExt};
+use reqwest_websocket::{CloseCode, Message, RequestBuilderExt};
 use tokio::net::UdpSocket;
 
 #[tokio::main]
@@ -40,8 +40,16 @@ async fn main() {
                 }
             }
             result = udp.recv(&mut buf) => {
-                let n = result.expect("Failed to receive UDP packet");
+                let Ok(n) = result else {
+                    // Also many reasons that this would fail
+                    continue;
+                };
                 websocket.send(Message::Binary(buf[..n].to_vec())).await.expect("Failed to send UDP packet to lunaserver");
+            }
+            result = tokio::signal::ctrl_c() => {
+                result.expect("Failed to listen for ctrl-c");
+                let _ = websocket.close(CloseCode::Normal, None).await;
+                break;
             }
         }
     }
