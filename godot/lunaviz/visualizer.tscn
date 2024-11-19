@@ -1,4 +1,4 @@
-[gd_scene load_steps=39 format=3 uid="uid://uh5c3q1118f8"]
+[gd_scene load_steps=41 format=3 uid="uid://uh5c3q1118f8"]
 
 [ext_resource type="Script" path="res://MapManager.gd" id="1_6vued"]
 [ext_resource type="FontFile" uid="uid://bwxjme6yvwr2i" path="res://kenvector_future.ttf" id="2_mns2s"]
@@ -337,6 +337,16 @@ border_width_top = 3
 border_width_right = 3
 border_width_bottom = 3
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bny6r"]
+bg_color = Color(0.572014, 0.87469, 0.326562, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(1, 1, 1, 1)
+
+[sub_resource type="ImageTexture" id="ImageTexture_8encv"]
+
 [node name="visualizer" type="Node2D"]
 script = ExtResource("1_6vued")
 
@@ -431,9 +441,35 @@ size_flags_vertical = 3
 layout_mode = 2
 text = "test"
 
-[node name="Map Texture" type="TextureRect" parent="CanvasLayer/VizHBox"]
+[node name="ImagePanel" type="Panel" parent="CanvasLayer/VizHBox"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_bny6r")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CanvasLayer/VizHBox/ImagePanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 9.0
+offset_top = 8.0
+offset_right = -11.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Label" type="Label" parent="CanvasLayer/VizHBox/ImagePanel/VBoxContainer"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("2_mns2s")
+theme_override_font_sizes/font_size = 30
+text = "[NAME] Map"
+horizontal_alignment = 1
+
+[node name="Map Texture" type="TextureRect" parent="CanvasLayer/VizHBox/ImagePanel/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+texture = SubResource("ImageTexture_8encv")
 
 [node name="Send Button" type="Button" parent="CanvasLayer/VizHBox"]
 layout_mode = 2
