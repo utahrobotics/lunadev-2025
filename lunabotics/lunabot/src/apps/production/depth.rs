@@ -11,7 +11,6 @@ use anyhow::Context;
 use fxhash::FxHashMap;
 use gputter::types::{AlignedMatrix4, AlignedVec4};
 use nalgebra::{Vector2, Vector4};
-// use image::{ImageBuffer, Luma, Rgb};
 pub use realsense_rust;
 use realsense_rust::{
     config::{Config, ConfigurationError},
@@ -22,7 +21,8 @@ use realsense_rust::{
     pipeline::{ActivePipeline, FrameWaitError, InactivePipeline},
 };
 use thalassic::DepthProjectorBuilder;
-use urobotics::log::{error, warn};
+use urobotics::{log::{error, warn}, shared::OwnedData};
+use urobotics_apriltag::{image::{ImageBuffer, Luma, Rgb}, AprilTagDetector};
 
 use crate::{
     localization::LocalizerRef,
@@ -123,13 +123,14 @@ pub fn enumerate_depth_cameras(
             continue;
         }
 
+        let mut expecting_color = false;
         if usb_val >= 3.0 {
             if let Err(e) =
                 config.enable_stream(Rs2StreamKind::Color, None, 0, 0, Rs2Format::Rgb8, 0)
             {
                 error!("Failed to enable color stream in depth camera {serial}: {e}");
             } else {
-
+                expecting_color = true;
             }
         } else {
             warn!("Depth camera {serial} is not connected to USB {usb_val}");
@@ -150,6 +151,8 @@ pub fn enumerate_depth_cameras(
             }
         };
         let mut depth_projecter = None;
+        let mut shared_luma_img = None;
+
         for stream in pipeline.profile().streams() {
             let is_depth = match stream.format() {
                 Rs2Format::Rgb8 => false,
@@ -176,16 +179,16 @@ pub fn enumerate_depth_cameras(
                     continue;
                 }
             };
-            let focal_length_px;
-
-            if intrinsics.fx() != intrinsics.fy() {
-                warn!("Depth camera {serial} has unequal fx and fy");
-                focal_length_px = (intrinsics.fx() + intrinsics.fy()) / 2.0;
-            } else {
-                focal_length_px = intrinsics.fx();
-            }
 
             if is_depth {
+                let focal_length_px;
+    
+                if intrinsics.fx() != intrinsics.fy() {
+                    warn!("Depth camera {serial} has unequal fx and fy");
+                    focal_length_px = (intrinsics.fx() + intrinsics.fy()) / 2.0;
+                } else {
+                    focal_length_px = intrinsics.fx();
+                }
                 let depth_projecter_builder = DepthProjectorBuilder {
                     image_size: Vector2::new(NonZeroU32::new(intrinsics.width() as u32).unwrap(), NonZeroU32::new(intrinsics.height() as u32).unwrap()),
                     focal_length_px,
@@ -196,6 +199,29 @@ pub fn enumerate_depth_cameras(
                 pcl_storage_channel.set_projected(pcl_storage);
                 pcl_storage_channels.push(pcl_storage_channel.clone());
                 depth_projecter = Some((depth_projecter_builder.build(), pcl_storage_channel));
+            } else if !expecting_color {
+                error!("Received color stream for depth camera {serial} even though it was not expected");
+            } else {
+                if shared_luma_img.is_some() {
+                    error!("Already handled color stream for depth camera {serial}");
+                    continue;
+                }
+                let mut img_shared = OwnedData::from(
+                    ImageBuffer::<Luma<u8>, _>::from_raw(
+                        intrinsics.width() as u32,
+                        intrinsics.height() as u32,
+                        vec![0u8; intrinsics.width() as usize * intrinsics.height() as usize],
+                    ).unwrap()
+                );
+                let det = AprilTagDetector::new(
+                    intrinsics.fx() as f64,
+                    intrinsics.fy() as f64,
+                    intrinsics.width() as u32,
+                    intrinsics.height() as u32,
+                    img_shared.create_lendee(),
+                );
+                std::thread::spawn(move || det.run());
+                shared_luma_img = Some(img_shared.pessimistic_share());
             }
         }
         let Some((mut depth_projecter, pcl_storage_channel)) = depth_projecter else {
@@ -214,48 +240,48 @@ pub fn enumerate_depth_cameras(
                 }
             };
 
-            // for frame in frames.frames_of_type::<ColorFrame>() {
-            //     let rgb_buf: Vec<_>;
-            //     let img = match frame.get(0, 0) {
-            //         Some(PixelKind::Rgb8 { .. }) => unsafe {
-            //             debug_assert_eq!(frame.bits_per_pixel(), 24);
+            if let Some(mut luma_img) = shared_luma_img {
+                for frame in frames.frames_of_type::<ColorFrame>() {
+                    if !matches!(frame.get(0, 0), Some(PixelKind::Rgb8 { .. })) {
+                        error!("Unexpected color pixel kind: {:?}", frame.get(0, 0));
+                    }
+                    debug_assert_eq!(frame.bits_per_pixel(), 24);
+                    debug_assert_eq!(frame.width() * frame.height() * 3, frame.get_data_size());
+                    let bytes = unsafe {
+                        let data: *const _ = frame.get_data();
+                        std::slice::from_raw_parts(data.cast::<u8>(), frame.get_data_size())
+                    };
+    
+                    match luma_img.try_recall() {
+                        Ok(mut owned_img) => {
+                            let (img, uninit) = owned_img.uninit();
+                            let mut buffer = img.into_raw();
+                            buffer.clear();
+                            buffer.extend(
+                                bytes.array_chunks::<3>().map(|[r, g, b]| {
+                                    let r = *r as u16;
+                                    let g = *g as u16;
+                                    let b = *b as u16;
+                                    ((r + g + b) / 3) as u8
+                                }),
+                            );
+                            owned_img = uninit.init(ImageBuffer::from_raw(frame.width() as u32, frame.height() as u32, buffer).unwrap());
+                            luma_img = owned_img.pessimistic_share();
+                        }
+                        Err(x) => {
+                            luma_img = x;
+                        }
+                    }
 
-            //             let data: *const _ = frame.get_data();
-            //             let slice =
-            //                 std::slice::from_raw_parts(data.cast::<u8>(), frame.get_data_size());
-
-            //             ImageBuffer::<Rgb<u8>, _>::from_raw(
-            //                 frame.width() as u32,
-            //                 frame.height() as u32,
-            //                 slice,
-            //             )
-            //             .unwrap()
-            //         },
-            //         Some(PixelKind::Bgr8 { .. }) => {
-            //             rgb_buf = frame
-            //                 .iter()
-            //                 .flat_map(|px| {
-            //                     let PixelKind::Bgr8 { r, g, b } = px else {
-            //                         unreachable!()
-            //                     };
-            //                     [*r, *g, *b]
-            //                 })
-            //                 .collect();
-            //             ImageBuffer::<Rgb<u8>, _>::from_raw(
-            //                 frame.width() as u32,
-            //                 frame.height() as u32,
-            //                 rgb_buf.as_slice(),
-            //             )
-            //             .unwrap()
-            //         }
-            //         Some(px) => {
-            //             error!("Unexpected color pixel kind: {px:?}");
-            //             continue;
-            //         }
-            //         None => continue,
-            //     };
-            //     self.color_img_callbacks.call(img);
-            // }
+                    // ImageBuffer::<Rgb<u8>, _>::from_raw(
+                    //     frame.width() as u32,
+                    //     frame.height() as u32,
+                    //     slice,
+                    // )
+                    // .unwrap()
+                }
+                shared_luma_img = Some(luma_img);
+            }
 
             for frame in frames.frames_of_type::<DepthFrame>() {
                 if !matches!(frame.get(0, 0), Some(PixelKind::Z16 { .. })) {

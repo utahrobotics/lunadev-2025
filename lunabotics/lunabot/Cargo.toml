@@ -21,7 +21,7 @@ nalgebra = { workspace = true }
 rayon = { workspace = true }
 k = { workspace = true }
 fxhash = { workspace = true }
-recycler = { workspace = true }
+# recycler = { workspace = true }
 bitcode = { workspace = true }
 thalassic.workspace = true
 gputter.workspace = true

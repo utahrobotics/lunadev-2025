@@ -85,6 +85,7 @@ thiserror = "1.0.64"
 recycler = { path = "misc/recycler" }
 gputter = { path = "misc/gputter" }
 thalassic = { path = "misc/thalassic" }
+axum = { version = "0.7.7", features = ["ws"] }
 
 [profile.dev.package.lunabot]
 opt-level = 3

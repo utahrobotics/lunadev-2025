@@ -77,7 +77,8 @@ pub struct AprilTagDetector {
     img_subscriber: SharedDataReceiver<ImageBuffer<image::Luma<u8>, Vec<u8>>>,
     detection_callbacks: DetectionCallbacks,
     known_tags: FxHashMap<usize, KnownTag>,
-    pub focal_length_px: f64,
+    pub focal_length_x_px: f64,
+    pub focal_length_y_px: f64,
     pub image_width: u32,
     pub image_height: u32,
 }
@@ -93,7 +94,8 @@ impl AprilTagDetector {
     /// As such, it is strongly encouraged that the subscription
     /// should not be a sum of multiple subscriptions.
     pub fn new(
-        focal_length_px: f64,
+        focal_length_x_px: f64,
+        focal_length_y_px: f64,
         image_width: u32,
         image_height: u32,
         img_subscriber: SharedDataReceiver<ImageBuffer<image::Luma<u8>, Vec<u8>>>,
@@ -102,7 +104,8 @@ impl AprilTagDetector {
             img_subscriber,
             detection_callbacks: DetectionCallbacks::default(),
             known_tags: Default::default(),
-            focal_length_px,
+            focal_length_x_px,
+            focal_length_y_px,
             image_width,
             image_height,
         }
@@ -126,8 +129,8 @@ impl AprilTagDetector {
                 pose: Isometry3::from_parts(tag_position.into(), tag_orientation),
                 tag_params: TagParams {
                     tagsize: tag_width,
-                    fx: self.focal_length_px,
-                    fy: self.focal_length_px,
+                    fx: self.focal_length_x_px,
+                    fy: self.focal_length_y_px,
                     cx: self.image_width as f64 / 2.0,
                     cy: self.image_height as f64 / 2.0,
                 },

@@ -15,7 +15,8 @@ use crate::localization::LocalizerRef;
 
 pub struct CameraInfo {
     pub k_node: k::Node<f64>,
-    pub focal_length_px: f64,
+    pub focal_length_x_px: f64,
+    pub focal_length_y_px: f64,
 }
 
 pub fn enumerate_cameras(
@@ -54,7 +55,8 @@ pub fn enumerate_cameras(
             };
             let Some(CameraInfo {
                 k_node,
-                focal_length_px,
+                focal_length_x_px,
+                focal_length_y_px
             }) = cam_info.take()
             else {
                 warn!(
@@ -86,7 +88,8 @@ pub fn enumerate_cameras(
             ));
             let mut image = image.pessimistic_share();
             let det = AprilTagDetector::new(
-                focal_length_px,
+                focal_length_x_px,
+                focal_length_y_px,
                 format.width,
                 format.height,
                 image.create_lendee(),
@@ -99,7 +102,7 @@ pub fn enumerate_cameras(
                     local_transform * observation.get_isometry_of_observer(),
                 );
             });
-            det.run();
+            std::thread::spawn(move || det.run());
 
             std::thread::spawn(move || {
                 let mut stream = MmapStream::with_buffers(&mut camera, Type::VideoCapture, 4)

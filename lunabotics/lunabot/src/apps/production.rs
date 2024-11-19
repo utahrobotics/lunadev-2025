@@ -14,7 +14,6 @@ use fxhash::FxHashMap;
 use gputter::init_gputter_blocking;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{UnitVector3, Vector2, Vector4};
-use recycler::Recycler;
 use serde::{Deserialize, Serialize};
 use urobotics::{
     app::Application, callbacks::caller::CallbacksStorage, get_tokio_handle, log::error, tokio,
@@ -34,7 +33,8 @@ mod depth;
 #[derive(Serialize, Deserialize, Debug)]
 struct CameraInfo {
     link_name: String,
-    focal_length_px: f64,
+    focal_length_x_px: f64,
+    focal_length_y_px: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -81,7 +81,8 @@ impl Application for LunabotApp {
                     serial,
                     CameraInfo {
                         link_name,
-                        focal_length_px,
+                        focal_length_x_px,
+                        focal_length_y_px,
                     },
                 )| {
                     (
@@ -92,7 +93,8 @@ impl Application for LunabotApp {
                                 .context("Failed to find camera link")
                                 .unwrap()
                                 .clone(),
-                            focal_length_px,
+                            focal_length_x_px,
+                            focal_length_y_px
                         },
                     )
                 },
