@@ -1,11 +1,6 @@
 # lunadev-2025
 
-This is the official workspace for the software team for Utah Student Robotics for the NASA Lunabotics 2024 competition.  
-If you are a student (ie. not an active contributor) you will find more value on the [wiki](https://github.com/utahrobotics/lunadev-2024/wiki) page.
-
-## Note
-
-Lunaserver is currently down, so the following instructions will not work. When it is eventually brought back online, these instructions will work without modification.
+This is the official workspace for the software team for Utah Student Robotics for the NASA Lunabotics 2025 competition.
 
 ## Quickstart
 
@@ -14,9 +9,9 @@ You will need Visual Studio Code (We'll call it VSCode). Any other IDE that can 
 Lunaserver is the computer that will run on the robot on competition day, but until then is just a computer that is on 24/7.
 It will be connected to all the sensors we will use, and maybe a microcontroller for you to test stuff on. You will use a technique called SSH to connect to Lunaserver. There is a dedicated extension in VScode for this that you should use. [Here is a guide](https://code.visualstudio.com/docs/remote/ssh#_connect-to-a-remote-host).
 
-The address is `5.tcp.ngrok.io` and the port is `22735`. The SSH Fingerprint is `SHA256:/XYiztKXqFHny36RCsustFw5qByHRmgKy0ONRsAbWHY`. When you connect to Lunaserver for the first time, VSCode will show you the fingerprint it received from what it thinks is Lunaserver. You should verify that this fingerprint is the same as that one. If they are different, disconnect and double check that you have written the address and port correctly. If they are correct, then it is likely that someone is trying to [piggy back](https://en.wikipedia.org/wiki/Man-in-the-middle_attack) off of your SSH connection for whatever reason. The chances of that happening is very low, but still worth checking. After the first connection, you will not need to verify the SSH fingerprint anymore as VSCode will check it for you. Very rarely, you may face a warning that the SSH fingerprint check has failed, which usually means that someone is once again trying to use your SSH connection. Simply let me know, and don't worry as your computer is not compromised.
+The address is [`lunaserver.coe.utah.edu`](http://lunaserver.coe.utah.edu) and the port is the default port: `22`. The SSH Fingerprint is `SHA256:QfSo3cslqdKEtn9XAo5X/LMQ1AiNdazxJQLCqiynL9g`. When you connect to Lunaserver for the first time, VSCode will show you the fingerprint it received from what it thinks is Lunaserver. You should verify that this fingerprint is the same as that one. Read about the significance of the fingerprint [here](https://superuser.com/a/422008).
 
-Before connecting for your first time, provide me with your preferred username and password for me to set up an account on Lunaserver for you. There is a guest account, username is `usr`. This account does not have any access outside of its home directory so you shouldn't use it to do your work.
+Before connecting for your first time, provide me with your preferred username and password for me to set up an account on Lunaserver for you.
 
 *By connecting to Lunaserver, you are agreeing to the terms and conditions. [Refer to the wiki for the terms and conditions](https://github.com/utahrobotics/lunadev-2024/wiki/Terms-and-Conditions).*
 
@@ -24,14 +19,23 @@ After connecting, VSCode may ask you to type in your password very frequently. S
 
 ## Cargo
 
-Every external dependency needed to run the code in lunadev-2024 on Lunaserver is already installed globally, with the exception of Rust itself, as it can only be installed for individual users. To install Rust, run the following command in Lunaserver:  
+Every external dependency needed to run the code in lunadev-2025 on Lunaserver is already installed globally, with the exception of Rust itself, as it can only be installed for individual users. The simplest way is to run `setup.sh`, which is located at the top level in this repository. It installs Rust and `cargo-make`.
+
+To install Rust manually, run the following command in Lunaserver:  
 `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`  
-and select the default options.
+and select the default options. Install `cargo-make` using `cargo install --force cargo-make`
 
-## What about a display?
+## Lunabase and Lunaserver
 
-I am actively working on finding a solution that will allow multiple people to have separate displays into Lunaserver without devcontainers.  
-If you need a display soon, please let me know as there are temporary solutions.
+Lunabase uses a different port than `22` and that port is not exposed to the internet. As such, a tunnel has to be made first. On your own computer, run the following command in this repository:  
+`cargo run -p lunaserver-web-client`  
+and follow the instructions provided. After that, you can just run `lunabot` (with `cargo run -p lunabot -- main` or `cargo make main`) on Lunaserver and it will be able to connect to Lunabase running on your computer. The disadvantage is the latency is higher than if you ran Lunabase over a direct connection to Lunaserver (more on this later). The latency is worse if the quality of your internet connection is poor.
+
+If you happen to be in MEB 2340, you can connect to USR-Wifi-5G for a better connection. The password is on the bottom of the router (the scratched out number is 6). If you are connected to the router, you do not need to run `lunaserver-web-client`. Instead, you can just use your private IP address for `lunabase_address` (eg. my `lunabase_address` would be `192.168.0.100:10600`). You can find your private IP address using `ifconfig` on mac or linux, and `ipconfig` on windows. Do note that the `:10600` is not part of your private IP address; You just concatenate it after. If Lunaserver is still not able to connect, check that your firewall is disabled, or that it allows port `10600` over UDP. If you are connected to this router, you can also SSH to `192.168.0.102` for a lower latency SSH connection, but this is not as beneficial.
+
+## Godot
+
+Both Lunabase and Lunasim depend on Rust code to run correctly. Simply build `lunasim-lib` and `lunabase-lib` and Godot will use them automatically. As a shortcut, you can also run `cargo make godot`. If you modify that Rust code, you have to rebuild it again. If Lunabase or Lunasim are open in the Godot editor *and* you are on Windows, you may need to minimize the window and maximize (or some other way to switch focus) to reload the new library. You must also have opened Lunaabse or Lunasim once in the Godot editor (everytime you clone this repository) for it to run correctly.
 
 ## Directory
 
@@ -50,9 +54,9 @@ If you need a display soon, please let me know as there are temporary solutions.
 
 The following files/folders are not provided in this repository and you may need to generate some of them yourself. However, most will be auto-generated.
 
-1. [app-config.toml](https://github.com/utahrobotics/lunadev-2024/tree/main/examples/app-config.toml) - This file needs to be in the top-most directory and is *not* auto-generated. An example file can be found in the `examples` folder
-2. urobotics-venv - A Python Virtual Environment that is used for Python interop
-3. cabinet - Logging folder that is auto-generated everytime a [urobotics-app](https://github.com/utahrobotics/lunadev-2025/tree/main/urobotics/urobotics-app) is executed
+1. [app-config.toml](https://github.com/utahrobotics/lunadev-2025/tree/main/examples/app-config.toml) - This file needs to be in the top-most directory and is *not* auto-generated. An example file can be found in the `examples` folder
+2. `urobotics-venv` - A Python Virtual Environment that is used for Python interop
+3. `cabinet` - Logging folder that is auto-generated everytime a [urobotics-app](https://github.com/utahrobotics/lunadev-2025/tree/main/urobotics/urobotics-app) is executed
 
 ## Third Party Assets
 
