@@ -1,4 +1,4 @@
-[gd_scene load_steps=41 format=3 uid="uid://uh5c3q1118f8"]
+[gd_scene load_steps=40 format=3 uid="uid://uh5c3q1118f8"]
 
 [ext_resource type="Script" path="res://MapManager.gd" id="1_6vued"]
 [ext_resource type="FontFile" uid="uid://bwxjme6yvwr2i" path="res://kenvector_future.ttf" id="2_mns2s"]
@@ -345,8 +345,6 @@ border_width_right = 3
 border_width_bottom = 3
 border_color = Color(1, 1, 1, 1)
 
-[sub_resource type="ImageTexture" id="ImageTexture_8encv"]
-
 [node name="visualizer" type="Node2D"]
 script = ExtResource("1_6vued")
 
@@ -461,20 +459,25 @@ offset_bottom = -10.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Label" type="Label" parent="CanvasLayer/VizHBox/ImagePanel/VBoxContainer"]
+[node name="Title" type="Label" parent="CanvasLayer/VizHBox/ImagePanel/VBoxContainer"]
 layout_mode = 2
 theme_override_fonts/font = ExtResource("2_mns2s")
 theme_override_font_sizes/font_size = 30
 text = "[NAME] Map"
 horizontal_alignment = 1
 
-[node name="Map Texture" type="TextureRect" parent="CanvasLayer/VizHBox/ImagePanel/VBoxContainer"]
+[node name="MapTexture" type="TextureRect" parent="CanvasLayer/VizHBox/ImagePanel/VBoxContainer"]
 layout_mode = 2
-size_flags_horizontal = 3
 size_flags_vertical = 3
-texture = SubResource("ImageTexture_8encv")
 
 [node name="Send Button" type="Button" parent="CanvasLayer/VizHBox"]
 layout_mode = 2
 theme = ExtResource("4_qsdjn")
 text = "Send"
+
+[connection signal="button_down" from="CanvasLayer/VizHBox/DataVBox/Depth Map" to="." method="_on_depth_map_button_down"]
+[connection signal="button_down" from="CanvasLayer/VizHBox/DataVBox/Point Map" to="." method="_on_point_map_button_down"]
+[connection signal="button_down" from="CanvasLayer/VizHBox/DataVBox/Height Map" to="." method="_on_height_map_button_down"]
+[connection signal="button_down" from="CanvasLayer/VizHBox/DataVBox/Gradient Map" to="." method="_on_gradient_map_button_down"]
+[connection signal="button_down" from="CanvasLayer/VizHBox/DataVBox/Obstacle Map" to="." method="_on_obstacle_map_button_down"]
+[connection signal="button_up" from="CanvasLayer/VizHBox/Send Button" to="." method="_on_send_button_button_up"]
