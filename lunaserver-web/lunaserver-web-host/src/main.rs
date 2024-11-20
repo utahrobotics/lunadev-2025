@@ -1,7 +1,7 @@
-use std::net::{Ipv4Addr, SocketAddrV4};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
 use axum::{
-    extract::{ws::Message, WebSocketUpgrade}, routing::get, Router
+    extract::{ws::Message, ConnectInfo, WebSocketUpgrade}, routing::get, Router
 };
 use tokio::net::UdpSocket;
 
@@ -11,6 +11,9 @@ async fn main() {
     let app = Router::new()
         .route("/", get(|| async {
             "Hello, world!"
+        }))
+        .route("/ip", get(|ConnectInfo(addr): ConnectInfo<SocketAddr>| async move {
+            format!("Your IP is {}", addr.ip())
         }))
         .route("/udp-ws", get(|ws: WebSocketUpgrade| async {
             ws.on_upgrade(|mut socket| async move {
@@ -85,5 +88,8 @@ async fn main() {
         }));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:80").await.expect("Failed to bind TCP listener");
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    ).await.unwrap();
 }
