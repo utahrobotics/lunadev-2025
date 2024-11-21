@@ -90,7 +90,7 @@ pub struct LunasimbotApp {
 impl Runnable for LunasimbotApp {
 
     fn run(mut self) {
-        log_to_console([("wgpu_hal::vulkan::instance", Level::Info)]);
+        log_to_console([("wgpu_hal::vulkan::instance", Level::Info), ("wgpu_core::device::resource", Level::Info)]);
         log_teleop_messages();
         if let Err(e) = init_gputter_blocking() {
             error!("Failed to initialize gputter: {e}");

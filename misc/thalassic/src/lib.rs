@@ -195,8 +195,8 @@ impl ThalassicBuilder {
 
         let mut pipeline = ComputePipeline::new([&height_fn]);
         pipeline.workgroups = [Vector3::new(
-            self.heightmap_width.get(),
             self.cell_count.get() / self.heightmap_width,
+            0,
             0,
         )];
         ThalassicPipeline {
@@ -224,8 +224,8 @@ impl ThalassicPipeline {
         let image_width = points_storage.image_size.x.get();
         let image_height = points_storage.image_size.y.get();
         let tri_count = (image_width - 1) * (image_height - 1) * 2;
-        self.pipeline.workgroups[0].y = tri_count / 65536;
-        self.pipeline.workgroups[0].z = tri_count % 65536;
+        self.pipeline.workgroups[0].y = tri_count / 65535 + 1;
+        self.pipeline.workgroups[0].z = tri_count % 65535 + 1;
         self.pipeline
             .new_pass(|mut lock| {
                 bind_grps
