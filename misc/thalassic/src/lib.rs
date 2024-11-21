@@ -223,7 +223,9 @@ impl ThalassicPipeline {
 
         let image_width = points_storage.image_size.x.get();
         let image_height = points_storage.image_size.y.get();
-        self.pipeline.workgroups[0].z = 2 * (image_width - 1) * (image_height - 1);
+        let tri_count = (image_width - 1) * (image_height - 1) * 2;
+        self.pipeline.workgroups[0].y = tri_count / 65536;
+        self.pipeline.workgroups[0].z = tri_count % 65536;
         self.pipeline
             .new_pass(|mut lock| {
                 bind_grps

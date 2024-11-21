@@ -242,7 +242,7 @@ pub fn enumerate_depth_cameras(
 
             if let Some(mut luma_img) = shared_luma_img {
                 for frame in frames.frames_of_type::<ColorFrame>() {
-                    if !matches!(frame.get(0, 0), Some(PixelKind::Rgb8 { .. })) {
+                    if !matches!(frame.get(0, 0), Some(PixelKind::Bgr8 { .. })) {
                         error!("Unexpected color pixel kind: {:?}", frame.get(0, 0));
                     }
                     debug_assert_eq!(frame.bits_per_pixel(), 24);
@@ -258,7 +258,7 @@ pub fn enumerate_depth_cameras(
                             let mut buffer = img.into_raw();
                             buffer.clear();
                             buffer.extend(
-                                bytes.array_chunks::<3>().map(|[r, g, b]| {
+                                bytes.array_chunks::<3>().map(|[b, g, r]| {
                                     (0.299 * *r as f64 + 0.587 * *g as f64 + 0.114 * *b as f64) as u8
                                 }),
                             );

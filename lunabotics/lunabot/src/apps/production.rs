@@ -19,6 +19,7 @@ use urobotics::{
     app::{define_app, Runnable}, callbacks::caller::CallbacksStorage, get_tokio_handle, log::{error, log_to_console, Level}, tokio,
     BlockOn,
 };
+use urobotics_apriltag::image::{DynamicImage, ImageBuffer};
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer,
@@ -126,6 +127,15 @@ impl Runnable for LunabotApp {
                 },
             ),
         );
+        // heightmap_callbacks.add_dyn_fn(Box::new(|heights| {
+        //     let max = heights.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        //     let min = heights.iter().copied().fold(f32::INFINITY, f32::min);
+        //     let rgb: Vec<_> = heights.iter().map(|&h| {
+        //         ((h - min) / (max - min) * 255.0) as u8
+        //     }).collect();
+        //     debug_assert_eq!(heights.len(), 128 * 64);
+        //     let _ = DynamicImage::ImageLuma8(ImageBuffer::from_raw(128, 64, rgb).unwrap()).save("heights.png");
+        // }));
 
         if let Err(e) = result {
             error!("Failed to enumerate depth cameras: {e}");

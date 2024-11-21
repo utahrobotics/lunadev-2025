@@ -34,14 +34,15 @@ build_shader!(
     }
     
     @compute
-    @workgroup_size(1, 1, 1)
+    @workgroup_size(HEIGHTMAP_WIDTH, 1, 1)
     fn main(
+        @builtin(local_invocation_id) local_invocation_id : vec3u,
         @builtin(workgroup_id) workgroup_id : vec3u,
     ) {
-        let heightmap_x = f32(workgroup_id.x) * CELL_SIZE;
-        let heightmap_y = f32(workgroup_id.y) * CELL_SIZE;
-        let heightmap_index = workgroup_id.y * HEIGHTMAP_WIDTH + workgroup_id.x;
-        let tri_index = workgroup_id.z;
+        let heightmap_x = f32(local_invocation_id.x) * CELL_SIZE;
+        let heightmap_y = f32(workgroup_id.x) * CELL_SIZE;
+        let heightmap_index = workgroup_id.x * HEIGHTMAP_WIDTH + local_invocation_id.x;
+        let tri_index = workgroup_id.y * 65536 + workgroup_id.z;
         let half_layer_index = tri_index / (projection_width - 1);
         let layer_index = half_layer_index / 2;
         let projection_x = tri_index % (projection_width - 1);
