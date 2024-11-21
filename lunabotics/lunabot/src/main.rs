@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use apps::LunasimbotApp;
+use apps::Sim;
 use urobotics::{
     app::{adhoc_app, application},
     python, serial,
@@ -35,7 +35,7 @@ fn info_app() {
     println!();
 }
 
-adhoc_app!(InfoApp, "info", "Print diagnostics", info_app);
+adhoc_app!(InfoApp(info_app): "Print diagnostics");
 
 fn main() {
     let mut app = application!();
@@ -47,13 +47,13 @@ fn main() {
     app.cabinet_builder.create_symlink_for("urdf");
 
     app = app
-        .add_app::<serial::SerialConnection>()
-        .add_app::<python::PythonVenvBuilder>()
+        .add_app::<serial::app::Serial>()
+        .add_app::<python::app::Python>()
         .add_app::<InfoApp>()
-        .add_app::<LunasimbotApp>();
+        .add_app::<Sim>();
     #[cfg(feature = "production")]
     {
-        app = app.add_app::<apps::LunabotApp>();
+        app = app.add_app::<apps::Main>();
     }
     app.run();
 }

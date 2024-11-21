@@ -1,4 +1,4 @@
-use std::os::unix::ffi::OsStrExt;
+use std::{io::Cursor, os::unix::ffi::OsStrExt};
 
 use anyhow::Context;
 use fxhash::{FxHashMap, FxHashSet};
@@ -8,7 +8,7 @@ use urobotics::{
     shared::{OwnedData, SharedData},
 };
 use urobotics_apriltag::{
-    image::{self, ImageBuffer, Luma},
+    image::{self, ImageBuffer, ImageDecoder, Luma},
     AprilTagDetector,
 };
 use v4l::{buffer::Type, format, io::traits::CaptureStream, prelude::MmapStream, video::Capture};
@@ -84,6 +84,19 @@ pub fn enumerate_cameras(
                     continue;
                 }
             };
+            // format.fourcc = v4l::FourCC::new(b"MJPG");
+            // match camera.set_format(&format) {
+            //     Ok(actual) => if actual.fourcc != format.fourcc {
+            //         error!(
+            //             "Failed to set format for camera {path_str}: {}", actual.fourcc
+            //         );
+            //         continue;
+            //     },
+            //     Err(e) => {
+            //         warn!("Failed to get format for camera {path_str}: {e}");
+            //         continue;
+            //     }
+            // }
             let image = OwnedData::from(ImageBuffer::from_pixel(
                 format.width,
                 format.height,
@@ -111,11 +124,34 @@ pub fn enumerate_cameras(
                 let mut stream = MmapStream::with_buffers(&mut camera, Type::VideoCapture, 4)
                     .expect("Failed to create buffer stream");
 
+                let mut rgb_img = vec![0u8; format.width as usize * format.height as usize * 3];
                 loop {
-                    let (buf, _) = stream.next().unwrap();
+                    let (jpg_img, _) = stream.next().unwrap();
+
+                    match image::codecs::jpeg::JpegDecoder::new(Cursor::new(jpg_img)) {
+                        Ok(decoder) => {
+                            if let Err(e) = decoder.read_image(&mut rgb_img) {
+                                error!("Failed to decode JPEG image: {e}");
+                                continue;
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to create JPEG decoder: {e}");
+                            continue;
+                        }
+                    }
+
                     match image.try_recall() {
-                        Ok(mut img) => {
-                            img.copy_from_slice(buf);
+                        Ok(img) => {
+                            let (img, uninit) = img.uninit();
+                            let mut vec  = img.into_raw();
+                            vec.clear();
+                            vec.extend(rgb_img.array_chunks::<3>().map(|[r, g, b]| {
+                                (0.299 * *r as f64 + 0.587 * *g as f64 + 0.114 * *b as f64) as u8
+                            }));
+                            let img = ImageBuffer::from_raw(format.width, format.height, vec)
+                                .expect("Failed to create image buffer");
+                            let img = uninit.init(img);
                             image = img.pessimistic_share();
                         }
                         Err(img) => {

@@ -16,7 +16,7 @@ use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{UnitVector3, Vector2, Vector4};
 use serde::{Deserialize, Serialize};
 use urobotics::{
-    app::Application, callbacks::caller::CallbacksStorage, get_tokio_handle, log::error, tokio,
+    app::{define_app, Runnable}, callbacks::caller::CallbacksStorage, get_tokio_handle, log::{error, log_to_console, Level}, tokio,
     BlockOn,
 };
 
@@ -40,7 +40,8 @@ struct CameraInfo {
 #[derive(Serialize, Deserialize, Debug)]
 struct DepthCameraInfo {
     link_name: String,
-    observe_apriltags: bool
+    #[serde(default)]
+    ignore_apriltags: bool
 }
 
 #[derive(Serialize, Deserialize)]
@@ -56,12 +57,10 @@ pub struct LunabotApp {
 
 // const PROJECTION_SIZE: Vector2<u32> = Vector2::new(36, 24);
 
-impl Application for LunabotApp {
-    const APP_NAME: &'static str = "main";
-
-    const DESCRIPTION: &'static str = "The lunabot application";
+impl Runnable for LunabotApp {
 
     fn run(self) {
+        log_to_console([("wgpu_hal::vulkan::instance", Level::Info)]);
         log_teleop_messages();
         if let Err(e) = init_gputter_blocking() {
             error!("Failed to initialize gputter: {e}");
@@ -110,7 +109,7 @@ impl Application for LunabotApp {
                     serial,
                     DepthCameraInfo {
                         link_name,
-                        observe_apriltags,
+                        ignore_apriltags: observe_apriltags,
                     },
                 )| {
                     (
@@ -121,7 +120,7 @@ impl Application for LunabotApp {
                                 .context("Failed to find camera link")
                                 .unwrap()
                                 .clone(),
-                            observe_apriltags,
+                            ignore_apriltags: observe_apriltags,
                         },
                     )
                 },
@@ -221,3 +220,5 @@ impl Application for LunabotApp {
         wait_for_ctrl_c();
     }
 }
+
+define_app!(pub Main(LunabotApp):  "The lunabot application");

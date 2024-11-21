@@ -8,8 +8,8 @@ use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
 use k::Chain;
 #[cfg(feature = "production")]
-pub use production::LunabotApp;
-pub use sim::{LunasimStdin, LunasimbotApp};
+pub use production::Main;
+pub use sim::{LunasimStdin, Sim};
 use urobotics::{
     log::{error, warn},
     tokio::{

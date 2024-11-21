@@ -21,9 +21,9 @@ use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4};
 use serde::{Deserialize, Serialize};
 use thalassic::DepthProjectorBuilder;
-use urobotics::tokio;
+use urobotics::{app::define_app, log::{log_to_console, Level}, tokio};
 use urobotics::{
-    app::Application,
+    app::Runnable,
     callbacks::caller::CallbacksStorage,
     define_callbacks, fn_alias, get_tokio_handle,
     log::{error, warn},
@@ -87,12 +87,10 @@ pub struct LunasimbotApp {
     simulation_command: Vec<String>,
 }
 
-impl Application for LunasimbotApp {
-    const APP_NAME: &'static str = "sim";
-
-    const DESCRIPTION: &'static str = "The lunabot application in a simulated environment";
+impl Runnable for LunasimbotApp {
 
     fn run(mut self) {
+        log_to_console([("wgpu_hal::vulkan::instance", Level::Info)]);
         log_teleop_messages();
         if let Err(e) = init_gputter_blocking() {
             error!("Failed to initialize gputter: {e}");
@@ -409,3 +407,5 @@ impl Application for LunasimbotApp {
         wait_for_ctrl_c();
     }
 }
+
+define_app!(pub Sim(LunasimbotApp):  "The lunabot application in a simulated environment");

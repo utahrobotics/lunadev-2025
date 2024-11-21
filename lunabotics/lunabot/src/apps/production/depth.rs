@@ -31,7 +31,7 @@ use crate::{
 
 pub struct DepthCameraInfo {
     pub k_node: k::Node<f64>,
-    pub observe_apriltags: bool
+    pub ignore_apriltags: bool
 }
 
 /// Returns an iterator over all the RealSense cameras that were identified.
@@ -83,7 +83,7 @@ pub fn enumerate_depth_cameras(
         };
         let Some(DepthCameraInfo {
             k_node,
-            observe_apriltags
+            ignore_apriltags
         }) = cam_info.take()
         else {
             error!(
@@ -259,10 +259,7 @@ pub fn enumerate_depth_cameras(
                             buffer.clear();
                             buffer.extend(
                                 bytes.array_chunks::<3>().map(|[r, g, b]| {
-                                    let r = *r as u16;
-                                    let g = *g as u16;
-                                    let b = *b as u16;
-                                    ((r + g + b) / 3) as u8
+                                    (0.299 * *r as f64 + 0.587 * *g as f64 + 0.114 * *b as f64) as u8
                                 }),
                             );
                             owned_img = uninit.init(ImageBuffer::from_raw(frame.width() as u32, frame.height() as u32, buffer).unwrap());

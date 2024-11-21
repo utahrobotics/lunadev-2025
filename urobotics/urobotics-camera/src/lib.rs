@@ -264,10 +264,7 @@ impl PendingCameraConnection {
 }
 
 #[cfg(feature = "standalone")]
-impl urobotics_app::Application for CameraConnectionBuilder {
-    const DESCRIPTION: &'static str = "Displays a camera feed";
-    const APP_NAME: &'static str = "camera";
-
+impl urobotics_app::Runnable for CameraConnectionBuilder {
     fn run(mut self) {
         use urobotics_core::{task::Loggable, BlockOn};
         (async move {
@@ -282,7 +279,7 @@ impl urobotics_app::Application for CameraConnectionBuilder {
                     camera_name: camera.info().human_name()
                 };
                 #[cfg(debug_assertions)]
-                urobotics_core::log::warn!(target: Self::APP_NAME, "Release mode is recommended when using camera as an app");
+                urobotics_core::log::warn!(target: "camera", "Release mode is recommended when using camera as an app");
 
                 let mut dump = urobotics_video::VideoDataDump::new_display(camera_info.camera_name, camera.camera_format().width(), camera.camera_format().height(), true).expect("Failed to initialize video data dump");
 
@@ -327,3 +324,11 @@ const CODE: &str = "for camera_info in enumerate_cameras(1400):\r\tprint(f'{came
 const CODE: &str = "for camera_info in enumerate_cameras(200):\r\tprint(f'{camera_info.index};{camera_info.name};{camera_info.path}')";
 #[cfg(target_os = "macos")]
 const CODE: &str = "for camera_info in enumerate_cameras(1200):\r\tprint(f'{camera_info.index};{camera_info.name};{camera_info.path}')";
+
+pub mod app {
+    use urobotics_app::define_app;
+
+    use crate::CameraConnectionBuilder;
+
+    define_app!(pub Camera(CameraConnectionBuilder): "Displays a camera feed");
+}
