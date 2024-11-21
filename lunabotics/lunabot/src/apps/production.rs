@@ -130,11 +130,12 @@ impl Runnable for LunabotApp {
         // heightmap_callbacks.add_dyn_fn(Box::new(|heights| {
         //     let max = heights.iter().copied().fold(f32::NEG_INFINITY, f32::max);
         //     let min = heights.iter().copied().fold(f32::INFINITY, f32::min);
+        //     println!("min: {}, max: {}", min, max);
         //     let rgb: Vec<_> = heights.iter().map(|&h| {
         //         ((h - min) / (max - min) * 255.0) as u8
         //     }).collect();
         //     debug_assert_eq!(heights.len(), 128 * 64);
-        //     let _ = DynamicImage::ImageLuma8(ImageBuffer::from_raw(128, 64, rgb).unwrap()).save("heights.png");
+        //     let _ = DynamicImage::ImageLuma8(ImageBuffer::from_raw(64, 128, rgb).unwrap()).save("heights.png");
         // }));
 
         if let Err(e) = result {

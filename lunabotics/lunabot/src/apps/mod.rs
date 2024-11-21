@@ -55,7 +55,9 @@ fn log_teleop_messages() {
 }
 
 fn create_robot_chain() -> Arc<Chain<f64>> {
-    Arc::new(Chain::<f64>::from_urdf_file("urdf/lunabot.urdf").expect("Failed to load urdf"))
+    let chain = Chain::<f64>::from_urdf_file("urdf/lunabot.urdf").expect("Failed to load urdf");
+    chain.update_transforms();
+    Arc::new(chain)
 }
 
 #[derive(Clone)]

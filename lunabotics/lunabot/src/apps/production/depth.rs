@@ -299,7 +299,7 @@ pub fn enumerate_depth_cameras(
                     let camera_transform: AlignedMatrix4<f32> =
                         camera_transform.to_homogeneous().cast::<f32>().into();
                     let Some(mut pcl_storage) = pcl_storage_channel.get_finished() else {
-                        return;
+                        break;
                     };
                     let depth_scale = match frame.depth_units() {
                         Ok(x) => x,
