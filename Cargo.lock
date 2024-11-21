@@ -2327,6 +2327,7 @@ dependencies = [
  "k",
  "lunabot-ai",
  "nalgebra",
+ "openh264",
  "pathfinding",
  "rayon",
  "realsense-rust",
@@ -2616,7 +2617,7 @@ dependencies = [
  "cc",
  "dunce",
  "libc",
- "nasm-rs",
+ "nasm-rs 0.3.0",
 ]
 
 [[package]]
@@ -2692,6 +2693,12 @@ name = "nanoserde-derive"
 version = "0.1.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e943b2c21337b7e3ec6678500687cdc741b7639ad457f234693352075c082204"
+
+[[package]]
+name = "nasm-rs"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe4d98d0065f4b1daf164b3eafb11974c94662e5e2396cf03f32d0bb5c17da51"
 
 [[package]]
 name = "nasm-rs"
@@ -3028,6 +3035,26 @@ name = "once_cell"
 version = "1.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1261fe7e33c73b354eab43b1273a57c8f967d0391e80353e51f764ac02cf6775"
+
+[[package]]
+name = "openh264"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75d4ba969cedf4384c325577ed9fc5d1038fe83710fa89e4931f33e7811c5aa7"
+dependencies = [
+ "openh264-sys2",
+]
+
+[[package]]
+name = "openh264-sys2"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15b59e491ad00df70d537fcc8a7cf817faa4f033b172a5b621deb4b954542dfc"
+dependencies = [
+ "cc",
+ "nasm-rs 0.2.5",
+ "walkdir",
+]
 
 [[package]]
 name = "openssl"
@@ -3686,6 +3713,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3460605018fdc9612bce72735cba0d27efbcd9904780d44c7e3a9948f96148a"
 dependencies = [
  "bytemuck",
+]
+
+[[package]]
+name = "same-file"
+version = "1.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
+dependencies = [
+ "winapi-util",
 ]
 
 [[package]]
@@ -4717,6 +4753,16 @@ version = "0.1.0"
 source = "git+https://github.com/Hydro111/vesc-translator.git#e363b84215218c2273c6a78971c9352051e2506e"
 dependencies = [
  "crc",
+]
+
+[[package]]
+name = "walkdir"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b"
+dependencies = [
+ "same-file",
+ "winapi-util",
 ]
 
 [[package]]

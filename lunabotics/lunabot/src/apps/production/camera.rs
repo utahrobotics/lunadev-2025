@@ -15,10 +15,13 @@ use v4l::{buffer::Type, format, io::traits::CaptureStream, prelude::MmapStream, 
 
 use crate::localization::LocalizerRef;
 
+use super::streaming::CameraStream;
+
 pub struct CameraInfo {
     pub k_node: k::Node<f64>,
     pub focal_length_x_px: f64,
     pub focal_length_y_px: f64,
+    pub stream_index: usize
 }
 
 pub fn enumerate_cameras(
@@ -66,7 +69,8 @@ pub fn enumerate_cameras(
             let CameraInfo {
                 k_node,
                 focal_length_x_px,
-                focal_length_y_px
+                focal_length_y_px,
+                stream_index
             } = cam_info.take().unwrap();
 
             let mut camera = match v4l::Device::with_path(path) {
@@ -84,7 +88,7 @@ pub fn enumerate_cameras(
                     continue;
                 }
             };
-            // format.fourcc = v4l::FourCC::new(b"MJPG");
+            // format.fourcc = v4l::FourCC::new(b"RGB3");
             // match camera.set_format(&format) {
             //     Ok(actual) => if actual.fourcc != format.fourcc {
             //         error!(
@@ -97,6 +101,11 @@ pub fn enumerate_cameras(
             //         continue;
             //     }
             // }
+
+            let Some(mut camera_stream) = CameraStream::new(stream_index) else {
+                continue;
+            };
+            
             let image = OwnedData::from(ImageBuffer::from_pixel(
                 format.width,
                 format.height,
@@ -140,6 +149,8 @@ pub fn enumerate_cameras(
                             continue;
                         }
                     }
+
+                    camera_stream.write(std::io::Cursor::new(&rgb_img));
 
                     match image.try_recall() {
                         Ok(img) => {

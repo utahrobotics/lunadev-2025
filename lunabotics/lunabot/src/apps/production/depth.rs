@@ -29,9 +29,12 @@ use crate::{
     pipelines::thalassic::{spawn_thalassic_pipeline, HeightMapCallbacksRef, PointsStorageChannel},
 };
 
+use super::streaming::CameraStream;
+
 pub struct DepthCameraInfo {
     pub k_node: k::Node<f64>,
-    pub ignore_apriltags: bool
+    pub ignore_apriltags: bool,
+    pub stream_index: usize
 }
 
 /// Returns an iterator over all the RealSense cameras that were identified.
@@ -83,13 +86,18 @@ pub fn enumerate_depth_cameras(
         };
         let Some(DepthCameraInfo {
             k_node,
-            ignore_apriltags
+            ignore_apriltags,
+            stream_index
         }) = cam_info.take()
         else {
             error!(
                 "Depth Camera {} already enumerated",
                 serial
             );
+            continue;
+        };
+
+        let Some(camera_stream) = CameraStream::new(stream_index) else {
             continue;
         };
 
@@ -201,7 +209,7 @@ pub fn enumerate_depth_cameras(
                 depth_projecter = Some((depth_projecter_builder.build(), pcl_storage_channel));
             } else if !expecting_color {
                 error!("Received color stream for depth camera {serial} even though it was not expected");
-            } else {
+            } else if !ignore_apriltags {
                 if shared_luma_img.is_some() {
                     error!("Already handled color stream for depth camera {serial}");
                     continue;
@@ -220,6 +228,14 @@ pub fn enumerate_depth_cameras(
                     intrinsics.height() as u32,
                     img_shared.create_lendee(),
                 );
+                let localizer_ref = localizer_ref.clone();
+                let mut local_transform = k_node.origin();
+                local_transform.inverse_mut();
+                det.detection_callbacks_ref().add_fn(move |observation| {
+                    localizer_ref.set_april_tag_isometry(
+                        local_transform * observation.get_isometry_of_observer(),
+                    );
+                });
                 std::thread::spawn(move || det.run());
                 shared_luma_img = Some(img_shared.pessimistic_share());
             }

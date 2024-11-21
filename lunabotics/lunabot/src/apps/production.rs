@@ -15,6 +15,7 @@ use gputter::init_gputter_blocking;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{UnitVector3, Vector2, Vector4};
 use serde::{Deserialize, Serialize};
+use streaming::camera_streaming;
 use urobotics::{
     app::{define_app, Runnable}, callbacks::caller::CallbacksStorage, get_tokio_handle, log::{error, log_to_console, Level}, tokio,
     BlockOn,
@@ -29,6 +30,7 @@ use crate::{
 use super::{create_packet_builder, create_robot_chain, wait_for_ctrl_c};
 
 mod camera;
+mod streaming;
 mod depth;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -36,13 +38,15 @@ struct CameraInfo {
     link_name: String,
     focal_length_x_px: f64,
     focal_length_y_px: f64,
+    stream_index: usize
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct DepthCameraInfo {
     link_name: String,
     #[serde(default)]
-    ignore_apriltags: bool
+    ignore_apriltags: bool,
+    stream_index: usize
 }
 
 #[derive(Serialize, Deserialize)]
@@ -74,6 +78,10 @@ impl Runnable for LunabotApp {
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
 
+        if let Err(e) = camera_streaming() {
+            error!("Failed to start camera streaming: {e}");
+        }
+
         if let Err(e) = enumerate_cameras(
             localizer_ref.clone(),
             self.cameras.into_iter().map(
@@ -83,6 +91,7 @@ impl Runnable for LunabotApp {
                         link_name,
                         focal_length_x_px,
                         focal_length_y_px,
+                        stream_index
                     },
                 )| {
                     (
@@ -94,7 +103,8 @@ impl Runnable for LunabotApp {
                                 .unwrap()
                                 .clone(),
                             focal_length_x_px,
-                            focal_length_y_px
+                            focal_length_y_px,
+                            stream_index
                         },
                     )
                 },
@@ -111,6 +121,7 @@ impl Runnable for LunabotApp {
                     DepthCameraInfo {
                         link_name,
                         ignore_apriltags: observe_apriltags,
+                        stream_index
                     },
                 )| {
                     (
@@ -122,6 +133,7 @@ impl Runnable for LunabotApp {
                                 .unwrap()
                                 .clone(),
                             ignore_apriltags: observe_apriltags,
+                            stream_index
                         },
                     )
                 },

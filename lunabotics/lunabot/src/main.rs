@@ -1,4 +1,4 @@
-#![feature(result_flattening, deadline_api, never_type, thread_sleep_until, array_chunks)]
+#![feature(result_flattening, deadline_api, never_type, thread_sleep_until, array_chunks, sync_unsafe_cell)]
 
 use std::path::Path;
 
