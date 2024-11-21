@@ -78,7 +78,7 @@ impl Application for LunabotApp {
             localizer_ref.clone(),
             self.cameras.into_iter().map(
                 |(
-                    serial,
+                    port,
                     CameraInfo {
                         link_name,
                         focal_length_x_px,
@@ -86,7 +86,7 @@ impl Application for LunabotApp {
                     },
                 )| {
                     (
-                        serial,
+                        port,
                         camera::CameraInfo {
                             k_node: robot_chain
                                 .find_link(&link_name)

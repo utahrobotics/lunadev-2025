@@ -78,7 +78,7 @@ pub fn enumerate_depth_cameras(
         let serial = serial.to_string();
 
         let Some(cam_info) = serial_to_chain.get_mut(&serial) else {
-            warn!("Unexpected depth camera with serial number {:?}", serial);
+            warn!("Unexpected depth camera with serial number {}", serial);
             continue;
         };
         let Some(DepthCameraInfo {
@@ -317,6 +317,12 @@ pub fn enumerate_depth_cameras(
                 }
             }
         });
+    }
+
+    for (serial_num, cam_info) in serial_to_chain {
+        if cam_info.is_some() {
+            error!("Depth camera with serial number {serial_num} not found");
+        }
     }
 
     let (heightmap_callbacks,) = spawn_thalassic_pipeline(pcl_storage_channels.into_boxed_slice());

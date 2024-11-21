@@ -1,8 +1,10 @@
+use std::os::unix::ffi::OsStrExt;
+
 use anyhow::Context;
-use fxhash::FxHashMap;
+use fxhash::{FxHashMap, FxHashSet};
 use udev::Udev;
 use urobotics::{
-    log::warn,
+    log::{error, warn},
     shared::{OwnedData, SharedData},
 };
 use urobotics_apriltag::{
@@ -21,55 +23,56 @@ pub struct CameraInfo {
 
 pub fn enumerate_cameras(
     localizer_ref: LocalizerRef,
-    serial_to_chain: impl IntoIterator<Item = (String, CameraInfo)>,
+    port_to_chain: impl IntoIterator<Item = (String, CameraInfo)>,
 ) -> anyhow::Result<()> {
-    let mut serial_to_chain: FxHashMap<String, Option<_>> = serial_to_chain
+    let mut port_to_chain: FxHashMap<String, Option<_>> = port_to_chain
         .into_iter()
-        .map(|(serial, chain)| (serial, Some(chain)))
+        .map(|(port, chain)| (port, Some(chain)))
         .collect();
     {
         let udev = Udev::new()?;
-        for node in v4l::context::enum_devices() {
-            let udev_device =
-                match udev::Device::from_syspath_with_context(udev.clone(), node.path()) {
-                    Ok(x) => x,
-                    Err(e) => {
-                        warn!(
-                            "Failed to get udev device for camera {:?}: {e}",
-                            node.path()
-                        );
+        let mut enumerator = udev::Enumerator::with_udev(udev.clone())?;
+        let mut seen = FxHashSet::default();
+
+        for udev_device in enumerator.scan_devices()? {
+            let Some(path) = udev_device.devnode() else { continue; };
+            // Valid camera paths are of the form /dev/videoN
+            let Some(path_str) = path.to_str() else { continue; };
+            if !path_str.starts_with("/dev/video") {
+                continue;
+            }
+            if let Some(name) = udev_device.attribute_value("name") {
+                if let Some(name) = name.to_str() {
+                    if name.contains("RealSense") {
                         continue;
                     }
-                };
-            let Some(serial_num) = udev_device.attribute_value("serial") else {
-                warn!("No serial number for camera {:?}", node.path());
+                }
+            }
+            let Some(port_raw) = udev_device.property_value("ID_PATH") else {
+                warn!("No port for camera {path_str}");
                 continue;
             };
-            let Some(serial_num) = serial_num.to_str() else {
-                warn!("Failed to parse serial number for camera {:?}", node.path());
+            let Some(port) = port_raw.to_str() else {
+                warn!("Failed to parse port of camera {path_str}");
                 continue;
             };
-            let Some(cam_info) = serial_to_chain.get_mut(serial_num) else {
-                warn!("Unexpected camera with serial number {}", serial_num);
+            if !seen.insert(port.to_string()) {
+                continue;
+            }
+            let Some(cam_info) = port_to_chain.get_mut(port) else {
+                warn!("Unexpected camera with port {}", port);
                 continue;
             };
-            let Some(CameraInfo {
+            let CameraInfo {
                 k_node,
                 focal_length_x_px,
                 focal_length_y_px
-            }) = cam_info.take()
-            else {
-                warn!(
-                    "Camera with serial number {} already enumerated",
-                    serial_num
-                );
-                continue;
-            };
+            } = cam_info.take().unwrap();
 
-            let mut camera = match v4l::Device::with_path(node.path()) {
+            let mut camera = match v4l::Device::with_path(path) {
                 Ok(x) => x,
                 Err(e) => {
-                    warn!("Failed to open camera {:?}: {e}", node.path());
+                    warn!("Failed to open camera {path_str}: {e}");
                     continue;
                 }
             };
@@ -77,7 +80,7 @@ pub fn enumerate_cameras(
             let format = match camera.format() {
                 Ok(x) => x,
                 Err(e) => {
-                    warn!("Failed to get format for camera {:?}: {e}", node.path());
+                    warn!("Failed to get format for camera {path_str}: {e}");
                     continue;
                 }
             };
@@ -124,9 +127,9 @@ pub fn enumerate_cameras(
         }
     }
 
-    for (serial_num, cam_info) in serial_to_chain {
+    for (port, cam_info) in port_to_chain {
         if cam_info.is_some() {
-            warn!("Camera with serial number {serial_num} not found");
+            error!("Camera with port {port} not found");
         }
     }
 
