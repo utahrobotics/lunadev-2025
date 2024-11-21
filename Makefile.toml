@@ -28,7 +28,7 @@ args = ["run", "--features=production", "-p", "lunabot", "--", "main"]
 [tasks.del-cabinet]
 workspace = false
 command = "cargo"
-args = ["run", "-p", "urobotics-tool", "--", "delete-cabinet"]
+args = ["run", "-p", "urobotics-tool", "--", "deletecabinet"]
 
 [tasks.mouser-web]
 workspace = false
