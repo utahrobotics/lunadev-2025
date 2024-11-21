@@ -1,12 +1,14 @@
 use futures_util::{SinkExt, TryStreamExt};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use reqwest::Client;
 use reqwest_websocket::{CloseCode, Message, RequestBuilderExt};
 use tokio::net::UdpSocket;
 
 #[tokio::main]
 async fn main() {
+    let prob = std::env::args().skip(1).next().map(|arg| arg.parse::<f64>().expect("Invalid probability"));
     let response = Client::default()
-        .get("ws://155.98.6.16/udp-ws")
+        .get("ws://lunaserver.coe.utah.edu/udp-ws")
         .upgrade() // Prepares the WebSocket upgrade.
         .send()
         .await
@@ -25,6 +27,7 @@ async fn main() {
     }
 
     let mut buf = [0u8; 2048];
+    let mut rng = StdRng::from_entropy();
 
     loop {
         tokio::select! {
@@ -35,6 +38,11 @@ async fn main() {
                 if let Message::Text(text) = message {
                     println!("{text}")
                 } else if let Message::Binary(data) = message {
+                    if let Some(prob) = prob {
+                        if rng.gen_bool(prob)  {
+                            continue;
+                        }
+                    }
                     // There are many non trivial reasons that the send could fail
                     let _ = udp.send(&data).await;
                 }
@@ -44,6 +52,11 @@ async fn main() {
                     // Also many reasons that this would fail
                     continue;
                 };
+                if let Some(prob) = prob {
+                    if rng.gen_bool(prob)  {
+                        continue;
+                    }
+                }
                 websocket.send(Message::Binary(buf[..n].to_vec())).await.expect("Failed to send UDP packet to lunaserver");
             }
             result = tokio::signal::ctrl_c() => {

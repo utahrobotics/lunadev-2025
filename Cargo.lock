@@ -2356,6 +2356,7 @@ name = "lunaserver-web-client"
 version = "0.1.0"
 dependencies = [
  "futures-util",
+ "rand",
  "reqwest",
  "reqwest-websocket",
  "tokio",

@@ -6,5 +6,6 @@ edition = "2021"
 [dependencies]
 reqwest-websocket = "0.4.3"
 tokio.workspace = true
+rand.workspace = true
 reqwest = "0.12.9"
 futures-util = "0.3.31"
