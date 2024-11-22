@@ -15,7 +15,7 @@ use openh264::{
 };
 use spin_sleep::SpinSleeper;
 use urobotics::{
-    log::error,
+    log::{error, info},
     parking_lot::{Mutex, RwLock},
 };
 
@@ -24,6 +24,7 @@ use crate::teleop::PacketBuilder;
 const CAMERA_COL_COUNT: usize = 3;
 const CAMERA_ROW_COUNT: usize = 2;
 pub const CAMERA_RESOLUTION: Vector2<u32> = Vector2::new(852, 480);
+const KEYFRAME_INTERVAL: usize = 24;
 
 static CAMERA_STREAMS: RwLock<Vec<Box<[&SyncUnsafeCell<[u8]>]>>> = RwLock::new(vec![]);
 static CAMERA_STREAM_LOCKS: OnceLock<Box<[AtomicBool]>> = OnceLock::new();
@@ -152,7 +153,7 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
             .enable_skip_frame(true)
             .max_frame_rate(24.0)
             .rate_control_mode(RateControlMode::Bitrate)
-            .sps_pps_strategy(SpsPpsStrategy::IncreasingId),
+            // .sps_pps_strategy(SpsPpsStrategy::IncreasingId)
     )
     .context("Failed to create H264 encoder")?;
     let udp = UdpSocket::bind("0.0.0.0:0").context("Binding streaming UDP socket")?;
@@ -168,9 +169,16 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
         let camera_frame_buffer: *const _ = Box::leak(camera_frame_buffer);
         let mut now = Instant::now();
         let sleeper = SpinSleeper::default();
+        let mut keyframe = 0usize;
+
+        info!("Starting camera streaming with resolution: {}x{}", CAMERA_RESOLUTION.x as usize * CAMERA_COL_COUNT, CAMERA_RESOLUTION.y as usize * CAMERA_ROW_COUNT);
 
         loop {
             now += now.elapsed();
+            keyframe = (keyframe + 1) % KEYFRAME_INTERVAL;
+            if keyframe == 0 {
+                h264_enc.force_intra_frame();
+            }
 
             {
                 // Must be write to get exclusive access to all camera
@@ -192,11 +200,10 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
                             let layer = x.layer(layer_i).unwrap();
                             for nal_i in 0..layer.nal_count() {
                                 let nal = layer.nal_unit(nal_i).unwrap();
-                                let mut buf = [0u8; 1400];
-                                buf[2] = 1;
-                                nal.chunks(1397).for_each(|chunk| {
-                                    buf[3..3 + chunk.len()].copy_from_slice(chunk);
-                                    if let Err(e) = udp.send(&buf) {
+
+                                nal.chunks(1400).for_each(|chunk| {
+                                    // println!("{nal_i} {} {:?}", nal.len(), &chunk[1..8]);
+                                    if let Err(e) = udp.send(chunk) {
                                         if e.kind() == ErrorKind::ConnectionRefused {
                                             if lunabase_streaming_address.ip().is_loopback() {
                                                 return;

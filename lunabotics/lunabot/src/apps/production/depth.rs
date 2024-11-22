@@ -245,7 +245,6 @@ pub fn enumerate_depth_cameras(
         };
         let mut point_cloud: Box<[_]> =
             std::iter::repeat_n(AlignedVec4::from(Vector4::default()), depth_projecter.get_pixel_count().get() as usize).collect();
-        let mut rgb_image = vec![];
 
         std::thread::spawn(move || loop {
             let frames = match pipeline.wait(None) {
@@ -258,6 +257,7 @@ pub fn enumerate_depth_cameras(
 
             if let Some(mut luma_img) = shared_luma_img {
                 for frame in frames.frames_of_type::<ColorFrame>() {
+                    // This is a bug in RealSense. It will say the pixel kind is BGR8 when it is actually RGB8.
                     if !matches!(frame.get(0, 0), Some(PixelKind::Bgr8 { .. })) {
                         error!("Unexpected color pixel kind: {:?}", frame.get(0, 0));
                     }
@@ -285,12 +285,8 @@ pub fn enumerate_depth_cameras(
                             luma_img = x;
                         }
                     }
-                    rgb_image.clear();
-                    rgb_image.extend(
-                        bytes.array_chunks::<3>().flat_map(|[b, g, r]| [*r, *g, *b]),
-                    );
 
-                    camera_stream.write(DownscaleRgbImageReader::new(&rgb_image, frame.width() as u32, frame.height() as u32));
+                    camera_stream.write(DownscaleRgbImageReader::new(&bytes, frame.width() as u32, frame.height() as u32));
                 }
                 shared_luma_img = Some(luma_img);
             }
