@@ -11,3 +11,5 @@ godot = { workspace = true }
 common = { path = "../common" }
 cakap2 = { workspace = true }
 bitcode = { workspace = true }
+tasker.workspace = true
+openh264 = { version = "0.6.3", features = ["source"]}

@@ -37,7 +37,7 @@ impl PointsStorageChannel {
 
 pub fn spawn_thalassic_pipeline(
     mut point_cloud_channels: Box<[Arc<PointsStorageChannel>]>,
-) -> (HeightMapCallbacksRef,) {
+) -> (HeightMapCallbacksRef, ) {
     const CELL_COUNT: u32 = 64 * 128;
 
     let mut heightmap_callbacks = HeightMapCallbacks::default();
@@ -49,19 +49,9 @@ pub fn spawn_thalassic_pipeline(
     else {
         return (heightmap_callbacks_ref,);
     };
-    // let mut pcl = vec![
-    //     AlignedVec4::from(Vector4::default());
-    //     projection_size.x as usize * projection_size.y as usize
-    // ]
-    // .into_boxed_slice();
 
     if is_gputter_initialized() {
         let mut pipeline = ThalassicBuilder {
-            // image_width: NonZeroU32::new(projection_size.x).unwrap(),
-            // focal_length_px,
-            // principal_point_px: (projection_size - Vector2::new(1, 1)).cast() / 2.0,
-            // depth_scale,
-            // pixel_count: NonZeroU32::new(projection_size.x * projection_size.y).unwrap(),
             heightmap_width: NonZeroU32::new(64).unwrap(),
             max_point_count: NonZeroU32::new(max_point_count).unwrap(),
             cell_size: -0.0625,

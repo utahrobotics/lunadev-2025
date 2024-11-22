@@ -8,8 +8,8 @@ use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
 use k::Chain;
 #[cfg(feature = "production")]
-pub use production::LunabotApp;
-pub use sim::{LunasimStdin, LunasimbotApp};
+pub use production::Main;
+pub use sim::{LunasimStdin, Sim};
 use urobotics::{
     log::{error, warn},
     tokio::{
@@ -55,7 +55,9 @@ fn log_teleop_messages() {
 }
 
 fn create_robot_chain() -> Arc<Chain<f64>> {
-    Arc::new(Chain::<f64>::from_urdf_file("urdf/lunabot.urdf").expect("Failed to load urdf"))
+    let chain = Chain::<f64>::from_urdf_file("urdf/lunabot.urdf").expect("Failed to load urdf");
+    chain.update_transforms();
+    Arc::new(chain)
 }
 
 #[derive(Clone)]

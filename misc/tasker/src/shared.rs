@@ -39,7 +39,7 @@ impl<T> MonoQueue<T> {
     fn get(&self) -> T {
         let mut lock = self.data.lock();
         if lock.is_none() {
-            self.condvar.wait(&mut lock);
+            self.condvar.wait_while(&mut lock, |inner| inner.is_none());
         }
         unsafe { lock.take().unwrap_unchecked() }
     }

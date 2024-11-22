@@ -14,12 +14,13 @@ use fxhash::FxHashMap;
 use gputter::init_gputter_blocking;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{UnitVector3, Vector2, Vector4};
-use recycler::Recycler;
 use serde::{Deserialize, Serialize};
+use streaming::camera_streaming;
 use urobotics::{
-    app::Application, callbacks::caller::CallbacksStorage, get_tokio_handle, log::error, tokio,
+    app::{define_app, Runnable}, callbacks::caller::CallbacksStorage, get_tokio_handle, log::{error, log_to_console, Level}, tokio,
     BlockOn,
 };
+use urobotics_apriltag::image::{DynamicImage, ImageBuffer};
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer,
@@ -29,23 +30,29 @@ use crate::{
 use super::{create_packet_builder, create_robot_chain, wait_for_ctrl_c};
 
 mod camera;
+mod streaming;
 mod depth;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct CameraInfo {
     link_name: String,
-    focal_length_px: f64,
+    focal_length_x_px: f64,
+    focal_length_y_px: f64,
+    stream_index: usize
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct DepthCameraInfo {
     link_name: String,
-    observe_apriltags: bool
+    #[serde(default)]
+    ignore_apriltags: bool,
+    stream_index: usize
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct LunabotApp {
     lunabase_address: SocketAddr,
+    lunabase_streaming_address: Option<SocketAddr>,
     #[serde(default = "super::default_max_pong_delay_ms")]
     max_pong_delay_ms: u64,
     #[serde(default)]
@@ -56,12 +63,10 @@ pub struct LunabotApp {
 
 // const PROJECTION_SIZE: Vector2<u32> = Vector2::new(36, 24);
 
-impl Application for LunabotApp {
-    const APP_NAME: &'static str = "main";
-
-    const DESCRIPTION: &'static str = "The lunabot application";
+impl Runnable for LunabotApp {
 
     fn run(self) {
+        log_to_console([("wgpu_hal::vulkan::instance", Level::Info), ("wgpu_core::device::resource", Level::Info)]);
         log_teleop_messages();
         if let Err(e) = init_gputter_blocking() {
             error!("Failed to initialize gputter: {e}");
@@ -74,25 +79,39 @@ impl Application for LunabotApp {
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
 
+        if let Err(e) = camera_streaming(
+            self.lunabase_streaming_address.unwrap_or_else(|| {
+                let mut addr = self.lunabase_address;
+                addr.set_port(addr.port() + 1);
+                addr
+            }
+        )) {
+            error!("Failed to start camera streaming: {e}");
+        }
+
         if let Err(e) = enumerate_cameras(
             localizer_ref.clone(),
             self.cameras.into_iter().map(
                 |(
-                    serial,
+                    port,
                     CameraInfo {
                         link_name,
-                        focal_length_px,
+                        focal_length_x_px,
+                        focal_length_y_px,
+                        stream_index
                     },
                 )| {
                     (
-                        serial,
+                        port,
                         camera::CameraInfo {
                             k_node: robot_chain
                                 .find_link(&link_name)
                                 .context("Failed to find camera link")
                                 .unwrap()
                                 .clone(),
-                            focal_length_px,
+                            focal_length_x_px,
+                            focal_length_y_px,
+                            stream_index
                         },
                     )
                 },
@@ -108,7 +127,8 @@ impl Application for LunabotApp {
                     serial,
                     DepthCameraInfo {
                         link_name,
-                        observe_apriltags,
+                        ignore_apriltags: observe_apriltags,
+                        stream_index
                     },
                 )| {
                     (
@@ -119,12 +139,23 @@ impl Application for LunabotApp {
                                 .context("Failed to find camera link")
                                 .unwrap()
                                 .clone(),
-                            observe_apriltags,
+                            ignore_apriltags: observe_apriltags,
+                            stream_index
                         },
                     )
                 },
             ),
         );
+        // heightmap_callbacks.add_dyn_fn(Box::new(|heights| {
+        //     let max = heights.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        //     let min = heights.iter().copied().fold(f32::INFINITY, f32::min);
+        //     println!("min: {}, max: {}", min, max);
+        //     let rgb: Vec<_> = heights.iter().map(|&h| {
+        //         ((h - min) / (max - min) * 255.0) as u8
+        //     }).collect();
+        //     debug_assert_eq!(heights.len(), 128 * 64);
+        //     let _ = DynamicImage::ImageLuma8(ImageBuffer::from_raw(64, 128, rgb).unwrap()).save("heights.png");
+        // }));
 
         if let Err(e) = result {
             error!("Failed to enumerate depth cameras: {e}");
@@ -219,3 +250,5 @@ impl Application for LunabotApp {
         wait_for_ctrl_c();
     }
 }
+
+define_app!(pub Main(LunabotApp):  "The lunabot application");

@@ -5,15 +5,12 @@
 //! the goal of URobotics, and this module provides that.
 
 use std::{
-    fs::File,
-    panic::PanicHookInfo,
-    path::Path,
-    sync::{Arc, LazyLock, OnceLock},
-    time::{Duration, Instant},
+    borrow::Borrow, fs::File, panic::PanicHookInfo, path::Path, sync::{Arc, LazyLock, OnceLock}, time::{Duration, Instant}
 };
 
 pub use color_eyre::owo_colors::OwoColorize;
 use crossbeam::atomic::AtomicCell;
+use fxhash::FxHashMap;
 use log::set_boxed_logger;
 pub use log::{debug, error, info, trace, warn, Level, LevelFilter, Log, Record};
 use parking_lot::Mutex;
@@ -209,8 +206,9 @@ pub fn log_to_file(path: impl AsRef<Path>) -> std::io::Result<LogFilter> {
 /// Sets up a logger that outputs to the console.
 ///
 /// The log level for this specific console logger can be controlled with the returned `LogFilter`.
-pub fn log_to_console() -> LogFilter {
+pub fn log_to_console<T>(ignore: impl IntoIterator<Item=(T, Level)>) -> LogFilter where T: Borrow<str> + Eq + std::hash::Hash + Send + Sync + 'static {
     get_program_time();
+    let ignore: FxHashMap<_, _> = ignore.into_iter().collect();
     let filter = LogFilter::new();
     let filter2 = filter.clone();
 
@@ -218,7 +216,7 @@ pub fn log_to_console() -> LogFilter {
         if record.target() == "panic" || record.level() > filter.get() {
             return;
         }
-        if record.target() == "wgpu_core::device::resource" {
+        if ignore.get(record.target()) == Some(&record.level()) {
             return;
         }
         let secs = get_program_time().as_secs_f32();

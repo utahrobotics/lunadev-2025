@@ -12,21 +12,50 @@ use urobotics_core::{
     cabinet::CabinetBuilder,
     end_tokio_runtime_and_wait, get_tokio_handle,
     log::{
-        log_panics, log_to_console, log_to_file,
+        log_panics, log_to_file,
         metrics::{CpuUsage, Temperature},
         OwoColorize,
     },
 };
 
 /// A trait that represents an application that can be run.
-pub trait Application: DeserializeOwned {
-    /// The name of the application as it appears in the command-line.
-    const APP_NAME: &'static str;
-    /// A description of the application as it appears in the command-line.
-    const DESCRIPTION: &'static str;
+pub trait Runnable {
 
     /// Runs the application on the current thread.
     fn run(self);
+}
+
+pub trait Application: Runnable + DeserializeOwned {
+    /// A description of the application as it appears in the command-line.
+    const DESCRIPTION: &'static str;
+
+    fn get_app_name() -> String;
+}
+
+#[macro_export]
+macro_rules! define_app {
+    ($vis: vis $app: ident($runnable: ident): $desc: literal) => {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "snake_case")]
+        #[allow(non_snake_case)]
+        $vis struct $app {
+            $app: $runnable
+        }
+
+        impl $crate::Runnable for $app {
+            fn run(self) {
+                $crate::Runnable::run(self.$app);
+            }
+        }
+
+        impl $crate::Application for $app {
+            const DESCRIPTION: &'static str = $desc;
+
+            fn get_app_name() -> String {
+                stringify!($app).to_lowercase()
+            }
+        }
+    }
 }
 
 struct BoxedApp {
@@ -50,7 +79,7 @@ pub struct Applications {
     pub cpu_usage: Option<CpuUsage>,
     /// The temperature monitoring configuration.
     pub temperature: Option<Temperature>,
-    functions: FxHashMap<&'static str, BoxedApp>,
+    functions: FxHashMap<String, BoxedApp>,
 }
 
 impl Default for Applications {
@@ -121,8 +150,6 @@ impl Applications {
                 return;
             }
 
-            log_to_console();
-
             let handle = get_tokio_handle();
             if let Some(cpu_usage) = self.cpu_usage.clone() {
                 handle.spawn(cpu_usage.run());
@@ -184,31 +211,7 @@ impl Applications {
                 return;
             }
         };
-        let mut config_parsed = String::new();
-        let mut copying = false;
-
-        for mut line in config_raw.lines() {
-            line = line.trim();
-            if line.starts_with('#') {
-                config_parsed.push_str(line);
-                config_parsed.push_str("\n");
-                continue;
-            }
-            if let Some(app_name) = unformat!("[{}]", line) {
-                if line.contains(',') || line.contains('\"') || line.contains('\'') {
-                    if copying {
-                        config_parsed.push_str(line);
-                    }
-                } else {
-                    copying = app_name == &cmd;
-                }
-            } else if copying {
-                config_parsed.push_str(line);
-            }
-            config_parsed.push_str("\n");
-        }
-
-        (app.func)(config_parsed);
+        (app.func)(config_raw);
     }
 
     /// Adds an application to the collection of applications.
@@ -216,7 +219,7 @@ impl Applications {
     /// Do note that the application is added statically as a type parameter.
     pub fn add_app<T: Application>(mut self) -> Self {
         self.functions.insert(
-            T::APP_NAME,
+            T::get_app_name(),
             BoxedApp {
                 description: T::DESCRIPTION,
                 func: Box::new(move |config: String| match toml::from_str::<T>(&config) {
@@ -242,19 +245,23 @@ impl Applications {
 ///     // TODO
 /// }
 ///
-/// adhoc_app!(pub MyApp, "myapp", "My application", my_func);
+/// adhoc_app!(pub MyApp(my_func): "My application");
 /// ```
 #[macro_export]
 macro_rules! adhoc_app {
-    ($vis:vis $type_name:ident, $cmd_name: literal, $description:literal, $func:ident) => {
+    ($vis:vis $type_name: ident($func:ident): $description:literal) => {
         #[derive(serde::Deserialize)]
         $vis struct $type_name {}
-        impl $crate::Application for $type_name {
-            const APP_NAME: &'static str = $cmd_name;
-            const DESCRIPTION: &'static str = $description;
-
+        impl $crate::Runnable for $type_name {
             fn run(self) {
                 $func();
+            }
+        }
+        impl $crate::Application for $type_name {
+            const DESCRIPTION: &'static str = $description;
+
+            fn get_app_name() -> String {
+                stringify!($type_name).to_lowercase()
             }
         }
     };
