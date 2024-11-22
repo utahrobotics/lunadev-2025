@@ -2336,11 +2336,12 @@ dependencies = [
  "serde",
  "spin_sleep",
  "thalassic",
+ "tokio-serial",
  "udev",
  "urobotics",
  "urobotics-apriltag",
  "v4l",
- "vesc_translator",
+ "vesc-translator",
 ]
 
 [[package]]

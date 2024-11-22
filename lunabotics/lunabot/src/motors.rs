@@ -1,4 +1,4 @@
-use urobotics::{serial, tokio::io::{AsyncWriteExt, WriteHalf}};
+use urobotics::{serial, tokio::io::{AsyncWriteExt, WriteHalf}, BlockOn};
 use vesc_translator::{CommandType, Message, VescSendable};
 use tokio_serial::SerialStream;
 
@@ -63,7 +63,7 @@ impl VescUartSerialMotor {
 impl Motor for VescUartSerialMotor {
 	fn send_message(&mut self, command: CommandType, payload: f32) {
 		let message = Message::new_no_target(command, payload);
-		let a =self.connection.write_all(message.to_uart_binary().as_slice());
+		self.connection.write_all(message.to_uart_binary().as_slice()).block_on().unwrap();
 	}
 }
 

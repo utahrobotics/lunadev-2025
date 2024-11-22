@@ -1,4 +1,4 @@
-use vesc-translator::*;
+use vesc_translator::*;
 
 macro_rules! uart_binary_test {
     ($message:expr, $result:literal, $name:ident) => {

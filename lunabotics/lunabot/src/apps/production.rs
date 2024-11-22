@@ -25,10 +25,10 @@ use urobotics::{
     tokio, BlockOn,
 };
 use urobotics_apriltag::image::{DynamicImage, ImageBuffer};
+use vesc_translator::CommandType;
 
 use crate::{
-    apps::log_teleop_messages, localization::Localizer,
-    pipelines::thalassic::spawn_thalassic_pipeline,
+    apps::log_teleop_messages, localization::Localizer, motors::{Motor, VescUartSerialMotor}, pipelines::thalassic::spawn_thalassic_pipeline
 };
 
 use super::{create_packet_builder, create_robot_chain, wait_for_ctrl_c};
@@ -186,6 +186,8 @@ impl Runnable for LunabotApp {
             error!("Failed to enumerate depth cameras: {e}");
         }
 
+        let mut motors = VescUartSerialMotor::new_from_path("/dev/ttyACM0");
+
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
         let (packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
@@ -203,7 +205,7 @@ impl Runnable for LunabotApp {
                     }
                     Action::SetSteering(steering) => {
                         let (left, right) = steering.get_left_and_right();
-                        // TODO
+                        motors.send_message(CommandType::SetDutyCycle, left as f32);
                     }
                     Action::CalculatePath { from, to, mut into } => {
                         into.push(from);
