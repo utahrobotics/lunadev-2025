@@ -13,6 +13,10 @@ use cakap2::{
 };
 use common::{FromLunabase, FromLunabot, LunabotStage, Steering};
 use godot::{classes::Engine, prelude::*};
+use image::{DynamicImage, ImageBuffer};
+use openh264::decoder::Decoder;
+use pollster::FutureExt;
+use urobotics_video::VideoDataDump;
 
 struct LunabaseLib;
 
@@ -96,6 +100,48 @@ impl INode for LunabotConn {
 
         udp.set_nonblocking(true)
             .expect("Failed to set non-blocking");
+        
+        std::thread::spawn(move || {
+            let stream_udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10601))
+                .expect("Failed to bind to 10601");
+    
+            stream_udp.set_nonblocking(true)
+                .expect("Failed to set stream udp non-blocking");
+
+            let mut rgb_img = vec![0u8; 2560 * 1440 * 3];
+            let mut display = VideoDataDump::new_display("Stream", 2560, 1440, false).expect("Failed to open display");
+            let mut dec = Decoder::new().expect("Failed to initialize decoder");
+            let mut buf = [0u8; 1400];
+
+            godot_print!("Stream server started");
+
+            loop {
+                match stream_udp.recv(&mut buf) {
+                    Ok(n) => {
+                        match dec.decode(&buf[..n]) {
+                            Ok(Some(frame)) => {
+                                frame.write_rgb8(&mut rgb_img);
+                                let dyn_img = DynamicImage::ImageRgb8(ImageBuffer::from_raw(2560, 1440, rgb_img).unwrap());
+                                if let Err(e) = display.write_frame(&dyn_img).block_on() {
+                                    godot_error!("Failed to write frame to display: {e}");
+                                    break;
+                                }
+                                let DynamicImage::ImageRgb8(img) = dyn_img else { unreachable!(); };
+                                rgb_img = img.into_raw();
+                            }
+                            Ok(None) => {}
+                            Err(e) => {
+                                godot_error!("Failed to decode frame: {e}");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        godot_error!("Failed to receive stream data: {e}");
+                        break;
+                    }
+                }
+            }
+        });
 
         let cakap_sm = PeerStateMachine::new(Duration::from_millis(150), 1024, 1400);
         // godot_warn!("LunabotConn initialized");

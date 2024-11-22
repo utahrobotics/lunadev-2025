@@ -1,3 +1,5 @@
+use std::net::{Ipv4Addr, SocketAddrV4};
+
 use futures_util::{SinkExt, TryStreamExt};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use reqwest::Client;
@@ -6,7 +8,8 @@ use tokio::net::UdpSocket;
 
 #[tokio::main]
 async fn main() {
-    let prob = std::env::args().skip(1).next().map(|arg| arg.parse::<f64>().expect("Invalid probability"));
+    let port = std::env::args().skip(1).next().map(|arg| arg.parse::<u16>().expect("Invalid port")).unwrap_or(10600);
+    let prob = std::env::args().skip(2).next().map(|arg| arg.parse::<f64>().expect("Invalid probability"));
     let response = Client::default()
         .get("ws://lunaserver.coe.utah.edu/udp-ws")
         .upgrade() // Prepares the WebSocket upgrade.
@@ -17,7 +20,7 @@ async fn main() {
     // Turns the response into a WebSocket stream.
     let mut websocket = response.into_websocket().await.expect("Failed to upgrade to WebSocket");
     let udp = UdpSocket::bind("0.0.0.0:0").await.expect("Failed to bind UDP socket");
-    udp.connect("127.0.0.1:10600").await.expect("Failed to connect to lunabase UDP socket 10600");
+    udp.connect(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)).await.expect("Failed to connect to lunabase UDP socket");
 
     let init_msg = websocket.try_next().await.expect("Failed to receive initial message from lunaserver").expect("Failed to receive initial message from lunaserver");
     if let Message::Text(text) = init_msg {
