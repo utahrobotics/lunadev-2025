@@ -28,7 +28,7 @@ use crate::{
     apps::production::streaming::DownscaleRgbImageReader, localization::LocalizerRef, pipelines::thalassic::{spawn_thalassic_pipeline, HeightMapCallbacksRef, PointsStorageChannel}
 };
 
-use super::streaming::CameraStream;
+use super::{apriltag::Apriltag, streaming::CameraStream};
 
 pub struct DepthCameraInfo {
     pub k_node: k::Node<f64>,
@@ -40,6 +40,7 @@ pub struct DepthCameraInfo {
 pub fn enumerate_depth_cameras(
     localizer_ref: LocalizerRef,
     serial_to_chain: impl IntoIterator<Item = (String, DepthCameraInfo)>,
+    apriltags: &FxHashMap<usize, Apriltag>
 ) -> (HeightMapCallbacksRef, anyhow::Result<()>) {
     let context =
         match realsense_rust::context::Context::new().context("Failed to get RealSense Context") {
@@ -220,19 +221,22 @@ pub fn enumerate_depth_cameras(
                         vec![0u8; intrinsics.width() as usize * intrinsics.height() as usize],
                     ).unwrap()
                 );
-                let det = AprilTagDetector::new(
+                let mut det = AprilTagDetector::new(
                     intrinsics.fx() as f64,
                     intrinsics.fy() as f64,
                     intrinsics.width() as u32,
                     intrinsics.height() as u32,
                     img_shared.create_lendee(),
                 );
+                for (&tag_id, tag) in apriltags {
+                    det.add_tag(tag.tag_position, tag.get_quat(), tag.tag_width, tag_id);
+                }
                 let localizer_ref = localizer_ref.clone();
-                let mut local_transform = k_node.origin();
-                local_transform.inverse_mut();
+                let mut inverse_local = k_node.origin();
+                inverse_local.inverse_mut();
                 det.detection_callbacks_ref().add_fn(move |observation| {
                     localizer_ref.set_april_tag_isometry(
-                        local_transform * observation.get_isometry_of_observer(),
+                        inverse_local * observation.get_isometry_of_observer(),
                     );
                 });
                 std::thread::spawn(move || det.run());

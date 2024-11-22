@@ -3,7 +3,7 @@
 
 use std::{f64::consts::PI, fmt::Debug};
 
-use apriltag::{families::Tag16h5, DetectorBuilder, Image, TagParams};
+use apriltag::{families::TagStandard41h12, DetectorBuilder, Image, TagParams};
 use apriltag_image::{image::ImageBuffer, ImageExt};
 use apriltag_nalgebra::PoseExt;
 use fxhash::FxHashMap;
@@ -52,15 +52,16 @@ impl Debug for TagObservation {
 impl TagObservation {
     /// Get the isometry of the observer.
     pub fn get_isometry_of_observer(&self) -> Isometry3<f64> {
-        let mut observer_pose = self.tag_local_isometry;
-        observer_pose.translation.vector = self.tag_global_isometry.translation.vector
-            + self.tag_global_isometry.rotation
-                * observer_pose.rotation.inverse()
-                * observer_pose.translation.vector;
-        observer_pose.rotation = self.tag_global_isometry.rotation
-            * UnitQuaternion::from_axis_angle(&(observer_pose.rotation * Vector3::y_axis()), PI)
-            * observer_pose.rotation;
-        observer_pose
+        // let mut observer_pose = self.tag_local_isometry;
+        // observer_pose.translation.vector = self.tag_global_isometry.translation.vector
+        //     + self.tag_global_isometry.rotation
+        //         * observer_pose.rotation.inverse()
+        //         * observer_pose.translation.vector;
+        // observer_pose.rotation = self.tag_global_isometry.rotation
+        //     * UnitQuaternion::from_axis_angle(&(observer_pose.rotation * Vector3::y_axis()), PI)
+        //     * observer_pose.rotation;
+        // observer_pose
+        self.tag_global_isometry * self.tag_local_isometry.inverse()
     }
 }
 
@@ -111,10 +112,10 @@ impl AprilTagDetector {
         }
     }
 
-    /// Add a tag to look out for.
+    /// Add a 41h12 tag to look out for. All units are in meters.
     ///
     /// Orientations and positions should be in global space. If this
-    /// is not known, any value can be used. However, `get_isometry_of_observer`
+    /// is not known, any value can be used. However, [`TagObservation::get_isometry_of_observer`]
     /// will not produce correct results in that case.
     pub fn add_tag(
         &mut self,
@@ -146,7 +147,7 @@ impl AprilTagDetector {
 impl AprilTagDetector {
     pub fn run(mut self) {
         let mut detector = DetectorBuilder::new()
-            .add_family_bits(Tag16h5::default(), 1)
+            .add_family_bits(TagStandard41h12::default(), 1)
             .build()
             .unwrap();
 
@@ -174,9 +175,17 @@ impl AprilTagDetector {
                     warn!("Failed to estimate pose of {}", detection.id());
                     continue;
                 };
+                let mut tag_local_isometry = tag_local_isometry.to_na();
+                tag_local_isometry.translation.y *= -1.0;
+                tag_local_isometry.translation.z *= -1.0;
+                let mut scaled_axis = tag_local_isometry.rotation.scaled_axis();
+                scaled_axis.y *= -1.0;
+                scaled_axis.z *= -1.0;
+                tag_local_isometry.rotation = UnitQuaternion::from_scaled_axis(scaled_axis);
+                tag_local_isometry.rotation = UnitQuaternion::from_scaled_axis(tag_local_isometry.rotation * Vector3::new(0.0, PI, 0.0)) * tag_local_isometry.rotation;
 
                 self.detection_callbacks.call(TagObservation {
-                    tag_local_isometry: tag_local_isometry.to_na(),
+                    tag_local_isometry,
                     decision_margin: detection.decision_margin(),
                     tag_global_isometry: known.pose,
                 });

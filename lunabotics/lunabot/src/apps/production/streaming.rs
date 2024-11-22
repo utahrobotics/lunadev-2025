@@ -23,8 +23,8 @@ use crate::teleop::PacketBuilder;
 
 const CAMERA_COL_COUNT: usize = 3;
 const CAMERA_ROW_COUNT: usize = 2;
-pub const CAMERA_RESOLUTION: Vector2<u32> = Vector2::new(852, 480);
-const KEYFRAME_INTERVAL: usize = 24;
+pub const CAMERA_RESOLUTION: Vector2<u32> = Vector2::new(640, 360);
+const KEYFRAME_INTERVAL: usize = 60;
 
 static CAMERA_STREAMS: RwLock<Vec<Box<[&SyncUnsafeCell<[u8]>]>>> = RwLock::new(vec![]);
 static CAMERA_STREAM_LOCKS: OnceLock<Box<[AtomicBool]>> = OnceLock::new();
@@ -149,7 +149,7 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
     let mut h264_enc = Encoder::with_api_config(
         OpenH264API::from_source(),
         EncoderConfig::new()
-            .set_bitrate_bps(1_000_000)
+            .set_bitrate_bps(500_000)
             .enable_skip_frame(true)
             .max_frame_rate(24.0)
             .rate_control_mode(RateControlMode::Bitrate)

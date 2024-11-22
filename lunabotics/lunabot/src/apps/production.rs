@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::Context;
+use apriltag::Apriltag;
 use camera::enumerate_cameras;
 use common::LunabotStage;
 use crossbeam::atomic::AtomicCell;
@@ -17,8 +18,11 @@ use nalgebra::{UnitVector3, Vector2, Vector4};
 use serde::{Deserialize, Serialize};
 use streaming::camera_streaming;
 use urobotics::{
-    app::{define_app, Runnable}, callbacks::caller::CallbacksStorage, get_tokio_handle, log::{error, log_to_console, Level}, tokio,
-    BlockOn,
+    app::{define_app, Runnable},
+    callbacks::caller::CallbacksStorage,
+    get_tokio_handle,
+    log::{error, log_to_console, Level},
+    tokio, BlockOn,
 };
 use urobotics_apriltag::image::{DynamicImage, ImageBuffer};
 
@@ -29,27 +33,28 @@ use crate::{
 
 use super::{create_packet_builder, create_robot_chain, wait_for_ctrl_c};
 
+mod apriltag;
 mod camera;
-mod streaming;
 mod depth;
+mod streaming;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 struct CameraInfo {
     link_name: String,
     focal_length_x_px: f64,
     focal_length_y_px: f64,
-    stream_index: usize
+    stream_index: usize,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 struct DepthCameraInfo {
     link_name: String,
     #[serde(default)]
     ignore_apriltags: bool,
-    stream_index: usize
+    stream_index: usize,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 pub struct LunabotApp {
     lunabase_address: SocketAddr,
     lunabase_streaming_address: Option<SocketAddr>,
@@ -59,18 +64,34 @@ pub struct LunabotApp {
     cameras: FxHashMap<String, CameraInfo>,
     #[serde(default)]
     depth_cameras: FxHashMap<String, DepthCameraInfo>,
+    #[serde(default)]
+    apriltags: FxHashMap<String, Apriltag>,
 }
 
 // const PROJECTION_SIZE: Vector2<u32> = Vector2::new(36, 24);
 
 impl Runnable for LunabotApp {
-
     fn run(self) {
-        log_to_console([("wgpu_hal::vulkan::instance", Level::Info), ("wgpu_core::device::resource", Level::Info)]);
+        log_to_console([
+            ("wgpu_hal::vulkan::instance", Level::Info),
+            ("wgpu_core::device::resource", Level::Info),
+        ]);
         log_teleop_messages();
         if let Err(e) = init_gputter_blocking() {
             error!("Failed to initialize gputter: {e}");
         }
+        let apriltags = match self
+            .apriltags
+            .into_iter()
+            .map(|(id_str, apriltag)| id_str.parse().map(|id| (id, apriltag)))
+            .try_collect::<FxHashMap<_, _>>()
+        {
+            Ok(apriltags) => apriltags,
+            Err(e) => {
+                error!("Failed to parse apriltags: {e}");
+                return;
+            }
+        };
 
         let _guard = get_tokio_handle().enter();
 
@@ -79,13 +100,11 @@ impl Runnable for LunabotApp {
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
 
-        if let Err(e) = camera_streaming(
-            self.lunabase_streaming_address.unwrap_or_else(|| {
-                let mut addr = self.lunabase_address;
-                addr.set_port(addr.port() + 1);
-                addr
-            }
-        )) {
+        if let Err(e) = camera_streaming(self.lunabase_streaming_address.unwrap_or_else(|| {
+            let mut addr = self.lunabase_address;
+            addr.set_port(addr.port() + 1);
+            addr
+        })) {
             error!("Failed to start camera streaming: {e}");
         }
 
@@ -98,7 +117,7 @@ impl Runnable for LunabotApp {
                         link_name,
                         focal_length_x_px,
                         focal_length_y_px,
-                        stream_index
+                        stream_index,
                     },
                 )| {
                     (
@@ -111,11 +130,12 @@ impl Runnable for LunabotApp {
                                 .clone(),
                             focal_length_x_px,
                             focal_length_y_px,
-                            stream_index
+                            stream_index,
                         },
                     )
                 },
             ),
+            &apriltags,
         ) {
             error!("Failed to enumerate cameras: {e}");
         }
@@ -128,7 +148,7 @@ impl Runnable for LunabotApp {
                     DepthCameraInfo {
                         link_name,
                         ignore_apriltags: observe_apriltags,
-                        stream_index
+                        stream_index,
                     },
                 )| {
                     (
@@ -140,11 +160,12 @@ impl Runnable for LunabotApp {
                                 .unwrap()
                                 .clone(),
                             ignore_apriltags: observe_apriltags,
-                            stream_index
+                            stream_index,
                         },
                     )
                 },
             ),
+            &apriltags,
         );
         // heightmap_callbacks.add_dyn_fn(Box::new(|heights| {
         //     let max = heights.iter().copied().fold(f32::NEG_INFINITY, f32::max);

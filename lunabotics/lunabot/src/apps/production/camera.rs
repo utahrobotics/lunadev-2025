@@ -15,18 +15,22 @@ use v4l::{buffer::Type, format, io::traits::CaptureStream, prelude::MmapStream, 
 
 use crate::localization::LocalizerRef;
 
-use super::streaming::{CameraStream, DownscaleRgbImageReader};
+use super::{
+    apriltag::Apriltag,
+    streaming::{CameraStream, DownscaleRgbImageReader},
+};
 
 pub struct CameraInfo {
     pub k_node: k::Node<f64>,
     pub focal_length_x_px: f64,
     pub focal_length_y_px: f64,
-    pub stream_index: usize
+    pub stream_index: usize,
 }
 
 pub fn enumerate_cameras(
     localizer_ref: LocalizerRef,
     port_to_chain: impl IntoIterator<Item = (String, CameraInfo)>,
+    apriltags: &FxHashMap<usize, Apriltag>,
 ) -> anyhow::Result<()> {
     let mut port_to_chain: FxHashMap<String, Option<_>> = port_to_chain
         .into_iter()
@@ -38,9 +42,13 @@ pub fn enumerate_cameras(
         let mut seen = FxHashSet::default();
 
         for udev_device in enumerator.scan_devices()? {
-            let Some(path) = udev_device.devnode() else { continue; };
+            let Some(path) = udev_device.devnode() else {
+                continue;
+            };
             // Valid camera paths are of the form /dev/videoN
-            let Some(path_str) = path.to_str() else { continue; };
+            let Some(path_str) = path.to_str() else {
+                continue;
+            };
             if !path_str.starts_with("/dev/video") {
                 continue;
             }
@@ -70,7 +78,7 @@ pub fn enumerate_cameras(
                 k_node,
                 focal_length_x_px,
                 focal_length_y_px,
-                stream_index
+                stream_index,
             } = cam_info.take().unwrap();
 
             let mut camera = match v4l::Device::with_path(path) {
@@ -105,27 +113,50 @@ pub fn enumerate_cameras(
             let Some(mut camera_stream) = CameraStream::new(stream_index) else {
                 continue;
             };
-            
+
             let image = OwnedData::from(ImageBuffer::from_pixel(
                 format.width,
                 format.height,
                 Luma([0]),
             ));
             let mut image = image.pessimistic_share();
-            let det = AprilTagDetector::new(
+            let mut det = AprilTagDetector::new(
                 focal_length_x_px,
                 focal_length_y_px,
                 format.width,
                 format.height,
                 image.create_lendee(),
             );
+            for (&tag_id, tag) in apriltags {
+                det.add_tag(tag.tag_position, tag.get_quat(), tag.tag_width, tag_id);
+            }
             let localizer_ref = localizer_ref.clone();
-            let mut local_transform = k_node.origin();
-            local_transform.inverse_mut();
+            let mut inverse_local = k_node.origin();
+            inverse_local.inverse_mut();
             det.detection_callbacks_ref().add_fn(move |observation| {
-                localizer_ref.set_april_tag_isometry(
-                    local_transform * observation.get_isometry_of_observer(),
+                // println!(
+                //     "pos: [{:.2}, {:.2}, {:.2}] angle: {}deg axis: [{:.2}, {:.2}, {:.2}]",
+                //     observation.tag_local_isometry.translation.x,
+                //     observation.tag_local_isometry.translation.y,
+                //     observation.tag_local_isometry.translation.z,
+                //     (observation.tag_local_isometry.rotation.angle() / std::f64::consts::PI * 180.0).round() as i32,
+                //     observation.tag_local_isometry.rotation.axis().unwrap().x,
+                //     observation.tag_local_isometry.rotation.axis().unwrap().y,
+                //     observation.tag_local_isometry.rotation.axis().unwrap().z,
+                // );
+                let pose = observation.get_isometry_of_observer();
+                println!(
+                    "pos: [{:.2}, {:.2}, {:.2}] angle: {}deg axis: [{:.2}, {:.2}, {:.2}]",
+                    pose.translation.x,
+                    pose.translation.y,
+                    pose.translation.z,
+                    (pose.rotation.angle() / std::f64::consts::PI * 180.0).round() as i32,
+                    pose.rotation.axis().unwrap().x,
+                    pose.rotation.axis().unwrap().y,
+                    pose.rotation.axis().unwrap().z,
                 );
+                localizer_ref
+                    .set_april_tag_isometry(inverse_local * observation.get_isometry_of_observer());
             });
             std::thread::spawn(move || det.run());
 
@@ -150,12 +181,16 @@ pub fn enumerate_cameras(
                         }
                     }
 
-                    camera_stream.write(DownscaleRgbImageReader::new(&rgb_img, format.width, format.height));
+                    camera_stream.write(DownscaleRgbImageReader::new(
+                        &rgb_img,
+                        format.width,
+                        format.height,
+                    ));
 
                     match image.try_recall() {
                         Ok(img) => {
                             let (img, uninit) = img.uninit();
-                            let mut vec  = img.into_raw();
+                            let mut vec = img.into_raw();
                             vec.clear();
                             vec.extend(rgb_img.array_chunks::<3>().map(|[r, g, b]| {
                                 (0.299 * *r as f64 + 0.587 * *g as f64 + 0.114 * *b as f64) as u8
