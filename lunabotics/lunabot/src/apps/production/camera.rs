@@ -15,7 +15,7 @@ use v4l::{buffer::Type, format, io::traits::CaptureStream, prelude::MmapStream, 
 
 use crate::localization::LocalizerRef;
 
-use super::streaming::CameraStream;
+use super::streaming::{CameraStream, DownscaleRgbImageReader};
 
 pub struct CameraInfo {
     pub k_node: k::Node<f64>,
@@ -150,7 +150,7 @@ pub fn enumerate_cameras(
                         }
                     }
 
-                    camera_stream.write(std::io::Cursor::new(&rgb_img));
+                    camera_stream.write(DownscaleRgbImageReader::new(&rgb_img, format.width, format.height));
 
                     match image.try_recall() {
                         Ok(img) => {

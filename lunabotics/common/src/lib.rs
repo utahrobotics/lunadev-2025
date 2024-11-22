@@ -42,7 +42,7 @@ impl FromLunabase {
     }
 }
 
-#[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum FromLunabot {
     Ping(LunabotStage),
 }

@@ -23,7 +23,7 @@ args = ["run", "-p", "lunabot", "--", "sim"]
 [tasks.main]
 workspace = false
 command = "cargo"
-args = ["run", "--features=production", "-p", "lunabot", "--", "main"]
+args = ["run", "--release", "--features=production", "-p", "lunabot", "--", "main"]
 
 [tasks.del-cabinet]
 workspace = false

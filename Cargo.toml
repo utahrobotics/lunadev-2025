@@ -98,3 +98,4 @@ opt-level = 3
 
 [profile.release.package.lunabot]
 debug = true
+debug-assertions = true

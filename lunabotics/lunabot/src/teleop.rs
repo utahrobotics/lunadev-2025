@@ -46,7 +46,7 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
     /// The `on_msg` closure is called whenever a message is received from the lunabase, and must
     /// return `true` if the message was successfully parsed, and `false` otherwise.
     pub fn connect_to_lunabase(mut self) -> PacketBuilder {
-        let mut cakap_sm = PeerStateMachine::new(Duration::from_millis(150), 1024);
+        let mut cakap_sm = PeerStateMachine::new(Duration::from_millis(150), 1024, 1400);
         let packet_builder = cakap_sm.get_packet_builder();
         let (packet_tx, mut packet_rx) = mpsc::unbounded_channel();
 
@@ -75,6 +75,11 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
                 ($data: expr) => {{
                     loop {
                         if let Err(e) = udp.send($data).await {
+                            if e.kind() == std::io::ErrorKind::ConnectionRefused {
+                                if self.lunabase_address.ip().is_loopback() {
+                                    continue;
+                                }
+                            }
                             error!("Failed to send data to lunabase: {e}");
                             continue;
                         }

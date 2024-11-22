@@ -67,13 +67,13 @@ impl PeerStateMachine {
     /// them twice).
     ///
     /// The returned [`RecommendedAction`] is an action that should be taken immediately after creating the state machine.
-    pub fn new(retransmission_duration: Duration, max_received_set_size: usize) -> Self {
+    pub fn new(retransmission_duration: Duration, max_received_set_size: usize, max_packet_size: usize) -> Self {
         Self {
             retransmission_duration,
             max_received_set_size,
             shared: Arc::new(Shared {
                 reliable_index: AtomicU64::new(1),
-                max_packet_size: 1400,
+                max_packet_size,
             }),
             retransmission_map: Default::default(),
             retransmission_queue: Default::default(),
@@ -298,7 +298,7 @@ mod tests {
 
     #[test]
     fn send_unreliable_1() {
-        let mut state_machine = PeerStateMachine::new(Duration::from_millis(100), 256);
+        let mut state_machine = PeerStateMachine::new(Duration::from_millis(100), 256, 1400);
         let reliable_builder = state_machine.get_packet_builder();
         let outgoing_data = reliable_builder
             .new_unreliable([217].into_iter().collect())
@@ -317,7 +317,7 @@ mod tests {
             RecommendedAction::WaitForData
         );
 
-        let mut other_state_machine = PeerStateMachine::new(Duration::from_millis(100), 256);
+        let mut other_state_machine = PeerStateMachine::new(Duration::from_millis(100), 256, 1400);
         // `other_state_machine` receives the unreliable packet
         let event = Event::IncomingData(&[217, 0, 0, 0, 0, 0, 0, 0, 0]);
         let action = other_state_machine.poll(event, Instant::now());
@@ -328,7 +328,7 @@ mod tests {
 
     #[test]
     fn send_reliable_1() {
-        let mut state_machine = PeerStateMachine::new(Duration::from_millis(100), 256);
+        let mut state_machine = PeerStateMachine::new(Duration::from_millis(100), 256, 1400);
         let reliable_builder = state_machine.get_packet_builder();
         let outgoing_data = reliable_builder
             .new_reliable([15].into_iter().collect())
@@ -351,7 +351,7 @@ mod tests {
         };
         assert!(duration.as_millis() > 98);
 
-        let mut other_state_machine = PeerStateMachine::new(Duration::from_millis(100), 256);
+        let mut other_state_machine = PeerStateMachine::new(Duration::from_millis(100), 256, 1400);
         // `other_state_machine` receives the reliable packet
         let event = Event::IncomingData(&[15, 0, 0, 0, 0, 0, 0, 0, 1]);
         let action = other_state_machine.poll(event, Instant::now());
@@ -388,7 +388,7 @@ mod tests {
 
     #[test]
     fn send_reliable_2() {
-        let mut state_machine = PeerStateMachine::new(Duration::from_millis(100), 256);
+        let mut state_machine = PeerStateMachine::new(Duration::from_millis(100), 256, 1400);
         let reliable_builder = state_machine.get_packet_builder();
         let outgoing_data = reliable_builder
             .new_reliable([15].into_iter().collect())
@@ -411,7 +411,7 @@ mod tests {
         };
         assert!(duration.as_millis() > 98);
 
-        let mut other_state_machine = PeerStateMachine::new(Duration::from_millis(100), 256);
+        let mut other_state_machine = PeerStateMachine::new(Duration::from_millis(100), 256, 1400);
         // `other_state_machine` receives the reliable packet
         let event = Event::IncomingData(&[15, 0, 0, 0, 0, 0, 0, 0, 1]);
         let action = other_state_machine.poll(event, Instant::now());

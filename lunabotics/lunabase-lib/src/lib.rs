@@ -97,7 +97,7 @@ impl INode for LunabotConn {
         udp.set_nonblocking(true)
             .expect("Failed to set non-blocking");
 
-        let cakap_sm = PeerStateMachine::new(Duration::from_millis(150), 1024);
+        let cakap_sm = PeerStateMachine::new(Duration::from_millis(150), 1024, 1400);
         // godot_warn!("LunabotConn initialized");
 
         Self {

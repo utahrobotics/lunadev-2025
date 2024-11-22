@@ -37,7 +37,7 @@ impl PointsStorageChannel {
 
 pub fn spawn_thalassic_pipeline(
     mut point_cloud_channels: Box<[Arc<PointsStorageChannel>]>,
-) -> (HeightMapCallbacksRef,) {
+) -> (HeightMapCallbacksRef, ) {
     const CELL_COUNT: u32 = 64 * 128;
 
     let mut heightmap_callbacks = HeightMapCallbacks::default();

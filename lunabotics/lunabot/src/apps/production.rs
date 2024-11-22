@@ -52,6 +52,7 @@ struct DepthCameraInfo {
 #[derive(Serialize, Deserialize)]
 pub struct LunabotApp {
     lunabase_address: SocketAddr,
+    lunabase_streaming_address: Option<SocketAddr>,
     #[serde(default = "super::default_max_pong_delay_ms")]
     max_pong_delay_ms: u64,
     #[serde(default)]
@@ -78,7 +79,13 @@ impl Runnable for LunabotApp {
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
 
-        if let Err(e) = camera_streaming() {
+        if let Err(e) = camera_streaming(
+            self.lunabase_streaming_address.unwrap_or_else(|| {
+                let mut addr = self.lunabase_address;
+                addr.set_port(addr.port() + 1);
+                addr
+            }
+        )) {
             error!("Failed to start camera streaming: {e}");
         }
 

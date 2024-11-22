@@ -25,8 +25,7 @@ use urobotics::{log::{error, warn}, shared::OwnedData};
 use urobotics_apriltag::{image::{ImageBuffer, Luma, Rgb}, AprilTagDetector};
 
 use crate::{
-    localization::LocalizerRef,
-    pipelines::thalassic::{spawn_thalassic_pipeline, HeightMapCallbacksRef, PointsStorageChannel},
+    apps::production::streaming::DownscaleRgbImageReader, localization::LocalizerRef, pipelines::thalassic::{spawn_thalassic_pipeline, HeightMapCallbacksRef, PointsStorageChannel}
 };
 
 use super::streaming::CameraStream;
@@ -97,7 +96,7 @@ pub fn enumerate_depth_cameras(
             continue;
         };
 
-        let Some(camera_stream) = CameraStream::new(stream_index) else {
+        let Some(mut camera_stream) = CameraStream::new(stream_index) else {
             continue;
         };
 
@@ -246,7 +245,8 @@ pub fn enumerate_depth_cameras(
         };
         let mut point_cloud: Box<[_]> =
             std::iter::repeat_n(AlignedVec4::from(Vector4::default()), depth_projecter.get_pixel_count().get() as usize).collect();
-        
+        let mut rgb_image = vec![];
+
         std::thread::spawn(move || loop {
             let frames = match pipeline.wait(None) {
                 Ok(x) => x,
@@ -285,13 +285,12 @@ pub fn enumerate_depth_cameras(
                             luma_img = x;
                         }
                     }
+                    rgb_image.clear();
+                    rgb_image.extend(
+                        bytes.array_chunks::<3>().flat_map(|[b, g, r]| [*r, *g, *b]),
+                    );
 
-                    // ImageBuffer::<Rgb<u8>, _>::from_raw(
-                    //     frame.width() as u32,
-                    //     frame.height() as u32,
-                    //     slice,
-                    // )
-                    // .unwrap()
+                    camera_stream.write(DownscaleRgbImageReader::new(&rgb_image, frame.width() as u32, frame.height() as u32));
                 }
                 shared_luma_img = Some(luma_img);
             }
