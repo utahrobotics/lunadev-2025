@@ -144,17 +144,17 @@ pub fn enumerate_cameras(
                 //     observation.tag_local_isometry.rotation.axis().unwrap().y,
                 //     observation.tag_local_isometry.rotation.axis().unwrap().z,
                 // );
-                let pose = observation.get_isometry_of_observer();
-                println!(
-                    "pos: [{:.2}, {:.2}, {:.2}] angle: {}deg axis: [{:.2}, {:.2}, {:.2}]",
-                    pose.translation.x,
-                    pose.translation.y,
-                    pose.translation.z,
-                    (pose.rotation.angle() / std::f64::consts::PI * 180.0).round() as i32,
-                    pose.rotation.axis().unwrap().x,
-                    pose.rotation.axis().unwrap().y,
-                    pose.rotation.axis().unwrap().z,
-                );
+                // let pose = observation.get_isometry_of_observer();
+                // println!(
+                //     "pos: [{:.2}, {:.2}, {:.2}] angle: {}deg axis: [{:.2}, {:.2}, {:.2}]",
+                //     pose.translation.x,
+                //     pose.translation.y,
+                //     pose.translation.z,
+                //     (pose.rotation.angle() / std::f64::consts::PI * 180.0).round() as i32,
+                //     pose.rotation.axis().unwrap().x,
+                //     pose.rotation.axis().unwrap().y,
+                //     pose.rotation.axis().unwrap().z,
+                // );
                 localizer_ref
                     .set_april_tag_isometry(inverse_local * observation.get_isometry_of_observer());
             });
