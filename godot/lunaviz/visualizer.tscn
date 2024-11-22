@@ -438,7 +438,7 @@ size_flags_horizontal = 3
 custom_minimum_size = Vector2(151, 20)
 layout_mode = 2
 size_flags_vertical = 2
-text = "test messag"
+text = "test"
 vertical_alignment = 1
 autowrap_mode = 1
 

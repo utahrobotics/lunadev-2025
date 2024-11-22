@@ -3,16 +3,26 @@ extends Node2D
 @onready var textbox=$CanvasLayer/VizHBox/DataVBox/Texbox/ScrollContainer/textVBox
 @onready var map_texture=$"CanvasLayer/VizHBox/ImagePanel/VBoxContainer/MapTexture"
 @onready var map_title= $CanvasLayer/VizHBox/ImagePanel/VBoxContainer/Title
-var current_map = "Depth"
+var current_map := 0
+
+var maps:Array[Image] = [null,null,null,null,null]
+
+func set_image_maps(depth:Image,point:Image,height:Image,gradient:Image,obstacle:Image):
+	maps[0]=depth
+	maps[1]=depth
+	maps[2]=depth
+	maps[3]=depth
+	maps[4]=depth
+	
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
-	map_title.text=current_map+" Map"
-	generate_image(64,64)
+	pass
 
 
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta: float) -> void:
-	pass
+	map_texture.texture=maps[current_map]
+	if map_texture.texture==null: generate_placeholder(64,64)
 
 func set_message(msg: String, color: Color):
 	var message:=Label.new()
@@ -24,7 +34,7 @@ func set_message(msg: String, color: Color):
 	message.size_flags_vertical=Control.SIZE_SHRINK_BEGIN
 	textbox.add_child(message)
 
-func generate_image(width:int, height:int):
+func generate_placeholder(width:int, height:int):
 	var image = Image.create(width, height, false, Image.FORMAT_RGBA8)
 	for y in range(height):
 		for x in range(width):
@@ -32,40 +42,38 @@ func generate_image(width:int, height:int):
 			image.set_pixel(x,y,color)
 	var texture= ImageTexture.create_from_image(image)
 	map_texture.texture=texture
-	map_texture.set_size(Vector2(64, 64)) 
-	print(map_texture.texture)
 
 
 
 func _on_depth_map_button_down() -> void:
-	current_map="Depth"
-	map_title.text=current_map+" Map"
+	current_map=0
+	map_title.text="Depth Map"
 	set_message("Depth Map Selected",Color.WHITE)
 
 
 func _on_point_map_button_down() -> void:
-	current_map="Point"
-	map_title.text=current_map+" Map"
+	current_map=1
+	map_title.text="Point Map"
 	set_message("Point Map Selected",Color.WHITE)
 
 
 func _on_height_map_button_down() -> void:
-	current_map="Height"
-	map_title.text=current_map+" Map"
+	current_map=2
+	map_title.text="Height Map"
 	set_message("Height Map Selected",Color.WHITE)
 
 
 func _on_gradient_map_button_down() -> void:
-	current_map="Gradient"
-	map_title.text=current_map+" Map"
+	current_map=3
+	map_title.text="Gradient Map"
 	set_message("Gradient Map Selected",Color.WHITE)
 
 func _on_obstacle_map_button_down() -> void:
-	current_map="Obstacle"
-	map_title.text=current_map+" Map"
+	current_map=4
+	map_title.text="Obstacle Map"
 	set_message("Obstacle Map Selected",Color.WHITE)
 
 
 func _on_send_button_button_up() -> void:
-	print(current_map)
-	set_message(current_map+" Map Sent",Color.WHITE)
+	print(map_title.text)
+	set_message(map_title.text+" Sent",Color.WHITE)
