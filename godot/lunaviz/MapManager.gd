@@ -9,15 +9,14 @@ var maps:Array[Image] = [null,null,null,null,null]
 
 func set_image_maps(depth:Image,point:Image,height:Image,gradient:Image,obstacle:Image):
 	maps[0]=depth
-	maps[1]=depth
-	maps[2]=depth
-	maps[3]=depth
-	maps[4]=depth
+	maps[1]=point
+	maps[2]=height
+	maps[3]=gradient
+	maps[4]=obstacle
 	
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	pass
-
 
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta: float) -> void:
