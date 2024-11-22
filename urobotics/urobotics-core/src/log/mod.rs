@@ -10,7 +10,7 @@ use std::{
 
 pub use color_eyre::owo_colors::OwoColorize;
 use crossbeam::atomic::AtomicCell;
-use fxhash::{FxHashMap, FxHashSet};
+use fxhash::FxHashMap;
 use log::set_boxed_logger;
 pub use log::{debug, error, info, trace, warn, Level, LevelFilter, Log, Record};
 use parking_lot::Mutex;

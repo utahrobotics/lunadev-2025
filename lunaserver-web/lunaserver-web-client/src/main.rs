@@ -20,6 +20,7 @@ async fn main() {
     // Turns the response into a WebSocket stream.
     let mut websocket = response.into_websocket().await.expect("Failed to upgrade to WebSocket");
     let udp = UdpSocket::bind("0.0.0.0:0").await.expect("Failed to bind UDP socket");
+    eprintln!("Bound to {}", udp.local_addr().expect("Failed to get local address"));
     udp.connect(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)).await.expect("Failed to connect to lunabase UDP socket");
 
     let init_msg = websocket.try_next().await.expect("Failed to receive initial message from lunaserver").expect("Failed to receive initial message from lunaserver");

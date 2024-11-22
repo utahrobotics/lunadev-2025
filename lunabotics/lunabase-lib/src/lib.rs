@@ -1,9 +1,6 @@
 #![feature(backtrace_frames)]
 use std::{
-    collections::VecDeque,
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
-    sync::Once,
-    time::{Duration, Instant},
+    collections::VecDeque, net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket}, sync::{atomic::{AtomicBool, Ordering}, Once}, time::{Duration, Instant}
 };
 
 use bitcode::encode;
@@ -12,11 +9,9 @@ use cakap2::{
     Event, PeerStateMachine, RecommendedAction,
 };
 use common::{FromLunabase, FromLunabot, LunabotStage, Steering};
-use godot::{classes::Engine, prelude::*};
-use image::{DynamicImage, ImageBuffer};
-use openh264::decoder::Decoder;
-use pollster::FutureExt;
-use urobotics_video::VideoDataDump;
+use godot::{classes::{image::Format, Engine, Image}, prelude::*};
+use openh264::{decoder::Decoder, nal_units};
+use tasker::shared::{OwnedData, SharedDataReceiver};
 
 struct LunabaseLib;
 
@@ -72,6 +67,8 @@ struct LunabotConnInner {
     did_reconnection: bool,
     last_steering: Option<(Steering, ReliableIndex)>,
     send_to: Option<SocketAddr>,
+    stream_lendee: SharedDataReceiver<Vec<u8>>,
+    stream_corrupted: &'static AtomicBool
 }
 
 #[derive(GodotClass)]
@@ -79,6 +76,10 @@ struct LunabotConnInner {
 struct LunabotConn {
     inner: Option<LunabotConnInner>,
     base: Base<Node>,
+    #[var]
+    stream_image: Gd<Image>,
+    #[var]
+    stream_image_updated: bool
 }
 
 thread_local! {
@@ -90,56 +91,77 @@ thread_local! {
 #[godot_api]
 impl INode for LunabotConn {
     fn init(base: Base<Node>) -> Self {
+        let stream_image = Image::create_empty(2556, 960, false, Format::RGB8).unwrap();
         if Engine::singleton().is_editor_hint() {
-            return Self { inner: None, base };
+            return Self { inner: None, base, stream_image, stream_image_updated: false };
         }
         init_panic_hook();
+
+        let stream_corrupted: &_ = Box::leak(Box::new(AtomicBool::new(false)));
+        let mut shared_rgb_img = OwnedData::from(vec![0u8; 2556 * 960 * 3]);
+        let stream_lendee = shared_rgb_img.create_lendee();
+        let mut shared_rgb_img = shared_rgb_img.pessimistic_share();
 
         let udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10600))
             .expect("Failed to bind to 10600");
 
         udp.set_nonblocking(true)
             .expect("Failed to set non-blocking");
+
+        let stream_udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10601))
+            .expect("Failed to bind to 10601");
         
         std::thread::spawn(move || {
-            let stream_udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10601))
-                .expect("Failed to bind to 10601");
-    
-            stream_udp.set_nonblocking(true)
-                .expect("Failed to set stream udp non-blocking");
-
-            let mut rgb_img = vec![0u8; 2560 * 1440 * 3];
-            let mut display = VideoDataDump::new_display("Stream", 2560, 1440, false).expect("Failed to open display");
+            if let Err(e) = Decoder::new() {
+                godot_error!("Failed to initialize decoder: {e}");
+                return;
+            }
             let mut dec = Decoder::new().expect("Failed to initialize decoder");
             let mut buf = [0u8; 1400];
+            let mut stream = vec![];
 
             godot_print!("Stream server started");
 
             loop {
                 match stream_udp.recv(&mut buf) {
                     Ok(n) => {
-                        match dec.decode(&buf[..n]) {
-                            Ok(Some(frame)) => {
-                                frame.write_rgb8(&mut rgb_img);
-                                let dyn_img = DynamicImage::ImageRgb8(ImageBuffer::from_raw(2560, 1440, rgb_img).unwrap());
-                                if let Err(e) = display.write_frame(&dyn_img).block_on() {
-                                    godot_error!("Failed to write frame to display: {e}");
-                                    break;
-                                }
-                                let DynamicImage::ImageRgb8(img) = dyn_img else { unreachable!(); };
-                                rgb_img = img.into_raw();
-                            }
-                            Ok(None) => {}
-                            Err(e) => {
-                                godot_error!("Failed to decode frame: {e}");
-                            }
-                        }
+                        stream.extend_from_slice(&buf[..n]);
                     }
                     Err(e) => {
                         godot_error!("Failed to receive stream data: {e}");
                         break;
                     }
                 }
+                
+                let mut last_i = 0usize;
+                let start_i = stream.as_ptr() as usize;
+                let mut nals: Vec<_> = nal_units(&stream).collect();
+                nals.pop();
+
+                for packet in nals {
+                    last_i = packet.as_ptr() as usize - start_i + packet.len();
+                    match dec.decode(packet) {
+                        Ok(Some(frame)) => {
+                            stream_corrupted.store(false, Ordering::Relaxed);
+                            match shared_rgb_img.try_recall() {
+                                Ok(mut owned) => {
+                                    frame.write_rgb8(&mut owned);
+                                    shared_rgb_img = owned.pessimistic_share();
+                                }
+                                Err(shared) => {
+                                    shared_rgb_img = shared;
+                                }
+                            }
+                        }
+                        Ok(None) => {
+                            stream_corrupted.store(false, Ordering::Relaxed);
+                        }
+                        Err(_) => {
+                            stream_corrupted.store(true, Ordering::Relaxed);
+                        }
+                    }
+                }
+                stream.drain(0..last_i);
             }
         });
 
@@ -155,14 +177,24 @@ impl INode for LunabotConn {
                 did_reconnection: false,
                 last_steering: None,
                 send_to: None,
+                stream_lendee,
+                stream_corrupted
             }),
             base,
+            stream_image,
+            stream_image_updated: false
         }
     }
 
     fn process(&mut self, _delta: f64) {
         if let Some(mut inner) = self.inner.as_mut() {
             let mut received = false;
+
+            if let Some(data) = inner.stream_lendee.try_get() {
+                self.stream_image.set_data(2556, 960, false, Format::RGB8, &PackedByteArray::from(&**data));
+                self.stream_image_updated = true;
+                received = true;
+            }
 
             macro_rules! on_msg {
                 ($msg: ident) => {{
@@ -342,6 +374,11 @@ impl LunabotConn {
     fn entered_dig(&self);
     #[signal]
     fn entered_dump(&self);
+
+    #[func]
+    fn is_stream_corrupted(&self) -> bool {
+        self.inner.as_ref().map_or(false, |inner| inner.stream_corrupted.load(Ordering::Relaxed))
+    }
 
     fn set_steering(&mut self, new_steering: Steering) {
         if let Some(inner) = &mut self.inner {

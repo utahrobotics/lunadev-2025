@@ -22,6 +22,7 @@ Lunabot="*res://lunabot.gd"
 [display]
 
 window/size/viewport_width=648
+window/subwindows/embed_subwindows=false
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
