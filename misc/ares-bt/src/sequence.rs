@@ -10,16 +10,16 @@ pub struct Sequence<A> {
 
 macro_rules! impl_seq {
     ($len: literal $($name: ident $num: tt)+) => {
-        impl<C1, T, $($name,)+> Behavior<C1, T> for Sequence<($($name,)+)>
+        impl<C1, $($name,)+> Behavior<C1> for Sequence<($($name,)+)>
         where
-            $($name: Behavior<C1, T>,)+
+            $($name: Behavior<C1>,)+
         {
-            fn run(&mut self, blackboard: &mut C1) -> Status<T> {
+            fn run(&mut self, blackboard: &mut C1) -> Status {
                 loop {
                     match self.index {
                         $(
                             $num => match self.body.$num.run(blackboard) {
-                                Status::Running(t) => return Status::Running(t),
+                                Status::Running => return Status::Running,
                                 Status::Success => {
                                     self.index += 1;
                                 }
@@ -48,16 +48,16 @@ macro_rules! impl_seq {
                 )+
             }
         }
-        impl<C1, T, $($name,)+> InfallibleBehavior<C1, T> for Sequence<($($name,)+)>
+        impl<C1, $($name,)+> InfallibleBehavior<C1> for Sequence<($($name,)+)>
         where
-            $($name: InfallibleBehavior<C1, T>,)+
+            $($name: InfallibleBehavior<C1>,)+
         {
-            fn run_infallible(&mut self, blackboard: &mut C1) -> InfallibleStatus<T> {
+            fn run_infallible(&mut self, blackboard: &mut C1) -> InfallibleStatus {
                 loop {
                     match self.index {
                         $(
                             $num => match self.body.$num.run_infallible(blackboard) {
-                                InfallibleStatus::Running(t) => return InfallibleStatus::Running(t),
+                                InfallibleStatus::Running => return InfallibleStatus::Running,
                                 InfallibleStatus::Success => {
                                     self.index += 1;
                                 }
@@ -71,20 +71,20 @@ macro_rules! impl_seq {
                 }
             }
         }
-        impl<C1, T, $($name,)+> FallibleBehavior<C1, T> for Sequence<($($name,)+)>
+        impl<C1, $($name,)+> FallibleBehavior<C1> for Sequence<($($name,)+)>
         where
-            $($name: FallibleBehavior<C1, T>,)+
+            $($name: FallibleBehavior<C1>,)+
         {
-            fn run_fallible(&mut self, blackboard: &mut C1) -> FallibleStatus<T> {
+            fn run_fallible(&mut self, blackboard: &mut C1) -> FallibleStatus {
                 self.index = 0;
                 self.body.0.run_fallible(blackboard)
             }
         }
-        impl<C1, T, $($name,)+> EternalBehavior<C1, T> for Sequence<($($name,)+)>
+        impl<C1, $($name,)+> EternalBehavior<C1> for Sequence<($($name,)+)>
         where
-            $($name: EternalBehavior<C1, T>,)+
+            $($name: EternalBehavior<C1>,)+
         {
-            fn run_eternal(&mut self, blackboard: &mut C1) -> EternalStatus<T> {
+            fn run_eternal(&mut self, blackboard: &mut C1) -> EternalStatus {
                 self.index = 0;
                 self.body.0.run_eternal(blackboard)
             }
@@ -131,16 +131,16 @@ pub struct Select<A> {
 
 macro_rules! impl_sel {
     ($len: literal $($name: ident $num: tt)+) => {
-        impl<C1, T, $($name,)+> Behavior<C1, T> for Select<($($name,)+)>
+        impl<C1, $($name,)+> Behavior<C1> for Select<($($name,)+)>
         where
-            $($name: Behavior<C1, T>,)+
+            $($name: Behavior<C1>,)+
         {
-            fn run(&mut self, blackboard: &mut C1) -> Status<T> {
+            fn run(&mut self, blackboard: &mut C1) -> Status {
                 loop {
                     match self.index {
                         $(
                             $num => match self.body.$num.run(blackboard) {
-                                Status::Running(t) => return Status::Running(t),
+                                Status::Running => return Status::Running,
                                 Status::Success => {
                                     self.index = 0;
                                     return Status::Success;
@@ -169,25 +169,25 @@ macro_rules! impl_sel {
                 )+
             }
         }
-        impl<C1, T, $($name,)+> InfallibleBehavior<C1, T> for Select<($($name,)+)>
+        impl<C1, $($name,)+> InfallibleBehavior<C1> for Select<($($name,)+)>
         where
-            $($name: InfallibleBehavior<C1, T>,)+
+            $($name: InfallibleBehavior<C1>,)+
         {
-            fn run_infallible(&mut self, blackboard: &mut C1) -> InfallibleStatus<T> {
+            fn run_infallible(&mut self, blackboard: &mut C1) -> InfallibleStatus {
                 self.index = 0;
                 self.body.0.run_infallible(blackboard)
             }
         }
-        impl<C1, T, $($name,)+> FallibleBehavior<C1, T> for Select<($($name,)+)>
+        impl<C1, $($name,)+> FallibleBehavior<C1> for Select<($($name,)+)>
         where
-            $($name: FallibleBehavior<C1, T>,)+
+            $($name: FallibleBehavior<C1>,)+
         {
-            fn run_fallible(&mut self, blackboard: &mut C1) -> FallibleStatus<T> {
+            fn run_fallible(&mut self, blackboard: &mut C1) -> FallibleStatus {
                 loop {
                     match self.index {
                         $(
                             $num => match self.body.$num.run_fallible(blackboard) {
-                                FallibleStatus::Running(t) => return FallibleStatus::Running(t),
+                                FallibleStatus::Running => return FallibleStatus::Running,
                                 FallibleStatus::Failure => {
                                     self.index += 1;
                                 }
@@ -201,11 +201,11 @@ macro_rules! impl_sel {
                 }
             }
         }
-        impl<C1, T, $($name,)+> EternalBehavior<C1, T> for Select<($($name,)+)>
+        impl<C1, $($name,)+> EternalBehavior<C1> for Select<($($name,)+)>
         where
-            $($name: EternalBehavior<C1, T>,)+
+            $($name: EternalBehavior<C1>,)+
         {
-            fn run_eternal(&mut self, blackboard: &mut C1) -> EternalStatus<T> {
+            fn run_eternal(&mut self, blackboard: &mut C1) -> EternalStatus {
                 self.index = 0;
                 self.body.0.run_eternal(blackboard)
             }
@@ -253,19 +253,19 @@ pub struct ParallelSequence<A> {
 
 macro_rules! impl_seq {
     ($len: literal $($name: ident $num: tt)+) => {
-        impl<C1, T, $($name,)+> Behavior<C1, T> for ParallelSequence<($($name,)+)>
+        impl<C1, $($name,)+> Behavior<C1> for ParallelSequence<($($name,)+)>
         where
-            $($name: Behavior<C1, T>,)+
+            $($name: Behavior<C1>,)+
             Self: CancelSafe
         {
-            fn run(&mut self, blackboard: &mut C1) -> Status<T> {
+            fn run(&mut self, blackboard: &mut C1) -> Status {
                 loop {
                     match self.index {
                         $(
                             $num => match self.body.$num.run(blackboard) {
-                                Status::Running(t) => {
+                                Status::Running => {
                                     self.index += 1;
-                                    return Status::Running(t);
+                                    return Status::Running;
                                 }
                                 Status::Success => {
                                     self.index += 1;
@@ -301,18 +301,18 @@ macro_rules! impl_seq {
                 )+
             }
         }
-        impl<C1, T, $($name,)+> InfallibleBehavior<C1, T> for ParallelSequence<($($name,)+)>
+        impl<C1, $($name,)+> InfallibleBehavior<C1> for ParallelSequence<($($name,)+)>
         where
-            $($name: InfallibleBehavior<C1, T>,)+
+            $($name: InfallibleBehavior<C1>,)+
         {
-            fn run_infallible(&mut self, blackboard: &mut C1) -> InfallibleStatus<T> {
+            fn run_infallible(&mut self, blackboard: &mut C1) -> InfallibleStatus {
                 loop {
                     match self.index {
                         $(
                             $num => match self.body.$num.run_infallible(blackboard) {
-                                InfallibleStatus::Running(t) => {
+                                InfallibleStatus::Running => {
                                     self.index += 1;
-                                    return InfallibleStatus::Running(t);
+                                    return InfallibleStatus::Running;
                                 }
                                 InfallibleStatus::Success => {
                                     self.index += 1;
@@ -332,19 +332,19 @@ macro_rules! impl_seq {
                 }
             }
         }
-        impl<C1, T, $($name,)+> FallibleBehavior<C1, T> for ParallelSequence<($($name,)+)>
+        impl<C1, $($name,)+> FallibleBehavior<C1> for ParallelSequence<($($name,)+)>
         where
-            $($name: FallibleBehavior<C1, T>,)+
+            $($name: FallibleBehavior<C1>,)+
             Self: CancelSafe
         {
-            fn run_fallible(&mut self, blackboard: &mut C1) -> FallibleStatus<T> {
+            fn run_fallible(&mut self, blackboard: &mut C1) -> FallibleStatus {
                 loop {
                     match self.index {
                         $(
                             $num => match self.body.$num.run_fallible(blackboard) {
-                                FallibleStatus::Running(t) => {
+                                FallibleStatus::Running => {
                                     self.index += 1;
-                                    return FallibleStatus::Running(t);
+                                    return FallibleStatus::Running;
                                 }
                                 FallibleStatus::Failure => {
                                     self.reset();
@@ -359,11 +359,11 @@ macro_rules! impl_seq {
                 }
             }
         }
-        impl<C1, T, $($name,)+> EternalBehavior<C1, T> for ParallelSequence<($($name,)+)>
+        impl<C1, $($name,)+> EternalBehavior<C1> for ParallelSequence<($($name,)+)>
         where
-            $($name: EternalBehavior<C1, T>,)+
+            $($name: EternalBehavior<C1>,)+
         {
-            fn run_eternal(&mut self, blackboard: &mut C1) -> EternalStatus<T> {
+            fn run_eternal(&mut self, blackboard: &mut C1) -> EternalStatus {
                 loop {
                     match self.index {
                         $(
@@ -428,19 +428,19 @@ pub struct ParallelSelect<A> {
 
 macro_rules! impl_sel {
     ($len: literal $($name: ident $num: tt)+) => {
-        impl<C1, T, $($name,)+> Behavior<C1, T> for ParallelSelect<($($name,)+)>
+        impl<C1, $($name,)+> Behavior<C1> for ParallelSelect<($($name,)+)>
         where
-            $($name: Behavior<C1, T>,)+
+            $($name: Behavior<C1>,)+
             Self: CancelSafe
         {
-            fn run(&mut self, blackboard: &mut C1) -> Status<T> {
+            fn run(&mut self, blackboard: &mut C1) -> Status {
                 loop {
                     match self.index {
                         $(
                             $num => match self.body.$num.run(blackboard) {
-                                Status::Running(t) => {
+                                Status::Running => {
                                     self.index += 1;
-                                    return Status::Running(t);
+                                    return Status::Running;
                                 },
                                 Status::Success => {
                                     self.reset();
@@ -476,19 +476,19 @@ macro_rules! impl_sel {
                 )+
             }
         }
-        impl<C1, T, $($name,)+> InfallibleBehavior<C1, T> for ParallelSelect<($($name,)+)>
+        impl<C1, $($name,)+> InfallibleBehavior<C1> for ParallelSelect<($($name,)+)>
         where
-            $($name: InfallibleBehavior<C1, T>,)+
+            $($name: InfallibleBehavior<C1>,)+
             Self: CancelSafe
         {
-            fn run_infallible(&mut self, blackboard: &mut C1) -> InfallibleStatus<T> {
+            fn run_infallible(&mut self, blackboard: &mut C1) -> InfallibleStatus {
                 loop {
                     match self.index {
                         $(
                             $num => match self.body.$num.run_infallible(blackboard) {
-                                InfallibleStatus::Running(t) => {
+                                InfallibleStatus::Running => {
                                     self.index += 1;
-                                    return InfallibleStatus::Running(t);
+                                    return InfallibleStatus::Running;
                                 },
                                 InfallibleStatus::Success => {
                                     self.reset();
@@ -503,18 +503,18 @@ macro_rules! impl_sel {
                 }
             }
         }
-        impl<C1, T, $($name,)+> FallibleBehavior<C1, T> for ParallelSelect<($($name,)+)>
+        impl<C1, $($name,)+> FallibleBehavior<C1> for ParallelSelect<($($name,)+)>
         where
-            $($name: FallibleBehavior<C1, T>,)+
+            $($name: FallibleBehavior<C1>,)+
         {
-            fn run_fallible(&mut self, blackboard: &mut C1) -> FallibleStatus<T> {
+            fn run_fallible(&mut self, blackboard: &mut C1) -> FallibleStatus {
                 loop {
                     match self.index {
                         $(
                             $num => match self.body.$num.run_fallible(blackboard) {
-                                FallibleStatus::Running(t) => {
+                                FallibleStatus::Running => {
                                     self.index += 1;
-                                    return FallibleStatus::Running(t);
+                                    return FallibleStatus::Running;
                                 },
                                 FallibleStatus::Failure => {
                                     self.index += 1;
@@ -534,11 +534,11 @@ macro_rules! impl_sel {
                 }
             }
         }
-        impl<C1, T, $($name,)+> EternalBehavior<C1, T> for ParallelSelect<($($name,)+)>
+        impl<C1, $($name,)+> EternalBehavior<C1> for ParallelSelect<($($name,)+)>
         where
-            $($name: EternalBehavior<C1, T>,)+
+            $($name: EternalBehavior<C1>,)+
         {
-            fn run_eternal(&mut self, blackboard: &mut C1) -> EternalStatus<T> {
+            fn run_eternal(&mut self, blackboard: &mut C1) -> EternalStatus {
                 loop {
                     match self.index {
                         $(
@@ -602,19 +602,19 @@ pub struct ParallelAny<A> {
 
 macro_rules! impl_sel {
     ($len: literal $($name: ident $num: tt)+) => {
-        impl<C1, T, $($name,)+> Behavior<C1, T> for ParallelAny<($($name,)+)>
+        impl<C1, $($name,)+> Behavior<C1> for ParallelAny<($($name,)+)>
         where
-            $($name: Behavior<C1, T>,)+
+            $($name: Behavior<C1>,)+
             Self: CancelSafe
         {
-            fn run(&mut self, blackboard: &mut C1) -> Status<T> {
+            fn run(&mut self, blackboard: &mut C1) -> Status {
                 loop {
                     match self.index {
                         $(
                             $num => match self.body.$num.run(blackboard) {
-                                Status::Running(t) => {
+                                Status::Running => {
                                     self.index += 1;
-                                    return Status::Running(t);
+                                    return Status::Running;
                                 },
                                 Status::Success => {
                                     self.reset();
@@ -644,19 +644,19 @@ macro_rules! impl_sel {
                 )+
             }
         }
-        impl<C1, T, $($name,)+> InfallibleBehavior<C1, T> for ParallelAny<($($name,)+)>
+        impl<C1, $($name,)+> InfallibleBehavior<C1> for ParallelAny<($($name,)+)>
         where
-            $($name: InfallibleBehavior<C1, T>,)+
+            $($name: InfallibleBehavior<C1>,)+
             Self: CancelSafe
         {
-            fn run_infallible(&mut self, blackboard: &mut C1) -> InfallibleStatus<T> {
+            fn run_infallible(&mut self, blackboard: &mut C1) -> InfallibleStatus {
                 loop {
                     match self.index {
                         $(
                             $num => match self.body.$num.run_infallible(blackboard) {
-                                InfallibleStatus::Running(t) => {
+                                InfallibleStatus::Running => {
                                     self.index += 1;
-                                    return InfallibleStatus::Running(t);
+                                    return InfallibleStatus::Running;
                                 },
                                 InfallibleStatus::Success => {
                                     self.reset();
@@ -671,19 +671,19 @@ macro_rules! impl_sel {
                 }
             }
         }
-        impl<C1, T, $($name,)+> FallibleBehavior<C1, T> for ParallelAny<($($name,)+)>
+        impl<C1, $($name,)+> FallibleBehavior<C1> for ParallelAny<($($name,)+)>
         where
-            $($name: FallibleBehavior<C1, T>,)+
+            $($name: FallibleBehavior<C1>,)+
             Self: CancelSafe
         {
-            fn run_fallible(&mut self, blackboard: &mut C1) -> FallibleStatus<T> {
+            fn run_fallible(&mut self, blackboard: &mut C1) -> FallibleStatus {
                 loop {
                     match self.index {
                         $(
                             $num => match self.body.$num.run_fallible(blackboard) {
-                                FallibleStatus::Running(t) => {
+                                FallibleStatus::Running => {
                                     self.index += 1;
-                                    return FallibleStatus::Running(t);
+                                    return FallibleStatus::Running;
                                 },
                                 FallibleStatus::Failure => {
                                     self.reset();
@@ -698,11 +698,11 @@ macro_rules! impl_sel {
                 }
             }
         }
-        impl<C1, T, $($name,)+> EternalBehavior<C1, T> for ParallelAny<($($name,)+)>
+        impl<C1, $($name,)+> EternalBehavior<C1> for ParallelAny<($($name,)+)>
         where
-            $($name: EternalBehavior<C1, T>,)+
+            $($name: EternalBehavior<C1>,)+
         {
-            fn run_eternal(&mut self, blackboard: &mut C1) -> EternalStatus<T> {
+            fn run_eternal(&mut self, blackboard: &mut C1) -> EternalStatus {
                 loop {
                     match self.index {
                         $(

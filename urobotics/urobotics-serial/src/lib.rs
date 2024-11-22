@@ -7,7 +7,7 @@ pub use bytes::Bytes;
 use bytes::BytesMut;
 use serde::Deserialize;
 use tokio_serial::{SerialPort, SerialPortBuilderExt, SerialStream};
-use urobotics_app::Application;
+use urobotics_app::Runnable;
 use urobotics_core::{
     define_callbacks, fn_alias,
     log::error,
@@ -88,10 +88,7 @@ impl SerialConnection {
     }
 }
 
-impl Application for SerialConnection {
-    const APP_NAME: &'static str = "serial";
-    const DESCRIPTION: &'static str = "Connects to a serial port and reads data from it";
-
+impl Runnable for SerialConnection {
     fn run(self) {
         let fut = async move {
             macro_rules! expect {
@@ -131,4 +128,12 @@ impl Application for SerialConnection {
         };
         fut.block_on();
     }
+}
+
+pub mod app {
+    use urobotics_app::define_app;
+
+    use crate::SerialConnection;
+
+    define_app!(pub Serial(SerialConnection): "Connects to a serial port and reads data from it");
 }

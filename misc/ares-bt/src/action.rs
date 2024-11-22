@@ -3,26 +3,26 @@ use crate::{
     InfallibleBehavior, InfallibleStatus, IntoRon, Status,
 };
 
-impl<T, F: FnMut(&mut B) -> Status<T>, B> Behavior<B, T> for F {
-    fn run(&mut self, blackboard: &mut B) -> Status<T> {
+impl<F: FnMut(&mut B) -> Status, B> Behavior<B> for F {
+    fn run(&mut self, blackboard: &mut B) -> Status {
         self(blackboard)
     }
 }
 
-impl<T, F: FnMut(&mut B) -> InfallibleStatus<T>, B> InfallibleBehavior<B, T> for F {
-    fn run_infallible(&mut self, blackboard: &mut B) -> InfallibleStatus<T> {
+impl<F: FnMut(&mut B) -> InfallibleStatus, B> InfallibleBehavior<B> for F {
+    fn run_infallible(&mut self, blackboard: &mut B) -> InfallibleStatus {
         self(blackboard)
     }
 }
 
-impl<T, F: FnMut(&mut B) -> FallibleStatus<T>, B> FallibleBehavior<B, T> for F {
-    fn run_fallible(&mut self, blackboard: &mut B) -> FallibleStatus<T> {
+impl<F: FnMut(&mut B) -> FallibleStatus, B> FallibleBehavior<B> for F {
+    fn run_fallible(&mut self, blackboard: &mut B) -> FallibleStatus {
         self(blackboard)
     }
 }
 
-impl<T, F: FnMut(&mut B) -> EternalStatus<T>, B> EternalBehavior<B, T> for F {
-    fn run_eternal(&mut self, blackboard: &mut B) -> EternalStatus<T> {
+impl<F: FnMut(&mut B) -> EternalStatus, B> EternalBehavior<B> for F {
+    fn run_eternal(&mut self, blackboard: &mut B) -> EternalStatus {
         self(blackboard)
     }
 }
@@ -30,14 +30,14 @@ impl<T, F: FnMut(&mut B) -> EternalStatus<T>, B> EternalBehavior<B, T> for F {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct AlwaysSucceed;
 
-impl<T, B> Behavior<B, T> for AlwaysSucceed {
-    fn run(&mut self, _blackboard: &mut B) -> Status<T> {
+impl<B> Behavior<B> for AlwaysSucceed {
+    fn run(&mut self, _blackboard: &mut B) -> Status {
         Status::Success
     }
 }
 
-impl<T, B> InfallibleBehavior<B, T> for AlwaysSucceed {
-    fn run_infallible(&mut self, _blackboard: &mut B) -> InfallibleStatus<T> {
+impl<B> InfallibleBehavior<B> for AlwaysSucceed {
+    fn run_infallible(&mut self, _blackboard: &mut B) -> InfallibleStatus {
         InfallibleStatus::Success
     }
 }
@@ -55,14 +55,14 @@ impl CancelSafe for AlwaysSucceed {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct AlwaysFail;
 
-impl<T, B> Behavior<B, T> for AlwaysFail {
-    fn run(&mut self, _blackboard: &mut B) -> Status<T> {
+impl<B> Behavior<B> for AlwaysFail {
+    fn run(&mut self, _blackboard: &mut B) -> Status {
         Status::Failure
     }
 }
 
-impl<T, B> FallibleBehavior<B, T> for AlwaysFail {
-    fn run_fallible(&mut self, _blackboard: &mut B) -> FallibleStatus<T> {
+impl<B> FallibleBehavior<B> for AlwaysFail {
+    fn run_fallible(&mut self, _blackboard: &mut B) -> FallibleStatus {
         FallibleStatus::Failure
     }
 }
@@ -80,26 +80,26 @@ impl CancelSafe for AlwaysFail {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct AlwaysRunning;
 
-impl<T: Default, B> Behavior<B, T> for AlwaysRunning {
-    fn run(&mut self, _blackboard: &mut B) -> Status<T> {
-        Status::Running(Default::default())
+impl<B> Behavior<B> for AlwaysRunning {
+    fn run(&mut self, _blackboard: &mut B) -> Status {
+        Status::Running
     }
 }
 
-impl<T: Default, B> InfallibleBehavior<B, T> for AlwaysRunning {
-    fn run_infallible(&mut self, _blackboard: &mut B) -> InfallibleStatus<T> {
-        InfallibleStatus::Running(Default::default())
+impl<B> InfallibleBehavior<B> for AlwaysRunning {
+    fn run_infallible(&mut self, _blackboard: &mut B) -> InfallibleStatus {
+        InfallibleStatus::Running
     }
 }
 
-impl<T: Default, B> FallibleBehavior<B, T> for AlwaysRunning {
-    fn run_fallible(&mut self, _blackboard: &mut B) -> FallibleStatus<T> {
-        FallibleStatus::Running(Default::default())
+impl<B> FallibleBehavior<B> for AlwaysRunning {
+    fn run_fallible(&mut self, _blackboard: &mut B) -> FallibleStatus {
+        FallibleStatus::Running
     }
 }
 
-impl<T: Default, B> EternalBehavior<B, T> for AlwaysRunning {
-    fn run_eternal(&mut self, _blackboard: &mut B) -> EternalStatus<T> {
+impl<B> EternalBehavior<B> for AlwaysRunning {
+    fn run_eternal(&mut self, _blackboard: &mut B) -> EternalStatus {
         Default::default()
     }
 }
@@ -114,43 +114,43 @@ impl IntoRon for AlwaysRunning {
     }
 }
 
-pub struct RunOnce<F> {
-    pub func: F,
-    ran: bool,
-}
+// pub struct RunOnce<F> {
+//     pub func: F,
+//     ran: bool,
+// }
 
-impl<F> From<F> for RunOnce<F> {
-    fn from(func: F) -> Self {
-        Self { func, ran: false }
-    }
-}
+// impl<F> From<F> for RunOnce<F> {
+//     fn from(func: F) -> Self {
+//         Self { func, ran: false }
+//     }
+// }
 
-impl<B, T, F: FnMut() -> T> Behavior<B, T> for RunOnce<F> {
-    fn run(&mut self, _blackboard: &mut B) -> Status<T> {
-        if self.ran {
-            self.ran = false;
-            Status::Success
-        } else {
-            self.ran = true;
-            Status::Running((self.func)())
-        }
-    }
-}
+// impl<B, F: FnMut() -> T> Behavior<B> for RunOnce<F> {
+//     fn run(&mut self, _blackboard: &mut B) -> Status {
+//         if self.ran {
+//             self.ran = false;
+//             Status::Success
+//         } else {
+//             self.ran = true;
+//             Status::Running
+//         }
+//     }
+// }
 
-impl<B, T, F: FnMut() -> T> InfallibleBehavior<B, T> for RunOnce<F> {
-    fn run_infallible(&mut self, _blackboard: &mut B) -> InfallibleStatus<T> {
-        if self.ran {
-            self.ran = false;
-            InfallibleStatus::Success
-        } else {
-            self.ran = true;
-            InfallibleStatus::Running((self.func)())
-        }
-    }
-}
+// impl<B, F: FnMut() -> T> InfallibleBehavior<B> for RunOnce<F> {
+//     fn run_infallible(&mut self, _blackboard: &mut B) -> InfallibleStatus {
+//         if self.ran {
+//             self.ran = false;
+//             InfallibleStatus::Success
+//         } else {
+//             self.ran = true;
+//             InfallibleStatus::Running
+//         }
+//     }
+// }
 
-impl<F> CancelSafe for RunOnce<F> {
-    fn reset(&mut self) {
-        self.ran = false;
-    }
-}
+// impl<F> CancelSafe for RunOnce<F> {
+//     fn reset(&mut self) {
+//         self.ran = false;
+//     }
+// }

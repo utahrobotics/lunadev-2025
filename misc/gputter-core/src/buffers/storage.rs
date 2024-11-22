@@ -1,4 +1,4 @@
-use super::{GpuBuffer, ReadableGpuBuffer, WritableGpuBuffer};
+use super::{GpuBuffer, GpuWriteLock, WritableGpuBuffer};
 
 use crate::size::{BufferSize, DynamicSize};
 
@@ -11,6 +11,7 @@ use std::marker::PhantomData;
 use crate::types::GpuType;
 
 pub trait HostStorageBufferMode {
+    const HOST_CAN_READ: bool;
     fn get_usage() -> wgpu::BufferUsages;
 }
 
@@ -18,6 +19,7 @@ pub trait HostStorageBufferMode {
 pub struct HostHidden;
 
 impl HostStorageBufferMode for HostHidden {
+    const HOST_CAN_READ: bool = false;
     fn get_usage() -> wgpu::BufferUsages {
         wgpu::BufferUsages::STORAGE
     }
@@ -27,6 +29,7 @@ impl HostStorageBufferMode for HostHidden {
 pub struct HostReadOnly;
 
 impl HostStorageBufferMode for HostReadOnly {
+    const HOST_CAN_READ: bool = true;
     fn get_usage() -> wgpu::BufferUsages {
         wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC
     }
@@ -36,6 +39,7 @@ impl HostStorageBufferMode for HostReadOnly {
 pub struct HostWriteOnly;
 
 impl HostStorageBufferMode for HostWriteOnly {
+    const HOST_CAN_READ: bool = false;
     fn get_usage() -> wgpu::BufferUsages {
         wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST
     }
@@ -45,43 +49,42 @@ impl HostStorageBufferMode for HostWriteOnly {
 pub struct HostReadWrite;
 
 impl HostStorageBufferMode for HostReadWrite {
+    const HOST_CAN_READ: bool = true;
     fn get_usage() -> wgpu::BufferUsages {
         wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST
     }
 }
 
 pub trait ShaderStorageBufferMode {
-    fn readonly() -> bool;
+    const READONLY: bool;
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct ShaderReadOnly;
 
 impl ShaderStorageBufferMode for ShaderReadOnly {
-    fn readonly() -> bool {
-        true
-    }
+    const READONLY: bool = true;
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct ShaderReadWrite;
 
 impl ShaderStorageBufferMode for ShaderReadWrite {
-    fn readonly() -> bool {
-        false
-    }
+    const READONLY: bool = false;
 }
 
 pub struct StorageBuffer<T: GpuType + ?Sized, HM, SM> {
     pub(crate) buffer: wgpu::Buffer,
     pub(crate) size: T::Size,
     pub(crate) phantom: PhantomData<(fn() -> (HM, SM), T)>,
+    read_buffer: Option<wgpu::Buffer>,
 }
 
 impl<T, HM, SM> StorageBuffer<T, HM, SM>
 where
     T: GpuType<Size = StaticSize<T>>,
     HM: HostStorageBufferMode,
+    SM: ShaderStorageBufferMode,
 {
     pub fn new() -> Self {
         const {
@@ -96,7 +99,20 @@ where
             usage: HM::get_usage(),
             mapped_at_creation: false,
         });
+
+        // Only allocate a read buffer if the host can read and the shader can write
+        let read_buffer = if const { HM::HOST_CAN_READ && !SM::READONLY } {
+            Some(device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: size_of::<T>() as u64,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: true,
+            }))
+        } else {
+            None
+        };
         Self {
+            read_buffer,
             buffer,
             size: StaticSize::default(),
             phantom: PhantomData,
@@ -122,6 +138,7 @@ impl<T, HM, SM> StorageBuffer<[T], HM, SM>
 where
     [T]: GpuType<Size = DynamicSize<T>>,
     HM: HostStorageBufferMode,
+    SM: ShaderStorageBufferMode,
 {
     pub fn new_dyn(len: usize) -> Result<Self, TooLargeForStorage> {
         let size = len as u64 * size_of::<T>() as u64;
@@ -133,7 +150,19 @@ where
                 usage: HM::get_usage(),
                 mapped_at_creation: false,
             });
+            // Only allocate a read buffer if the host can read and the shader can write
+            let read_buffer = if const { HM::HOST_CAN_READ && !SM::READONLY } {
+                Some(device.create_buffer(&wgpu::BufferDescriptor {
+                    label: None,
+                    size,
+                    usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                    mapped_at_creation: true,
+                }))
+            } else {
+                None
+            };
             Ok(Self {
+                read_buffer,
                 buffer,
                 size: DynamicSize::new(len),
                 phantom: PhantomData,
@@ -149,13 +178,11 @@ where
     T: GpuType + ?Sized,
     SM: ShaderStorageBufferMode,
 {
+    type PostSubmission<'a>
+        = ()
+    where
+        Self: 'a;
     type Data = T;
-    type ReadBuffer = ();
-    type Size = T::Size;
-
-    fn make_read_buffer(_size: Self::Size, _device: &wgpu::Device) -> Self::ReadBuffer {
-        ()
-    }
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
@@ -163,7 +190,7 @@ where
             visibility: wgpu::ShaderStages::COMPUTE,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage {
-                    read_only: SM::readonly(),
+                    read_only: SM::READONLY,
                 },
                 has_dynamic_offset: false,
                 min_binding_size: None,
@@ -174,8 +201,14 @@ where
     fn get_buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
-    fn get_size(&self) -> Self::Size {
-        self.size
+    fn get_writable_size(&self) -> u64 {
+        0
+    }
+    fn pre_submission(&self, _encoder: &mut wgpu::CommandEncoder) {
+        debug_assert!(self.read_buffer.is_none());
+    }
+    fn post_submission(&self) -> Self::PostSubmission<'_> {
+        debug_assert!(self.read_buffer.is_none());
     }
 }
 
@@ -184,13 +217,11 @@ where
     T: GpuType + ?Sized,
     SM: ShaderStorageBufferMode,
 {
+    type PostSubmission<'a>
+        = ()
+    where
+        Self: 'a;
     type Data = T;
-    type ReadBuffer = ();
-    type Size = T::Size;
-
-    fn make_read_buffer(_size: Self::Size, _device: &wgpu::Device) -> Self::ReadBuffer {
-        ()
-    }
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
@@ -198,7 +229,7 @@ where
             visibility: wgpu::ShaderStages::COMPUTE,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage {
-                    read_only: SM::readonly(),
+                    read_only: SM::READONLY,
                 },
                 has_dynamic_offset: false,
                 min_binding_size: None,
@@ -209,88 +240,58 @@ where
     fn get_buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
-    fn get_size(&self) -> Self::Size {
-        self.size
+    fn get_writable_size(&self) -> u64 {
+        self.size.size()
+    }
+    fn pre_submission(&self, _encoder: &mut wgpu::CommandEncoder) {
+        debug_assert!(self.read_buffer.is_none());
+    }
+    fn post_submission(&self) -> Self::PostSubmission<'_> {
+        debug_assert!(self.read_buffer.is_none());
     }
 }
 
 impl<T, SM> WritableGpuBuffer for StorageBuffer<T, HostWriteOnly, SM>
 where
     T: GpuType + ?Sized,
-    SM: ShaderStorageBufferMode, {}
-
-impl<T, SM> GpuBuffer for StorageBuffer<T, HostReadOnly, SM>
-where
-    T: GpuType + ?Sized,
     SM: ShaderStorageBufferMode,
 {
-    type Data = T;
-    type ReadBuffer = wgpu::Buffer;
-    type Size = T::Size;
-
-
-    fn make_read_buffer(size: Self::Size, device: &wgpu::Device) -> Self::ReadBuffer {
-        device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: size.size(),
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        })
-    }
-
-    fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::COMPUTE,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage {
-                    read_only: SM::readonly(),
-                },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }
-    }
-    fn get_buffer(&self) -> &wgpu::Buffer {
-        &self.buffer
-    }
-    fn get_size(&self) -> Self::Size {
-        self.size
-    }
 }
 
-impl<T, SM> ReadableGpuBuffer for StorageBuffer<T, HostReadOnly, SM>
-where
-    T: GpuType + ?Sized,
-    SM: ShaderStorageBufferMode, {}
+macro_rules! read_impl {
+    () => {
+        fn pre_submission(&self, encoder: &mut wgpu::CommandEncoder) {
+            let read_buffer = self.read_buffer.as_ref().unwrap();
+            read_buffer.unmap();
+            encoder.copy_buffer_to_buffer(&self.buffer, 0, read_buffer, 0, self.size.size());
+        }
+        fn post_submission(&self) -> Self::PostSubmission<'_> {
+            let read_buffer = self.read_buffer.as_ref().unwrap();
+            let slice = read_buffer.slice(..);
+            slice.map_async(wgpu::MapMode::Read, |result| {
+                result.unwrap();
+            });
+            slice
+        }
+    };
+}
 
-impl<T, SM> GpuBuffer for StorageBuffer<T, HostReadWrite, SM>
+impl<T> GpuBuffer for StorageBuffer<T, HostReadOnly, ShaderReadWrite>
 where
     T: GpuType + ?Sized,
-    SM: ShaderStorageBufferMode,
 {
+    type PostSubmission<'a>
+        = wgpu::BufferSlice<'a>
+    where
+        Self: 'a;
     type Data = T;
-    type ReadBuffer = wgpu::Buffer;
-    type Size = T::Size;
-
-    fn make_read_buffer(size: Self::Size, device: &wgpu::Device) -> Self::ReadBuffer {
-        device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: size.size(),
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        })
-    }
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
             binding,
             visibility: wgpu::ShaderStages::COMPUTE,
             ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage {
-                    read_only: SM::readonly(),
-                },
+                ty: wgpu::BufferBindingType::Storage { read_only: false },
                 has_dynamic_offset: false,
                 min_binding_size: None,
             },
@@ -300,16 +301,114 @@ where
     fn get_buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
-    fn get_size(&self) -> Self::Size {
-        self.size
+    fn get_writable_size(&self) -> u64 {
+        0
     }
+    read_impl!();
+}
+
+impl<T> GpuBuffer for StorageBuffer<T, HostReadWrite, ShaderReadWrite>
+where
+    T: GpuType + ?Sized,
+{
+    type PostSubmission<'a>
+        = wgpu::BufferSlice<'a>
+    where
+        Self: 'a;
+    type Data = T;
+
+    fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::COMPUTE,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }
+    }
+    fn get_buffer(&self) -> &wgpu::Buffer {
+        &self.buffer
+    }
+    fn get_writable_size(&self) -> u64 {
+        self.size.size()
+    }
+    read_impl!();
 }
 
 impl<T, SM> WritableGpuBuffer for StorageBuffer<T, HostReadWrite, SM>
 where
     T: GpuType + ?Sized,
-    SM: ShaderStorageBufferMode, {}
-impl<T, SM> ReadableGpuBuffer for StorageBuffer<T, HostReadWrite, SM>
+    SM: ShaderStorageBufferMode,
+    Self: GpuBuffer,
+{
+}
+
+impl<T, HM, SM> StorageBuffer<T, HM, SM>
 where
     T: GpuType + ?Sized,
-    SM: ShaderStorageBufferMode, {}
+    HM: HostStorageBufferMode<HOST_CAN_READ = true>,
+{
+    pub fn read(&self, into: &mut T) {
+        into.from_bytes(
+            &self
+                .read_buffer
+                .as_ref()
+                .unwrap()
+                .slice(..)
+                .get_mapped_range(),
+        );
+    }
+    pub fn copy_into_unchecked(&self, other: &mut impl WritableGpuBuffer, lock: &mut GpuWriteLock) {
+        lock.encoder.copy_buffer_to_buffer(
+            &self.buffer,
+            0,
+            other.get_buffer(),
+            0,
+            self.size.size(),
+        );
+    }
+}
+
+impl<T, HM, SM> StorageBuffer<T, HM, SM>
+where
+    T: GpuType<Size = StaticSize<T>>,
+{
+    pub fn cast<U: GpuType<Size = StaticSize<U>>>(self) -> StorageBuffer<U, HM, SM> {
+        const {
+            if size_of::<T>() != size_of::<U>() {
+                panic!("Attempted to cast between types of different sizes");
+            }
+        }
+        StorageBuffer {
+            buffer: self.buffer,
+            size: StaticSize::new(),
+            phantom: PhantomData,
+            read_buffer: self.read_buffer,
+        }
+    }
+}
+
+impl<T, HM, SM> StorageBuffer<T, HM, SM>
+where
+    T: GpuType<Size = DynamicSize<T>>,
+{
+    pub fn cast_dyn<U: GpuType<Size = DynamicSize<U>>>(self) -> StorageBuffer<U, HM, SM> {
+        const {
+            if size_of::<T>() != size_of::<U>() {
+                panic!("Attempted to cast between types of different sizes");
+            }
+            if align_of::<T>() != align_of::<U>() {
+                panic!("Attempted to cast between types of different alignments");
+            }
+        }
+        StorageBuffer {
+            buffer: self.buffer,
+            size: DynamicSize::new(self.size.0),
+            phantom: PhantomData,
+            read_buffer: self.read_buffer,
+        }
+    }
+}

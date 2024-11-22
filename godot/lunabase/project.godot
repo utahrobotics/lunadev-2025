@@ -22,9 +22,14 @@ Lunabot="*res://lunabot.gd"
 [display]
 
 window/size/viewport_width=648
+window/subwindows/embed_subwindows=false
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[dotnet]
+
+project/assembly_name="Lunabase"
+
 [rendering]
 
-environment/defaults/default_clear_color=Color(0.114897, 0.114897, 0.114897, 1)
+environment/defaults/default_clear_color=Color(0.834614, 0.834614, 0.834614, 1)

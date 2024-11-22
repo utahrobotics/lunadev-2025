@@ -21,20 +21,12 @@ use nokhwa::{
 use serde::Deserialize;
 use unfmt::unformat;
 use urobotics_core::{
-    define_callbacks, fn_alias,
     log::error,
     service::ServiceExt,
-    task::Loggable,
+    shared::{DataHandle, UninitOwnedData},
     tokio::sync::{Mutex, OnceCell},
-    BlockOn,
 };
 use urobotics_py::{PyRepl, PythonValue, PythonVenvBuilder};
-use urobotics_video::VideoDataDump;
-
-fn_alias! {
-    pub type ImageCallbacksRef = CallbacksRef(&Arc<DynamicImage>) + Send
-}
-define_callbacks!(ImageCallbacks => Fn(image: &Arc<DynamicImage>) + Send);
 
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum CameraIdentifier {
@@ -65,7 +57,7 @@ pub struct CameraConnectionBuilder {
     #[serde(default)]
     pub py_venv_builder: PythonVenvBuilder,
     #[serde(skip)]
-    image_received: ImageCallbacks,
+    image_received: UninitOwnedData<DynamicImage>,
     #[serde(skip)]
     camera_info: Arc<OnceLock<CameraInfo>>,
 }
@@ -86,6 +78,10 @@ macro_rules! cam_impl {
                     .py_venv_builder
                     .packages_to_install
                     .push("cv2_enumerate_cameras".to_string());
+                $self
+                    .py_venv_builder
+                    .packages_to_install
+                    .push("opencv-python".to_string());
                 let mut repl = $self
                     .py_venv_builder
                     .build()
@@ -181,7 +177,7 @@ impl CameraConnectionBuilder {
             fps: 0,
             image_width: 0,
             image_height: 0,
-            image_received: ImageCallbacks::default(),
+            image_received: UninitOwnedData::default(),
             camera_info: Arc::default(),
             py_venv_builder: PythonVenvBuilder::default(),
         }
@@ -191,9 +187,8 @@ impl CameraConnectionBuilder {
         PendingCameraInfo(self.camera_info.clone())
     }
 
-    /// Gets a reference to the `Signal` that represents received images.
-    pub fn image_received_ref(&self) -> ImageCallbacksRef {
-        self.image_received.get_ref()
+    pub fn image_received_handle(&self) -> &DataHandle<DynamicImage> {
+        self.image_received.get_data_handle()
     }
 
     pub async fn resolve(mut self) -> Result<PendingCameraConnection, nokhwa::NokhwaError> {
@@ -210,11 +205,11 @@ impl CameraConnectionBuilder {
 pub struct PendingCameraConnection {
     camera_index: CameraIndex,
     requested: RequestedFormat<'static>,
-    image_received: ImageCallbacks,
+    image_received: UninitOwnedData<DynamicImage>,
 }
 
 impl PendingCameraConnection {
-    pub fn spawn(mut self) -> Result<CameraInfo, nokhwa::NokhwaError> {
+    pub fn spawn(self) -> Result<CameraInfo, nokhwa::NokhwaError> {
         let (info_tx, info_rx) = std::sync::mpsc::sync_channel(1);
 
         std::thread::spawn(move || {
@@ -236,21 +231,31 @@ impl PendingCameraConnection {
             unwrap!(camera.open_stream());
             let _ = info_tx.send(Ok(camera_info));
 
-            loop {
-                let frame = match camera.frame() {
-                    Ok(x) => x,
-                    Err(e) => {
-                        error!(target: &camera.info().human_name(), "Failed to get frame: {:?}", e);
-                        break;
+            macro_rules! get_img {
+                () => {
+                    {
+                        let frame = match camera.frame() {
+                            Ok(x) => x,
+                            Err(e) => {
+                                error!(target: &camera.info().human_name(), "Failed to get frame: {:?}", e);
+                                return;
+                            }
+                        };
+                        let decoded = frame.decode_image::<RgbFormat>().unwrap();
+                        DynamicImage::ImageRgb8(
+                            ImageBuffer::from_raw(decoded.width(), decoded.height(), decoded.into_raw())
+                                .unwrap(),
+                        )
                     }
-                };
-                let decoded = frame.decode_image::<RgbFormat>().unwrap();
-                let img = DynamicImage::ImageRgb8(
-                    ImageBuffer::from_raw(decoded.width(), decoded.height(), decoded.into_raw())
-                        .unwrap(),
-                );
-                let img = Arc::new(img);
-                self.image_received.call(&img);
+                }
+            }
+
+            let owned = self.image_received.init(get_img!());
+            let mut unowned = owned.pessimistic_share();
+
+            loop {
+                let img = get_img!();
+                unowned = unowned.replace(img).pessimistic_share();
             }
         });
 
@@ -259,11 +264,9 @@ impl PendingCameraConnection {
 }
 
 #[cfg(feature = "standalone")]
-impl urobotics_app::Application for CameraConnectionBuilder {
-    const DESCRIPTION: &'static str = "Displays a camera feed";
-    const APP_NAME: &'static str = "camera";
-
+impl urobotics_app::Runnable for CameraConnectionBuilder {
     fn run(mut self) {
+        use urobotics_core::{task::Loggable, BlockOn};
         (async move {
                 let (index, requested) = cam_impl!(self);
 
@@ -276,9 +279,9 @@ impl urobotics_app::Application for CameraConnectionBuilder {
                     camera_name: camera.info().human_name()
                 };
                 #[cfg(debug_assertions)]
-                urobotics_core::log::warn!(target: Self::APP_NAME, "Release mode is recommended when using camera as an app");
+                urobotics_core::log::warn!(target: "camera", "Release mode is recommended when using camera as an app");
 
-                let mut dump = VideoDataDump::new_display(camera_info.camera_name, camera.camera_format().width(), camera.camera_format().height(), true).expect("Failed to initialize video data dump");
+                let mut dump = urobotics_video::VideoDataDump::new_display(camera_info.camera_name, camera.camera_format().width(), camera.camera_format().height(), true).expect("Failed to initialize video data dump");
 
                 camera.open_stream().expect("Failed to open camera stream");
                 loop {
@@ -321,3 +324,11 @@ const CODE: &str = "for camera_info in enumerate_cameras(1400):\r\tprint(f'{came
 const CODE: &str = "for camera_info in enumerate_cameras(200):\r\tprint(f'{camera_info.index};{camera_info.name};{camera_info.path}')";
 #[cfg(target_os = "macos")]
 const CODE: &str = "for camera_info in enumerate_cameras(1200):\r\tprint(f'{camera_info.index};{camera_info.name};{camera_info.path}')";
+
+pub mod app {
+    use urobotics_app::define_app;
+
+    use crate::CameraConnectionBuilder;
+
+    define_app!(pub Camera(CameraConnectionBuilder): "Displays a camera feed");
+}

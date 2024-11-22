@@ -1,16 +1,19 @@
-use ares_bt::{action::RunOnce, sequence::Sequence, Behavior, Status};
+use ares_bt::{sequence::Sequence, Behavior, Status};
 use common::{FromLunabase, LunabotStage};
 use log::{error, warn};
 
 use crate::{
     autonomy::{Autonomy, AutonomyStage},
     blackboard::LunabotBlackboard,
-    Action,
+    Action, PollWhen,
 };
 
-pub fn teleop() -> impl Behavior<LunabotBlackboard, Action> {
+pub fn teleop() -> impl Behavior<LunabotBlackboard> {
     Sequence::new((
-        RunOnce::from(|| Action::SetStage(LunabotStage::TeleOp)),
+        |blackboard: &mut LunabotBlackboard| {
+            blackboard.enqueue_action(Action::SetStage(LunabotStage::TeleOp));
+            Status::Success
+        },
         |blackboard: &mut LunabotBlackboard| {
             if *blackboard.lunabase_disconnected() {
                 error!("Lunabase disconnected");
@@ -19,7 +22,8 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard, Action> {
             while let Some(msg) = blackboard.pop_from_lunabase() {
                 match msg {
                     FromLunabase::Steering(steering) => {
-                        return Status::Running(Action::SetSteering(steering));
+                        blackboard.enqueue_action(Action::SetSteering(steering));
+                        return Status::Running;
                     }
                     FromLunabase::SoftStop => {
                         warn!("Received SoftStop");
@@ -33,7 +37,8 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard, Action> {
                     _ => {}
                 }
             }
-            Status::Running(Action::WaitForLunabase)
+            *blackboard.get_poll_when() = PollWhen::ReceivedLunabase;
+            Status::Running
         },
     ))
 }

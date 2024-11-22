@@ -140,7 +140,7 @@ impl INode for Lunasim {
                         .collect();
 
                     self.base_mut()
-                        .emit_signal("fitted_points".into(), &[points.to_variant()]);
+                        .emit_signal("fitted_points", &[points.to_variant()]);
                 }
                 FromLunasimbot::Isometry {
                     axis,
@@ -156,20 +156,18 @@ impl INode for Lunasim {
                     let [x, y, z] = origin;
                     let origin = Vector3 { x, y, z };
 
-                    self.base_mut().emit_signal(
-                        "transform".into(),
-                        &[Transform3D { basis, origin }.to_variant()],
-                    );
+                    self.base_mut()
+                        .emit_signal("transform", &[Transform3D { basis, origin }.to_variant()]);
                 }
                 FromLunasimbot::Drive { left, right } => {
                     self.base_mut()
-                        .emit_signal("drive".into(), &[left.to_variant(), right.to_variant()]);
+                        .emit_signal("drive", &[left.to_variant(), right.to_variant()]);
                 }
                 FromLunasimbot::HeightMap(heights) => {
                     let heights: PackedFloat32Array = Box::into_iter(heights).collect();
 
                     self.base_mut()
-                        .emit_signal("heightmap".into(), &[heights.to_variant()]);
+                        .emit_signal("heightmap", &[heights.to_variant()]);
                 }
             }
         }
@@ -213,7 +211,7 @@ impl Lunasim {
             .map(|d| {
                 (randfn(d as f64, (d as f64).powi(2) * self.depth_deviation).abs() as f32
                     / DEPTH_SCALE)
-                    .round() as u32
+                    .round() as u16
             })
             .collect();
 

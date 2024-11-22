@@ -37,7 +37,7 @@ bytemuck_impl!(i32);
 bytemuck_impl!(f32);
 
 macro_rules! define_aligned {
-    ($name: ident $align: literal $inner: ident $padding: literal) => {
+    ($name: ident $align: literal $inner: ident $padding: literal $count: literal) => {
         #[derive(Clone, Copy, Debug)]
         #[repr(C)]
         #[repr(align($align))]
@@ -75,6 +75,39 @@ macro_rules! define_aligned {
             }
         }
 
+        impl std::fmt::Display for $name<f32> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "vec{}f(", $count)?;
+                for i in 0..$count {
+                    write!(f, "{}f,", self.vec.data.0[0][i])?;
+                }
+                write!(f, ")")?;
+                Ok(())
+            }
+        }
+
+        impl std::fmt::Display for $name<u32> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "vec{}u(", $count)?;
+                for i in 0..$count {
+                    write!(f, "{}u,", self.vec.data.0[0][i])?;
+                }
+                write!(f, ")")?;
+                Ok(())
+            }
+        }
+
+        impl std::fmt::Display for $name<i32> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "vec{}i(", $count)?;
+                for i in 0..$count {
+                    write!(f, "{}i,", self.vec.data.0[0][i])?;
+                }
+                write!(f, ")")?;
+                Ok(())
+            }
+        }
+
         // These where clauses help to protect against unsafe behavior
         unsafe impl bytemuck::Zeroable for $name<u32> where $inner<u32>: bytemuck::Zeroable {}
         unsafe impl bytemuck::Pod for $name<u32> where $inner<u32>: bytemuck::Pod {}
@@ -102,9 +135,9 @@ macro_rules! define_aligned {
     };
 }
 
-define_aligned!(AlignedVec2 8 Vector2 8);
-define_aligned!(AlignedVec3 16 Vector3 4);
-define_aligned!(AlignedVec4 16 Vector4 0);
+define_aligned!(AlignedVec2 8 Vector2 8 2);
+define_aligned!(AlignedVec3 16 Vector3 4 3);
+define_aligned!(AlignedVec4 16 Vector4 0 4);
 
 impl<const N: usize, T> GpuType for [T; N]
 where
@@ -122,7 +155,8 @@ where
 }
 
 impl<T: 'static> GpuType for [T]
-where T: bytemuck::NoUninit + bytemuck::AnyBitPattern
+where
+    T: bytemuck::NoUninit + bytemuck::AnyBitPattern,
 {
     type Size = DynamicSize<T>;
 
@@ -150,6 +184,20 @@ where
     V: Copy,
 {
 }
+impl<V, const C: usize> GpuType for AlignedMat<V, C>
+where
+    Self: bytemuck::Pod,
+{
+    type Size = StaticSize<Self>;
+
+    fn to_bytes(&self) -> &[u8] {
+        bytes_of(self)
+    }
+
+    fn from_bytes(&mut self, bytes: &[u8]) {
+        bytes_of_mut(self).copy_from_slice(bytes);
+    }
+}
 
 macro_rules! define_mat {
     ($name: ident $vec: ident $columns: literal $matrix: ident) => {
@@ -174,3 +222,7 @@ macro_rules! define_mat {
 define_mat!(AlignedMatrix2 AlignedVec2 2 Matrix2);
 define_mat!(AlignedMatrix3 AlignedVec3 3 Matrix3);
 define_mat!(AlignedMatrix4 AlignedVec4 4 Matrix4);
+
+pub type AlignedMatrix2x2<N> = AlignedMatrix2<N>;
+pub type AlignedMatrix3x3<N> = AlignedMatrix3<N>;
+pub type AlignedMatrix4x4<N> = AlignedMatrix4<N>;

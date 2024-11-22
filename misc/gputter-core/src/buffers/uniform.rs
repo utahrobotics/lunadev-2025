@@ -1,27 +1,25 @@
-use crate::size::{DynamicSize, StaticSize};
+use crate::size::{BufferSize, DynamicSize, StaticSize};
 use crate::{get_device, GpuDevice};
 
-use super::{GpuBuffer, ReadableGpuBuffer, WritableGpuBuffer};
+use super::{GpuBuffer, WritableGpuBuffer};
 
 use crate::types::GpuType;
 
 use std::marker::PhantomData;
 
 /// Uniform Buffers can only be read from shaders, and written to by the host.
-pub struct UniformBuffer<T: GpuType +  ?Sized> {
+pub struct UniformBuffer<T: GpuType + ?Sized> {
     pub(crate) buffer: wgpu::Buffer,
     size: T::Size,
     pub(crate) phantom: PhantomData<T>,
 }
 
 impl<T: GpuType + ?Sized> GpuBuffer for UniformBuffer<T> {
+    type PostSubmission<'a>
+        = ()
+    where
+        Self: 'a;
     type Data = T;
-    type ReadBuffer = ();
-    type Size = T::Size;
-
-    fn make_read_buffer(_size: Self::Size, _device: &wgpu::Device) -> Self::ReadBuffer {
-        
-    }
 
     fn create_layout(binding: u32) -> wgpu::BindGroupLayoutEntry {
         wgpu::BindGroupLayoutEntry {
@@ -38,12 +36,14 @@ impl<T: GpuType + ?Sized> GpuBuffer for UniformBuffer<T> {
     fn get_buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
-    fn get_size(&self) -> Self::Size {
-        self.size
+    fn get_writable_size(&self) -> u64 {
+        self.size.size()
     }
+    fn pre_submission(&self, _encoder: &mut wgpu::CommandEncoder) {}
+    fn post_submission(&self) -> Self::PostSubmission<'_> {}
 }
 
-impl<T: GpuType<Size=StaticSize<T>>> UniformBuffer<T> {
+impl<T: GpuType<Size = StaticSize<T>>> UniformBuffer<T> {
     pub fn new() -> Self {
         const {
             // If this assertion fails, the size of T
@@ -65,8 +65,7 @@ impl<T: GpuType<Size=StaticSize<T>>> UniformBuffer<T> {
     }
 }
 
-impl<T: GpuType +  ?Sized> WritableGpuBuffer for UniformBuffer<T> {}
-impl<T: GpuType +  ?Sized> ReadableGpuBuffer for UniformBuffer<T> {}
+impl<T: GpuType + ?Sized> WritableGpuBuffer for UniformBuffer<T> {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TooLargeForUniform;
@@ -82,7 +81,10 @@ impl std::fmt::Display for TooLargeForUniform {
 
 impl std::error::Error for TooLargeForUniform {}
 
-impl<T> UniformBuffer<[T]> where [T]: GpuType<Size=DynamicSize<T>> {
+impl<T> UniformBuffer<[T]>
+where
+    [T]: GpuType<Size = DynamicSize<T>>,
+{
     pub fn new_dyn(len: usize) -> Result<Self, TooLargeForUniform> {
         let size = len as u64 * size_of::<T>() as u64;
         if size < 65536 {

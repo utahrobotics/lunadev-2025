@@ -1,5 +1,6 @@
-[gd_scene load_steps=29 format=3 uid="uid://bxmnthetrtkso"]
+[gd_scene load_steps=32 format=3 uid="uid://bxmnthetrtkso"]
 
+[ext_resource type="Script" path="res://path_manager.gd" id="1_ohl8f"]
 [ext_resource type="PackedScene" uid="uid://leqgym66qbuo" path="res://robot.tscn" id="1_y4wm8"]
 [ext_resource type="PackedScene" uid="uid://y0gvb4s2mi2x" path="res://apriltag.tscn" id="2_nhvh2"]
 [ext_resource type="Script" path="res://rocks/rock.gd" id="3_5i5qc"]
@@ -12,7 +13,31 @@ script/source = "extends Node3D
 
 func _ready() -> void:
 	get_viewport().disable_3d = true
+
+
+func _on_check_button_toggled(toggled_on: bool) -> void:
+	if toggled_on: $PathManager.show()
+	else: $PathManager.hide()
 "
+
+[sub_resource type="Curve3D" id="Curve3D_yjb38"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_k0m8n"]
+transparency = 1
+albedo_color = Color(0.439216, 0.647059, 0, 0.498039)
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_s0tqm"]
+sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
+ground_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
+
+[sub_resource type="Sky" id="Sky_rwqwj"]
+sky_material = SubResource("ProceduralSkyMaterial_s0tqm")
+
+[sub_resource type="Environment" id="Environment_tv5af"]
+background_mode = 2
+sky = SubResource("Sky_rwqwj")
+tonemap_mode = 2
+glow_enabled = true
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wujp8"]
 shading_mode = 0
@@ -142,16 +167,6 @@ size = Vector3(2, 2, 4)
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_reayg"]
 size = Vector2(2, 4)
-
-[sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_e6mxc"]
-energy_multiplier = 2.0
-
-[sub_resource type="Sky" id="Sky_1xo37"]
-sky_material = SubResource("PhysicalSkyMaterial_e6mxc")
-
-[sub_resource type="Environment" id="Environment_4hw3w"]
-background_mode = 2
-sky = SubResource("Sky_1xo37")
 
 [sub_resource type="GDScript" id="GDScript_x4sn7"]
 script/source = "extends TabContainer
@@ -291,6 +306,35 @@ func _on_pressed() -> void:
 [node name="Node3D" type="Node3D"]
 script = SubResource("GDScript_lj4gt")
 
+[node name="PathManager" type="Path3D" parent="."]
+visible = false
+curve = SubResource("Curve3D_yjb38")
+script = ExtResource("1_ohl8f")
+test_path = Array[Vector3]([Vector3(-2.5, 1, -3.5), Vector3(-2, 0.5, -6)])
+
+[node name="CSGPolygon3D" type="CSGPolygon3D" parent="PathManager"]
+polygon = PackedVector2Array(0, 0, 0, 0.05, 0.05, 0.05, 0.05, 0)
+mode = 2
+path_node = NodePath("..")
+path_interval_type = 0
+path_interval = 0.01
+path_simplify_angle = 0.0
+path_rotation = 2
+path_local = false
+path_continuous_u = true
+path_u_distance = 1.0
+path_joined = false
+material = SubResource("StandardMaterial3D_k0m8n")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_tv5af")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="WorldEnvironment"]
+transform = Transform3D(-0.866023, -0.433016, 0.250001, 0, 0.499998, 0.866027, -0.500003, 0.749999, -0.43301, 0, 8.16029, 0)
+shadow_enabled = true
+
+[node name="ReflectionProbe" type="ReflectionProbe" parent="WorldEnvironment"]
+
 [node name="HeightMap" type="MultiMeshInstance3D" parent="."]
 top_level = true
 layers = 4
@@ -354,6 +398,7 @@ layers = 3
 mesh = SubResource("PlaneMesh_reayg")
 
 [node name="Rocks" type="Node3D" parent="Arena"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.25613, 0, -6.70293)
 
 [node name="Rock" type="Node3D" parent="Arena/Rocks"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.861442, 2.20208, -1.0874)
@@ -368,10 +413,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.71816, 2.20208, -1.0874)
 script = ExtResource("3_5i5qc")
 
 [node name="Robot" parent="." instance=ExtResource("1_y4wm8")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.459583, 0, -0.502181)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -1)
 
 [node name="OriginOnly" parent="Robot" index="0"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.459583, 0, -0.502181)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -1)
 
 [node name="ExternalView" parent="Robot/OriginOnly/CameraPivot" index="0"]
 remote_path = NodePath("../../../../CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport/ExternalCamera")
@@ -384,13 +429,7 @@ script = null
 remote_path = NodePath("../../CanvasLayer/TabContainer/RearCamera/AspectRatioContainer/SubviewportContainer/SubViewport/RearCamera")
 
 [node name="RaycastOrigin" parent="Robot" index="10"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.459583, 0, -0.502181)
-
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
-environment = SubResource("Environment_4hw3w")
-
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="WorldEnvironment"]
-transform = Transform3D(0.926909, 0.34775, -0.141101, 0.330633, -0.57883, 0.745411, 0.177544, -0.737581, -0.6515, -2.51144, 3.72433, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -1)
 
 [node name="Apriltag" parent="." instance=ExtResource("2_nhvh2")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.610044, 0.50416)
@@ -426,7 +465,7 @@ size = Vector2i(1132, 597)
 render_target_update_mode = 4
 
 [node name="ExternalCamera" type="Camera3D" parent="CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport"]
-transform = Transform3D(0.283078, -0.220396, 0.93343, -1.77252e-08, 0.973239, 0.229795, -0.959097, -0.0650499, 0.275503, 2.77329, 1.29588, 0.452004)
+transform = Transform3D(0.283078, -0.220396, 0.93343, -1.77252e-08, 0.973239, 0.229795, -0.959097, -0.0650499, 0.275503, 2.23287, 1.29588, -0.0458146)
 
 [node name="DepthCamera1" type="MarginContainer" parent="CanvasLayer/TabContainer"]
 visible = false
@@ -451,7 +490,7 @@ size = Vector2i(2, 2)
 render_target_update_mode = 0
 
 [node name="DepthCamera" type="Camera3D" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport"]
-transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, -0.459583, 0.572526, -0.80037)
+transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, -1, 0.572526, -1.29819)
 cull_mask = 1048571
 fov = 120.0
 script = ExtResource("3_n7k3i")
@@ -479,7 +518,7 @@ size = Vector2i(2, 2)
 render_target_update_mode = 0
 
 [node name="RearCamera" type="Camera3D" parent="CanvasLayer/TabContainer/RearCamera/AspectRatioContainer/SubviewportContainer/SubViewport"]
-transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, -0.459583, 0.572526, -0.25353)
+transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, -1, 0.572526, -0.751349)
 cull_mask = 1048571
 fov = 120.0
 script = ExtResource("3_n7k3i")
@@ -584,6 +623,14 @@ focus_mode = 1
 text = "0.0"
 script = SubResource("GDScript_f6nnu")
 
+[node name="Label6" type="Label" parent="CanvasLayer/Control/VBoxContainer"]
+layout_mode = 2
+text = "Show Path"
+
+[node name="CheckButton" type="CheckButton" parent="CanvasLayer/Control/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 0
+
 [node name="Control3D" type="Control" parent="CanvasLayer/Control" node_paths=PackedStringArray("node3d", "camera")]
 anchors_preset = 0
 offset_right = 40.0
@@ -607,6 +654,7 @@ script = SubResource("GDScript_6xoh2")
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit3" to="CanvasLayer/Control/VBoxContainer/LineEdit3" method="_on_text_submitted"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit4" to="CanvasLayer/Control/VBoxContainer/LineEdit4" method="_on_text_submitted"]
 [connection signal="text_submitted" from="CanvasLayer/Control/VBoxContainer/LineEdit5" to="CanvasLayer/Control/VBoxContainer/LineEdit5" method="_on_text_submitted"]
+[connection signal="toggled" from="CanvasLayer/Control/VBoxContainer/CheckButton" to="." method="_on_check_button_toggled"]
 [connection signal="pressed" from="CanvasLayer/Control/Control3D/Button" to="CanvasLayer/Control/Control3D/Button" method="_on_pressed"]
 
 [editable path="Robot"]

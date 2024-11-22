@@ -11,7 +11,7 @@ use std::{
 
 use bytes::BytesMut;
 use serde::Deserialize;
-use urobotics_app::Application;
+use urobotics_app::{define_app, Runnable};
 use urobotics_core::{
     service::{Service, ServiceExt},
     tokio::{
@@ -42,7 +42,7 @@ fn default_venv_path() -> PathBuf {
 }
 
 fn default_system_interpreter() -> OsString {
-    "python".into()
+    "python3".into()
 }
 
 impl Default for PythonVenvBuilder {
@@ -77,7 +77,7 @@ impl PythonVenvBuilder {
             }
         }
         let venv = PythonVenv {
-            path: Path::new(&self.venv_path).join("Scripts//python"),
+            path: Path::new(&self.venv_path).join("bin/python"),
         };
 
         for package in &self.packages_to_install {
@@ -214,10 +214,7 @@ impl Service for PyRepl {
     }
 }
 
-impl Application for PythonVenvBuilder {
-    const APP_NAME: &'static str = "python";
-    const DESCRIPTION: &'static str = "Python virtual environment REPL";
-
+impl Runnable for PythonVenvBuilder {
     fn run(self) {
         let venv = self
             .build()
@@ -246,4 +243,12 @@ impl Application for PythonVenvBuilder {
         })
         .join();
     }
+}
+
+pub mod app {
+    use urobotics_app::define_app;
+
+    use crate::PythonVenvBuilder;
+
+    define_app!(pub Python(PythonVenvBuilder): "Python virtual environment REPL");
 }

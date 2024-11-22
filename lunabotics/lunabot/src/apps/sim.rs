@@ -1,6 +1,9 @@
+use core::str;
 use std::{
     cmp::Ordering,
     collections::VecDeque,
+    net::SocketAddr,
+    num::NonZeroU32,
     process::Stdio,
     sync::{Arc, Mutex},
 };
@@ -10,14 +13,17 @@ use common::{
     LunabotStage,
 };
 use crossbeam::atomic::AtomicCell;
-use fitter::utils::CameraProjection;
-use lunabot_ai::{run_ai, Action, Input};
+use gputter::{
+    init_gputter_blocking,
+    types::{AlignedMatrix4, AlignedVec4},
+};
+use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4};
-use recycler::Recycler;
 use serde::{Deserialize, Serialize};
-use urobotics::tokio::{self, task::block_in_place};
+use thalassic::DepthProjectorBuilder;
+use urobotics::{app::define_app, log::{log_to_console, Level}, tokio};
 use urobotics::{
-    app::Application,
+    app::Runnable,
     callbacks::caller::CallbacksStorage,
     define_callbacks, fn_alias, get_tokio_handle,
     log::{error, warn},
@@ -29,12 +35,12 @@ use urobotics::{
     BlockOn,
 };
 
-use crate::{localization::Localizer, obstacles::heightmap::heightmap_strategy, LunabotApp};
-
-use super::{
-    create_packet_builder, create_robot_chain, log_teleop_messages, wait_for_ctrl_c,
-    PointCloudCallbacks,
+use crate::{
+    localization::Localizer,
+    pipelines::thalassic::{spawn_thalassic_pipeline, PointsStorageChannel},
 };
+
+use super::{create_packet_builder, create_robot_chain, log_teleop_messages, wait_for_ctrl_c};
 
 fn_alias! {
     pub type FromLunasimRef = CallbacksRef(FromLunasim) + Send
@@ -65,24 +71,30 @@ impl LunasimStdin {
     }
 }
 
+#[cfg(target_os = "windows")]
+const DELIMIT: &[u8] = b"READY\r\n";
+
+#[cfg(not(target_os = "windows"))]
+const DELIMIT: &[u8] = b"READY\n";
+
 #[derive(Serialize, Deserialize)]
 pub struct LunasimbotApp {
-    #[serde(flatten)]
-    app: LunabotApp,
+    pub lunabase_address: SocketAddr,
+    #[serde(default = "super::default_max_pong_delay_ms")]
+    pub max_pong_delay_ms: u64,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     simulation_command: Vec<String>,
 }
 
-const PROJECTION_SIZE: Vector2<u32> = Vector2::new(36, 24);
-
-impl Application for LunasimbotApp {
-    const APP_NAME: &'static str = "sim";
-
-    const DESCRIPTION: &'static str = "The lunabot application in a simulated environment";
+impl Runnable for LunasimbotApp {
 
     fn run(mut self) {
+        log_to_console([("wgpu_hal::vulkan::instance", Level::Info), ("wgpu_core::device::resource", Level::Info)]);
         log_teleop_messages();
+        if let Err(e) = init_gputter_blocking() {
+            error!("Failed to initialize gputter: {e}");
+        }
 
         let mut cmd = if self.simulation_command.is_empty() {
             let mut cmd = Command::new("godot");
@@ -151,7 +163,7 @@ impl Application for LunasimbotApp {
                 // Read lunasim stdout
                 handle.spawn(async move {
                     {
-                        let mut bytes = VecDeque::with_capacity(7);
+                        let mut bytes = VecDeque::with_capacity(DELIMIT.len());
                         let mut buf = [0u8];
                         loop {
                             match stdout.read_exact(&mut buf).await {
@@ -161,12 +173,12 @@ impl Application for LunasimbotApp {
                                 }
                                 Err(e) => error!(target: "lunasim", "Faced the following error while reading stdout: {e}"),
                             }
-                            match bytes.len().cmp(&6) {
+                            match bytes.len().cmp(&DELIMIT.len()) {
                                 Ordering::Equal => {}
                                 Ordering::Greater => {bytes.pop_front();}
                                 Ordering::Less => continue,
                             }
-                            if bytes == b"READY\n" {
+                            if bytes == DELIMIT {
                                 break;
                             }
                         }
@@ -209,16 +221,21 @@ impl Application for LunasimbotApp {
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
 
-        let depth_project = match CameraProjection::new(10.392, PROJECTION_SIZE, 0.01).block_on() {
-            Ok(x) => Some(Arc::new(x)),
-            Err(e) => {
-                error!("Failed to create camera projector: {e}");
-                None
-            }
-        };
-
         let camera_link = robot_chain.find_link("depth_camera_link").unwrap().clone();
-        let points_buffer_recycler = Recycler::<Box<[Vector4<f32>]>>::default();
+
+        let depth_projecter_builder = DepthProjectorBuilder {
+            image_size: Vector2::new(NonZeroU32::new(36).unwrap(), NonZeroU32::new(24).unwrap()),
+            focal_length_px: 10.392,
+            principal_point_px: Vector2::new(17.5, 11.5),
+        };
+        let mut point_cloud: Box<[_]> =
+            std::iter::repeat_n(AlignedVec4::from(Vector4::default()), 36 * 24).collect();
+        let mut depth_projecter = depth_projecter_builder.build();
+        let pcl_storage = depth_projecter_builder.make_points_storage();
+        let pcl_storage_channel = Arc::new(PointsStorageChannel::new_for(&pcl_storage));
+        pcl_storage_channel.set_projected(pcl_storage);
+        let (heightmap_callbacks,) =
+            spawn_thalassic_pipeline(Box::new([pcl_storage_channel.clone()]));
 
         let axis_angle = |axis: [f32; 3], angle: f32| {
             let axis = UnitVector3::new_normalize(Vector3::new(
@@ -230,19 +247,9 @@ impl Application for LunasimbotApp {
             UnitQuaternion::from_axis_angle(&axis, angle as f64)
         };
 
-        let raw_pcl_callbacks = Arc::new(PointCloudCallbacks::default());
-        let raw_pcl_callbacks_ref = raw_pcl_callbacks.get_ref();
-
         let lunasim_stdin2 = lunasim_stdin.clone();
-        let mut bitcode_buffer = bitcode::Buffer::new();
-        raw_pcl_callbacks_ref.add_dyn_fn_mut(Box::new(move |point_cloud| {
-            let msg =
-                FromLunasimbot::PointCloud(point_cloud.iter().map(|p| [p.x, p.y, p.z]).collect());
-            let bytes = bitcode_buffer.encode(&msg);
-            lunasim_stdin2.write(bytes);
-        }));
 
-        from_lunasim_ref.add_fn(move |msg| match msg {
+        from_lunasim_ref.add_fn_mut(move |msg| match msg {
             common::lunasim::FromLunasim::Accelerometer {
                 id: _,
                 acceleration,
@@ -258,24 +265,24 @@ impl Application for LunasimbotApp {
                 localizer_ref.set_angular_velocity(axis_angle(axis, angle));
             }
             common::lunasim::FromLunasim::DepthMap(depths) => {
-                let Some(depth_project) = &depth_project else {
-                    return;
-                };
                 let Some(camera_transform) = camera_link.world_transform() else {
                     return;
                 };
-                let mut points_buffer = points_buffer_recycler
-                    .get_or_else(|| vec![Vector4::default(); 36 * 24].into_boxed_slice());
-                let depth_project = depth_project.clone();
-                let raw_pcl_callbacks = raw_pcl_callbacks.clone();
-
-                get_tokio_handle().spawn(async move {
-                    depth_project
-                        .project_buffer(&depths, camera_transform.cast(), &mut **points_buffer)
-                        .await;
-                    block_in_place(|| {
-                        raw_pcl_callbacks.call_immut(&points_buffer);
-                    });
+                let camera_transform: AlignedMatrix4<f32> =
+                    camera_transform.to_homogeneous().cast::<f32>().into();
+                let Some(mut pcl_storage) = pcl_storage_channel.get_finished() else {
+                    return;
+                };
+                pcl_storage = depth_projecter.project(&depths, &camera_transform, pcl_storage, 0.01);
+                pcl_storage.read(&mut point_cloud);
+                pcl_storage_channel.set_projected(pcl_storage);
+                let msg = FromLunasimbot::PointCloud(
+                    point_cloud.iter().map(|p| [p.x, p.y, p.z]).collect(),
+                );
+                let lunasim_stdin2 = lunasim_stdin2.clone();
+                rayon::spawn(move || {
+                    let bytes = bitcode::encode(&msg);
+                    lunasim_stdin2.write(&bytes);
                 });
             }
             common::lunasim::FromLunasim::ExplicitApriltag {
@@ -296,10 +303,9 @@ impl Application for LunasimbotApp {
             }
         });
 
-        let heightmap_ref = heightmap_strategy(PROJECTION_SIZE, &raw_pcl_callbacks_ref);
         let lunasim_stdin2 = lunasim_stdin.clone();
         let mut bitcode_buffer = bitcode::Buffer::new();
-        heightmap_ref.add_dyn_fn_mut(Box::new(move |heightmap| {
+        heightmap_callbacks.add_dyn_fn_mut(Box::new(move |heightmap| {
             let bytes = bitcode_buffer.encode(&FromLunasimbot::HeightMap(
                 heightmap.to_vec().into_boxed_slice(),
             ));
@@ -309,48 +315,17 @@ impl Application for LunasimbotApp {
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
         let (packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
-            self.app.lunabase_address,
+            self.lunabase_address,
             lunabot_stage.clone(),
-            self.app.max_pong_delay_ms,
+            self.max_pong_delay_ms,
         );
 
         let mut bitcode_buffer = bitcode::Buffer::new();
 
         std::thread::spawn(move || {
-            run_ai(robot_chain, |action, inputs| {
-                debug_assert!(inputs.is_empty());
-                let wait_disconnect = async {
-                    if lunabot_stage.load() == LunabotStage::SoftStop {
-                        std::future::pending::<()>().await;
-                    } else {
-                        connected.wait_disconnect().await;
-                    }
-                };
-
-                match action {
-                    Action::WaitForLunabase => {
-                        while let Ok(msg) = from_lunabase_rx.try_recv() {
-                            inputs.push(Input::FromLunabase(msg));
-                        }
-                        if inputs.is_empty() {
-                            async {
-                                tokio::select! {
-                                    result = from_lunabase_rx.recv() => {
-                                        let Some(msg) = result else {
-                                            error!("Lunabase message channel closed");
-                                            std::future::pending::<()>().await;
-                                            unreachable!();
-                                        };
-                                        inputs.push(Input::FromLunabase(msg));
-                                    }
-                                    _ = wait_disconnect => {
-                                        inputs.push(Input::LunabaseDisconnected);
-                                    }
-                                }
-                            }
-                            .block_on();
-                        }
-                    }
+            run_ai(
+                robot_chain,
+                |action, inputs| match action {
                     Action::SetStage(stage) => {
                         lunabot_stage.store(stage);
                     }
@@ -367,30 +342,70 @@ impl Application for LunasimbotApp {
                         into.push(to);
                         inputs.push(Input::PathCalculated(into));
                     }
-                    Action::WaitUntil(deadline) => {
-                        async {
-                            tokio::select! {
-                                result = from_lunabase_rx.recv() => {
-                                    let Some(msg) = result else {
-                                        error!("Lunabase message channel closed");
-                                        std::future::pending::<()>().await;
-                                        unreachable!();
-                                    };
-                                    inputs.push(Input::FromLunabase(msg));
+                },
+                |poll_when, inputs| {
+                    let wait_disconnect = async {
+                        if lunabot_stage.load() == LunabotStage::SoftStop {
+                            std::future::pending::<()>().await;
+                        } else {
+                            connected.wait_disconnect().await;
+                        }
+                    };
+
+                    match poll_when {
+                        PollWhen::ReceivedLunabase => {
+                            while let Ok(msg) = from_lunabase_rx.try_recv() {
+                                inputs.push(Input::FromLunabase(msg));
+                            }
+                            if inputs.is_empty() {
+                                async {
+                                    tokio::select! {
+                                        result = from_lunabase_rx.recv() => {
+                                            let Some(msg) = result else {
+                                                error!("Lunabase message channel closed");
+                                                std::future::pending::<()>().await;
+                                                unreachable!();
+                                            };
+                                            inputs.push(Input::FromLunabase(msg));
+                                        }
+                                        _ = wait_disconnect => {
+                                            inputs.push(Input::LunabaseDisconnected);
+                                        }
+                                    }
                                 }
-                                _ = tokio::time::sleep_until(deadline.into()) => {}
-                                _ = wait_disconnect => {
-                                    inputs.push(Input::LunabaseDisconnected);
-                                }
+                                .block_on();
                             }
                         }
-                        .block_on();
+                        PollWhen::Instant(deadline) => {
+                            async {
+                                tokio::select! {
+                                    result = from_lunabase_rx.recv() => {
+                                        let Some(msg) = result else {
+                                            error!("Lunabase message channel closed");
+                                            std::future::pending::<()>().await;
+                                            unreachable!();
+                                        };
+                                        inputs.push(Input::FromLunabase(msg));
+                                    }
+                                    _ = tokio::time::sleep_until(deadline.into()) => {}
+                                    _ = wait_disconnect => {
+                                        inputs.push(Input::LunabaseDisconnected);
+                                    }
+                                }
+                            }
+                            .block_on();
+                        }
+                        PollWhen::NoDelay => {
+                            // Helps prevent freezing when `NoDelay` is used frequently
+                            std::thread::yield_now();
+                        }
                     }
-                    Action::PollAgain => {}
-                }
-            });
+                },
+            );
         });
 
         wait_for_ctrl_c();
     }
 }
+
+define_app!(pub Sim(LunasimbotApp):  "The lunabot application in a simulated environment");

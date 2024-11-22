@@ -6,7 +6,7 @@ args = ["build", "-p", "lunasim-lib"]
 [tasks.build_lunabase]
 workspace = false
 command = "cargo"
-args = ["build", "-p", "lunabase-lib"]
+args = ["build", "-p", "lunabase-lib", "--release"]
 
 [tasks.godot]
 workspace = false
@@ -23,9 +23,23 @@ args = ["run", "-p", "lunabot", "--", "sim"]
 [tasks.main]
 workspace = false
 command = "cargo"
-args = ["run", "-p", "lunabot", "--", "main"]
+args = ["run", "--release", "--features=production", "-p", "lunabot", "--", "main"]
 
 [tasks.del-cabinet]
 workspace = false
 command = "cargo"
-args = ["run", "-p", "urobotics-tool", "--", "delete-cabinet"]
+args = ["run", "-p", "urobotics-tool", "--", "deletecabinet"]
+
+[tasks.mouser-web]
+workspace = false
+command = "npm"
+cwd = "mouser/mouser-web"
+args = ["run", "build"]
+
+[tasks.mouser-host]
+workspace = false
+command = "cargo"
+dependencies = [
+    "mouser-web",
+]
+args = ["run", "-p", "mouser-host"]

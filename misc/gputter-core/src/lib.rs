@@ -1,11 +1,14 @@
+#![feature(associated_const_equality)]
 use std::sync::OnceLock;
 
+use pollster::FutureExt;
 pub use wgpu;
 
 pub mod buffers;
 pub mod compute;
 pub mod shader;
 pub mod size;
+pub mod tuple;
 pub mod types;
 
 pub struct GpuDevice {
@@ -41,6 +44,7 @@ pub async fn init_gputter() -> anyhow::Result<()> {
                 } else {
                     wgpu::Limits::default()
                 },
+                memory_hints: wgpu::MemoryHints::Performance,
                 label: None,
             },
             None, // Trace path
@@ -54,4 +58,12 @@ pub fn get_device() -> &'static GpuDevice {
     GPU_DEVICE
         .get()
         .expect("GpuDevice was not initialized. Call init_gputter first")
+}
+
+pub fn init_gputter_blocking() -> anyhow::Result<()> {
+    init_gputter().block_on()
+}
+
+pub fn is_gputter_initialized() -> bool {
+    GPU_DEVICE.get().is_some()
 }

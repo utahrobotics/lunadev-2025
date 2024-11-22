@@ -1,25 +1,17 @@
+#[cfg(feature = "production")]
 mod production;
 mod sim;
 
-use std::{
-    fs::File,
-    net::SocketAddr,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{fs::File, net::SocketAddr, sync::Arc, time::Duration};
 
 use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
 use k::Chain;
-use nalgebra::Vector4;
-pub use production::LunabotApp;
-pub use sim::{LunasimStdin, LunasimbotApp};
+#[cfg(feature = "production")]
+pub use production::Main;
+pub use sim::{LunasimStdin, Sim};
 use urobotics::{
-    define_callbacks, fn_alias,
-    log::{error, info, warn},
+    log::{error, warn},
     tokio::{
         self,
         sync::{mpsc, watch},
@@ -28,6 +20,10 @@ use urobotics::{
 };
 
 use crate::teleop::{LunabaseConn, PacketBuilder};
+
+fn default_max_pong_delay_ms() -> u64 {
+    1500
+}
 
 fn wait_for_ctrl_c() {
     match tokio::signal::ctrl_c().block_on() {
@@ -59,13 +55,10 @@ fn log_teleop_messages() {
 }
 
 fn create_robot_chain() -> Arc<Chain<f64>> {
-    Arc::new(Chain::<f64>::from_urdf_file("urdf/lunabot.urdf").expect("Failed to load urdf"))
+    let chain = Chain::<f64>::from_urdf_file("urdf/lunabot.urdf").expect("Failed to load urdf");
+    chain.update_transforms();
+    Arc::new(chain)
 }
-
-fn_alias! {
-    pub type PointCloudCallbacksRef = CallbacksRef(&[Vector4<f32>]) + Send + Sync
-}
-define_callbacks!(PointCloudCallbacks => Fn(point_cloud: &[Vector4<f32>]) + Send + Sync);
 
 #[derive(Clone)]
 struct LunabotConnected {

@@ -1,0 +1,14 @@
+[package]
+name = "mouser-host"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum.workspace = true
+tokio.workspace = true
+toml.workspace = true
+serde.workspace = true
+fxhash.workspace = true
+crossbeam.workspace = true
+humantime-serde = "1.1.1"
+http = "1.1.0"

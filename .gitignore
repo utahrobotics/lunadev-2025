@@ -23,3 +23,9 @@ rtp.sdp
 ~*
 godot/lunabase/exports/
 /export_presets.cfg
+playlist.m3u8
+playlist*.ts
+mouser-config.toml
+/go2rtc*
+/address_log.txt
+.DS_Store

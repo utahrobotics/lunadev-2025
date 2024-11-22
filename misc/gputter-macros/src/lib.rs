@@ -6,14 +6,15 @@ use std::{
 };
 
 use fxhash::FxHashMap;
-use gputter_core::{get_device, init_gputter, wgpu, GpuDevice};
-use pollster::FutureExt;
+use gputter_core::{get_device, init_gputter_blocking, wgpu, GpuDevice};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use regex::Regex;
 use syn::{
     parse::{Parse, ParseStream},
-    parse_macro_input, token, Ident, LitStr, Visibility,
+    parse_macro_input,
+    token::{self},
+    Ident, LitStr, Visibility,
 };
 use unfmt::unformat;
 
@@ -48,19 +49,13 @@ fn type_resolver(s: &str, uint_consts: &FxHashMap<&str, Option<u32>>) -> String 
         "f32" => return "f32".into(),
         "u32" => return "u32".into(),
         "i32" => return "i32".into(),
-        "vec2f" => return "gputter::types::AlignedVec2<f32>".into(),
-        "vec3f" => return "gputter::types::AlignedVec3<f32>".into(),
-        "vec4f" => return "gputter::types::AlignedVec4<f32>".into(),
-        "vec2u" => return "gputter::types::AlignedVec2<u32>".into(),
-        "vec3u" => return "gputter::types::AlignedVec3<u32>".into(),
-        "vec4u" => return "gputter::types::AlignedVec4<u32>".into(),
-        "vec2i" => return "gputter::types::AlignedVec2<i32>".into(),
-        "vec3i" => return "gputter::types::AlignedVec3<i32>".into(),
-        "vec4i" => return "gputter::types::AlignedVec4<i32>".into(),
+        "NonZeroU32" => return "std::num::NonZeroU32".into(),
+        "NonZeroI32" => return "std::num::NonZeroI32".into(),
         _ => {}
     }
-    
-    if let Some(inner) = unformat!("array<{}>", s) {
+
+    let delimited = &format!("{s}?");
+    if let Some(inner) = unformat!("array<{}>?", delimited) {
         if let Some((ty, mut count)) = unformat!("{},{}", inner) {
             count = count.trim();
             if let Ok(count) = usize::from_str(count) {
@@ -82,10 +77,50 @@ fn type_resolver(s: &str, uint_consts: &FxHashMap<&str, Option<u32>>) -> String 
         // There is no count
         return format!("[{}]", type_resolver(inner.trim(), uint_consts));
     }
-    
+    if let Some(inner) = unformat!("atomic<{}>?", delimited) {
+        // Atomic types in the shader do not need to be atomic in the host
+        return type_resolver(inner.trim(), uint_consts);
+    }
+    if let Some(mut inner) = unformat!("vec{}?", delimited) {
+        inner = inner.trim();
+        if let Some((n, ty)) = unformat!("{}<{}>", inner) {
+            return format!("gputter::types::AlignedVec{n}<{ty}>");
+        } else if inner.len() != 2 {
+            panic!("Invalid vector type: {s}");
+        } else {
+            let (n, mut ty) = inner.split_at(1);
+            ty = match ty {
+                "f" => "f32",
+                "u" => "u32",
+                "i" => "i32",
+                _ => panic!("Invalid vector type: {s}"),
+            };
+            return format!("gputter::types::AlignedVec{n}<{ty}>");
+        }
+    }
+    if let Some((dim1, dim2)) = unformat!("mat{}x{}?", delimited) {
+        if let Some((dim2, ty)) = unformat!("{}<{}>", dim2.trim_end()) {
+            return format!("gputter::types::AlignedMatrix{dim1}x{dim2}<{ty}>");
+        } else if dim2.len() != 2 {
+            panic!("Invalid matrix type: {s}");
+        } else {
+            let (dim2, mut ty) = dim2.split_at(1);
+            ty = match ty {
+                "f" => "f32",
+                "u" => "u32",
+                "i" => "i32",
+                _ => panic!("Invalid matrix type: {s}"),
+            };
+            return format!("gputter::types::AlignedMatrix{dim1}x{dim2}<{ty}>");
+        }
+    }
+
     // It is some custom type that is used verbatim in the shader and the host
     s.into()
 }
+
+// Eventually check errors like these
+// Shader entry point's workgroup size [36, 24, 1] (864 total invocations) must be less or equal to the per-dimension limit [256, 256, 64] and the total invocation limit 256
 
 #[proc_macro]
 pub fn build_shader(input: TokenStream) -> TokenStream {
@@ -94,54 +129,77 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         vis, name, shader, ..
     } = parse_macro_input!(input as BuildShader);
 
+    // remove comments
+    let re = Regex::new(r"//[[[:blank:]]\S]*\n").unwrap();
+
+    let shader = shader.value();
+    let shader = re.replace_all(&shader, "\n");
+
+    // Add aliases to the start
+    // This helps with later steps if the first symbol in the shader
+    // is a buffer annotation
     let shader = {
-        let mut tmp = String::with_capacity(shader.value().len() + 1);
+        let mut tmp = String::with_capacity(shader.len() + 1);
         tmp.push_str("alias NonZeroU32 = u32;\nalias NonZeroI32 = i32;\n");
-        tmp.push_str(&shader.value());
+        tmp.push_str(&shader);
         tmp
     };
 
-    let re = Regex::new(r"@compute[\s@a-zA-Z0-9\(\)_,]+fn\s+([a-zA-Z0-9]+)\s*\(").unwrap();
-    let compute_fns: Vec<_> = re.captures_iter(&shader).map(|caps| {
-        let (_, [fn_name]) = caps.extract();
-        fn_name
-    }).collect();
-    
-    let re = Regex::new(
-            r"const\s*([a-zA-Z0-9]+)\s*:\s*([a-zA-Z0-9]+)\s*=\s*([\{\}a-zA-Z0-9]+)\s*;?",
-        )
-        .unwrap();
+    // Find all compute functions
+    let re = Regex::new(r"@compute[\s@a-zA-Z0-9\(\)_,\*\+\-/%]+fn\s+([a-zA-Z0-9]+)\s*\(").unwrap();
+    let compute_fns: Vec<_> = re
+        .captures_iter(&shader)
+        .map(|caps| {
+            let (_, [fn_name]) = caps.extract();
+            fn_name
+        })
+        .collect();
 
-    let uint_consts: FxHashMap<_, _> = re.captures_iter(&shader).filter_map(|caps| {
-        let (_, [const_name, const_ty, const_val]) = caps.extract();
-        if const_ty != "u32" && const_ty != "NonZeroU32" {
-            return None;
-        }
+    // Find all u32 constants as they can be used for array lengths
+    let re =
+        Regex::new(r"const\s*([a-zA-Z0-9_]+)\s*:\s*([a-zA-Z0-9]+)\s*=\s*([\{\}a-zA-Z0-9_]+)\s*;?")
+            .unwrap();
 
-        if const_val.starts_with("{{") && const_val.ends_with("}}") {
-            return Some((const_name, None));
-        }
+    let uint_consts: FxHashMap<_, _> = re
+        .captures_iter(&shader)
+        .filter_map(|caps| {
+            let (_, [const_name, const_ty, const_val]) = caps.extract();
+            if const_ty != "u32" && const_ty != "NonZeroU32" {
+                return None;
+            }
 
-        let Ok(n) = u32::from_str(&const_val) else {
-            panic!(r#"Constant "{const_name}" is not a valid u32 (was {const_val})"#);
-        };
-        Some((const_name, Some(n)))
-    })
-    .collect();
+            if const_val.starts_with("{{") && const_val.ends_with("}}") {
+                return Some((const_name, None));
+            }
 
+            let Ok(n) = u32::from_str(&const_val) else {
+                panic!(r#"Constant "{const_name}" is not a valid u32 (was {const_val})"#);
+            };
+            Some((const_name, Some(n)))
+        })
+        .collect();
+
+    // Split by buffer annotations
     let re = Regex::new(r"#\[buffer\(([a-zA-Z0-9]+)\)\]").unwrap();
 
-    let buffer_rw_modes: Vec<_> = re.captures_iter(&shader).map(|caps| {
-        let (_, [rw_mode]) = caps.extract();
-        match rw_mode {
-            "HostHidden" => "HostHidden",
-            "HostReadOnly" => "HostReadOnly",
-            "HostWriteOnly" => "HostWriteOnly",
-            "HostReadWrite" => "HostReadWrite",
-            _ => panic!("Unsupported buffer host read-write mode: {rw_mode}"),
-        }
-    }).collect();
+    let buffer_rw_modes: Vec<_> = re
+        .captures_iter(&shader)
+        .map(|caps| {
+            let (_, [rw_mode]) = caps.extract();
+            match rw_mode {
+                "HostHidden" => "HostHidden",
+                "HostReadOnly" => "HostReadOnly",
+                "HostWriteOnly" => "HostWriteOnly",
+                "HostReadWrite" => "HostReadWrite",
+                _ => panic!("Unsupported buffer host read-write mode: {rw_mode}"),
+            }
+        })
+        .collect();
 
+    // Parse all buffer definitions
+    // They should come immediately after the buffer annotation,
+    // and the first split element can be ignore as it is definitely the aliases
+    // defined earlier
     let mut buffer_storage_types = vec![];
     let mut buffer_types = vec![];
     let splitted: Vec<_> = re.split(&shader).collect();
@@ -172,10 +230,16 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                         host_rw_mode,
                         shader_read_only: false,
                     },
-                    "read" => StorageType::Storage {
-                        host_rw_mode,
-                        shader_read_only: true,
-                    },
+                    "read" => {
+                        // relaxed for now, maybe forever
+                        // if host_rw_mode != "HostWriteOnly" && host_rw_mode != "HostReadWrite" {
+                        //     panic!("Read only storage buffer must be writable by host (HostWriteOnly or HostReadWrite)");
+                        // }
+                        StorageType::Storage {
+                            host_rw_mode,
+                            shader_read_only: true,
+                        }
+                    }
                     _ => panic!("Unsupported shader read-write mode: {shader_rw_mode}"),
                 }
             } else {
@@ -185,36 +249,61 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Find all build time constants
+    // These constants can be filled by the host before the shader is compiled
     let re = Regex::new(
-        r"(const\s+[a-zA-Z0-9]+\s*:\s*([a-zA-Z0-9]+)\s*=\s*)\{\{([a-zA-Z0-9]+)\}\}\s*(;?)",
+        r"(const\s+[a-zA-Z0-9_]+\s*:\s*([a-zA-Z0-9]+)\s*=\s*)\{\{([a-zA-Z0-9_]+)\}\}\s*(;?)(\s*/!/\s*sub\s*with\s*(\S+))?(\n)?",
     )
     .unwrap();
 
     let mut const_types = vec![];
     let mut const_names = vec![];
+    let mut const_custom_sub = vec![];
     let mut binding_index = 0usize;
 
+    // Prepare shader for substitution
     let shader: Vec<_> = splitted
         .into_iter()
         .map(String::from)
         .intersperse_with(|| {
-            let out = format!("<<GRP_SUBSTITUTE{binding_index}>>");
+            let out = format!("<<GRP_SUBSTITUTE{binding_index}?>>");
             binding_index += 1;
             out
         })
         .flat_map(|s| {
             re.captures_iter(&s).for_each(|caps| {
-                let (_, [_, type_name, const_name, _]) = caps.extract();
-                const_types.push(type_name.to_owned());
+                let mut caps = caps.iter();
+                let _whole = caps.next();
+                let _declaration = caps.next();
+                let type_name = caps.next().unwrap().unwrap().as_str();
+                let const_name = caps.next().unwrap().unwrap().as_str();
+                let _semicolon = caps.next();
+                const_types.push(type_resolver(type_name, &uint_consts));
                 const_names.push(const_name.to_owned());
+                // panic!("A {:?}", caps.next());
+                const_custom_sub.push(
+                    caps.next()
+                        .flatten()
+                        .map(|_| {
+                            // If the outer capture group is present, the inner capture group is also present
+                            // refer to regex for proof
+                            let cap = caps.next().unwrap().unwrap().as_str().trim();
+                            if cap.is_empty() {
+                                None
+                            } else {
+                                Some(cap.to_owned())
+                            }
+                        })
+                        .flatten(),
+                )
             });
             let mut const_index = 0usize;
             let splitted: Vec<_> = re
-                .replace_all(&s, "$1<<SUBSTITUTE>>$4")
+                .replace_all(&s, "$1<<SUBSTITUTE>>$4$7")
                 .split("<<SUBSTITUTE>>")
                 .map(String::from)
                 .intersperse_with(|| {
-                    let out = format!("<<SUBSTITUTE{}>>", const_types[const_index]);
+                    let out = format!("<<SUBSTITUTE{}?>>", const_types[const_index]);
                     const_index += 1;
                     out
                 })
@@ -223,20 +312,43 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         })
         .collect();
 
+    let mut const_sub_idx = 0usize;
+
+    // Substitute parameters with reasonable defaults
     let tmp_shader: String = shader
         .iter()
         .map(|s| {
-            if let Some(i) = unformat!("<<GRP_SUBSTITUTE{}>>", s) {
+            if let Some(i) = unformat!("<<GRP_SUBSTITUTE{}?>>", s) {
                 format!("@group(0) @binding({i})")
-            } else if let Some(ty) = unformat!("<<SUBSTITUTE{}>>", s) {
+            } else if let Some(ty) = unformat!("<<SUBSTITUTE{}?>>", s) {
+                if let Some(custom_sub) = &const_custom_sub[const_sub_idx] {
+                    const_sub_idx += 1;
+                    return custom_sub.clone();
+                }
+                const_sub_idx += 1;
                 match ty {
                     "f32" => "0.0".to_owned(),
                     "u32" => "0".to_owned(),
                     "i32" => "0".to_owned(),
                     "bool" => "false".to_owned(),
-                    "NonZeroU32" => "1".to_owned(),
-                    "NonZeroI32" => "1".to_owned(),
-                    _ => panic!("Unsupported type for substitution: {}", ty),
+                    "std::num::NonZeroU32" => "1".to_owned(),
+                    "std::num::NonZeroI32" => "1".to_owned(),
+                    _ => {
+                        if let Some((n, ty)) = unformat!("gputter::types::AlignedVec{}<{}>", ty) {
+                            let sub = match ty {
+                                "f32" => "0.0".to_owned(),
+                                "u32" | "i32" => "0".to_owned(),
+                                _ => panic!("Unsupported type for substitution: {}", ty),
+                            };
+                            return match n {
+                                "2" => format!("vec2<{ty}>({sub}, {sub})"),
+                                "3" => format!("vec3<{ty}>({sub}, {sub}, {sub})"),
+                                "4" => format!("vec4<{ty}>({sub}, {sub}, {sub}, {sub})"),
+                                _ => panic!("Unsupported type for substitution: {}", ty),
+                            };
+                        }
+                        panic!("Unsupported type for substitution: {}", ty)
+                    }
                 }
             } else {
                 s.clone()
@@ -245,9 +357,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         .collect();
 
     // Check that it compiles
-    init_gputter()
-        .block_on()
-        .expect("Failed to initialize gputter");
+    init_gputter_blocking().expect("Failed to initialize gputter");
     let GpuDevice { device, .. } = get_device();
     if let Err(panic) = catch_unwind(AssertUnwindSafe(|| {
         device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -262,6 +372,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         );
     }
 
+    // Replace substitutions with variable names
     let mut binding_index = 0usize;
     let mut const_index = 0usize;
 
@@ -277,42 +388,50 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                 const_index += 1;
                 out
             } else {
+                // Replace regular braces with double braces
                 s.replace('{', "{{").replace('}', "}}")
             }
         })
         .collect();
 
+    // Define actual buffer types as they appear to the host
     let buffer_def: Vec<_> = buffer_names
         .iter()
         .zip(buffer_types.iter())
         .zip(buffer_storage_types.iter())
         .map(|((&name, ty), storage_ty)| {
             let stream = match storage_ty {
-                StorageType::Uniform => format!("{name}: gputter::shader::BufferGroupBinding<gputter::buffers::uniform::UniformBuffer<{ty}>, S>"),
+                StorageType::Uniform => format!("pub {name}: gputter::shader::BufferGroupBinding<gputter::buffers::uniform::UniformBuffer<{ty}>, S>"),
                 StorageType::Storage { host_rw_mode, shader_read_only } => {
                     let shader_read_only = if *shader_read_only { "ShaderReadOnly" } else { "ShaderReadWrite" };
-                    format!("{name}: gputter::shader::BufferGroupBinding<gputter::buffers::storage::StorageBuffer<{ty}, gputter::buffers::storage::{host_rw_mode}, gputter::buffers::storage::{shader_read_only}>, S>")
+                    format!("pub {name}: gputter::shader::BufferGroupBinding<gputter::buffers::storage::StorageBuffer<{ty}, gputter::buffers::storage::{host_rw_mode}, gputter::buffers::storage::{shader_read_only}>, S>")
                 }
             };
             proc_macro2::TokenStream::from_str(&stream).unwrap()
         })
         .collect();
 
+    // Define actual constant types as they appear to the host
     let const_def = const_names
         .iter()
         .zip(const_types.iter())
-        .map(|(name, ty)| proc_macro2::TokenStream::from_str(&format!("{name}: {ty}")).unwrap());
+        .map(|(name, ty)| {
+            proc_macro2::TokenStream::from_str(&format!("pub {name}: {ty}")).unwrap()
+        });
 
     let const_idents = const_names.iter().map(|name| format_ident!("{name}"));
     let buffer_idents = buffer_names.iter().map(|&name| format_ident!("{name}"));
 
+    // Create a ComputeFn for each compute function
     let compute_count = compute_fns.len();
-    let compile_out = compute_fns.iter()
-        .map(|&name| {
-            proc_macro2::TokenStream::from_str(&format!("gputter::shader::ComputeFn::new_unchecked(shader.clone(), {name:?})")).unwrap()
-        });
-    
-    // Build the output, possibly using quasi-quotation
+    let compile_out = compute_fns.iter().map(|&name| {
+        proc_macro2::TokenStream::from_str(&format!(
+            "gputter::shader::ComputeFn::new_unchecked(shader.clone(), {name:?})"
+        ))
+        .unwrap()
+    });
+
+    // Build the output
     let expanded = quote! {
         #vis struct #name<S> {
             #(#buffer_def,)*

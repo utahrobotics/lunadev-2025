@@ -1,11 +1,11 @@
-#![feature(result_flattening, deadline_api, never_type, thread_sleep_until)]
+#![feature(result_flattening, never_type, array_chunks, sync_unsafe_cell, iterator_try_collect)]
 
 use std::path::Path;
 
-use apps::{LunabotApp, LunasimbotApp};
+use apps::Sim;
 use urobotics::{
     app::{adhoc_app, application},
-    camera, python, serial,
+    python, serial,
     video::info::list_media_input,
     BlockOn,
 };
@@ -13,7 +13,8 @@ use urobotics::{
 mod apps;
 mod localization;
 mod motors;
-mod obstacles;
+// mod obstacles;
+mod pipelines;
 mod teleop;
 mod utils;
 
@@ -34,7 +35,7 @@ fn info_app() {
     println!();
 }
 
-adhoc_app!(InfoApp, "info", "Print diagnostics", info_app);
+adhoc_app!(InfoApp(info_app): "Print diagnostics");
 
 fn main() {
     let mut app = application!();
@@ -45,11 +46,14 @@ fn main() {
     app.cabinet_builder.create_symlink_for("target");
     app.cabinet_builder.create_symlink_for("urdf");
 
-    app.add_app::<serial::SerialConnection>()
-        .add_app::<python::PythonVenvBuilder>()
-        .add_app::<camera::CameraConnectionBuilder>()
-        .add_app::<LunabotApp>()
+    app = app
+        .add_app::<serial::app::Serial>()
+        .add_app::<python::app::Python>()
         .add_app::<InfoApp>()
-        .add_app::<LunasimbotApp>()
-        .run();
+        .add_app::<Sim>();
+    #[cfg(feature = "production")]
+    {
+        app = app.add_app::<apps::Main>();
+    }
+    app.run();
 }

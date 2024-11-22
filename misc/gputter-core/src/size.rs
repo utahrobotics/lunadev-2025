@@ -7,6 +7,11 @@ pub trait BufferSize: Copy + Default + Send + 'static {
 
 /// A buffer size that is statically known as `T` is statically sized.
 pub struct StaticSize<T>(PhantomData<fn() -> T>);
+impl<T> StaticSize<T> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
 
 impl<T> Default for StaticSize<T> {
     fn default() -> Self {
@@ -34,7 +39,7 @@ pub struct DynamicSize<T: ?Sized>(pub usize, PhantomData<fn() -> T>);
 
 impl<T: 'static> BufferSize for DynamicSize<T> {
     fn size(&self) -> u64 {
-        let stride = size_of::<T>().next_multiple_of(align_of::<T>()) as u64;
+        let stride = size_of::<T>() as u64;
         self.0 as u64 * stride
     }
 }
