@@ -13,6 +13,10 @@ use godot::{classes::{image::Format, Engine, Image}, prelude::*};
 use openh264::{decoder::Decoder, nal_units};
 use tasker::shared::{OwnedData, SharedDataReceiver};
 
+
+const STREAM_WIDTH: u32 = 1920;
+const STREAM_HEIGHT: u32 = 720;
+
 struct LunabaseLib;
 
 #[gdextension]
@@ -91,14 +95,14 @@ thread_local! {
 #[godot_api]
 impl INode for LunabotConn {
     fn init(base: Base<Node>) -> Self {
-        let stream_image = Image::create_empty(2556, 960, false, Format::RGB8).unwrap();
+        let stream_image = Image::create_empty(STREAM_WIDTH as i32, STREAM_HEIGHT as i32, false, Format::RGB8).unwrap();
         if Engine::singleton().is_editor_hint() {
             return Self { inner: None, base, stream_image, stream_image_updated: false };
         }
         init_panic_hook();
 
         let stream_corrupted: &_ = Box::leak(Box::new(AtomicBool::new(false)));
-        let mut shared_rgb_img = OwnedData::from(vec![0u8; 2556 * 960 * 3]);
+        let mut shared_rgb_img = OwnedData::from(vec![0u8; STREAM_WIDTH as usize * STREAM_HEIGHT as usize * 3]);
         let stream_lendee = shared_rgb_img.create_lendee();
         let mut shared_rgb_img = shared_rgb_img.pessimistic_share();
 
@@ -191,7 +195,7 @@ impl INode for LunabotConn {
             let mut received = false;
 
             if let Some(data) = inner.stream_lendee.try_get() {
-                self.stream_image.set_data(2556, 960, false, Format::RGB8, &PackedByteArray::from(&**data));
+                self.stream_image.set_data(STREAM_WIDTH as i32, STREAM_HEIGHT as i32, false, Format::RGB8, &PackedByteArray::from(&**data));
                 self.stream_image_updated = true;
                 received = true;
             }

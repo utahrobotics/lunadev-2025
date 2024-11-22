@@ -82,7 +82,11 @@ impl Runnable for LunabotApp {
         if let Err(e) = camera_streaming(
             self.lunabase_streaming_address.unwrap_or_else(|| {
                 let mut addr = self.lunabase_address;
-                addr.set_port(addr.port() + 1);
+                if addr.port() == u16::MAX {
+                    addr.set_port(65534);
+                } else {
+                    addr.set_port(addr.port() + 1);
+                }
                 addr
             }
         )) {

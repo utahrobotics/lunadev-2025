@@ -96,6 +96,10 @@ opt-level = 3
 [profile.dev.package.lunabase-lib]
 opt-level = 3
 
+[profile.release.package.lunabase-lib]
+debug = true
+debug-assertions = true
+
 [profile.release.package.lunabot]
 debug = true
 debug-assertions = true

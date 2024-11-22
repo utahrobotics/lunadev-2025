@@ -87,7 +87,7 @@ Actuation<y:LabelModel><y:SmartNodeLabelModel distance="4.0"/></y:LabelModel><y:
       <data key="d6">
         <y:GenericNode configuration="com.yworks.entityRelationship.small_entity">
           <y:Geometry height="32.96000000000001" width="125.6800000000004" x="757.3600000000001" y="194.91999999999996"/>
-          <y:Fill color="#E8EEF7" color2="#808000" transparent="false"/>
+          <y:Fill color="#E8EEF7" color2="#008000" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="18.1328125" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="bottom" visible="true" width="110.927734375" x="7.3761328125001455" xml:space="preserve" y="7.413593750000018">Camera Streaming<y:LabelModel><y:SmartNodeLabelModel distance="4.0"/></y:LabelModel><y:ModelParameter><y:SmartNodeLabelModelParameter labelRatioX="0.0" labelRatioY="0.0" nodeRatioX="0.0" nodeRatioY="0.0" offsetX="0.0" offsetY="0.0" upX="0.0" upY="-1.0"/></y:ModelParameter></y:NodeLabel>
           <y:StyleProperties>
@@ -344,7 +344,7 @@ Traversal<y:LabelModel><y:SmartNodeLabelModel distance="4.0"/></y:LabelModel><y:
       <data key="d6">
         <y:GenericNode configuration="com.yworks.entityRelationship.small_entity">
           <y:Geometry height="32.960000000000036" width="96.0" x="999.0399999999988" y="193.53999999999996"/>
-          <y:Fill color="#E8EEF7" color2="#FF6600" transparent="false"/>
+          <y:Fill color="#E8EEF7" color2="#008000" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="32.265625" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="bottom" visible="true" width="77.599609375" x="9.2001953125" xml:space="preserve" y="0.3471875000000182">Camera
 Enumeration<y:LabelModel><y:SmartNodeLabelModel distance="4.0"/></y:LabelModel><y:ModelParameter><y:SmartNodeLabelModelParameter labelRatioX="0.0" labelRatioY="0.0" nodeRatioX="0.0" nodeRatioY="0.0" offsetX="0.0" offsetY="0.0" upX="0.0" upY="-1.0"/></y:ModelParameter></y:NodeLabel>
