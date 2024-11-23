@@ -185,7 +185,7 @@ pub fn enumerate_cameras(
                         &rgb_img,
                         format.width,
                         format.height,
-                    ));
+                    )).unwrap();
 
                     match image.try_recall() {
                         Ok(img) => {

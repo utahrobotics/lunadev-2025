@@ -290,7 +290,7 @@ pub fn enumerate_depth_cameras(
                         }
                     }
 
-                    camera_stream.write(DownscaleRgbImageReader::new(&bytes, frame.width() as u32, frame.height() as u32));
+                    camera_stream.write(DownscaleRgbImageReader::new(&bytes, frame.width() as u32, frame.height() as u32)).unwrap();
                 }
                 shared_luma_img = Some(luma_img);
             }

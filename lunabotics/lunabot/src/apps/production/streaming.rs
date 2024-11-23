@@ -26,7 +26,12 @@ const CAMERA_ROW_COUNT: usize = 2;
 pub const CAMERA_RESOLUTION: Vector2<u32> = Vector2::new(640, 360);
 const KEYFRAME_INTERVAL: usize = 60;
 
-static CAMERA_STREAMS: RwLock<Vec<Box<[&SyncUnsafeCell<[u8]>]>>> = RwLock::new(vec![]);
+struct ImgPtr(*mut u8, usize);
+
+unsafe impl Send for ImgPtr {}
+unsafe impl Sync for ImgPtr {}
+
+static CAMERA_STREAMS: RwLock<ImgPtr> = RwLock::new(ImgPtr(std::ptr::null_mut(), 0));
 static CAMERA_STREAM_LOCKS: OnceLock<Box<[AtomicBool]>> = OnceLock::new();
 
 pub struct CameraStream {
@@ -55,15 +60,26 @@ impl CameraStream {
         Some(Self { index })
     }
 
-    pub fn write(&mut self, mut src: impl Read) {
+    pub fn write(&mut self, mut src: impl Read) -> std::io::Result<()> {
         let Some(camera_streams) = CAMERA_STREAMS.try_read() else {
-            return;
+            return Ok(());
         };
-        let camera_stream = &camera_streams[self.index];
-        for &row in camera_stream {
-            let row = unsafe { &mut *row.get() };
-            src.read(row).unwrap();
+        let ptr = camera_streams.0;
+        let cam_x = self.index % CAMERA_COL_COUNT;
+        let cam_y = self.index / CAMERA_COL_COUNT;
+        let individual_frame_row_length = CAMERA_RESOLUTION.x as usize * 3;
+        let global_frame_row_length = individual_frame_row_length * CAMERA_COL_COUNT;
+
+        let start = (cam_y * global_frame_row_length + cam_x * individual_frame_row_length)
+            as usize;
+        for y in 0..CAMERA_RESOLUTION.y as usize {
+            let start = start + y * global_frame_row_length;
+            let row = unsafe {
+                &mut *std::ptr::slice_from_raw_parts_mut(ptr.add(start), individual_frame_row_length)
+            };
+            src.read(row)?;
         }
+        Ok(())
     }
 }
 
@@ -128,23 +144,8 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
     .into_boxed_slice();
     {
         let mut camera_streams = CAMERA_STREAMS.write();
-        let individual_frame_row_length = CAMERA_RESOLUTION.x as usize * 3;
-        let global_frame_row_length = individual_frame_row_length * CAMERA_COL_COUNT;
-
-        for cam_y in 0..CAMERA_ROW_COUNT {
-            for cam_x in 0..CAMERA_COL_COUNT {
-                let start = (cam_y * global_frame_row_length + cam_x * individual_frame_row_length)
-                    as usize;
-                let mut camera_stream = vec![];
-                for y in 0..CAMERA_RESOLUTION.y as usize {
-                    let start = start + y * global_frame_row_length;
-                    let end = start + individual_frame_row_length;
-                    camera_stream
-                        .push(unsafe { std::mem::transmute(&camera_frame_buffer[start..end]) });
-                }
-                camera_streams.push(camera_stream.into_boxed_slice());
-            }
-        }
+        camera_streams.1 = camera_frame_buffer.len();
+        camera_streams.0 = Box::leak(camera_frame_buffer).as_mut_ptr();
     }
     let mut h264_enc = Encoder::with_api_config(
         OpenH264API::from_source(),
@@ -159,14 +160,12 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
     let udp = UdpSocket::bind("0.0.0.0:0").context("Binding streaming UDP socket")?;
     udp.connect(lunabase_streaming_address)
         .context("Connecting to lunabase streaming address")?;
-    // let mut tmp_output = std::io::BufWriter::new(std::fs::File::create("video.h264").unwrap());
 
     std::thread::spawn(move || {
         let mut yuv_buffer = YUVBuffer::new(
             CAMERA_RESOLUTION.x as usize * CAMERA_COL_COUNT,
             CAMERA_RESOLUTION.y as usize * CAMERA_ROW_COUNT,
         );
-        let camera_frame_buffer: *const _ = Box::leak(camera_frame_buffer);
         let mut now = Instant::now();
         let sleeper = SpinSleeper::default();
         let mut keyframe = 0usize;
@@ -183,8 +182,10 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
             {
                 // Must be write to get exclusive access to all camera
                 // streams, even though we are only reading from them
-                let _lock = CAMERA_STREAMS.write();
-                let frame_data = unsafe { &*camera_frame_buffer };
+                let writer = CAMERA_STREAMS.write();
+                let frame_data = unsafe {
+                    &*std::ptr::slice_from_raw_parts_mut(writer.0, writer.1)
+                };
 
                 let rgb_slice = RgbSliceU8::new(
                     frame_data,
@@ -194,36 +195,37 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
                     ),
                 );
                 yuv_buffer.read_rgb(rgb_slice);
-                match h264_enc.encode(&yuv_buffer) {
-                    Ok(x) => {
-                        for layer_i in 0..x.num_layers() {
-                            let layer = x.layer(layer_i).unwrap();
-                            for nal_i in 0..layer.nal_count() {
-                                let nal = layer.nal_unit(nal_i).unwrap();
+            }
+            match h264_enc.encode(&yuv_buffer) {
+                Ok(x) => {
+                    for layer_i in 0..x.num_layers() {
+                        let layer = x.layer(layer_i).unwrap();
+                        for nal_i in 0..layer.nal_count() {
+                            let nal = layer.nal_unit(nal_i).unwrap();
 
-                                nal.chunks(1400).for_each(|chunk| {
-                                    // println!("{nal_i} {} {:?}", nal.len(), &chunk[1..8]);
-                                    if let Err(e) = udp.send(chunk) {
-                                        if e.kind() == ErrorKind::ConnectionRefused {
-                                            if lunabase_streaming_address.ip().is_loopback() {
-                                                return;
-                                            }
+                            nal.chunks(1400).for_each(|chunk| {
+                                // println!("{nal_i} {} {:?}", nal.len(), &chunk[1..8]);
+                                if let Err(e) = udp.send(chunk) {
+                                    if e.kind() == ErrorKind::ConnectionRefused {
+                                        if lunabase_streaming_address.ip().is_loopback() {
+                                            return;
                                         }
-                                        error!("Failed to send stream data to lunabase: {e}");
                                     }
-                                });
-                            }
+                                    error!("Failed to send stream data to lunabase: {e}");
+                                }
+                            });
                         }
-                        // tmp_output.flush().unwrap();
                     }
-                    Err(e) => {
-                        error!("Failed to encode frame: {e}");
-                    }
+                    // tmp_output.flush().unwrap();
+                }
+                Err(e) => {
+                    error!("Failed to encode frame: {e}");
                 }
             }
 
             // 24 fps
-            sleeper.sleep(Duration::from_millis(1000 / 24).saturating_sub(now.elapsed()));
+            let delta = Duration::from_millis(1000 / 24).saturating_sub(now.elapsed());
+            sleeper.sleep(delta);
         }
     });
 
