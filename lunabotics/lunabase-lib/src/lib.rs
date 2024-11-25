@@ -138,7 +138,7 @@ impl INode for LunabotConn {
                     }
                 }
                 
-                let mut last_i = 0usize;
+                let mut last_stream_i = 0usize;
                 let start_i = stream.as_ptr() as usize;
                 nals.extend(
                     nal_units(&stream)
@@ -150,21 +150,25 @@ impl INode for LunabotConn {
                             )
                         })
                 );
+                let mut read_frame = false;
                 // The last packet is usually incomplete
                 nals.pop();
 
-                for (i, len) in nals.drain(..) {
-                    last_i = i + len;
-                    match dec.decode(&stream[i..last_i]) {
+                for (stream_index, len) in nals.drain(..) {
+                    last_stream_i = stream_index + len;
+                    match dec.decode(&stream[stream_index..last_stream_i]) {
                         Ok(Some(frame)) => {
-                            stream_corrupted.store(false, Ordering::Relaxed);
-                            match shared_rgb_img.try_recall() {
-                                Ok(mut owned) => {
-                                    frame.write_rgb8(&mut owned);
-                                    shared_rgb_img = owned.pessimistic_share();
-                                }
-                                Err(shared) => {
-                                    shared_rgb_img = shared;
+                            if !read_frame {
+                                read_frame = true;
+                                stream_corrupted.store(false, Ordering::Relaxed);
+                                match shared_rgb_img.try_recall() {
+                                    Ok(mut owned) => {
+                                        frame.write_rgb8(&mut owned);
+                                        shared_rgb_img = owned.pessimistic_share();
+                                    }
+                                    Err(shared) => {
+                                        shared_rgb_img = shared;
+                                    }
                                 }
                             }
                         }
@@ -176,7 +180,7 @@ impl INode for LunabotConn {
                         }
                     }
                 }
-                stream.drain(0..last_i);
+                stream.drain(0..last_stream_i);
             }
         });
 
