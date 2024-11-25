@@ -125,6 +125,7 @@ impl INode for LunabotConn {
             let mut stream = vec![];
 
             godot_print!("Stream server started");
+            let mut nals = vec![];
 
             loop {
                 match stream_udp.recv(&mut buf) {
@@ -139,12 +140,22 @@ impl INode for LunabotConn {
                 
                 let mut last_i = 0usize;
                 let start_i = stream.as_ptr() as usize;
-                let mut nals: Vec<_> = nal_units(&stream).collect();
+                nals.extend(
+                    nal_units(&stream)
+                        .into_iter()
+                        .map(|nal| {
+                            (
+                                nal.as_ptr() as usize - start_i,
+                                nal.len()
+                            )
+                        })
+                );
+                // The last packet is usually incomplete
                 nals.pop();
 
-                for packet in nals {
-                    last_i = packet.as_ptr() as usize - start_i + packet.len();
-                    match dec.decode(packet) {
+                for (i, len) in nals.drain(..) {
+                    last_i = i + len;
+                    match dec.decode(&stream[i..last_i]) {
                         Ok(Some(frame)) => {
                             stream_corrupted.store(false, Ordering::Relaxed);
                             match shared_rgb_img.try_recall() {
