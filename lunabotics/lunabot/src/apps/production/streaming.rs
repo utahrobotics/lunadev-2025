@@ -150,10 +150,10 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
     let mut h264_enc = Encoder::with_api_config(
         OpenH264API::from_source(),
         EncoderConfig::new()
-            .set_bitrate_bps(500_000)
-            .enable_skip_frame(true)
+            .set_bitrate_bps(1_000_000)
+            // .enable_skip_frame(true)
             .max_frame_rate(24.0)
-            .rate_control_mode(RateControlMode::Bitrate)
+            // .rate_control_mode(RateControlMode::Timestamp)
             .set_multiple_thread_idc(4)
             // .sps_pps_strategy(SpsPpsStrategy::IncreasingId)
     )
