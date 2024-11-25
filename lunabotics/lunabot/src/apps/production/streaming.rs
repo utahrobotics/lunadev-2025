@@ -154,6 +154,7 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
             .enable_skip_frame(true)
             .max_frame_rate(24.0)
             .rate_control_mode(RateControlMode::Bitrate)
+            .set_multiple_thread_idc(4)
             // .sps_pps_strategy(SpsPpsStrategy::IncreasingId)
     )
     .context("Failed to create H264 encoder")?;
