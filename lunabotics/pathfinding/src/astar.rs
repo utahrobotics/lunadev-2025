@@ -32,24 +32,16 @@ pub(crate) fn astar(
     mut start: Vector2<f64>,
     mut goal: Vector2<f64>,
     map_dimension: Vector2<f64>,
-    offset: Vector2<f64>,
     step_size: f64,
     mut is_safe: impl FnMut(Vector2<f64>, Vector2<f64>) -> bool,
 ) -> Vec<Vector2<f64>> {
     let startf = start;
     let goalf = goal;
     let max_index = Vector2::new(
-        (map_dimension.x as f64 / step_size).round() as u32,
-        (map_dimension.y as f64 / step_size).round() as u32,
+        (map_dimension.x / step_size).round() as u32,
+        (map_dimension.y / step_size).round() as u32,
     );
 
-    start -= offset;
-    if start.x < 0.0 {
-        start.x = 0.0;
-    }
-    if start.y < 0.0 {
-        start.y = 0.0;
-    }
     let mut start = Vector2::new(
         (start.x / step_size).round() as u32,
         (start.y / step_size).round() as u32,
@@ -61,13 +53,6 @@ pub(crate) fn astar(
         start.y = max_index.y;
     }
 
-    goal -= offset;
-    if goal.x < 0.0 {
-        goal.x = 0.0;
-    }
-    if goal.y < 0.0 {
-        goal.y = 0.0;
-    }
     let mut goal = Vector2::new(
         (goal.x / step_size).round() as u32,
         (goal.y / step_size).round() as u32,
@@ -110,10 +95,7 @@ pub(crate) fn astar(
             let node_parent = parents.get(&node).unwrap();
             let mut successors = heapless::Vec::<_, 8>::new();
             let mut try_add = |next: Vector2<u32>, successor_parent: Parent, cost: usize| {
-                if is_safe(
-                    step_size * node.cast() + offset,
-                    step_size * next.cast() + offset,
-                ) {
+                if is_safe(step_size * node.cast(), step_size * next.cast()) {
                     successors.push((next, successor_parent, cost)).unwrap();
                 }
             };
@@ -177,6 +159,11 @@ pub(crate) fn astar(
         }
     }
 
+    // End here if pathfinding was not successful
+    if !parents.contains_key(&goal) {
+        return vec![startf];
+    }
+
     let mut path = vec![goalf; best_cost_so_far.length];
 
     for i in (1..best_cost_so_far.length - 1).rev() {
@@ -196,7 +183,7 @@ pub(crate) fn astar(
             };
         }
         traverse!();
-        path[i] = step_size * best_so_far.cast() + offset;
+        path[i] = step_size * best_so_far.cast();
 
         #[cfg(debug_assertions)]
         {
