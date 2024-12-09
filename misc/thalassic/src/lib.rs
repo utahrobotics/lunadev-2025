@@ -20,30 +20,43 @@ pub mod depth2pcl;
 pub mod pcl2height;
 pub use clustering::Clusterer;
 
-/// 1. Depths
-/// 2. Transform
-/// 3. Depth Scale
+/// 1. Depths in arbitrary units
+/// 2. Global Transform of the camera
+/// 3. Depth Scale (meters per depth unit)
+///
+/// This bind group serves as the input for all DepthProjectors
 type DepthBindGrp = (
     StorageBuffer<[u32], HostWriteOnly, ShaderReadOnly>,
     UniformBuffer<AlignedMatrix4<f32>>,
     UniformBuffer<f32>,
 );
 
-/// Points used by depth2pcl and pcl2height
+/// 1. Points in global space
+/// 2. Projection Width (the width of the depth camera/image in pixels)
+///
+/// This bind group is the output of DepthProjectors and the input for the heightmapper ([`pcl2height`])
 type PointsBindGrp = (
     StorageBuffer<[AlignedVec4<f32>], HostReadOnly, ShaderReadWrite>,
-    // Projection Width
     UniformBuffer<u32>,
 );
 
-/// Heightmap used by pcl2height and height2grad
-type HeightMapBindGrp = (StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,);
+/// 1. The height of each cell in the heightmap. The actual type is `f32`, but it is stored as `u32` to allow for atomic operations.
+/// The units are meters.
+/// 
+/// This bind group is the output of the heightmapper ([`pcl2height`]) and the input for the gradientmapper.
+type HeightMapBindGrp = (
+    StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,
+);
 
-/// Original heightmap used by pcl2height
+/// 1. The heightmap from the previous iteration
+/// 
+/// This bind group is the input for the heightmapper ([`pcl2height`]) and that is its only usage.
 type PclBindGrp = (StorageBuffer<[f32], HostWriteOnly, ShaderReadOnly>,);
 
+/// The set of bind groups used by the DepthProjector
 type AlphaBindGroups = (GpuBufferSet<DepthBindGrp>, GpuBufferSet<PointsBindGrp>);
 
+/// The set of bind groups used by the rest of the thalassic pipeline
 type BetaBindGroups = (
     GpuBufferSet<PointsBindGrp>,
     GpuBufferSet<HeightMapBindGrp>,
