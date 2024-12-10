@@ -421,12 +421,13 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
 
     let const_idents = const_names.iter().map(|name| format_ident!("{name}"));
     let buffer_idents = buffer_names.iter().map(|&name| format_ident!("{name}"));
+    let buffer_idents2 = buffer_idents.clone();
 
     // Create a ComputeFn for each compute function
     let compute_count = compute_fns.len();
     let compile_out = compute_fns.iter().map(|&name| {
         proc_macro2::TokenStream::from_str(&format!(
-            "gputter::shader::ComputeFn::new_unchecked(shader.clone(), {name:?})"
+            "gputter::shader::ComputeFn::new_unchecked(shader.clone(), {name:?}, bind_group_indices.into_boxed_slice())"
         ))
         .unwrap()
     });
@@ -447,6 +448,9 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                     source: gputter::wgpu::ShaderSource::Wgsl(shader.into()),
                 });
                 let shader = std::sync::Arc::new(shader);
+                let mut bind_group_indices = vec![#(self.#buffer_idents2.group_index(), )*];
+                bind_group_indices.sort();
+                bind_group_indices.dedup();
                 [
                     #(#compile_out,)*
                 ]
