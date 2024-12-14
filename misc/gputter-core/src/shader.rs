@@ -3,7 +3,7 @@ use std::{marker::PhantomData, sync::Arc};
 use wgpu::{ShaderModule, SubmissionIndex};
 
 use crate::{
-    buffers::{storage::StorageBuffer, uniform::UniformBuffer, GpuBufferSet, GpuBufferTuple},
+    buffers::{storage::{HostReadOnly, HostReadWrite, HostWriteOnly, StorageBuffer}, uniform::UniformBuffer, GpuBufferSet, GpuBufferTuple},
     tuple::StaticIndexable, types::GpuType,
 };
 
@@ -140,6 +140,23 @@ impl<T: GpuType, S> BufferGroupBinding<UniformBuffer<T>, S> {
 
 impl<T: GpuType, HM, SM, S> BufferGroupBinding<StorageBuffer<T, HM, SM>, S> {
     pub const fn unchecked_cast<U: GpuType>(self) -> BufferGroupBinding<StorageBuffer<U, HM, SM>, S> {
+        BufferGroupBinding {
+            group_index: self.group_index,
+            binding_index: self.binding_index,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<T: GpuType, SM, S> BufferGroupBinding<StorageBuffer<T, HostReadWrite, SM>, S> {
+    pub const fn cast_host_read_only<U: GpuType>(self) -> BufferGroupBinding<StorageBuffer<U, HostReadOnly, SM>, S> {
+        BufferGroupBinding {
+            group_index: self.group_index,
+            binding_index: self.binding_index,
+            phantom: PhantomData,
+        }
+    }
+    pub const fn cast_host_write_only<U: GpuType>(self) -> BufferGroupBinding<StorageBuffer<U, HostWriteOnly, SM>, S> {
         BufferGroupBinding {
             group_index: self.group_index,
             binding_index: self.binding_index,
