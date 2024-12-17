@@ -1,6 +1,6 @@
 #![feature(map_try_insert)]
 
-use nalgebra::{Point2, Point3, Vector2, Vector3};
+use nalgebra::{Point3, Vector2};
 
 mod astar;
 mod decimate;
@@ -162,10 +162,10 @@ impl Pathfinder {
         &mut self,
         dy: f64,
         dx: f64,
-        mut x: f64,
-        mut y: f64,
+        x: f64,
+        y: f64,
         gradient_length: usize,
-        mut index: usize,
+        index: usize,
     ) -> (f64, f64, usize) {
         let cost_x = ((x + 1.0).ceil() - 0.5 - x) / dx;
 
@@ -241,7 +241,7 @@ mod tests {
         );
         assert_eq!(
             path,
-            vec![Vector3::new(0.0, 0.0, 1.0), Vector3::new(1.0, 1.0, 1.0)]
+            [Point3::new(0.0, 0.0, 1.0), Point3::new(1.0, 1.0, 1.0)]
         );
     }
 
@@ -260,10 +260,10 @@ mod tests {
         );
         assert_eq!(
             path,
-            vec![
-                Vector3::new(0.0, 0.0, 1.0),
-                Vector3::new(2.0, 1.0, 1.0),
-                Vector3::new(2.0, 2.0, 1.0)
+            [
+                Point3::new(0.0, 0.0, 1.0),
+                Point3::new(2.0, 1.0, 1.0),
+                Point3::new(2.0, 2.0, 1.0)
             ]
         )
     }
@@ -297,12 +297,12 @@ mod tests {
         );
         assert_eq!(
             path,
-            vec![
-                Vector3::new(0.5, 0.25, 1.0),
-                Vector3::new(1.5, 0.0, 1.0),
-                Vector3::new(1.5, 0.5, 1.0),
-                Vector3::new(2.0, 1.0, 1.0),
-                Vector3::new(1.75, 1.5, 1.0),
+            [
+                Point3::new(0.5, 0.25, 1.0),
+                Point3::new(1.5, 0.0, 1.0),
+                Point3::new(1.5, 0.5, 1.0),
+                Point3::new(2.0, 1.0, 1.0),
+                Point3::new(1.75, 1.5, 1.0),
             ]
         )
     }
@@ -321,6 +321,6 @@ mod tests {
             1.0,
         );
 
-        assert_eq!(vec![Vector3::new(0.0, 0.0, 1.0)], path);
+        assert_eq!(path, [Point3::new(0.0, 0.0, 1.0)]);
     }
 }
