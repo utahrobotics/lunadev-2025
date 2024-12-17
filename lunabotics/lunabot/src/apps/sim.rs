@@ -1,4 +1,5 @@
 use core::str;
+use std::ops::Deref;
 use std::{
     cmp::Ordering,
     collections::VecDeque,
@@ -19,6 +20,7 @@ use gputter::{
 };
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4};
+use pathfinding::Pathfinder;
 use serde::{Deserialize, Serialize};
 use thalassic::DepthProjectorBuilder;
 use urobotics::{app::define_app, log::{log_to_console, Level}, tokio};
@@ -88,7 +90,6 @@ pub struct LunasimbotApp {
 }
 
 impl Runnable for LunasimbotApp {
-
     fn run(mut self) {
         log_to_console([("wgpu_hal::vulkan::instance", Level::Info), ("wgpu_core::device::resource", Level::Info)]);
         log_teleop_messages();
@@ -312,6 +313,19 @@ impl Runnable for LunasimbotApp {
             lunasim_stdin2.write(bytes);
         }));
 
+        // Add callback for pathfinding
+        const CELL_COUNT: usize = 64 * 128;
+        let height_map: Arc<Mutex<[f32; CELL_COUNT]>> =
+            Arc::new(Mutex::new([0f32; CELL_COUNT]));
+        let height_map_copy = height_map.clone();
+        heightmap_callbacks.add_dyn_fn_mut(Box::new(move |heights| {
+            if let Ok(mut map_arr) = height_map_copy.try_lock() {
+                *map_arr = heights.try_into().unwrap();
+            }
+        }));
+        let mut finder = Pathfinder::new(Vector2::new(32.0, 16.0), 0.0625);
+        let gradient_map: &[f32] = &[0f32; CELL_COUNT]; // Replace this with gradient map callback
+
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
         let (packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
@@ -338,8 +352,14 @@ impl Runnable for LunasimbotApp {
                         lunasim_stdin.write(bytes);
                     }
                     Action::CalculatePath { from, to, mut into } => {
-                        into.push(from);
-                        into.push(to);
+                        finder.append_path(
+                            from,
+                            to,
+                            height_map.lock().unwrap().deref(),
+                            gradient_map,
+                            1.0,
+                            &mut into,
+                        );
                         inputs.push(Input::PathCalculated(into));
                     }
                 },
