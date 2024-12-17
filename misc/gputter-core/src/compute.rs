@@ -10,7 +10,7 @@ use crate::{
 };
 
 pub struct ComputePipeline<S, const SIZE: usize> {
-    compute_pipelines: [wgpu::ComputePipeline; SIZE],
+    compute_pipelines: [(wgpu::ComputePipeline, Box<[u32]>); SIZE],
     pub workgroups: [Vector3<u32>; SIZE],
     phantom: PhantomData<fn() -> S>,
 }
@@ -39,14 +39,17 @@ impl<S: GpuBufferTupleList, const SIZE: usize> ComputePipeline<S, SIZE> {
             });
 
         let compute_pipelines = compute_fns.map(|compute_fn| {
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: None,
-                layout: Some(&compute_pipeline_layout),
-                module: &compute_fn.shader,
-                entry_point: compute_fn.name,
-                cache: None,
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            })
+            (
+                device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: None,
+                    layout: Some(&compute_pipeline_layout),
+                    module: &compute_fn.shader,
+                    entry_point: compute_fn.name,
+                    cache: None,
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                }),
+                compute_fn.bind_group_indices.clone(),
+            )
         });
 
         Self {
@@ -79,14 +82,14 @@ impl<S: GpuBufferTupleList, const SIZE: usize> ComputePipeline<S, SIZE> {
 pub struct ComputePass<'a, 'b, S, const SIZE: usize> {
     bind_group_set: &'b mut S,
     encoder: wgpu::CommandEncoder,
-    compute_pipelines: &'a [wgpu::ComputePipeline; SIZE],
+    compute_pipelines: &'a [(wgpu::ComputePipeline, Box<[u32]>); SIZE],
     pub workgroups: [Vector3<u32>; SIZE],
 }
 
 impl<'a, 'b, S: GpuBufferTupleList, const SIZE: usize> ComputePass<'a, 'b, S, SIZE> {
     pub fn finish(mut self) {
         let GpuDevice { queue, device } = get_device();
-        for (pipeline, workgroups) in self.compute_pipelines.iter().zip(self.workgroups) {
+        for ((pipeline, bind_group_indices), workgroups) in self.compute_pipelines.iter().zip(self.workgroups) {
             let mut compute_pass = self
                 .encoder
                 .begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -95,7 +98,7 @@ impl<'a, 'b, S: GpuBufferTupleList, const SIZE: usize> ComputePass<'a, 'b, S, SI
                 });
 
             compute_pass.set_pipeline(pipeline);
-            self.bind_group_set.set_into_compute_pass(&mut compute_pass);
+            self.bind_group_set.set_into_compute_pass(&mut compute_pass, bind_group_indices);
             compute_pass.dispatch_workgroups(workgroups.x, workgroups.y, workgroups.z);
         }
         self.bind_group_set.pre_submission(&mut self.encoder);
