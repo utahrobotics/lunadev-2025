@@ -7,7 +7,6 @@ use std::{
 
 use fxhash::FxHashMap;
 use serde::de::DeserializeOwned;
-use unfmt::unformat;
 use urobotics_core::{
     cabinet::CabinetBuilder,
     end_tokio_runtime_and_wait, get_tokio_handle,

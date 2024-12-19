@@ -11,7 +11,7 @@ use std::{
 
 use bytes::BytesMut;
 use serde::Deserialize;
-use urobotics_app::{define_app, Runnable};
+use urobotics_app::Runnable;
 use urobotics_core::{
     service::{Service, ServiceExt},
     tokio::{
