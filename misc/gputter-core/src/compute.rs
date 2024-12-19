@@ -20,28 +20,32 @@ impl<S: GpuBufferTupleList, const SIZE: usize> ComputePipeline<S, SIZE> {
         let GpuDevice { device, .. } = get_device();
         let layout_entries = S::create_layout_entries();
 
-        let bind_group_layouts: Box<[_]> = layout_entries
-            .iter()
-            .map(|entries| {
-                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries,
-                    label: None,
-                })
-            })
-            .collect();
-        let bind_group_layouts: Box<[_]> = bind_group_layouts.iter().collect();
-
-        let compute_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: None,
-                bind_group_layouts: &bind_group_layouts,
-                push_constant_ranges: &[],
-            });
-
         let compute_pipelines = compute_fns.map(|compute_fn| {
+            let bind_group_layouts: Box<[_]> = layout_entries
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| {
+                    compute_fn.bind_group_indices.contains(&(*i as u32))
+                })
+                .map(|(_, entries)| {
+                    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                        entries,
+                        label: None,
+                    })
+                })
+                .collect();
+            let bind_group_layouts: Box<[_]> = bind_group_layouts.iter().collect();
+    
+            let compute_pipeline_layout =
+                device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: None,
+                    bind_group_layouts: &bind_group_layouts,
+                    push_constant_ranges: &[],
+                });
+            
             (
                 device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                    label: None,
+                    label: Some(compute_fn.name),
                     layout: Some(&compute_pipeline_layout),
                     module: &compute_fn.shader,
                     entry_point: compute_fn.name,

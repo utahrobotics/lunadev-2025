@@ -29,8 +29,8 @@ impl Ord for HeapElement {
 }
 
 pub(crate) fn astar(
-    mut start: Vector2<f64>,
-    mut goal: Vector2<f64>,
+    start: Vector2<f64>,
+    goal: Vector2<f64>,
     map_dimension: Vector2<f64>,
     step_size: f64,
     mut is_safe: impl FnMut(Vector2<f64>, Vector2<f64>) -> bool,

@@ -3,7 +3,7 @@ use std::{marker::PhantomData, sync::Arc};
 use wgpu::{ShaderModule, SubmissionIndex};
 
 use crate::{
-    buffers::{storage::{HostReadOnly, HostReadWrite, HostWriteOnly, StorageBuffer}, uniform::UniformBuffer, GpuBufferSet, GpuBufferTuple},
+    buffers::{storage::{HostHidden, HostReadOnly, HostReadWrite, HostWriteOnly, StorageBuffer}, uniform::UniformBuffer, GpuBufferSet, GpuBufferTuple},
     tuple::StaticIndexable, types::GpuType,
 };
 
@@ -35,13 +35,15 @@ macro_rules! tuple_impl {
                 )
             }
             fn set_into_compute_pass<'a>(&'a self, pass: &mut wgpu::ComputePass<'a>, indices: &[u32]) {
+                let mut gpu_index = 0;
                 indices.iter().for_each(|&i| {
                     match i {
                         $(
-                            $index => self.$index.set_into_compute_pass($index, pass),
+                            $index => self.$index.set_into_compute_pass(gpu_index, pass),
                         )*
                         _ => {}
                     }
+                    gpu_index += 1;
                 });
             }
             fn pre_submission(&mut self, encoder: &mut wgpu::CommandEncoder) {
@@ -128,8 +130,8 @@ impl<B, S> BufferGroupBinding<B, S> {
     }
 }
 
-impl<T: GpuType, S> BufferGroupBinding<UniformBuffer<T>, S> {
-    pub const fn unchecked_cast<U: GpuType>(self) -> BufferGroupBinding<UniformBuffer<U>, S> {
+impl<T: GpuType + ?Sized, S> BufferGroupBinding<UniformBuffer<T>, S> {
+    pub const fn unchecked_cast<U: GpuType + ?Sized>(self) -> BufferGroupBinding<UniformBuffer<U>, S> {
         BufferGroupBinding {
             group_index: self.group_index,
             binding_index: self.binding_index,
@@ -138,8 +140,16 @@ impl<T: GpuType, S> BufferGroupBinding<UniformBuffer<T>, S> {
     }
 }
 
-impl<T: GpuType, HM, SM, S> BufferGroupBinding<StorageBuffer<T, HM, SM>, S> {
-    pub const fn unchecked_cast<U: GpuType>(self) -> BufferGroupBinding<StorageBuffer<U, HM, SM>, S> {
+impl<T: GpuType + ?Sized, HM, SM, S> BufferGroupBinding<StorageBuffer<T, HM, SM>, S> {
+    pub const fn unchecked_cast<U: GpuType + ?Sized>(self) -> BufferGroupBinding<StorageBuffer<U, HM, SM>, S> {
+        BufferGroupBinding {
+            group_index: self.group_index,
+            binding_index: self.binding_index,
+            phantom: PhantomData,
+        }
+    }
+    
+    pub const fn cast_hidden(self) -> BufferGroupBinding<StorageBuffer<T, HostHidden, SM>, S> {
         BufferGroupBinding {
             group_index: self.group_index,
             binding_index: self.binding_index,
@@ -148,15 +158,15 @@ impl<T: GpuType, HM, SM, S> BufferGroupBinding<StorageBuffer<T, HM, SM>, S> {
     }
 }
 
-impl<T: GpuType, SM, S> BufferGroupBinding<StorageBuffer<T, HostReadWrite, SM>, S> {
-    pub const fn cast_host_read_only<U: GpuType>(self) -> BufferGroupBinding<StorageBuffer<U, HostReadOnly, SM>, S> {
+impl<T: GpuType + ?Sized, SM, S> BufferGroupBinding<StorageBuffer<T, HostReadWrite, SM>, S> {
+    pub const fn cast_host_read_only(self) -> BufferGroupBinding<StorageBuffer<T, HostReadOnly, SM>, S> {
         BufferGroupBinding {
             group_index: self.group_index,
             binding_index: self.binding_index,
             phantom: PhantomData,
         }
     }
-    pub const fn cast_host_write_only<U: GpuType>(self) -> BufferGroupBinding<StorageBuffer<U, HostWriteOnly, SM>, S> {
+    pub const fn cast_host_write_only(self) -> BufferGroupBinding<StorageBuffer<T, HostWriteOnly, SM>, S> {
         BufferGroupBinding {
             group_index: self.group_index,
             binding_index: self.binding_index,
@@ -165,15 +175,15 @@ impl<T: GpuType, SM, S> BufferGroupBinding<StorageBuffer<T, HostReadWrite, SM>, 
     }
 }
 
-impl<B, S> std::fmt::Display for BufferGroupBinding<B, S> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "@group({}) @binding({}) ",
-            self.group_index, self.binding_index
-        )
-    }
-}
+// impl<B, S> std::fmt::Display for BufferGroupBinding<B, S> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(
+//             f,
+//             "@group({}) @binding({}) ",
+//             self.group_index, self.binding_index
+//         )
+//     }
+// }
 
 pub struct ComputeFn<S> {
     pub(crate) shader: Arc<ShaderModule>,

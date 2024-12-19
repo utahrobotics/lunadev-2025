@@ -1,6 +1,5 @@
 use std::num::NonZeroU32;
 
-use bytemuck::cast_slice_mut;
 use depth2pcl::Depth2Pcl;
 use gputter::{
     buffers::{
@@ -12,12 +11,14 @@ use gputter::{
     shader::BufferGroupBinding,
     types::{AlignedMatrix4, AlignedVec4},
 };
+use height2grad::Height2Grad;
 use nalgebra::{Vector2, Vector3};
 use pcl2height::Pcl2Height;
 
 mod clustering;
-pub mod depth2pcl;
-pub mod pcl2height;
+mod depth2pcl;
+mod pcl2height;
+mod height2grad;
 pub use clustering::Clusterer;
 
 /// 1. Depths in arbitrary units
@@ -40,18 +41,26 @@ type PointsBindGrp = (
     UniformBuffer<u32>,
 );
 
-/// 1. The height of each cell in the heightmap. The actual type is `f32`, but it is stored as `u32` to allow for atomic operations.
+/// 1. The height of each cell in the heightmap.
+/// The actual type is `f32`, but it is stored as `u32` in the shader to allow for atomic operations, with conversion being a bitwise cast.
 /// The units are meters.
 /// 
 /// This bind group is the output of the heightmapper ([`pcl2height`]) and the input for the gradientmapper.
 type HeightMapBindGrp = (
-    StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,
+    StorageBuffer<[f32], HostReadOnly, ShaderReadWrite>,
 );
 
 /// 1. The heightmap from the previous iteration
 /// 
 /// This bind group is the input for the heightmapper ([`pcl2height`]) and that is its only usage.
 type PclBindGrp = (StorageBuffer<[f32], HostWriteOnly, ShaderReadOnly>,);
+
+/// 1. The gradient of each cell in the heightmap expressed as an angle in radians.
+/// 
+/// This bind group is the output of the gradientmapper ([`height2grad`]) and the input for the obstaclemapper.
+type GradMapBindGrp = (
+    StorageBuffer<[f32], HostReadOnly, ShaderReadWrite>,
+);
 
 /// The set of bind groups used by the DepthProjector
 type AlphaBindGroups = (GpuBufferSet<DepthBindGrp>, GpuBufferSet<PointsBindGrp>);
@@ -61,6 +70,7 @@ type BetaBindGroups = (
     GpuBufferSet<PointsBindGrp>,
     GpuBufferSet<HeightMapBindGrp>,
     GpuBufferSet<PclBindGrp>,
+    GpuBufferSet<GradMapBindGrp>,
 );
 
 #[derive(Debug, Clone, Copy)]
@@ -192,11 +202,12 @@ impl ThalassicBuilder {
         let bind_grps = (
             GpuBufferSet::from((StorageBuffer::new_dyn(self.cell_count.get() as usize).unwrap(),)),
             GpuBufferSet::from((StorageBuffer::new_dyn(self.cell_count.get() as usize).unwrap(),)),
+            GpuBufferSet::from((StorageBuffer::new_dyn(self.cell_count.get() as usize).unwrap(),)),
         );
 
         let [height_fn] = Pcl2Height {
             points: BufferGroupBinding::<_, BetaBindGroups>::get::<0, 0>(),
-            heightmap: BufferGroupBinding::<_, BetaBindGroups>::get::<1, 0>(),
+            heightmap: BufferGroupBinding::<_, BetaBindGroups>::get::<1, 0>().unchecked_cast(),
             cell_size: self.cell_size,
             heightmap_width: self.heightmap_width,
             cell_count: self.cell_count,
@@ -206,12 +217,28 @@ impl ThalassicBuilder {
         }
         .compile();
 
-        let mut pipeline = ComputePipeline::new([&height_fn]);
-        pipeline.workgroups = [Vector3::new(
-            self.cell_count.get() / self.heightmap_width,
-            0,
-            0,
-        )];
+        let [grad_fn] = Height2Grad {
+            heightmap: BufferGroupBinding::<_, BetaBindGroups>::get::<1, 0>().cast_hidden(),
+            gradient_map: BufferGroupBinding::<_, BetaBindGroups>::get::<3, 0>(),
+            cell_size: self.cell_size,
+            heightmap_width: self.heightmap_width,
+            cell_count: self.cell_count,
+        }
+        .compile();
+
+        let mut pipeline = ComputePipeline::new([&height_fn, &grad_fn]);
+        pipeline.workgroups = [
+            Vector3::new(
+                self.cell_count.get() / self.heightmap_width,
+                0,
+                0,
+            ),
+            Vector3::new(
+                self.heightmap_width.get() - 2,
+                self.cell_count.get() / self.heightmap_width - 2,
+                0,
+            ),
+        ];
         ThalassicPipeline {
             pipeline,
             bind_grps: Some(bind_grps),
@@ -220,8 +247,8 @@ impl ThalassicBuilder {
 }
 
 pub struct ThalassicPipeline {
-    pipeline: ComputePipeline<BetaBindGroups, 1>,
-    bind_grps: Option<(GpuBufferSet<HeightMapBindGrp>, GpuBufferSet<PclBindGrp>)>,
+    pipeline: ComputePipeline<BetaBindGroups, 2>,
+    bind_grps: Option<(GpuBufferSet<HeightMapBindGrp>, GpuBufferSet<PclBindGrp>, GpuBufferSet<GradMapBindGrp>),>,
 }
 
 impl ThalassicPipeline {
@@ -229,10 +256,11 @@ impl ThalassicPipeline {
         &mut self,
         mut points_storage: PointCloudStorage,
         out_heightmap: &mut [f32],
+        out_gradient: &mut [f32],
     ) -> PointCloudStorage {
-        let (height_grp, pcl_grp) = self.bind_grps.take().unwrap();
+        let (height_grp, pcl_grp, grad_grp) = self.bind_grps.take().unwrap();
 
-        let mut bind_grps = (points_storage.points_grp, height_grp, pcl_grp);
+        let mut bind_grps: BetaBindGroups = (points_storage.points_grp, height_grp, pcl_grp, grad_grp);
 
         let image_width = points_storage.image_size.x.get();
         let image_height = points_storage.image_size.y.get();
@@ -249,10 +277,12 @@ impl ThalassicPipeline {
                 &mut bind_grps
             })
             .finish();
-        bind_grps.1.buffers.0.read(cast_slice_mut(out_heightmap));
 
-        let (points_grp, height_grp, pcl_grp) = bind_grps;
-        self.bind_grps = Some((height_grp, pcl_grp));
+        let (points_grp, height_grp, pcl_grp, grad_grp) = bind_grps;
+        height_grp.buffers.0.read(out_heightmap);
+        grad_grp.buffers.0.read(out_gradient);
+
+        self.bind_grps = Some((height_grp, pcl_grp, grad_grp));
         points_storage.points_grp = points_grp;
         points_storage
     }

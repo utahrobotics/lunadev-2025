@@ -61,12 +61,13 @@ pub fn spawn_thalassic_pipeline(
 
         std::thread::spawn(move || {
             let mut heightmap = [0.0; CELL_COUNT as usize];
+            let mut gradmap = [0.0; CELL_COUNT as usize];
             loop {
                 for channel in &mut point_cloud_channels {
                     let Some(mut points) = channel.projected.take() else {
                         continue;
                     };
-                    points = pipeline.provide_points(points, &mut heightmap);
+                    points = pipeline.provide_points(points, &mut heightmap, &mut gradmap);
                     channel.finished.store(Some(points));
                     heightmap_callbacks.call(&heightmap);
                 }

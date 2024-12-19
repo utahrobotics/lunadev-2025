@@ -16,7 +16,7 @@ const HALF_PIXEL_COUNT: NonZeroU32 = {{half_pixel_count}};
 
 @compute
 @workgroup_size(1, 1, 1)
-fn main(
+fn depth(
     @builtin(workgroup_id) workgroup_id : vec3u,
 ) {
     let i = workgroup_id.x + workgroup_id.y * IMAGE_WIDTH;

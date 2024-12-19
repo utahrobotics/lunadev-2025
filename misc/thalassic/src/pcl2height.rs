@@ -35,7 +35,7 @@ build_shader!(
     
     @compute
     @workgroup_size(HEIGHTMAP_WIDTH, 1, 1)
-    fn main(
+    fn height(
         @builtin(local_invocation_id) local_invocation_id : vec3u,
         @builtin(workgroup_id) workgroup_id : vec3u,
     ) {

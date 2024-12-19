@@ -373,16 +373,17 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
     }
 
     // Replace substitutions with variable names
-    let mut binding_index = 0usize;
+    // let mut binding_index = 0usize;
     let mut const_index = 0usize;
 
     let shader: String = shader
         .iter()
         .map(|s| {
             if let Some(_) = unformat!("<<GRP_SUBSTITUTE{}>>", s) {
-                let out = format!("{{{}}}", buffer_names[binding_index]);
-                binding_index += 1;
-                out
+                // let out = format!("@group({{{}}}) @binding({{{}.binding_index()}})", binding_index, buffer_names[binding_index]);
+                // binding_index += 1;
+                // out
+                "@group({}) @binding({})".into()
             } else if let Some(_) = unformat!("<<SUBSTITUTE{}>>", s) {
                 let out = format!("{{{}}}", const_names[const_index]);
                 const_index += 1;
@@ -421,13 +422,20 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
 
     let const_idents = const_names.iter().map(|name| format_ident!("{name}"));
     let buffer_idents = buffer_names.iter().map(|&name| format_ident!("{name}"));
-    let buffer_idents2 = buffer_idents.clone();
+    // let buffer_idents2 = buffer_idents.clone();
 
     // Create a ComputeFn for each compute function
     let compute_count = compute_fns.len();
     let compile_out = compute_fns.iter().map(|&name| {
         proc_macro2::TokenStream::from_str(&format!(
             "gputter::shader::ComputeFn::new_unchecked(shader.clone(), {name:?}, bind_group_indices.into_boxed_slice())"
+        ))
+        .unwrap()
+    });
+
+    let shader_buffer_sub = buffer_names.iter().map(|&name| {
+        proc_macro2::TokenStream::from_str(&format!(
+            "bind_group_indices.binary_search(&self.{name}.group_index()).unwrap(), self.{name}.binding_index()"
         ))
         .unwrap()
     });
@@ -440,17 +448,22 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         }
         impl<S> #name<S> {
             #vis fn compile(&self) -> [gputter::shader::ComputeFn<S>; #compute_count] {
-                #(let #buffer_idents = &self.#buffer_idents;)*
+                // #(let #buffer_idents = &self.#buffer_idents;)*
+                let mut bind_group_indices = vec![#(self.#buffer_idents.group_index(), )*];
+                bind_group_indices.sort();
+                bind_group_indices.dedup();
+
                 #(let #const_idents = &self.#const_idents;)*
-                let shader = format!(#shader);
+                let shader = format!(
+                    #shader,
+                    #(#shader_buffer_sub,)*
+                );
+
                 let shader = gputter::get_device().device.create_shader_module(gputter::wgpu::ShaderModuleDescriptor {
-                    label: None,
+                    label: Some(stringify!(#name)),
                     source: gputter::wgpu::ShaderSource::Wgsl(shader.into()),
                 });
                 let shader = std::sync::Arc::new(shader);
-                let mut bind_group_indices = vec![#(self.#buffer_idents2.group_index(), )*];
-                bind_group_indices.sort();
-                bind_group_indices.dedup();
                 [
                     #(#compile_out,)*
                 ]
