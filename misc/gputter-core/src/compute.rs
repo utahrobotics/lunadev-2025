@@ -24,9 +24,7 @@ impl<S: GpuBufferTupleList, const SIZE: usize> ComputePipeline<S, SIZE> {
             let bind_group_layouts: Box<[_]> = layout_entries
                 .iter()
                 .enumerate()
-                .filter(|(i, _)| {
-                    compute_fn.bind_group_indices.contains(&(*i as u32))
-                })
+                .filter(|(i, _)| compute_fn.bind_group_indices.contains(&(*i as u32)))
                 .map(|(_, entries)| {
                     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                         entries,
@@ -35,14 +33,14 @@ impl<S: GpuBufferTupleList, const SIZE: usize> ComputePipeline<S, SIZE> {
                 })
                 .collect();
             let bind_group_layouts: Box<[_]> = bind_group_layouts.iter().collect();
-    
+
             let compute_pipeline_layout =
                 device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: None,
                     bind_group_layouts: &bind_group_layouts,
                     push_constant_ranges: &[],
                 });
-            
+
             (
                 device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                     label: Some(compute_fn.name),
@@ -93,7 +91,9 @@ pub struct ComputePass<'a, 'b, S, const SIZE: usize> {
 impl<'a, 'b, S: GpuBufferTupleList, const SIZE: usize> ComputePass<'a, 'b, S, SIZE> {
     pub fn finish(mut self) {
         let GpuDevice { queue, device } = get_device();
-        for ((pipeline, bind_group_indices), workgroups) in self.compute_pipelines.iter().zip(self.workgroups) {
+        for ((pipeline, bind_group_indices), workgroups) in
+            self.compute_pipelines.iter().zip(self.workgroups)
+        {
             let mut compute_pass = self
                 .encoder
                 .begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -102,7 +102,8 @@ impl<'a, 'b, S: GpuBufferTupleList, const SIZE: usize> ComputePass<'a, 'b, S, SI
                 });
 
             compute_pass.set_pipeline(pipeline);
-            self.bind_group_set.set_into_compute_pass(&mut compute_pass, bind_group_indices);
+            self.bind_group_set
+                .set_into_compute_pass(&mut compute_pass, bind_group_indices);
             compute_pass.dispatch_workgroups(workgroups.x, workgroups.y, workgroups.z);
         }
         self.bind_group_set.pre_submission(&mut self.encoder);

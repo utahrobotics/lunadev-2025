@@ -1,8 +1,12 @@
 use std::{
-    cell::SyncUnsafeCell, io::{Cursor, ErrorKind, Read, Write}, net::{SocketAddr, UdpSocket}, sync::{
+    cell::SyncUnsafeCell,
+    io::{Cursor, ErrorKind, Read, Write},
+    net::{SocketAddr, UdpSocket},
+    sync::{
         atomic::{AtomicBool, Ordering},
         OnceLock,
-    }, time::{Duration, Instant}
+    },
+    time::{Duration, Instant},
 };
 
 use anyhow::Context;
@@ -70,12 +74,15 @@ impl CameraStream {
         let individual_frame_row_length = CAMERA_RESOLUTION.x as usize * 3;
         let global_frame_row_length = individual_frame_row_length * CAMERA_COL_COUNT;
 
-        let start = (cam_y * global_frame_row_length + cam_x * individual_frame_row_length)
-            as usize;
+        let start =
+            (cam_y * global_frame_row_length + cam_x * individual_frame_row_length) as usize;
         for y in 0..CAMERA_RESOLUTION.y as usize {
             let start = start + y * global_frame_row_length;
             let row = unsafe {
-                &mut *std::ptr::slice_from_raw_parts_mut(ptr.add(start), individual_frame_row_length)
+                &mut *std::ptr::slice_from_raw_parts_mut(
+                    ptr.add(start),
+                    individual_frame_row_length,
+                )
             };
             src.read(row)?;
         }
@@ -154,8 +161,7 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
             // .enable_skip_frame(true)
             .max_frame_rate(24.0)
             // .rate_control_mode(RateControlMode::Timestamp)
-            .set_multiple_thread_idc(4)
-            // .sps_pps_strategy(SpsPpsStrategy::IncreasingId)
+            .set_multiple_thread_idc(4), // .sps_pps_strategy(SpsPpsStrategy::IncreasingId)
     )
     .context("Failed to create H264 encoder")?;
     let udp = UdpSocket::bind("0.0.0.0:0").context("Binding streaming UDP socket")?;
@@ -171,7 +177,11 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
         let sleeper = SpinSleeper::default();
         let mut keyframe = 0usize;
 
-        info!("Starting camera streaming with resolution: {}x{}", CAMERA_RESOLUTION.x as usize * CAMERA_COL_COUNT, CAMERA_RESOLUTION.y as usize * CAMERA_ROW_COUNT);
+        info!(
+            "Starting camera streaming with resolution: {}x{}",
+            CAMERA_RESOLUTION.x as usize * CAMERA_COL_COUNT,
+            CAMERA_RESOLUTION.y as usize * CAMERA_ROW_COUNT
+        );
 
         loop {
             now += now.elapsed();
@@ -184,9 +194,8 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
                 // Must be write to get exclusive access to all camera
                 // streams, even though we are only reading from them
                 let writer = CAMERA_STREAMS.write();
-                let frame_data = unsafe {
-                    &*std::ptr::slice_from_raw_parts_mut(writer.0, writer.1)
-                };
+                let frame_data =
+                    unsafe { &*std::ptr::slice_from_raw_parts_mut(writer.0, writer.1) };
 
                 let rgb_slice = RgbSliceU8::new(
                     frame_data,

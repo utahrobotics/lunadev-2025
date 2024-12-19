@@ -182,7 +182,9 @@ impl AprilTagDetector {
                 scaled_axis.y *= -1.0;
                 scaled_axis.z *= -1.0;
                 tag_local_isometry.rotation = UnitQuaternion::from_scaled_axis(scaled_axis);
-                tag_local_isometry.rotation = UnitQuaternion::from_scaled_axis(tag_local_isometry.rotation * Vector3::new(0.0, PI, 0.0)) * tag_local_isometry.rotation;
+                tag_local_isometry.rotation = UnitQuaternion::from_scaled_axis(
+                    tag_local_isometry.rotation * Vector3::new(0.0, PI, 0.0),
+                ) * tag_local_isometry.rotation;
 
                 self.detection_callbacks.call(TagObservation {
                     tag_local_isometry,

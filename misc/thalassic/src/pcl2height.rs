@@ -39,8 +39,8 @@ build_shader!(
         @builtin(local_invocation_id) local_invocation_id : vec3u,
         @builtin(workgroup_id) workgroup_id : vec3u,
     ) {
-        let heightmap_x = f32(local_invocation_id.x) * CELL_SIZE;
-        let heightmap_y = f32(workgroup_id.x) * CELL_SIZE;
+        let heightmap_x = - f32(local_invocation_id.x) * CELL_SIZE;
+        let heightmap_y = - f32(workgroup_id.x) * CELL_SIZE;
         let heightmap_index = workgroup_id.x * HEIGHTMAP_WIDTH + local_invocation_id.x;
         let tri_index = workgroup_id.y * 65536 + workgroup_id.z;
         let half_layer_index = tri_index / (projection_width - 1);

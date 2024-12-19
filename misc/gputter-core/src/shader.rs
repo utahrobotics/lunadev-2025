@@ -3,8 +3,13 @@ use std::{marker::PhantomData, sync::Arc};
 use wgpu::{ShaderModule, SubmissionIndex};
 
 use crate::{
-    buffers::{storage::{HostHidden, HostReadOnly, HostReadWrite, HostWriteOnly, StorageBuffer}, uniform::UniformBuffer, GpuBufferSet, GpuBufferTuple},
-    tuple::StaticIndexable, types::GpuType,
+    buffers::{
+        storage::{HostHidden, HostReadOnly, HostReadWrite, HostWriteOnly, StorageBuffer},
+        uniform::UniformBuffer,
+        GpuBufferSet, GpuBufferTuple,
+    },
+    tuple::StaticIndexable,
+    types::GpuType,
 };
 
 /// A list (tuple) of [`GpuBufferTuple`].
@@ -131,7 +136,9 @@ impl<B, S> BufferGroupBinding<B, S> {
 }
 
 impl<T: GpuType + ?Sized, S> BufferGroupBinding<UniformBuffer<T>, S> {
-    pub const fn unchecked_cast<U: GpuType + ?Sized>(self) -> BufferGroupBinding<UniformBuffer<U>, S> {
+    pub const fn unchecked_cast<U: GpuType + ?Sized>(
+        self,
+    ) -> BufferGroupBinding<UniformBuffer<U>, S> {
         BufferGroupBinding {
             group_index: self.group_index,
             binding_index: self.binding_index,
@@ -141,14 +148,16 @@ impl<T: GpuType + ?Sized, S> BufferGroupBinding<UniformBuffer<T>, S> {
 }
 
 impl<T: GpuType + ?Sized, HM, SM, S> BufferGroupBinding<StorageBuffer<T, HM, SM>, S> {
-    pub const fn unchecked_cast<U: GpuType + ?Sized>(self) -> BufferGroupBinding<StorageBuffer<U, HM, SM>, S> {
+    pub const fn unchecked_cast<U: GpuType + ?Sized>(
+        self,
+    ) -> BufferGroupBinding<StorageBuffer<U, HM, SM>, S> {
         BufferGroupBinding {
             group_index: self.group_index,
             binding_index: self.binding_index,
             phantom: PhantomData,
         }
     }
-    
+
     pub const fn cast_hidden(self) -> BufferGroupBinding<StorageBuffer<T, HostHidden, SM>, S> {
         BufferGroupBinding {
             group_index: self.group_index,
@@ -159,14 +168,18 @@ impl<T: GpuType + ?Sized, HM, SM, S> BufferGroupBinding<StorageBuffer<T, HM, SM>
 }
 
 impl<T: GpuType + ?Sized, SM, S> BufferGroupBinding<StorageBuffer<T, HostReadWrite, SM>, S> {
-    pub const fn cast_host_read_only(self) -> BufferGroupBinding<StorageBuffer<T, HostReadOnly, SM>, S> {
+    pub const fn cast_host_read_only(
+        self,
+    ) -> BufferGroupBinding<StorageBuffer<T, HostReadOnly, SM>, S> {
         BufferGroupBinding {
             group_index: self.group_index,
             binding_index: self.binding_index,
             phantom: PhantomData,
         }
     }
-    pub const fn cast_host_write_only(self) -> BufferGroupBinding<StorageBuffer<T, HostWriteOnly, SM>, S> {
+    pub const fn cast_host_write_only(
+        self,
+    ) -> BufferGroupBinding<StorageBuffer<T, HostWriteOnly, SM>, S> {
         BufferGroupBinding {
             group_index: self.group_index,
             binding_index: self.binding_index,
@@ -213,7 +226,11 @@ impl<S> std::fmt::Debug for ComputeFn<S> {
 }
 
 impl<S> ComputeFn<S> {
-    pub fn new_unchecked(shader: Arc<ShaderModule>, name: &'static str, bind_group_indices: Box<[u32]>) -> Self {
+    pub fn new_unchecked(
+        shader: Arc<ShaderModule>,
+        name: &'static str,
+        bind_group_indices: Box<[u32]>,
+    ) -> Self {
         Self {
             shader,
             name,

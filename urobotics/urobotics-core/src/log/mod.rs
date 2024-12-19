@@ -5,7 +5,12 @@
 //! the goal of URobotics, and this module provides that.
 
 use std::{
-    borrow::Borrow, fs::File, panic::PanicHookInfo, path::Path, sync::{Arc, LazyLock, OnceLock}, time::{Duration, Instant}
+    borrow::Borrow,
+    fs::File,
+    panic::PanicHookInfo,
+    path::Path,
+    sync::{Arc, LazyLock, OnceLock},
+    time::{Duration, Instant},
 };
 
 pub use color_eyre::owo_colors::OwoColorize;
@@ -206,7 +211,10 @@ pub fn log_to_file(path: impl AsRef<Path>) -> std::io::Result<LogFilter> {
 /// Sets up a logger that outputs to the console.
 ///
 /// The log level for this specific console logger can be controlled with the returned `LogFilter`.
-pub fn log_to_console<T>(ignore: impl IntoIterator<Item=(T, Level)>) -> LogFilter where T: Borrow<str> + Eq + std::hash::Hash + Send + Sync + 'static {
+pub fn log_to_console<T>(ignore: impl IntoIterator<Item = (T, Level)>) -> LogFilter
+where
+    T: Borrow<str> + Eq + std::hash::Hash + Send + Sync + 'static,
+{
     get_program_time();
     let ignore: FxHashMap<_, _> = ignore.into_iter().collect();
     let filter = LogFilter::new();

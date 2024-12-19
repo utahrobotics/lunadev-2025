@@ -166,7 +166,7 @@ impl INode for Lunasim {
                 FromLunasimbot::Thalassic { heightmap, gradmap } => {
                     let heights: PackedFloat32Array = Box::into_iter(heightmap).collect();
                     let grads: PackedFloat32Array = Box::into_iter(gradmap).collect();
-                    
+
                     self.base_mut()
                         .emit_signal("thalassic", &[heights.to_variant(), grads.to_variant()]);
                 }

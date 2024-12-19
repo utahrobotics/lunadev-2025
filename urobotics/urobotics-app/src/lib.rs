@@ -20,7 +20,6 @@ use urobotics_core::{
 
 /// A trait that represents an application that can be run.
 pub trait Runnable {
-
     /// Runs the application on the current thread.
     fn run(self);
 }

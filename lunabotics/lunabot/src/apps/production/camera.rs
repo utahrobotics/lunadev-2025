@@ -181,11 +181,13 @@ pub fn enumerate_cameras(
                         }
                     }
 
-                    camera_stream.write(DownscaleRgbImageReader::new(
-                        &rgb_img,
-                        format.width,
-                        format.height,
-                    )).unwrap();
+                    camera_stream
+                        .write(DownscaleRgbImageReader::new(
+                            &rgb_img,
+                            format.width,
+                            format.height,
+                        ))
+                        .unwrap();
 
                     match image.try_recall() {
                         Ok(img) => {

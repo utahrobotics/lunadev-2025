@@ -23,7 +23,11 @@ use pathfinding::Pathfinder;
 use serde::{Deserialize, Serialize};
 use thalassic::DepthProjectorBuilder;
 use urobotics::shared::OwnedData;
-use urobotics::{app::define_app, log::{log_to_console, Level}, tokio};
+use urobotics::{
+    app::define_app,
+    log::{log_to_console, Level},
+    tokio,
+};
 use urobotics::{
     app::Runnable,
     callbacks::caller::CallbacksStorage,
@@ -92,7 +96,10 @@ pub struct LunasimbotApp {
 
 impl Runnable for LunasimbotApp {
     fn run(mut self) {
-        log_to_console([("wgpu_hal::vulkan::instance", Level::Info), ("wgpu_core::device::resource", Level::Info)]);
+        log_to_console([
+            ("wgpu_hal::vulkan::instance", Level::Info),
+            ("wgpu_core::device::resource", Level::Info),
+        ]);
         log_teleop_messages();
         if let Err(e) = init_gputter_blocking() {
             error!("Failed to initialize gputter: {e}");
@@ -236,7 +243,7 @@ impl Runnable for LunasimbotApp {
         let pcl_storage = depth_projecter_builder.make_points_storage();
         let pcl_storage_channel = Arc::new(PointsStorageChannel::new_for(&pcl_storage));
         pcl_storage_channel.set_projected(pcl_storage);
-        
+
         let mut buffer = OwnedData::from(ThalassicData::default());
         let shared_thalassic_data = buffer.create_lendee();
 
@@ -288,7 +295,8 @@ impl Runnable for LunasimbotApp {
                 let Some(mut pcl_storage) = pcl_storage_channel.get_finished() else {
                     return;
                 };
-                pcl_storage = depth_projecter.project(&depths, &camera_transform, pcl_storage, 0.01);
+                pcl_storage =
+                    depth_projecter.project(&depths, &camera_transform, pcl_storage, 0.01);
                 pcl_storage.read(&mut point_cloud);
                 pcl_storage_channel.set_projected(pcl_storage);
                 let msg = FromLunasimbot::PointCloud(

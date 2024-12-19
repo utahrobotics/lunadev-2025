@@ -17,8 +17,8 @@ use pcl2height::Pcl2Height;
 
 mod clustering;
 mod depth2pcl;
-mod pcl2height;
 mod height2grad;
+mod pcl2height;
 pub use clustering::Clusterer;
 
 /// 1. Depths in arbitrary units
@@ -44,23 +44,19 @@ type PointsBindGrp = (
 /// 1. The height of each cell in the heightmap.
 /// The actual type is `f32`, but it is stored as `u32` in the shader to allow for atomic operations, with conversion being a bitwise cast.
 /// The units are meters.
-/// 
+///
 /// This bind group is the output of the heightmapper ([`pcl2height`]) and the input for the gradientmapper.
-type HeightMapBindGrp = (
-    StorageBuffer<[f32], HostReadOnly, ShaderReadWrite>,
-);
+type HeightMapBindGrp = (StorageBuffer<[f32], HostReadOnly, ShaderReadWrite>,);
 
 /// 1. The heightmap from the previous iteration
-/// 
+///
 /// This bind group is the input for the heightmapper ([`pcl2height`]) and that is its only usage.
 type PclBindGrp = (StorageBuffer<[f32], HostWriteOnly, ShaderReadOnly>,);
 
 /// 1. The gradient of each cell in the heightmap expressed as an angle in radians.
-/// 
+///
 /// This bind group is the output of the gradientmapper ([`height2grad`]) and the input for the obstaclemapper.
-type GradMapBindGrp = (
-    StorageBuffer<[f32], HostReadOnly, ShaderReadWrite>,
-);
+type GradMapBindGrp = (StorageBuffer<[f32], HostReadOnly, ShaderReadWrite>,);
 
 /// The set of bind groups used by the DepthProjector
 type AlphaBindGroups = (GpuBufferSet<DepthBindGrp>, GpuBufferSet<PointsBindGrp>);
@@ -154,7 +150,7 @@ impl DepthProjector {
         depths: &[u16],
         camera_transform: &AlignedMatrix4<f32>,
         mut points_storage: PointCloudStorage,
-        depth_scale: f32
+        depth_scale: f32,
     ) -> PointCloudStorage {
         debug_assert_eq!(self.image_size, points_storage.image_size);
         let depth_grp = self.bind_grp.take().unwrap();
@@ -165,7 +161,9 @@ impl DepthProjector {
             .new_pass(|mut lock| {
                 // We have to write raw bytes because we can only cast to [u32] if the number of
                 // depth pixels is even
-                bind_grps.0.write_raw::<0>(bytemuck::cast_slice(depths), &mut lock);
+                bind_grps
+                    .0
+                    .write_raw::<0>(bytemuck::cast_slice(depths), &mut lock);
                 bind_grps.0.write::<1, _>(camera_transform, &mut lock);
                 bind_grps.0.write::<2, _>(&depth_scale, &mut lock);
                 bind_grps
@@ -228,15 +226,11 @@ impl ThalassicBuilder {
 
         let mut pipeline = ComputePipeline::new([&height_fn, &grad_fn]);
         pipeline.workgroups = [
-            Vector3::new(
-                self.cell_count.get() / self.heightmap_width,
-                0,
-                0,
-            ),
+            Vector3::new(self.cell_count.get() / self.heightmap_width, 0, 0),
             Vector3::new(
                 self.heightmap_width.get() - 2,
                 self.cell_count.get() / self.heightmap_width - 2,
-                0,
+                1,
             ),
         ];
         ThalassicPipeline {
@@ -248,7 +242,11 @@ impl ThalassicBuilder {
 
 pub struct ThalassicPipeline {
     pipeline: ComputePipeline<BetaBindGroups, 2>,
-    bind_grps: Option<(GpuBufferSet<HeightMapBindGrp>, GpuBufferSet<PclBindGrp>, GpuBufferSet<GradMapBindGrp>),>,
+    bind_grps: Option<(
+        GpuBufferSet<HeightMapBindGrp>,
+        GpuBufferSet<PclBindGrp>,
+        GpuBufferSet<GradMapBindGrp>,
+    )>,
 }
 
 impl ThalassicPipeline {
@@ -260,7 +258,8 @@ impl ThalassicPipeline {
     ) -> PointCloudStorage {
         let (height_grp, pcl_grp, grad_grp) = self.bind_grps.take().unwrap();
 
-        let mut bind_grps: BetaBindGroups = (points_storage.points_grp, height_grp, pcl_grp, grad_grp);
+        let mut bind_grps: BetaBindGroups =
+            (points_storage.points_grp, height_grp, pcl_grp, grad_grp);
 
         let image_width = points_storage.image_size.x.get();
         let image_height = points_storage.image_size.y.get();

@@ -1,7 +1,9 @@
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
 use axum::{
-    extract::{ws::Message, ConnectInfo, WebSocketUpgrade}, routing::get, Router
+    extract::{ws::Message, ConnectInfo, WebSocketUpgrade},
+    routing::get,
+    Router,
 };
 use tokio::net::UdpSocket;
 
@@ -87,9 +89,13 @@ async fn main() {
             })
         }));
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:80").await.expect("Failed to bind TCP listener");
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:80")
+        .await
+        .expect("Failed to bind TCP listener");
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
-    ).await.unwrap();
+    )
+    .await
+    .unwrap();
 }

@@ -21,11 +21,19 @@ use realsense_rust::{
     pipeline::{ActivePipeline, FrameWaitError, InactivePipeline},
 };
 use thalassic::DepthProjectorBuilder;
-use urobotics::{log::{error, warn}, shared::OwnedData};
-use urobotics_apriltag::{image::{ImageBuffer, Luma, Rgb}, AprilTagDetector};
+use urobotics::{
+    log::{error, warn},
+    shared::OwnedData,
+};
+use urobotics_apriltag::{
+    image::{ImageBuffer, Luma, Rgb},
+    AprilTagDetector,
+};
 
 use crate::{
-    apps::production::streaming::DownscaleRgbImageReader, localization::LocalizerRef, pipelines::thalassic::{spawn_thalassic_pipeline, HeightMapCallbacksRef, PointsStorageChannel}
+    apps::production::streaming::DownscaleRgbImageReader,
+    localization::LocalizerRef,
+    pipelines::thalassic::{spawn_thalassic_pipeline, HeightMapCallbacksRef, PointsStorageChannel},
 };
 
 use super::{apriltag::Apriltag, streaming::CameraStream};
@@ -33,14 +41,14 @@ use super::{apriltag::Apriltag, streaming::CameraStream};
 pub struct DepthCameraInfo {
     pub k_node: k::Node<f64>,
     pub ignore_apriltags: bool,
-    pub stream_index: usize
+    pub stream_index: usize,
 }
 
 /// Returns an iterator over all the RealSense cameras that were identified.
 pub fn enumerate_depth_cameras(
     localizer_ref: LocalizerRef,
     serial_to_chain: impl IntoIterator<Item = (String, DepthCameraInfo)>,
-    apriltags: &FxHashMap<usize, Apriltag>
+    apriltags: &FxHashMap<usize, Apriltag>,
 ) -> (HeightMapCallbacksRef, anyhow::Result<()>) {
     let context =
         match realsense_rust::context::Context::new().context("Failed to get RealSense Context") {
@@ -87,13 +95,10 @@ pub fn enumerate_depth_cameras(
         let Some(DepthCameraInfo {
             k_node,
             ignore_apriltags,
-            stream_index
+            stream_index,
         }) = cam_info.take()
         else {
-            error!(
-                "Depth Camera {} already enumerated",
-                serial
-            );
+            error!("Depth Camera {} already enumerated", serial);
             continue;
         };
 
@@ -190,7 +195,7 @@ pub fn enumerate_depth_cameras(
 
             if is_depth {
                 let focal_length_px;
-    
+
                 if intrinsics.fx() != intrinsics.fy() {
                     warn!("Depth camera {serial} has unequal fx and fy");
                     focal_length_px = (intrinsics.fx() + intrinsics.fy()) / 2.0;
@@ -198,7 +203,10 @@ pub fn enumerate_depth_cameras(
                     focal_length_px = intrinsics.fx();
                 }
                 let depth_projecter_builder = DepthProjectorBuilder {
-                    image_size: Vector2::new(NonZeroU32::new(intrinsics.width() as u32).unwrap(), NonZeroU32::new(intrinsics.height() as u32).unwrap()),
+                    image_size: Vector2::new(
+                        NonZeroU32::new(intrinsics.width() as u32).unwrap(),
+                        NonZeroU32::new(intrinsics.height() as u32).unwrap(),
+                    ),
                     focal_length_px,
                     principal_point_px: Vector2::new(intrinsics.ppx(), intrinsics.ppy()),
                 };
@@ -219,7 +227,8 @@ pub fn enumerate_depth_cameras(
                         intrinsics.width() as u32,
                         intrinsics.height() as u32,
                         vec![0u8; intrinsics.width() as usize * intrinsics.height() as usize],
-                    ).unwrap()
+                    )
+                    .unwrap(),
                 );
                 let mut det = AprilTagDetector::new(
                     intrinsics.fx() as f64,
@@ -247,8 +256,11 @@ pub fn enumerate_depth_cameras(
             error!("Depth stream missing after initialization of {serial}");
             continue;
         };
-        let mut point_cloud: Box<[_]> =
-            std::iter::repeat_n(AlignedVec4::from(Vector4::default()), depth_projecter.get_pixel_count().get() as usize).collect();
+        let mut point_cloud: Box<[_]> = std::iter::repeat_n(
+            AlignedVec4::from(Vector4::default()),
+            depth_projecter.get_pixel_count().get() as usize,
+        )
+        .collect();
 
         std::thread::spawn(move || loop {
             let frames = match pipeline.wait(None) {
@@ -271,18 +283,23 @@ pub fn enumerate_depth_cameras(
                         let data: *const _ = frame.get_data();
                         std::slice::from_raw_parts(data.cast::<u8>(), frame.get_data_size())
                     };
-    
+
                     match luma_img.try_recall() {
                         Ok(mut owned_img) => {
                             let (img, uninit) = owned_img.uninit();
                             let mut buffer = img.into_raw();
                             buffer.clear();
-                            buffer.extend(
-                                bytes.array_chunks::<3>().map(|[b, g, r]| {
-                                    (0.299 * *r as f64 + 0.587 * *g as f64 + 0.114 * *b as f64) as u8
-                                }),
+                            buffer.extend(bytes.array_chunks::<3>().map(|[b, g, r]| {
+                                (0.299 * *r as f64 + 0.587 * *g as f64 + 0.114 * *b as f64) as u8
+                            }));
+                            owned_img = uninit.init(
+                                ImageBuffer::from_raw(
+                                    frame.width() as u32,
+                                    frame.height() as u32,
+                                    buffer,
+                                )
+                                .unwrap(),
                             );
-                            owned_img = uninit.init(ImageBuffer::from_raw(frame.width() as u32, frame.height() as u32, buffer).unwrap());
                             luma_img = owned_img.pessimistic_share();
                         }
                         Err(x) => {
@@ -290,7 +307,13 @@ pub fn enumerate_depth_cameras(
                         }
                     }
 
-                    camera_stream.write(DownscaleRgbImageReader::new(&bytes, frame.width() as u32, frame.height() as u32)).unwrap();
+                    camera_stream
+                        .write(DownscaleRgbImageReader::new(
+                            &bytes,
+                            frame.width() as u32,
+                            frame.height() as u32,
+                        ))
+                        .unwrap();
                 }
                 shared_luma_img = Some(luma_img);
             }
@@ -323,7 +346,8 @@ pub fn enumerate_depth_cameras(
                             continue;
                         }
                     };
-                    pcl_storage = depth_projecter.project(slice, &camera_transform, pcl_storage, depth_scale);
+                    pcl_storage =
+                        depth_projecter.project(slice, &camera_transform, pcl_storage, depth_scale);
                     pcl_storage.read(&mut point_cloud);
                     pcl_storage_channel.set_projected(pcl_storage);
                 }

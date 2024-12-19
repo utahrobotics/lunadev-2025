@@ -38,8 +38,12 @@ build_shader!(
         }
 
         let dx = length(maxCoords - minCoords) * CELL_SIZE;
-        let dy = (maxHeight - minHeight) * CELL_SIZE;
-        gradient_map[(workgroup_id.y + 1) * HEIGHTMAP_WIDTH + workgroup_id.x + 1] = atan2(dy, dx);
+        if (dx == 0.0) {
+            gradient_map[(workgroup_id.y + 1) * HEIGHTMAP_WIDTH + workgroup_id.x + 1] = 0.0;
+            return;
+        }
+        let dy = maxHeight - minHeight;
+        gradient_map[(workgroup_id.y + 1) * HEIGHTMAP_WIDTH + workgroup_id.x + 1] = atan(dy / dx);
     }
     "#
 );

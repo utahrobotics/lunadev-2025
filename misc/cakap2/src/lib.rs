@@ -67,7 +67,11 @@ impl PeerStateMachine {
     /// them twice).
     ///
     /// The returned [`RecommendedAction`] is an action that should be taken immediately after creating the state machine.
-    pub fn new(retransmission_duration: Duration, max_received_set_size: usize, max_packet_size: usize) -> Self {
+    pub fn new(
+        retransmission_duration: Duration,
+        max_received_set_size: usize,
+        max_packet_size: usize,
+    ) -> Self {
         Self {
             retransmission_duration,
             max_received_set_size,

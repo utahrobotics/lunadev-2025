@@ -63,33 +63,31 @@ pub fn spawn_thalassic_pipeline(
         let mut pipeline = ThalassicBuilder {
             heightmap_width: NonZeroU32::new(64).unwrap(),
             max_point_count: NonZeroU32::new(max_point_count).unwrap(),
-            cell_size: -0.0625,
+            cell_size: 0.0625,
             cell_count: NonZeroU32::new(CELL_COUNT).unwrap(),
         }
         .build();
 
-        std::thread::spawn(move || {
-            loop {
-                let mut points_vec = vec![];
+        std::thread::spawn(move || loop {
+            let mut points_vec = vec![];
 
-                for channel in &mut point_cloud_channels {
-                    let Some(points) = channel.projected.take() else {
-                        continue;
-                    };
-                    points_vec.push((channel, points));
+            for channel in &mut point_cloud_channels {
+                let Some(points) = channel.projected.take() else {
+                    continue;
+                };
+                points_vec.push((channel, points));
+            }
+
+            if !points_vec.is_empty() {
+                let mut owned = buffer.recall_or_replace_with(Default::default);
+                let ThalassicData { heightmap, gradmap } = &mut *owned;
+
+                for (channel, mut points) in points_vec {
+                    points = pipeline.provide_points(points, heightmap, gradmap);
+                    channel.finished.store(Some(points));
                 }
 
-                if !points_vec.is_empty() {
-                    let mut owned = buffer.recall_or_replace_with(Default::default);
-                    let ThalassicData { heightmap, gradmap } = &mut *owned;
-
-                    for (channel, mut points) in points_vec {
-                        points = pipeline.provide_points(points, heightmap, gradmap);
-                        channel.finished.store(Some(points));
-                    }
-
-                    buffer = owned.pessimistic_share();
-                }
+                buffer = owned.pessimistic_share();
             }
         });
     }
