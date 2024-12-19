@@ -1,7 +1,7 @@
 [tasks.build_lunasim]
 workspace = false
 command = "cargo"
-args = ["build", "-p", "lunasim-lib"]
+args = ["build", "-p", "lunasim-lib", "--release"]
 
 [tasks.build_lunabase]
 workspace = false
@@ -19,6 +19,9 @@ dependencies = [
 workspace = false
 command = "cargo"
 args = ["run", "-p", "lunabot", "--", "sim"]
+dependencies = [
+    "godot",
+]
 
 [tasks.main]
 workspace = false

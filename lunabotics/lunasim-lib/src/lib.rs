@@ -88,7 +88,7 @@ impl INode for Lunasim {
                     match bitcode_buffer.decode(&bytes) {
                         Ok(msg) => shared2.from_lunasimbot.push(msg),
                         Err(e) => {
-                            godot_error!("Failed to deserialize from lunasim: {e}");
+                            godot_error!("Failed to deserialize from lunasimbot: {e}");
                             continue;
                         }
                     }
@@ -163,11 +163,12 @@ impl INode for Lunasim {
                     self.base_mut()
                         .emit_signal("drive", &[left.to_variant(), right.to_variant()]);
                 }
-                FromLunasimbot::HeightMap(heights) => {
-                    let heights: PackedFloat32Array = Box::into_iter(heights).collect();
-
+                FromLunasimbot::Thalassic { heightmap, gradmap } => {
+                    let heights: PackedFloat32Array = Box::into_iter(heightmap).collect();
+                    let grads: PackedFloat32Array = Box::into_iter(gradmap).collect();
+                    
                     self.base_mut()
-                        .emit_signal("heightmap", &[heights.to_variant()]);
+                        .emit_signal("thalassic", &[heights.to_variant(), grads.to_variant()]);
                 }
             }
         }
@@ -198,7 +199,7 @@ impl Lunasim {
     #[signal]
     fn fitted_points(points: Vec<Vector3>);
     #[signal]
-    fn heightmap(heights: PackedFloat32Array);
+    fn thalassic(heights: PackedFloat32Array, grads: PackedFloat32Array);
     #[signal]
     fn transform(transform: Transform3D);
     #[signal]

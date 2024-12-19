@@ -4,12 +4,23 @@ use crossbeam::atomic::AtomicCell;
 use gputter::is_gputter_initialized;
 use nalgebra::Vector2;
 use thalassic::{PointCloudStorage, ThalassicBuilder};
-use urobotics::{define_callbacks, fn_alias};
+use urobotics::shared::OwnedData;
 
-fn_alias! {
-    pub type HeightMapCallbacksRef = CallbacksRef(&[f32]) + Send + Sync
+const CELL_COUNT: u32 = 64 * 128;
+
+pub struct ThalassicData {
+    pub heightmap: [f32; CELL_COUNT as usize],
+    pub gradmap: [f32; CELL_COUNT as usize],
 }
-define_callbacks!(HeightMapCallbacks => Fn(heightmap: &[f32]) + Send + Sync);
+
+impl Default for ThalassicData {
+    fn default() -> Self {
+        Self {
+            heightmap: [0.0; CELL_COUNT as usize],
+            gradmap: [0.0; CELL_COUNT as usize],
+        }
+    }
+}
 
 pub struct PointsStorageChannel {
     projected: AtomicCell<Option<PointCloudStorage>>,
@@ -36,18 +47,16 @@ impl PointsStorageChannel {
 }
 
 pub fn spawn_thalassic_pipeline(
+    buffer: OwnedData<ThalassicData>,
     mut point_cloud_channels: Box<[Arc<PointsStorageChannel>]>,
-) -> (HeightMapCallbacksRef, ) {
-    const CELL_COUNT: u32 = 64 * 128;
-
-    let mut heightmap_callbacks = HeightMapCallbacks::default();
-    let heightmap_callbacks_ref = heightmap_callbacks.get_ref();
+) {
+    let mut buffer = buffer.pessimistic_share();
     let Some(max_point_count) = point_cloud_channels
         .iter()
         .map(|channel| channel.image_size.x.get() * channel.image_size.y.get())
         .max()
     else {
-        return (heightmap_callbacks_ref,);
+        return;
     };
 
     if is_gputter_initialized() {
@@ -60,20 +69,28 @@ pub fn spawn_thalassic_pipeline(
         .build();
 
         std::thread::spawn(move || {
-            let mut heightmap = [0.0; CELL_COUNT as usize];
-            let mut gradmap = [0.0; CELL_COUNT as usize];
             loop {
+                let mut points_vec = vec![];
+
                 for channel in &mut point_cloud_channels {
-                    let Some(mut points) = channel.projected.take() else {
+                    let Some(points) = channel.projected.take() else {
                         continue;
                     };
-                    points = pipeline.provide_points(points, &mut heightmap, &mut gradmap);
-                    channel.finished.store(Some(points));
-                    heightmap_callbacks.call(&heightmap);
+                    points_vec.push((channel, points));
+                }
+
+                if !points_vec.is_empty() {
+                    let mut owned = buffer.recall_or_replace_with(Default::default);
+                    let ThalassicData { heightmap, gradmap } = &mut *owned;
+
+                    for (channel, mut points) in points_vec {
+                        points = pipeline.provide_points(points, heightmap, gradmap);
+                        channel.finished.store(Some(points));
+                    }
+
+                    buffer = owned.pessimistic_share();
                 }
             }
         });
     }
-
-    (heightmap_callbacks_ref,)
 }

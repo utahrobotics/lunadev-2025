@@ -461,6 +461,53 @@ impl<T> LoanedData<T> {
         }
     }
 
+    /// Checks if other threads have dropped their ownership of the data, replacing
+    /// data if still shared. Otherwise, ownership of the original data is returned.
+    pub fn recall_or_replace_with(self, f: impl FnOnce() -> T) -> OwnedData<T> {
+        for lendee in &self.lendees {
+            lendee.try_clear();
+        }
+        if Arc::strong_count(&self.inner) == 1 {
+            let owned = unsafe {
+                let tmp = MaybeUninit::new(self);
+                let tmp = tmp.as_ptr();
+                let inner = &raw const (*tmp).inner;
+                let callbacks = &raw const (*tmp).callbacks;
+                let data_handle = &raw const (*tmp).data_handle;
+                let lendees = &raw const (*tmp).lendees;
+
+                OwnedData {
+                    inner: inner.read(),
+                    data_handle: data_handle.read(),
+                    callbacks: callbacks.read(),
+                    lendees: lendees.read(),
+                }
+            };
+            return owned;
+        }
+
+        let inner = Arc::new(DataInner {
+            data: MaybeUninit::new(f()),
+            released_condvar: Condvar::new(),
+            released_mut: Mutex::new(()),
+        });
+
+        unsafe {
+            let tmp = MaybeUninit::new(self);
+            let tmp = tmp.as_ptr();
+            let callbacks = &raw const (*tmp).callbacks;
+            let data_handle = &raw const (*tmp).data_handle;
+            let lendees = &raw const (*tmp).lendees;
+
+            OwnedData {
+                inner,
+                data_handle: data_handle.read(),
+                callbacks: callbacks.read(),
+                lendees: lendees.read(),
+            }
+        }
+    }
+
     /// Creates a new uninit object that maintains the callbacks and lendees.
     ///
     /// This is different from [`OwnedData::uninit`], which reuses the heap allocation. This

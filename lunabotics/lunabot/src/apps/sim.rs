@@ -1,5 +1,4 @@
 use core::str;
-use std::ops::Deref;
 use std::{
     cmp::Ordering,
     collections::VecDeque,
@@ -23,6 +22,7 @@ use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4
 use pathfinding::Pathfinder;
 use serde::{Deserialize, Serialize};
 use thalassic::DepthProjectorBuilder;
+use urobotics::shared::OwnedData;
 use urobotics::{app::define_app, log::{log_to_console, Level}, tokio};
 use urobotics::{
     app::Runnable,
@@ -37,6 +37,7 @@ use urobotics::{
     BlockOn,
 };
 
+use crate::pipelines::thalassic::ThalassicData;
 use crate::{
     localization::Localizer,
     pipelines::thalassic::{spawn_thalassic_pipeline, PointsStorageChannel},
@@ -235,8 +236,21 @@ impl Runnable for LunasimbotApp {
         let pcl_storage = depth_projecter_builder.make_points_storage();
         let pcl_storage_channel = Arc::new(PointsStorageChannel::new_for(&pcl_storage));
         pcl_storage_channel.set_projected(pcl_storage);
-        let (heightmap_callbacks,) =
-            spawn_thalassic_pipeline(Box::new([pcl_storage_channel.clone()]));
+        
+        let mut buffer = OwnedData::from(ThalassicData::default());
+        let shared_thalassic_data = buffer.create_lendee();
+
+        let lunasim_stdin2 = lunasim_stdin.clone();
+        let mut bitcode_buffer = bitcode::Buffer::new();
+        buffer.add_callback(move |ThalassicData { heightmap, gradmap }| {
+            let bytes = bitcode_buffer.encode(&FromLunasimbot::Thalassic {
+                heightmap: heightmap.to_vec().into_boxed_slice(),
+                gradmap: gradmap.to_vec().into_boxed_slice(),
+            });
+            lunasim_stdin2.write(bytes);
+        });
+
+        spawn_thalassic_pipeline(buffer, Box::new([pcl_storage_channel.clone()]));
 
         let axis_angle = |axis: [f32; 3], angle: f32| {
             let axis = UnitVector3::new_normalize(Vector3::new(
@@ -304,27 +318,8 @@ impl Runnable for LunasimbotApp {
             }
         });
 
-        let lunasim_stdin2 = lunasim_stdin.clone();
-        let mut bitcode_buffer = bitcode::Buffer::new();
-        heightmap_callbacks.add_dyn_fn_mut(Box::new(move |heightmap| {
-            let bytes = bitcode_buffer.encode(&FromLunasimbot::HeightMap(
-                heightmap.to_vec().into_boxed_slice(),
-            ));
-            lunasim_stdin2.write(bytes);
-        }));
-
         // Add callback for pathfinding
-        const CELL_COUNT: usize = 64 * 128;
-        let height_map: Arc<Mutex<[f32; CELL_COUNT]>> =
-            Arc::new(Mutex::new([0f32; CELL_COUNT]));
-        let height_map_copy = height_map.clone();
-        heightmap_callbacks.add_dyn_fn_mut(Box::new(move |heights| {
-            if let Ok(mut map_arr) = height_map_copy.try_lock() {
-                *map_arr = heights.try_into().unwrap();
-            }
-        }));
         let mut finder = Pathfinder::new(Vector2::new(32.0, 16.0), 0.0625);
-        let gradient_map: &[f32] = &[0f32; CELL_COUNT]; // Replace this with gradient map callback
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
@@ -352,11 +347,12 @@ impl Runnable for LunasimbotApp {
                         lunasim_stdin.write(bytes);
                     }
                     Action::CalculatePath { from, to, mut into } => {
+                        let data = shared_thalassic_data.get();
                         finder.append_path(
                             from,
                             to,
-                            height_map.lock().unwrap().deref(),
-                            gradient_map,
+                            &data.heightmap,
+                            &data.gradmap,
                             1.0,
                             &mut into,
                         );
