@@ -2660,6 +2660,7 @@ dependencies = [
  "godot",
  "openh264",
  "tasker",
+ "tokio",
  "webrtc",
 ]
 

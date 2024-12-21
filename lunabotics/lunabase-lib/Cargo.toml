@@ -15,3 +15,4 @@ tasker.workspace = true
 openh264 = { version = "0.6.3", features = ["source"]}
 webrtc = { version = "0.12.0", optional = true }
 axum = { workspace = true, optional = true }
+tokio.workspace = true

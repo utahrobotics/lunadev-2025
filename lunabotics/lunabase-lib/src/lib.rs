@@ -1,4 +1,5 @@
 #![feature(backtrace_frames)]
+
 use std::{
     collections::VecDeque,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
@@ -19,8 +20,10 @@ use godot::{
     classes::{image::Format, Engine, Image},
     prelude::*,
 };
-use openh264::{decoder::Decoder, nal_units};
+use stream::camera_streaming;
 use tasker::shared::{OwnedData, SharedDataReceiver};
+
+mod stream;
 
 const STREAM_WIDTH: u32 = 1920;
 const STREAM_HEIGHT: u32 = 720;
@@ -127,7 +130,7 @@ impl INode for LunabotConn {
                 STREAM_WIDTH as usize * STREAM_HEIGHT as usize * 3
             ]);
         let stream_lendee = shared_rgb_img.create_lendee();
-        let mut shared_rgb_img = shared_rgb_img.pessimistic_share();
+        camera_streaming(shared_rgb_img.pessimistic_share(), stream_corrupted);
 
         let udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10600))
             .expect("Failed to bind to 10600");
@@ -135,75 +138,7 @@ impl INode for LunabotConn {
         udp.set_nonblocking(true)
             .expect("Failed to set non-blocking");
 
-        let stream_udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10601))
-            .expect("Failed to bind to 10601");
-
-        std::thread::spawn(move || {
-            if let Err(e) = Decoder::new() {
-                godot_error!("Failed to initialize decoder: {e}");
-                return;
-            }
-            let mut dec = Decoder::new().expect("Failed to initialize decoder");
-            let mut buf = [0u8; 1400];
-            let mut stream = vec![];
-
-            godot_print!("Stream server started");
-            let mut nals = vec![];
-
-            loop {
-                match stream_udp.recv(&mut buf) {
-                    Ok(n) => {
-                        stream.extend_from_slice(&buf[..n]);
-                    }
-                    Err(e) => {
-                        godot_error!("Failed to receive stream data: {e}");
-                        break;
-                    }
-                }
-
-                let mut last_stream_i = 0usize;
-                let start_i = stream.as_ptr() as usize;
-                nals.extend(
-                    nal_units(&stream)
-                        .into_iter()
-                        .map(|nal| (nal.as_ptr() as usize - start_i, nal.len())),
-                );
-                let mut read_frame = false;
-                // The last packet is usually incomplete
-                nals.pop();
-
-                for (stream_index, len) in nals.drain(..) {
-                    last_stream_i = stream_index + len;
-                    match dec.decode(&stream[stream_index..last_stream_i]) {
-                        Ok(Some(frame)) => {
-                            if !read_frame {
-                                read_frame = true;
-                                stream_corrupted.store(false, Ordering::Relaxed);
-                                match shared_rgb_img.try_recall() {
-                                    Ok(mut owned) => {
-                                        frame.write_rgb8(&mut owned);
-                                        shared_rgb_img = owned.pessimistic_share();
-                                    }
-                                    Err(shared) => {
-                                        shared_rgb_img = shared;
-                                    }
-                                }
-                            }
-                        }
-                        Ok(None) => {
-                            stream_corrupted.store(false, Ordering::Relaxed);
-                        }
-                        Err(_) => {
-                            stream_corrupted.store(true, Ordering::Relaxed);
-                        }
-                    }
-                }
-                stream.drain(0..last_stream_i);
-            }
-        });
-
         let cakap_sm = PeerStateMachine::new(Duration::from_millis(150), 1024, 1400);
-        // godot_warn!("LunabotConn initialized");
 
         Self {
             inner: Some(LunabotConnInner {
