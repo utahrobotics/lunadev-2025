@@ -57,7 +57,7 @@ pub fn camera_streaming(
                 let app = Router::new()
                     .route("/", get(|| async { Html(include_str!("index.html")) }))
                     .route(
-                        "/rtc",
+                        "/lunabot/rtc",
                         get(|ws: WebSocketUpgrade| async {
                             ws.on_upgrade(|mut ws| async move {
                                 let mut m = MediaEngine::default();

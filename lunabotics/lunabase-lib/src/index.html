@@ -7,24 +7,82 @@
 </head>
 <body>
     <script>
-        const socket = new WebSocket(`ws://${window.location.host}/rtc`);
-
-        socket.onopen = function(event) {
-            console.log('WebSocket is open now.');
+        const mediaConstraints = {
+            audio: false,
+            video: true,
         };
+        const socket = new WebSocket(`ws://${window.location.host}/lunabot/rtc`);
+        const rtc = new RTCPeerConnection({
+            iceServers: [
+                {
+                    urls: 'stun:stun.l.google.com:19302'
+                }
+            ]
+        });
+
+        // Connection requires at least one data channel or track
+        rtc.createDataChannel('unused');
 
         socket.onmessage = function(event) {
             console.log('Received:', event.data);
-            socket.send(`Echo: ${event.data}`);
+            const obj = JSON.parse(event.data);
+
+            if (obj === null || obj.sdp === undefined) {
+                rtc.addIceCandidate(obj);
+            } else {
+                rtc.setRemoteDescription(obj);
+            }
         };
 
-        socket.onclose = function(event) {
-            console.log('WebSocket is closed now.');
+        const wsOpened = new Promise(function(resolve, reject) {
+            socket.onopen = function(event) {
+                console.log('WebSocket is open now.');
+                resolve();
+            };
+            socket.onclose = function(event) {
+                console.log('WebSocket is closed now.');
+                reject();
+            };
+            socket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                reject();
+            };
+        })
+
+        rtc.onicecandidate = async function(event) {
+            await wsOpened;
+            if (event.candidate) {
+                socket.send(JSON.stringify(event.candidate));
+                console.log('Candidate sent:', event.candidate);
+            }
         };
 
-        socket.onerror = function(error) {
-            console.error('WebSocket error:', error);
+        rtc.ontrack = function(event) {
+            document.getElementById("received_video").srcObject = event.streams[0];
+            console.log('Received track:', event.track);
+        }
+
+        rtc.onconnectionstatechange = function(event) {
+            console.log('Connection state:', rtc.connectionState);
+
+            if (rtc.connectionState === 'failed') {
+                alert("Failed to connect");
+            }
         };
+
+        async function main() {
+            await wsOpened;
+            const offer = await rtc.createOffer();
+            await rtc.setLocalDescription(offer);
+            socket.send(JSON.stringify(offer));
+            console.log('Offer sent:', offer);
+        }
+        main();
     </script>
+    <div class="flexChild" id="camera-container">
+        <div class="camera-box">
+          <video id="received_video" autoplay></video>
+        </div>
+      </div>
 </body>
 </html>
