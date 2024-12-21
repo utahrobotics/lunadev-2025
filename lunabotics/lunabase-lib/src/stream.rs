@@ -46,7 +46,6 @@ pub fn camera_streaming(
     let lendee_storage: Arc<AtomicCell<Option<SharedDataReceiver<BroadcastingBuffer>>>> =
         Arc::new(AtomicCell::new(None));
     let lendee_storage2 = lendee_storage.clone();
-    broadcasting_buffer.create_lendee().get();
 
     std::thread::spawn(move || {
         tokio::runtime::Builder::new_multi_thread()
@@ -236,6 +235,7 @@ pub fn camera_streaming(
                 let listener = tokio::net::TcpListener::bind("0.0.0.0:80")
                     .await
                     .expect("Failed to bind TCP listener");
+                godot_print!("HTTP Server started");
                 axum::serve(listener, app.into_make_service())
                     .await
                     .unwrap();

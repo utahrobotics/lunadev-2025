@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USR Lunabot Exclusive Portal</title>
+</head>
+<body>
+    <script>
+        const socket = new WebSocket(`ws://${window.location.host}/rtc`);
+
+        socket.onopen = function(event) {
+            console.log('WebSocket is open now.');
+        };
+
+        socket.onmessage = function(event) {
+            console.log('Received:', event.data);
+            socket.send(`Echo: ${event.data}`);
+        };
+
+        socket.onclose = function(event) {
+            console.log('WebSocket is closed now.');
+        };
+
+        socket.onerror = function(error) {
+            console.error('WebSocket error:', error);
+        };
+    </script>
+</body>
+</html>
