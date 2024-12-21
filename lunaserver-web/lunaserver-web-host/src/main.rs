@@ -1,11 +1,58 @@
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
 use axum::{
-    extract::{ws::Message, ConnectInfo, WebSocketUpgrade},
-    routing::get,
+    extract::{ws::Message, ConnectInfo, Request, State, WebSocketUpgrade},
+    http::{
+        uri::{Authority, Scheme},
+        Uri,
+    },
+    routing::{any, get},
     Router,
 };
+use reqwest::{Client, Url};
 use tokio::net::UdpSocket;
+
+#[axum::debug_handler]
+async fn lunabot_redirect(
+    client: State<Client>,
+    mut request: Request,
+) -> Result<axum::response::Response, String> {
+    let mut uri_parts = axum::http::uri::Parts::default();
+    uri_parts.scheme = Some(Scheme::HTTP);
+    uri_parts.authority = Some(Authority::from_static("127.0.0.1:21141"));
+    uri_parts.path_and_query = request.uri().path_and_query().cloned();
+
+    *request.uri_mut() = Uri::from_parts(uri_parts).unwrap();
+    let mut new_request = reqwest::Request::new(
+        request.method().clone(),
+        Url::parse(&request.uri().to_string()).unwrap(),
+    );
+    new_request
+        .headers_mut()
+        .extend(std::mem::take(request.headers_mut()));
+    *new_request.body_mut() = Some(reqwest::Body::wrap_stream(
+        request.into_body().into_data_stream(),
+    ));
+
+    let mut resp = client
+        .execute(new_request)
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut builder = axum::response::Response::builder().status(resp.status());
+
+    for (k, v) in std::mem::take(resp.headers_mut()) {
+        let Some(k) = k else {
+            continue;
+        };
+        builder = builder.header(k, v);
+    }
+
+    Ok(builder
+        .body(axum::body::Body::from(
+            resp.bytes().await.map_err(|e| e.to_string())?,
+        ))
+        .unwrap())
+}
 
 #[tokio::main]
 async fn main() {
@@ -17,6 +64,8 @@ async fn main() {
         .route("/ip", get(|ConnectInfo(addr): ConnectInfo<SocketAddr>| async move {
             format!("Your IP is {}", addr.ip())
         }))
+        .route("/lunabot", any(lunabot_redirect))
+        .with_state(Client::new())
         .route("/udp-ws", get(|ws: WebSocketUpgrade| async {
             ws.on_upgrade(|mut socket| async move {
                 let mut send_to = None;

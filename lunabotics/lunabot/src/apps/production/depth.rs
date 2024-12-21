@@ -33,7 +33,7 @@ use urobotics_apriltag::{
 use crate::{
     apps::production::streaming::DownscaleRgbImageReader,
     localization::LocalizerRef,
-    pipelines::thalassic::{spawn_thalassic_pipeline, HeightMapCallbacksRef, PointsStorageChannel},
+    pipelines::thalassic::{spawn_thalassic_pipeline, PointsStorageChannel, ThalassicData},
 };
 
 use super::{apriltag::Apriltag, streaming::CameraStream};
@@ -46,15 +46,19 @@ pub struct DepthCameraInfo {
 
 /// Returns an iterator over all the RealSense cameras that were identified.
 pub fn enumerate_depth_cameras(
+    thalassic_buffer: OwnedData<ThalassicData>,
     localizer_ref: LocalizerRef,
     serial_to_chain: impl IntoIterator<Item = (String, DepthCameraInfo)>,
     apriltags: &FxHashMap<usize, Apriltag>,
-) -> (HeightMapCallbacksRef, anyhow::Result<()>) {
+) -> anyhow::Result<()> {
     let context =
         match realsense_rust::context::Context::new().context("Failed to get RealSense Context") {
             Ok(x) => x,
             Err(e) => {
-                return (spawn_thalassic_pipeline(Box::new([])).0, Err(e).into());
+                // It's debatable whether or not we should spawn the pipeline if no cameras are found.
+                // Spawning it can help expose some bugs though
+                spawn_thalassic_pipeline(thalassic_buffer, Box::new([]));
+                return Err(e);
             }
         };
     let devices = context.query_devices(Some(Rs2ProductLine::Depth).into_iter().collect());
@@ -361,7 +365,6 @@ pub fn enumerate_depth_cameras(
         }
     }
 
-    let (heightmap_callbacks,) = spawn_thalassic_pipeline(pcl_storage_channels.into_boxed_slice());
-
-    (heightmap_callbacks, Ok(()))
+    spawn_thalassic_pipeline(thalassic_buffer, pcl_storage_channels.into_boxed_slice());
+    Ok(())
 }

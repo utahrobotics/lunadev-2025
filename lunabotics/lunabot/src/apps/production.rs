@@ -15,6 +15,7 @@ use fxhash::FxHashMap;
 use gputter::init_gputter_blocking;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{UnitVector3, Vector2, Vector4};
+use pathfinding::Pathfinder;
 use serde::{Deserialize, Serialize};
 use streaming::camera_streaming;
 use urobotics::{
@@ -22,13 +23,15 @@ use urobotics::{
     callbacks::caller::CallbacksStorage,
     get_tokio_handle,
     log::{error, log_to_console, Level},
+    shared::OwnedData,
     tokio, BlockOn,
 };
 use urobotics_apriltag::image::{DynamicImage, ImageBuffer};
 
 use crate::{
-    apps::log_teleop_messages, localization::Localizer,
-    pipelines::thalassic::spawn_thalassic_pipeline,
+    apps::log_teleop_messages,
+    localization::Localizer,
+    pipelines::thalassic::{spawn_thalassic_pipeline, ThalassicData},
 };
 
 use super::{create_packet_builder, create_robot_chain, wait_for_ctrl_c};
@@ -142,7 +145,23 @@ impl Runnable for LunabotApp {
             error!("Failed to enumerate cameras: {e}");
         }
 
-        let (heightmap_callbacks, result) = enumerate_depth_cameras(
+        let mut buffer = OwnedData::from(ThalassicData::default());
+        let shared_thalassic_data = buffer.create_lendee();
+        buffer.add_callback(|ThalassicData { heightmap, .. }| {
+            debug_assert_eq!(heightmap.len(), 128 * 64);
+            let max = heightmap.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+            let min = heightmap.iter().copied().fold(f32::INFINITY, f32::min);
+            println!("min: {}, max: {}", min, max);
+            let rgb: Vec<_> = heightmap
+                .iter()
+                .map(|&h| ((h - min) / (max - min) * 255.0) as u8)
+                .collect();
+            let _ = DynamicImage::ImageLuma8(ImageBuffer::from_raw(64, 128, rgb).unwrap())
+                .save("heights.png");
+        });
+
+        if let Err(e) = enumerate_depth_cameras(
+            buffer,
             localizer_ref,
             self.depth_cameras.into_iter().map(
                 |(
@@ -168,21 +187,11 @@ impl Runnable for LunabotApp {
                 },
             ),
             &apriltags,
-        );
-        // heightmap_callbacks.add_dyn_fn(Box::new(|heights| {
-        //     let max = heights.iter().copied().fold(f32::NEG_INFINITY, f32::max);
-        //     let min = heights.iter().copied().fold(f32::INFINITY, f32::min);
-        //     println!("min: {}, max: {}", min, max);
-        //     let rgb: Vec<_> = heights.iter().map(|&h| {
-        //         ((h - min) / (max - min) * 255.0) as u8
-        //     }).collect();
-        //     debug_assert_eq!(heights.len(), 128 * 64);
-        //     let _ = DynamicImage::ImageLuma8(ImageBuffer::from_raw(64, 128, rgb).unwrap()).save("heights.png");
-        // }));
-
-        if let Err(e) = result {
+        ) {
             error!("Failed to enumerate depth cameras: {e}");
         }
+
+        let mut finder = Pathfinder::new(Vector2::new(32.0, 16.0), 0.0625);
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
@@ -204,8 +213,15 @@ impl Runnable for LunabotApp {
                         // TODO
                     }
                     Action::CalculatePath { from, to, mut into } => {
-                        into.push(from);
-                        into.push(to);
+                        let data = shared_thalassic_data.get();
+                        finder.append_path(
+                            from,
+                            to,
+                            &data.heightmap,
+                            &data.gradmap,
+                            1.0,
+                            &mut into,
+                        );
                         inputs.push(Input::PathCalculated(into));
                     }
                 },
