@@ -6,7 +6,7 @@ use nalgebra::Vector2;
 use thalassic::{PointCloudStorage, ThalassicBuilder};
 use urobotics::shared::OwnedData;
 
-const CELL_COUNT: u32 = 64 * 128;
+const CELL_COUNT: u32 = 128 * 256;
 
 pub struct ThalassicData {
     pub heightmap: [f32; CELL_COUNT as usize],
@@ -61,9 +61,9 @@ pub fn spawn_thalassic_pipeline(
 
     if is_gputter_initialized() {
         let mut pipeline = ThalassicBuilder {
-            heightmap_width: NonZeroU32::new(64).unwrap(),
+            heightmap_width: NonZeroU32::new(128).unwrap(),
             max_point_count: NonZeroU32::new(max_point_count).unwrap(),
-            cell_size: 0.0625,
+            cell_size: 0.03125,
             cell_count: NonZeroU32::new(CELL_COUNT).unwrap(),
         }
         .build();

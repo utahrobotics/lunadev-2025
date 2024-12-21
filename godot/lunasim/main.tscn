@@ -57,17 +57,17 @@ mesh = SubResource("PointMesh_fxwe8")
 script/source = "extends MultiMeshInstance3D
 
 
-const CELL_SIZE := 0.0625
+const CELL_SIZE := 0.03125
 
 
 func _ready() -> void:
 	var mesh: MultiMesh = multimesh
-	mesh.instance_count = 8192
+	mesh.instance_count = 256 * 128
 	LunasimNode.thalassic.connect(
 		func(heights: PackedFloat32Array, grads: PackedFloat32Array):
 			var i := 0
-			for z in range(128):
-				for x in range(64):
+			for z in range(256):
+				for x in range(128):
 					mesh.set_instance_transform(i, Transform3D(Basis(), Vector3(-x * CELL_SIZE, heights[i], -z * CELL_SIZE)))
 					mesh.set_instance_color(i, Color.GREEN.lerp(Color.RED, grads[i] / PI * 2))
 					i += 1

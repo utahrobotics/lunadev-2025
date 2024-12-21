@@ -4,7 +4,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use axum::{
@@ -213,7 +213,7 @@ pub fn camera_streaming(
                                             // We do not need very low latency to know when the peer is disconnected
                                             let buffer = block_in_place(|| receiver.get());
                                             let mut start_i = 0usize;
-        
+
                                             for &len in &buffer.packet_sizes {
                                                 if video_track
                                                     .write_sample(&Sample {

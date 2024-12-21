@@ -67,12 +67,12 @@ impl Pathfinder {
             goal,
             self.map_dimension,
             self.step_size,
-            |begin, end| self.check_safe(begin, end, gradient_map, threshold),
+            |begin, end| self.check_safe(begin, end, gradient_map, height_map, threshold),
         );
 
         // Optimize path where possible
         decimate::decimate(&mut path, |begin, end| {
-            self.check_safe(begin, end, gradient_map, threshold)
+            self.check_safe(begin, end, gradient_map, height_map, threshold)
         });
 
         // Add height data to path
@@ -118,6 +118,7 @@ impl Pathfinder {
         start: Vector2<f64>,
         goal: Vector2<f64>,
         gradient_map: &[f32],
+        height_map: &[f32],
         threshold: f32,
     ) -> bool {
         let mut start = start;
@@ -148,7 +149,7 @@ impl Pathfinder {
             if index >= gradient_map.len() {
                 return true;
             }
-            if gradient_map[index] > threshold {
+            if height_map[index] == 0.0 && gradient_map[index] > threshold {
                 return false;
             }
             (x, y, index) = self.find_next(dy, dx, x, y, gradient_length, index);

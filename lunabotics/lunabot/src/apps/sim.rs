@@ -326,7 +326,7 @@ impl Runnable for LunasimbotApp {
             }
         });
 
-        let mut finder = Pathfinder::new(Vector2::new(32.0, 16.0), 0.0625);
+        let mut finder = Pathfinder::new(Vector2::new(32.0, 16.0), 0.03125);
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
