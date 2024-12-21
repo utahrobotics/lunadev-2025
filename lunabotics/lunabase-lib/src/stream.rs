@@ -4,10 +4,15 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
-use axum::{extract::{ws, WebSocketUpgrade}, response::Html, routing::get, Router};
+use axum::{
+    extract::{ws, WebSocketUpgrade},
+    response::Html,
+    routing::get,
+    Router,
+};
 use crossbeam::{atomic::AtomicCell, utils::Backoff};
 use godot::global::{godot_error, godot_print};
 use openh264::{decoder::Decoder, nal_units};
@@ -20,13 +25,15 @@ use webrtc::{
         APIBuilder,
     },
     ice_transport::{
-        ice_candidate::{RTCIceCandidate, RTCIceCandidateInit}, ice_connection_state::RTCIceConnectionState,
+        ice_candidate::{RTCIceCandidate, RTCIceCandidateInit},
+        ice_connection_state::RTCIceConnectionState,
         ice_server::RTCIceServer,
     },
     interceptor::registry::Registry,
     media::Sample,
     peer_connection::{
-        configuration::RTCConfiguration, peer_connection_state::RTCPeerConnectionState, sdp::session_description::RTCSessionDescription,
+        configuration::RTCConfiguration, peer_connection_state::RTCPeerConnectionState,
+        sdp::session_description::RTCSessionDescription,
     },
     rtp_transceiver::rtp_codec::RTCRtpCodecCapability,
     track::track_local::{track_local_static_sample::TrackLocalStaticSample, TrackLocal},
@@ -124,9 +131,7 @@ pub fn camera_streaming(
                                 let disconnected_notify2 = disconnected_notify.clone();
                                 peer_connection.on_peer_connection_state_change(Box::new(
                                     move |s: RTCPeerConnectionState| {
-                                        println!("Peer Connection State has changed: {s}");
-
-                                        if s == RTCPeerConnectionState::Failed {
+                                        if s == RTCPeerConnectionState::Failed || s == RTCPeerConnectionState::Closed {
                                             disconnected_notify2.notify_waiters();
                                         }
 
@@ -149,6 +154,12 @@ pub fn camera_streaming(
                                     },
                                 ));
 
+                                let offer = peer_connection.create_offer(None).await.expect("Failed to create offer");
+                                if ws.send(serde_json::to_string(&offer).unwrap().into()).await.is_err() {
+                                    return;
+                                }
+                                peer_connection.set_local_description(offer).await.expect("Failed to set local description");
+
                                 loop {
                                     tokio::select! {
                                         _ = connected_notify.notified() => break,
@@ -170,13 +181,8 @@ pub fn camera_streaming(
                                                 let _ = ws.close().await;
                                                 return;
                                             };
-                                            if let Ok(offer) = serde_json::from_str::<RTCSessionDescription>(&msg) {
-                                                peer_connection.set_remote_description(offer).await.expect("Failed to set remote description");
-                                                let answer = peer_connection.create_answer(None).await.expect("Failed to create answer");
-                                                if ws.send(serde_json::to_string(&answer).unwrap().into()).await.is_err() {
-                                                    break;
-                                                }
-                                                peer_connection.set_local_description(answer).await.expect("Failed to set local description");
+                                            if let Ok(answer) = serde_json::from_str::<RTCSessionDescription>(&msg) {
+                                                peer_connection.set_remote_description(answer).await.expect("Failed to set remote description");
                                             } else {
                                                 let ice = serde_json::from_str::<Option<RTCIceCandidateInit>>(&msg).expect("Failed to parse ice candidate");
                                                 peer_connection.add_ice_candidate(ice.unwrap_or(RTCIceCandidateInit {
@@ -201,6 +207,10 @@ pub fn camera_streaming(
                                 tokio::select! {
                                     _ = async {
                                         'main: loop {
+                                            // block_in_place is not appropriate to be used in select
+                                            // as it can prevent other tasks from running
+                                            // However, receiver.get() resolves quite fast, so it should be fine
+                                            // We do not need very low latency to know when the peer is disconnected
                                             let buffer = block_in_place(|| receiver.get());
                                             let mut start_i = 0usize;
         
@@ -211,8 +221,7 @@ pub fn camera_streaming(
                                                             [start_i..(start_i + len)]
                                                             .to_vec()
                                                             .into(),
-                                                        // TODO: Calculate duration
-                                                        duration: Duration::from_secs(0),
+                                                        duration: Duration::from_secs(1),
                                                         ..Default::default()
                                                     })
                                                     .await
@@ -246,6 +255,10 @@ pub fn camera_streaming(
         let stream_udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10601))
             .expect("Failed to bind to 10601");
 
+        if let Err(e) = stream_udp.set_read_timeout(Some(Duration::from_secs(1))) {
+            godot_error!("Failed to set read timeout, continuing: {e}");
+        }
+
         if let Err(e) = Decoder::new() {
             godot_error!("Failed to initialize decoder: {e}");
             return;
@@ -258,11 +271,21 @@ pub fn camera_streaming(
         let mut nals = vec![];
 
         loop {
+            if let Some(storage) = lendee_storage2.take() {
+                lendee_storage2.store(Some(storage));
+            } else {
+                lendee_storage2.store(Some(broadcasting_buffer.create_lendee()));
+            }
             match stream_udp.recv(&mut buf) {
                 Ok(n) => {
                     stream.extend_from_slice(&buf[..n]);
                 }
                 Err(e) => {
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.kind() == std::io::ErrorKind::TimedOut
+                    {
+                        continue;
+                    }
                     godot_error!("Failed to receive stream data: {e}");
                     break;
                 }
@@ -323,12 +346,6 @@ pub fn camera_streaming(
                 } else {
                     nals.clear();
                 }
-            }
-
-            if let Some(storage) = lendee_storage2.take() {
-                lendee_storage2.store(Some(storage));
-            } else {
-                lendee_storage2.store(Some(broadcasting_buffer.create_lendee()));
             }
 
             stream.drain(..last_stream_i);
