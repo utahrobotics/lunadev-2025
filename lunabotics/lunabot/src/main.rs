@@ -1,8 +1,7 @@
 #![feature(
     result_flattening,
-    never_type,
+    // never_type,
     array_chunks,
-    sync_unsafe_cell,
     iterator_try_collect
 )]
 

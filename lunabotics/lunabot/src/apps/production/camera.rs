@@ -1,17 +1,16 @@
-use std::{io::Cursor, os::unix::ffi::OsStrExt};
+use std::io::Cursor;
 
-use anyhow::Context;
 use fxhash::{FxHashMap, FxHashSet};
 use udev::Udev;
 use urobotics::{
     log::{error, warn},
-    shared::{OwnedData, SharedData},
+    shared::OwnedData,
 };
 use urobotics_apriltag::{
     image::{self, ImageBuffer, ImageDecoder, Luma},
     AprilTagDetector,
 };
-use v4l::{buffer::Type, format, io::traits::CaptureStream, prelude::MmapStream, video::Capture};
+use v4l::{buffer::Type, io::traits::CaptureStream, prelude::MmapStream, video::Capture};
 
 use crate::localization::LocalizerRef;
 

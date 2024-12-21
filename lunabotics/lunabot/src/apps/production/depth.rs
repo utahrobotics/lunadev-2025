@@ -1,11 +1,4 @@
-use std::{
-    ffi::OsString,
-    num::NonZeroU32,
-    ops::Deref,
-    path::{Path, PathBuf},
-    sync::{Arc, Mutex, OnceLock},
-    time::{Duration, Instant},
-};
+use std::{num::NonZeroU32, sync::Arc};
 
 use anyhow::Context;
 use fxhash::FxHashMap;
@@ -13,12 +6,10 @@ use gputter::types::{AlignedMatrix4, AlignedVec4};
 use nalgebra::{Vector2, Vector4};
 pub use realsense_rust;
 use realsense_rust::{
-    config::{Config, ConfigurationError},
-    context::ContextConstructionError,
-    device::Device,
+    config::Config,
     frame::{ColorFrame, DepthFrame, PixelKind},
     kind::{Rs2CameraInfo, Rs2Format, Rs2ProductLine, Rs2StreamKind},
-    pipeline::{ActivePipeline, FrameWaitError, InactivePipeline},
+    pipeline::InactivePipeline,
 };
 use thalassic::DepthProjectorBuilder;
 use urobotics::{
@@ -26,7 +17,7 @@ use urobotics::{
     shared::OwnedData,
 };
 use urobotics_apriltag::{
-    image::{ImageBuffer, Luma, Rgb},
+    image::{ImageBuffer, Luma},
     AprilTagDetector,
 };
 

@@ -1,6 +1,5 @@
 use std::{
-    cell::SyncUnsafeCell,
-    io::{Cursor, ErrorKind, Read, Write},
+    io::{ErrorKind, Read},
     net::{SocketAddr, UdpSocket},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -10,20 +9,17 @@ use std::{
 };
 
 use anyhow::Context;
-use cakap2::packet::Action;
 use nalgebra::Vector2;
 use openh264::{
-    encoder::{Encoder, EncoderConfig, RateControlMode, SpsPpsStrategy},
+    encoder::{Encoder, EncoderConfig},
     formats::{RgbSliceU8, YUVBuffer},
     OpenH264API,
 };
 use spin_sleep::SpinSleeper;
 use urobotics::{
     log::{error, info},
-    parking_lot::{Mutex, RwLock},
+    parking_lot::RwLock,
 };
-
-use crate::teleop::PacketBuilder;
 
 const CAMERA_COL_COUNT: usize = 3;
 const CAMERA_ROW_COUNT: usize = 2;
