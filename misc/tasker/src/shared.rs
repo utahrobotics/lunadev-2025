@@ -713,6 +713,25 @@ impl<T> MaybeOwned<T> {
             },
         }
     }
+
+    pub fn try_recall(&mut self) -> bool {
+        match self {
+            Self::Owned(_) => true,
+            Self::Loaned(loaned) => unsafe {
+                let owned_loaded = std::ptr::read(loaned);
+                match owned_loaded.try_recall() {
+                    Ok(owned) => {
+                        std::ptr::write(self, Self::Owned(owned));
+                        true
+                    }
+                    Err(loaned) => {
+                        std::ptr::write(self, Self::Loaned(loaned));
+                        false
+                    }
+                }
+            },
+        }
+    }
 }
 
 impl<T> Deref for MaybeOwned<T> {

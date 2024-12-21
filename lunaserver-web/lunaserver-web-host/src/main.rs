@@ -1,16 +1,14 @@
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
 use axum::{
-    extract::{ws::Message, ConnectInfo, Path, WebSocketUpgrade},
+    extract::{ws::Message, ConnectInfo, WebSocketUpgrade},
     routing::get,
     Router,
 };
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpStream, UdpSocket}};
-
+use tokio::net::UdpSocket;
 
 #[tokio::main]
 async fn main() {
-    // build our application with a single route
     let app = Router::new()
         .route("/", get(|| async {
             "Hello, world!"
@@ -80,55 +78,6 @@ async fn main() {
                                 continue;
                             };
                             send_to = Some(from);
-                            if let Err(e) = socket.send(Message::Binary(buf[..n].to_vec())).await {
-                                eprintln!("Failed to send UDP packet to client: {e}");
-                                break;
-                            }
-                        }
-                    }
-                }
-            })
-        }))
-        .route("/tcp-ws/:port", get(|ws: WebSocketUpgrade, Path((port,)): Path<(u16,)>| async move {
-            ws.on_upgrade(move |mut socket| async move {
-                let mut tcp = match TcpStream::connect(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)).await {
-                    Ok(x) => x,
-                    Err(e) => {
-                        eprintln!("Failed to connect to TCP server: {e}");
-                        return;
-                    },
-                };
-
-                let mut buf = [0u8; 2048];
-                loop {
-                    tokio::select! {
-                        option = socket.recv() => {
-                            let Some(result) = option else {
-                                break;
-                            };
-                            let msg = match result {
-                                Ok(msg) => msg,
-                                Err(e) => {
-                                    eprintln!("Received error from peer: {e}");
-                                    break;
-                                },
-                            };
-                            let Message::Binary(data) = msg else {
-                                continue;
-                            };
-                            if let Err(e) = tcp.write_all(&data).await {
-                                eprintln!("Failed to send TCP stream to client: {e}");
-                                break;
-                            }
-                        }
-                        result = tcp.read(&mut buf) => {
-                            let n = match result {
-                                Ok(n) => n,
-                                Err(e) => {
-                                    eprintln!("Failed to read TCP stream: {e}");
-                                    break;
-                                },
-                            };
                             if let Err(e) = socket.send(Message::Binary(buf[..n].to_vec())).await {
                                 eprintln!("Failed to send UDP packet to client: {e}");
                                 break;
