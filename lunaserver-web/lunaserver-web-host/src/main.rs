@@ -21,7 +21,7 @@ async fn main() {
             ws.on_upgrade(|mut socket| async move {
                 let mut send_to = None;
                 let mut udp = None;
-                
+
                 for port in 30000..=30100 {
                     let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
                     match UdpSocket::bind(addr).await {
