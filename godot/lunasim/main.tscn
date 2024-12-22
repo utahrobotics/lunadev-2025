@@ -461,6 +461,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -1)
 remote_path = NodePath("../../../../CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport/ExternalCamera")
 
 [node name="DepthCamera" parent="Robot" index="2"]
+remote_path = NodePath("../../CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport/DepthCamera")
 script = null
 
 [node name="RearCamera" parent="Robot" index="3"]
@@ -528,17 +529,17 @@ handle_input_locally = false
 size = Vector2i(597, 597)
 render_target_update_mode = 0
 
+[node name="DepthCamera" type="Camera3D" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport"]
+transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, -1, 0.572526, -1.29819)
+cull_mask = 1048571
+fov = 120.0
+script = ExtResource("3_n7k3i")
+
 [node name="MeshInstance3D" type="MeshInstance3D" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport"]
 layers = 32
 gi_mode = 0
 mesh = SubResource("QuadMesh_axs8d")
 skeleton = NodePath("../../../../../../..")
-
-[node name="DepthCamera" type="Camera3D" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport"]
-transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, -1, 0.572526, -0.751349)
-cull_mask = 1048571
-fov = 120.0
-script = ExtResource("3_n7k3i")
 
 [node name="RearCamera" type="MarginContainer" parent="CanvasLayer/TabContainer"]
 visible = false
@@ -563,7 +564,7 @@ size = Vector2i(2, 2)
 
 [node name="RearCamera" type="Camera3D" parent="CanvasLayer/TabContainer/RearCamera/AspectRatioContainer/SubviewportContainer/SubViewport"]
 transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, -1, 0.572526, -0.751349)
-cull_mask = 1048571
+cull_mask = 1048539
 fov = 120.0
 script = ExtResource("3_n7k3i")
 
