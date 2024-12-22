@@ -1,4 +1,4 @@
-[gd_scene load_steps=32 format=3 uid="uid://bxmnthetrtkso"]
+[gd_scene load_steps=35 format=3 uid="uid://bxmnthetrtkso"]
 
 [ext_resource type="Script" path="res://path_manager.gd" id="1_ohl8f"]
 [ext_resource type="PackedScene" uid="uid://leqgym66qbuo" path="res://robot.tscn" id="1_y4wm8"]
@@ -230,6 +230,43 @@ func _process(delta: float) -> void:
 		LunasimNode.send_depth_map(depths)
 "
 
+[sub_resource type="Shader" id="Shader_evb1q"]
+code = "shader_type spatial;
+// Prevent the quad from being affected by lighting and fog. This also improves performance.
+render_mode unshaded, fog_disabled;
+
+uniform sampler2D depth_texture : source_color, hint_depth_texture;
+
+void vertex() {
+  POSITION = vec4(VERTEX.xy, 1.0, 1.0);
+}
+
+void fragment() {
+  float depth = texture(depth_texture, SCREEN_UV).x;
+  vec3 ndc = vec3(SCREEN_UV * 2.0 - 1.0, depth);
+  vec4 view = INV_PROJECTION_MATRIX * vec4(ndc, 1.0);
+  view.xyz /= view.w;
+  float linear_depth = -view.z;
+
+  vec4 world = INV_VIEW_MATRIX * INV_PROJECTION_MATRIX * vec4(ndc, 1.0);
+  vec3 world_position = world.xyz / world.w;
+
+  // Visualize linear depth
+  ALBEDO.rgb = vec3(min(linear_depth / 8.0, 1));
+
+  // Visualize world coordinates
+  //ALBEDO.rgb = fract(world_position).xyz;
+}"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_10xs8"]
+render_priority = 0
+shader = SubResource("Shader_evb1q")
+
+[sub_resource type="QuadMesh" id="QuadMesh_axs8d"]
+material = SubResource("ShaderMaterial_10xs8")
+flip_faces = true
+size = Vector2(2, 2)
+
 [sub_resource type="GDScript" id="GDScript_4uyte"]
 script/source = "extends LineEdit
 
@@ -424,7 +461,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -1)
 remote_path = NodePath("../../../../CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport/ExternalCamera")
 
 [node name="DepthCamera" parent="Robot" index="2"]
-remote_path = NodePath("../../CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport/DepthCamera")
 script = null
 
 [node name="RearCamera" parent="Robot" index="3"]
@@ -468,6 +504,7 @@ render_target_update_mode = 4
 
 [node name="ExternalCamera" type="Camera3D" parent="CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport"]
 transform = Transform3D(0.283078, -0.220396, 0.93343, -1.77252e-08, 0.973239, 0.229795, -0.959097, -0.0650499, 0.275503, 2.23287, 1.29588, -0.0458146)
+cull_mask = 1048543
 
 [node name="DepthCamera1" type="MarginContainer" parent="CanvasLayer/TabContainer"]
 visible = false
@@ -488,11 +525,17 @@ stretch = true
 
 [node name="SubViewport" type="SubViewport" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer"]
 handle_input_locally = false
-size = Vector2i(2, 2)
+size = Vector2i(597, 597)
 render_target_update_mode = 0
 
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport"]
+layers = 32
+gi_mode = 0
+mesh = SubResource("QuadMesh_axs8d")
+skeleton = NodePath("../../../../../../..")
+
 [node name="DepthCamera" type="Camera3D" parent="CanvasLayer/TabContainer/DepthCamera1/AspectRatioContainer/SubviewportContainer/SubViewport"]
-transform = Transform3D(1, 0, 0, 0, 0.972921, 0.231137, 0, -0.231137, 0.972921, -1, 0.572526, -1.29819)
+transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, -1, 0.572526, -0.751349)
 cull_mask = 1048571
 fov = 120.0
 script = ExtResource("3_n7k3i")
@@ -517,7 +560,6 @@ stretch = true
 [node name="SubViewport" type="SubViewport" parent="CanvasLayer/TabContainer/RearCamera/AspectRatioContainer/SubviewportContainer"]
 handle_input_locally = false
 size = Vector2i(2, 2)
-render_target_update_mode = 0
 
 [node name="RearCamera" type="Camera3D" parent="CanvasLayer/TabContainer/RearCamera/AspectRatioContainer/SubviewportContainer/SubViewport"]
 transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, -1, 0.572526, -0.751349)
@@ -545,11 +587,10 @@ stretch = true
 [node name="SubViewport" type="SubViewport" parent="CanvasLayer/TabContainer/ArenaCamera1/AspectRatioContainer/SubviewportContainer"]
 handle_input_locally = false
 size = Vector2i(2, 2)
-render_target_update_mode = 0
 
 [node name="ArenaCamera1" type="Camera3D" parent="CanvasLayer/TabContainer/ArenaCamera1/AspectRatioContainer/SubviewportContainer/SubViewport"]
 transform = Transform3D(0.767165, -0.436648, 0.469889, 0, 0.732543, 0.680721, -0.64145, -0.522225, 0.561981, 0.405, 1.805, 0.384)
-cull_mask = 1048571
+cull_mask = 1048539
 fov = 100.0
 script = ExtResource("3_n7k3i")
 

@@ -78,7 +78,7 @@ pub fn run_ai(
                     FallibleStatus::Running
                 },
             )),
-            follow_path,
+            // follow_path,
             TryCatch::new(
                 WhileLoop::new(
                     AlwaysSucceed,
