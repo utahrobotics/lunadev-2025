@@ -170,6 +170,13 @@ impl INode for Lunasim {
                     self.base_mut()
                         .emit_signal("thalassic", &[heights.to_variant(), grads.to_variant()]);
                 }
+                FromLunasimbot::Path(path) => {
+                    let path: Vec<_> = Box::into_iter(path)
+                        .map(|[x, y, z]| Vector3 { x, y, z })
+                        .collect();
+
+                    self.base_mut().emit_signal("path", &[path.to_variant()]);
+                }
             }
         }
     }
@@ -198,6 +205,8 @@ fn rand_vec(deviation: f64) -> Vector3 {
 impl Lunasim {
     #[signal]
     fn fitted_points(points: Vec<Vector3>);
+    #[signal]
+    fn path(points: Vec<Vector3>);
     #[signal]
     fn thalassic(heights: PackedFloat32Array, grads: PackedFloat32Array);
     #[signal]

@@ -5,7 +5,7 @@ use ares_bt::{
 use common::LunabotStage;
 use nalgebra::Point3;
 
-use crate::{blackboard::LunabotBlackboard, Action};
+use crate::{blackboard::LunabotBlackboard, Action, PollWhen};
 
 use super::{follow_path, Autonomy, AutonomyStage};
 
@@ -21,6 +21,7 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
         }),
         Sequence::new((
             AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+                blackboard.enqueue_action(Action::SetSteering(Default::default()));
                 blackboard.enqueue_action(Action::SetStage(LunabotStage::TraverseObstacles));
                 Status::Success
             }),

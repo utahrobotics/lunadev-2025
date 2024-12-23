@@ -40,8 +40,8 @@ impl Pathfinder {
         gradient_map: &[f32],
         threshold: f32,
     ) -> Vec<Point3<f64>> {
-        let length = ((self.map_dimension.x / self.step_size) + 0.0).round() as usize;
-        let height = ((self.map_dimension.y / self.step_size) + 0.0).round() as usize;
+        let length = ((self.map_dimension.x / self.step_size.abs()) + 0.0).round() as usize;
+        let height = ((self.map_dimension.y / self.step_size.abs()) + 0.0).round() as usize;
 
         if gradient_map.len() != length * height {
             panic!(
@@ -58,8 +58,8 @@ impl Pathfinder {
             );
         }
 
-        let start = Vector2::new(start.x, start.y);
-        let goal = Vector2::new(goal.x, goal.y);
+        let start = Vector2::new(start.x, start.z);
+        let goal = Vector2::new(goal.x, goal.z);
 
         // Find valid path from start to goal (if it exists)
         let mut path = astar::astar(
@@ -80,10 +80,10 @@ impl Pathfinder {
             .map(|point2| {
                 Point3::new(
                     point2.x,
-                    point2.y,
                     height_map[(point2.x / self.step_size).round() as usize
                         + (point2.y / self.step_size).round() as usize * length]
                         as f64,
+                    point2.y,
                 )
             })
             .collect()
@@ -121,6 +121,7 @@ impl Pathfinder {
         height_map: &[f32],
         threshold: f32,
     ) -> bool {
+        return true;
         let mut start = start;
         let mut goal = goal;
 
@@ -149,7 +150,7 @@ impl Pathfinder {
             if index >= gradient_map.len() {
                 return true;
             }
-            if height_map[index] == 0.0 && gradient_map[index] > threshold {
+            if gradient_map[index] > threshold {
                 return false;
             }
             (x, y, index) = self.find_next(dy, dx, x, y, gradient_length, index);

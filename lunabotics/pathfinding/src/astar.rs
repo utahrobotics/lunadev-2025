@@ -38,8 +38,8 @@ pub(crate) fn astar(
     let startf = start;
     let goalf = goal;
     let max_index = Vector2::new(
-        (map_dimension.x / step_size).round() as u32,
-        (map_dimension.y / step_size).round() as u32,
+        (map_dimension.x / step_size.abs()).round() as u32,
+        (map_dimension.y / step_size.abs()).round() as u32,
     );
 
     let mut start = Vector2::new(

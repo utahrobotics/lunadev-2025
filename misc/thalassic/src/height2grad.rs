@@ -26,6 +26,10 @@ build_shader!(
         for (var y = 0u; y < 3u; y++) {
             for (var x = 0u; x < 3u; x++) {
                 let height = heightmap[(workgroup_id.y + y) * HEIGHTMAP_WIDTH + workgroup_id.x + x];
+                // height is exactly 0.0 if it is not set
+                if (height == 0.0) {
+                    continue;
+                }
 
                 if (height < minHeight) {
                     minHeight = height;

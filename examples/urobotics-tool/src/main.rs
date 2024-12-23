@@ -2,7 +2,6 @@ use std::path::Path;
 
 use urobotics::{
     app::{adhoc_app, application},
-    camera,
     log::OwoColorize,
     python, serial,
 };
@@ -30,7 +29,6 @@ fn main() {
     }
     app.add_app::<serial::app::Serial>()
         .add_app::<python::app::Python>()
-        .add_app::<camera::app::Camera>()
         .add_app::<DeleteCabinet>()
         // .add_app::<urobotics_learning::multiples_of_two::solution::MultiplesOfTwoSolution>()
         // .add_app::<urobotics_learning::simbot::linear_maze::solution::LinearMazeSolution>()

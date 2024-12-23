@@ -11,4 +11,6 @@ serde.workspace = true
 fxhash.workspace = true
 crossbeam.workspace = true
 humantime-serde = "1.1.1"
-http = "1.1.0"
+
+[package.metadata.cargo-machete]
+ignored = ["humantime-serde"]

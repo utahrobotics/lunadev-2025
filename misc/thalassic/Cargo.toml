@@ -8,7 +8,6 @@ gputter.workspace = true
 bytemuck.workspace = true
 nalgebra.workspace = true
 fxhash.workspace = true
-image.workspace = true
 # rayon.workspace = true
 linfa-clustering = "0.7.0"
 linfa = "0.7.0"

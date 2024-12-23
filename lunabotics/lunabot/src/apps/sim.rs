@@ -328,7 +328,7 @@ impl Runnable for LunasimbotApp {
             }
         });
 
-        let mut finder = Pathfinder::new(Vector2::new(4.0, 8.0), 0.03125);
+        let mut finder = Pathfinder::new(Vector2::new(4.0, 8.0), -0.03125);
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
@@ -365,6 +365,11 @@ impl Runnable for LunasimbotApp {
                             45.0f32.to_radians(),
                             &mut into,
                         );
+                        println!("{:?}", into);
+                        let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
+                            into.iter().map(|p| p.coords.cast::<f32>().data.0[0]).collect(),
+                        ));
+                        lunasim_stdin.write(bytes);
                         inputs.push(Input::PathCalculated(into));
                     }
                 },

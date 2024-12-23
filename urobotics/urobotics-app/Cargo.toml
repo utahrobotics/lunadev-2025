@@ -8,5 +8,4 @@ edition = "2021"
 urobotics-core = { workspace = true }
 fxhash = { workspace = true }
 toml = { workspace = true }
-tokio = { workspace = true }
 serde = { workspace = true }

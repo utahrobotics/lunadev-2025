@@ -7,7 +7,6 @@ members = [
     "urobotics/urobotics-app",
     "examples/urobotics-tool",
     "urobotics/urobotics",
-    "urobotics/urobotics-camera",
     "urobotics/urobotics-py",
     "urobotics/urobotics-apriltag",
     "misc/tasker",

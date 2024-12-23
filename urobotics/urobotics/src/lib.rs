@@ -2,8 +2,6 @@
 
 #[cfg(feature = "app")]
 pub use urobotics_app as app;
-#[cfg(feature = "camera")]
-pub use urobotics_camera as camera;
 pub use urobotics_core::*;
 #[cfg(feature = "python")]
 pub use urobotics_py as python;

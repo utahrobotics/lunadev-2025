@@ -11,10 +11,8 @@ tokio = { workspace = true }
 crossbeam = { workspace = true }
 sysinfo = "0.30"
 color-eyre = { version = "0.6", default-features = false }
-ctrlc = "3.4.2"
 rayon = { workspace = true }
 parking_lot = { workspace = true }
-static_assertions = { workspace = true }
 futures = { workspace = true }
 tasker = { workspace = true }
 serde = { workspace = true }
