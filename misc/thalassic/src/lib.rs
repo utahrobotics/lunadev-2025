@@ -21,6 +21,9 @@ mod height2grad;
 mod pcl2height;
 pub use clustering::Clusterer;
 
+mod expand_obstacles;
+use expand_obstacles::ExpandObstacles;
+
 /// 1. Depths in arbitrary units
 /// 2. Global Transform of the camera
 /// 3. Depth Scale (meters per depth unit)
@@ -67,6 +70,28 @@ type BetaBindGroups = (
     GpuBufferSet<HeightMapBindGrp>,
     GpuBufferSet<PclBindGrp>,
     GpuBufferSet<GradMapBindGrp>,
+);
+
+/// 1. Whether or not each cell is an obstacle, denoted with `1` or `0`.
+/// 2. The position of the closest obstacle to each position. (should be filled with `0`, used during calculation)
+/// 
+/// This bind group is the input to the expander.
+type ExpanderInputBindGrp = (
+    StorageBuffer<[u32], HostReadWrite, ShaderReadWrite>,
+    StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,
+);
+
+/// 1. Whether or not each cell is an obstacle, denoted with `1` or `0`.
+/// 
+/// This bind group is the output of the expander and input to the pathfinder?.
+type ExpanderOutputBindGrp = (
+    StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,
+);
+
+/// The set of bind groups used by the expander
+type ExpanderBindGroups = (
+    GpuBufferSet<ExpanderInputBindGrp>,
+    GpuBufferSet<ExpanderOutputBindGrp>,
 );
 
 #[derive(Debug, Clone, Copy)]
@@ -284,5 +309,56 @@ impl ThalassicPipeline {
         self.bind_grps = Some((height_grp, pcl_grp, grad_grp));
         points_storage.points_grp = points_grp;
         points_storage
+    }
+}
+
+pub struct Expander {}
+impl Expander {
+
+    //TODO: populate constants
+    const RADIUS: f32 = 3.0;
+    const GRID_WIDTH: u32 = 10;
+    const GRID_HEIGHT: u32 = 10;
+    
+    pub fn expand(obstacles: &[u32]) -> GpuBufferSet<ExpanderOutputBindGrp> {        
+        let grid_size = (Self::GRID_WIDTH * Self::GRID_HEIGHT) as usize;
+
+        let [expand_fn] = ExpandObstacles {
+            obstacles: BufferGroupBinding::<_, ExpanderBindGroups>::get::<0, 0>(),
+            closest: BufferGroupBinding::<_, ExpanderBindGroups>::get::<0, 1>(),
+            expanded: BufferGroupBinding::<_, ExpanderBindGroups>::get::<1, 0>(),
+            radius: Self::RADIUS,
+            grid_width: NonZeroU32::new(Self::GRID_WIDTH).unwrap(),
+            grid_height: NonZeroU32::new(Self::GRID_HEIGHT).unwrap(),
+        }
+        .compile();
+
+        let mut pipeline = ComputePipeline::new([&expand_fn]);
+        pipeline.workgroups = [Vector3::new(
+            Self::GRID_WIDTH,
+            Self::GRID_HEIGHT,
+            1,
+        )];
+
+        let mut bind_grps = (
+            GpuBufferSet::from((
+                StorageBuffer::new_dyn(grid_size).unwrap(), 
+                StorageBuffer::new_dyn(grid_size * 2).unwrap(),
+            )), 
+            GpuBufferSet::from((
+                StorageBuffer::new_dyn(grid_size).unwrap(), 
+            ))
+        );
+
+        for _ in 0..(Self::RADIUS as usize + 1) {
+            pipeline
+                .new_pass(|mut lock| {
+                    bind_grps.0.write::<0, _>( obstacles, &mut lock);
+                    &mut bind_grps
+                })
+                .finish();
+        }
+
+        bind_grps.1
     }
 }
