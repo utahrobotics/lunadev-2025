@@ -26,7 +26,7 @@ dependencies = [
 [tasks.main]
 workspace = false
 command = "cargo"
-args = ["run", "--release", "--features=production", "-p", "lunabot", "--", "main"]
+args = ["run", "--features=production", "-p", "lunabot", "--", "main"]
 
 [tasks.del-cabinet]
 workspace = false

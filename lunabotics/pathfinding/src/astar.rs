@@ -144,6 +144,9 @@ pub(crate) fn astar(
         };
 
         for (successor, parent, added_cost) in successors {
+            if parents.try_insert(successor, parent).is_err() {
+                continue;
+            }
             let new_cost = cost.cost + added_cost;
             let successor_cost = Cost {
                 heuristic: heuristic(successor),
@@ -155,7 +158,6 @@ pub(crate) fn astar(
                 node: successor,
                 cost: successor_cost,
             });
-            let _ = parents.try_insert(successor, parent);
         }
     }
 

@@ -309,7 +309,6 @@ func _on_pressed() -> void:
 script = SubResource("GDScript_lj4gt")
 
 [node name="PathManager" type="Path3D" parent="."]
-visible = false
 curve = SubResource("Curve3D_yjb38")
 script = ExtResource("1_ohl8f")
 test_path = Array[Vector3]([Vector3(-2.5, 1, -3.5), Vector3(-2, 0.5, -6)])
@@ -400,7 +399,7 @@ layers = 3
 mesh = SubResource("PlaneMesh_reayg")
 
 [node name="Rocks" type="Node3D" parent="Arena"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.25613, 0, -6.70293)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.906988, 0, -2.93281)
 
 [node name="Rock" type="Node3D" parent="Arena/Rocks"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.861442, 2.20208, -1.0874)

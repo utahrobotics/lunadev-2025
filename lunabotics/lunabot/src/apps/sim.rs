@@ -362,10 +362,27 @@ impl Runnable for LunasimbotApp {
                             to,
                             &data.heightmap,
                             &data.gradmap,
-                            45.0f32.to_radians(),
+                            20.0f32.to_radians(),
                             &mut into,
                         );
-                        println!("{:?}", into);
+                        if into.len() == 1 {
+                            warn!("Failed to find path, loosening threshold...");
+                            into.clear();
+                            finder.append_path(
+                                from,
+                                to,
+                                &data.heightmap,
+                                &data.gradmap,
+                                45.0f32.to_radians(),
+                                &mut into,
+                            );
+                            if into.len() == 1 {
+                                warn!("Failed to find path, using straight line");
+                                into.clear();
+                                into.push(from);
+                                into.push(to);
+                            }
+                        }
                         let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
                             into.iter().map(|p| p.coords.cast::<f32>().data.0[0]).collect(),
                         ));
