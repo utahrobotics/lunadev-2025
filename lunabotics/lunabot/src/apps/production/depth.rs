@@ -35,7 +35,6 @@ pub struct DepthCameraInfo {
     pub stream_index: usize,
 }
 
-/// Returns an iterator over all the RealSense cameras that were identified.
 pub fn enumerate_depth_cameras(
     thalassic_buffer: OwnedData<ThalassicData>,
     localizer_ref: LocalizerRef,

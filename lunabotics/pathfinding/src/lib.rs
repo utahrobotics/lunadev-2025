@@ -40,8 +40,8 @@ impl Pathfinder {
         gradient_map: &[f32],
         threshold: f32,
     ) -> Vec<Point3<f64>> {
-        let length = ((self.map_dimension.x / self.step_size) + 1.0).round() as usize;
-        let height = ((self.map_dimension.y / self.step_size) + 1.0).round() as usize;
+        let length = ((self.map_dimension.x / self.step_size) + 0.0).round() as usize;
+        let height = ((self.map_dimension.y / self.step_size) + 0.0).round() as usize;
 
         if gradient_map.len() != length * height {
             panic!(

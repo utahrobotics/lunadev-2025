@@ -1,4 +1,10 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use common::lunasim::FromLunasimbot;
 use crossbeam::atomic::AtomicCell;
@@ -14,12 +20,16 @@ use crate::{
 
 const ACCELEROMETER_LERP_SPEED: f64 = 150.0;
 const LOCALIZATION_DELTA: f64 = 1.0 / 60.0;
+/// The threshold of speed in m/s for the robot to be considered in motion.
+const IN_MOTION_THRESHOLD: f64 = 0.1;
+const IN_MOTION_DURATION: f64 = 0.5;
 
 #[derive(Default)]
 struct LocalizerRefInner {
     acceleration: AtomicCell<Vector3<f64>>,
     angular_velocity: AtomicCell<UnitQuaternion<f64>>,
     april_tag_isometry: AtomicCell<Option<Isometry3<f64>>>,
+    in_motion: AtomicBool,
 }
 
 #[derive(Clone)]
@@ -51,6 +61,10 @@ impl LocalizerRef {
     fn angular_velocity(&self) -> UnitQuaternion<f64> {
         self.inner.angular_velocity.load()
     }
+
+    pub fn is_in_motion(&self) -> bool {
+        self.inner.in_motion.load(Ordering::Relaxed)
+    }
 }
 
 pub struct Localizer {
@@ -77,6 +91,8 @@ impl Localizer {
     pub fn run(self) {
         let spin_sleeper = SpinSleeper::default();
         let mut bitcode_buffer = bitcode::Buffer::new();
+        let mut is_in_motion = false;
+        let mut is_in_motion_timer = 0.0;
 
         loop {
             spin_sleeper.sleep(Duration::from_secs_f64(LOCALIZATION_DELTA));
@@ -108,6 +124,10 @@ impl Localizer {
                 } else {
                     break 'check;
                 }
+                self.localizer_ref
+                    .inner
+                    .in_motion
+                    .store(false, Ordering::Relaxed);
                 self.robot_chain.set_origin(Isometry3::identity());
             }
 
@@ -146,6 +166,33 @@ impl Localizer {
                         .try_slerp(&twist, LOCALIZATION_DELTA, 0.001)
                         .unwrap_or_default(),
                 );
+            }
+
+            let currently_in_motion = (isometry.translation.vector
+                - self.robot_chain.origin().translation.vector)
+                .magnitude()
+                / LOCALIZATION_DELTA
+                > IN_MOTION_THRESHOLD;
+            if is_in_motion {
+                if currently_in_motion {
+                    is_in_motion_timer = IN_MOTION_DURATION;
+                } else {
+                    is_in_motion_timer -= LOCALIZATION_DELTA;
+                    if is_in_motion_timer <= 0.0 {
+                        is_in_motion = false;
+                        self.localizer_ref
+                            .inner
+                            .in_motion
+                            .store(false, Ordering::Relaxed);
+                    }
+                }
+            } else if currently_in_motion {
+                is_in_motion = true;
+                is_in_motion_timer = IN_MOTION_DURATION;
+                self.localizer_ref
+                    .inner
+                    .in_motion
+                    .store(true, Ordering::Relaxed);
             }
 
             self.robot_chain.set_origin(isometry);

@@ -259,36 +259,6 @@ impl Runnable for LunasimbotApp {
 
         spawn_thalassic_pipeline(buffer, Box::new([pcl_storage_channel.clone()]));
 
-        let (depths_tx, depths_rx) = std::sync::mpsc::sync_channel::<Box<[u16]>>(1);
-        let lunasim_stdin2 = lunasim_stdin.clone();
-        rayon::spawn(move || {
-            let sleeper = spin_sleep::SpinSleeper::default();
-            loop {
-                let Ok(depths) = depths_rx.recv() else {
-                    break;
-                };
-                sleeper.sleep(std::time::Duration::from_millis(60));
-                let Some(camera_transform) = camera_link.world_transform() else {
-                    continue;
-                };
-                let camera_transform: AlignedMatrix4<f32> =
-                    camera_transform.to_homogeneous().cast::<f32>().into();
-                let Some(mut pcl_storage) = pcl_storage_channel.get_finished() else {
-                    continue;
-                };
-                pcl_storage =
-                    depth_projecter.project(&depths, &camera_transform, pcl_storage, 0.01);
-                pcl_storage.read(&mut point_cloud);
-                pcl_storage_channel.set_projected(pcl_storage);
-                let msg = FromLunasimbot::PointCloud(
-                    point_cloud.iter().map(|p| [p.x, p.y, p.z]).collect(),
-                );
-                let lunasim_stdin2 = lunasim_stdin2.clone();
-                let bytes = bitcode::encode(&msg);
-                lunasim_stdin2.write(&bytes);
-            }
-        });
-
         let axis_angle = |axis: [f32; 3], angle: f32| {
             let axis = UnitVector3::new_normalize(Vector3::new(
                 axis[0] as f64,
@@ -299,6 +269,7 @@ impl Runnable for LunasimbotApp {
             UnitQuaternion::from_axis_angle(&axis, angle as f64)
         };
 
+        let lunasim_stdin2 = lunasim_stdin.clone();
         from_lunasim_ref.add_fn_mut(move |msg| match msg {
             common::lunasim::FromLunasim::Accelerometer {
                 id: _,
@@ -315,7 +286,29 @@ impl Runnable for LunasimbotApp {
                 localizer_ref.set_angular_velocity(axis_angle(axis, angle));
             }
             common::lunasim::FromLunasim::DepthMap(depths) => {
-                let _ = depths_tx.try_send(depths);
+                if localizer_ref.is_in_motion() {
+                    return;
+                }
+                let Some(camera_transform) = camera_link.world_transform() else {
+                    return;
+                };
+                let camera_transform: AlignedMatrix4<f32> =
+                    camera_transform.to_homogeneous().cast::<f32>().into();
+                let Some(mut pcl_storage) = pcl_storage_channel.get_finished() else {
+                    return;
+                };
+                pcl_storage =
+                    depth_projecter.project(&depths, &camera_transform, pcl_storage, 0.01);
+                pcl_storage.read(&mut point_cloud);
+                pcl_storage_channel.set_projected(pcl_storage);
+                let msg = FromLunasimbot::PointCloud(
+                    point_cloud.iter().map(|p| [p.x, p.y, p.z]).collect(),
+                );
+                let lunasim_stdin2 = lunasim_stdin2.clone();
+                let bytes = bitcode::encode(&msg);
+                rayon::spawn(move || {
+                    lunasim_stdin2.write(&bytes);
+                });
             }
             common::lunasim::FromLunasim::ExplicitApriltag {
                 robot_origin,
@@ -335,7 +328,7 @@ impl Runnable for LunasimbotApp {
             }
         });
 
-        let mut finder = Pathfinder::new(Vector2::new(32.0, 16.0), 0.03125);
+        let mut finder = Pathfinder::new(Vector2::new(4.0, 8.0), 0.03125);
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
@@ -369,7 +362,7 @@ impl Runnable for LunasimbotApp {
                             to,
                             &data.heightmap,
                             &data.gradmap,
-                            1.0,
+                            45.0f32.to_radians(),
                             &mut into,
                         );
                         inputs.push(Input::PathCalculated(into));

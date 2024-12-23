@@ -434,7 +434,7 @@ remote_path = NodePath("../../CanvasLayer/TabContainer/RearCamera/AspectRatioCon
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -1)
 
 [node name="Apriltag" parent="." instance=ExtResource("2_nhvh2")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.610044, 0.50416)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.370852, 0.610044, -0.00139198)
 explicit = true
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]

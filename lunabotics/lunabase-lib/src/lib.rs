@@ -325,6 +325,35 @@ impl LunabotConn {
         }
     }
 
+    fn set_steering(&mut self, new_steering: Steering) {
+        if let Some(inner) = &mut self.inner {
+            let mut last_steering_reliable_idx = None;
+            if let Some((old_steering, old_idx)) = inner.last_steering {
+                last_steering_reliable_idx = Some(old_idx);
+                if old_steering == new_steering {
+                    return;
+                }
+            }
+            let msg = FromLunabase::Steering(new_steering);
+            match inner
+                .cakap_sm
+                .get_packet_builder()
+                .new_reliable(encode(&msg).into())
+            {
+                Ok(packet) => {
+                    if let Some(old_idx) = last_steering_reliable_idx {
+                        inner.to_lunabot.push_back(Action::CancelReliable(old_idx));
+                    }
+                    inner.last_steering = Some((new_steering, packet.get_index()));
+                    inner.to_lunabot.push_back(Action::SendReliable(packet));
+                }
+                Err(e) => {
+                    godot_error!("Failed to build reliable packet: {e}");
+                }
+            }
+        }
+    }
+
     // fn send_unreliable(&mut self, msg: &FromLunabase) {
     //     if let Some(inner) = &mut self.inner {
     //         match inner.cakap_sm.get_packet_builder().new_unreliable(encode(msg).into()) {
@@ -359,35 +388,6 @@ impl LunabotConn {
         self.inner.as_ref().map_or(false, |inner| {
             inner.stream_corrupted.load(Ordering::Relaxed)
         })
-    }
-
-    fn set_steering(&mut self, new_steering: Steering) {
-        if let Some(inner) = &mut self.inner {
-            let mut last_steering_reliable_idx = None;
-            if let Some((old_steering, old_idx)) = inner.last_steering {
-                last_steering_reliable_idx = Some(old_idx);
-                if old_steering == new_steering {
-                    return;
-                }
-            }
-            let msg = FromLunabase::Steering(new_steering);
-            match inner
-                .cakap_sm
-                .get_packet_builder()
-                .new_reliable(encode(&msg).into())
-            {
-                Ok(packet) => {
-                    if let Some(old_idx) = last_steering_reliable_idx {
-                        inner.to_lunabot.push_back(Action::CancelReliable(old_idx));
-                    }
-                    inner.last_steering = Some((new_steering, packet.get_index()));
-                    inner.to_lunabot.push_back(Action::SendReliable(packet));
-                }
-                Err(e) => {
-                    godot_error!("Failed to build reliable packet: {e}");
-                }
-            }
-        }
     }
 
     #[func]

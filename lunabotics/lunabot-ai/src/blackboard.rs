@@ -89,6 +89,11 @@ impl LunabotBlackboard {
         self.now = Instant::now();
     }
 
+    pub fn calculate_path(&mut self, from: Point3<f64>, to: Point3<f64>) {
+        let into = std::mem::take(&mut self.path);
+        self.enqueue_action(Action::CalculatePath { from, to, into });
+    }
+
     pub fn enqueue_action(&mut self, action: Action) {
         self.actions.push(action);
     }
