@@ -68,17 +68,17 @@ impl LunabotBlackboard {
         }
     }
 
-    pub fn invalidate_path(&mut self) {
-        self.path.clear();
-    }
-
     pub fn lunabase_disconnected(&mut self) -> &mut bool {
         &mut self.lunabase_disconnected
     }
 
-    // pub fn get_now(&self) -> Instant {
-    //     self.now
-    // }
+    pub fn get_now(&self) -> Instant {
+        self.now
+    }
+
+    pub(crate) fn update_now(&mut self) {
+        self.now = Instant::now();
+    }
 
     pub fn digest_input(&mut self, input: Input) {
         match input {
@@ -86,7 +86,6 @@ impl LunabotBlackboard {
             Input::PathCalculated(path) => self.path = path,
             Input::LunabaseDisconnected => self.lunabase_disconnected = true,
         }
-        self.now = Instant::now();
     }
 
     pub fn calculate_path(&mut self, from: Point3<f64>, to: Point3<f64>) {

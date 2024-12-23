@@ -1,6 +1,6 @@
 use std::{
     sync::Arc,
-    time::{Duration, Instant},
+    time::Instant,
     vec,
 };
 
@@ -17,12 +17,13 @@ use blackboard::LunabotBlackboard;
 use common::{FromLunabase, LunabotStage, Steering};
 use k::Chain;
 use log::warn;
-use nalgebra::{distance, Const, Matrix2, OPoint, Point2, Point3, Vector2, Vector3};
+use nalgebra::Point3;
 use teleop::teleop;
 
 mod autonomy;
 mod blackboard;
 mod teleop;
+mod utils;
 
 pub use blackboard::Input;
 
@@ -91,6 +92,7 @@ pub fn run_ai(
 
     let mut inputs = vec![];
     loop {
+        blackboard.update_now();
         b.run_eternal(&mut blackboard);
         for action in blackboard.drain_actions() {
             std::thread::sleep(std::time::Duration::from_millis(16));
