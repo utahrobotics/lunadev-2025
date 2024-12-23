@@ -350,12 +350,18 @@ impl Expander {
             ))
         );
 
-        for _ in 0..(Self::RADIUS as usize + 1) {
+        // write obstacle data to buffer before the first pass...
+        pipeline
+            .new_pass(|mut lock| {
+                bind_grps.0.write::<0, _>( obstacles, &mut lock);
+                &mut bind_grps
+            })
+            .finish();
+
+        // ...no need to touch buffers again in the remaining (radius-1) passes
+        for _ in 0..(Self::RADIUS as usize) {
             pipeline
-                .new_pass(|mut lock| {
-                    bind_grps.0.write::<0, _>( obstacles, &mut lock);
-                    &mut bind_grps
-                })
+                .new_pass(|mut _lock| &mut bind_grps)
                 .finish();
         }
 
