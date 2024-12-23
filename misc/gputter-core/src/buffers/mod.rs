@@ -32,9 +32,9 @@ pub trait WritableGpuBuffer: GpuBuffer {
         lock: &mut GpuWriteLock,
         staging_belt: &mut StagingBelt,
     ) {
-        self.write_raw(data.to_bytes(), lock, staging_belt);
+        self.write_raw_internal(data.to_bytes(), lock, staging_belt);
     }
-    fn write_raw(
+    fn write_raw_internal(
         &mut self,
         bytes: &[u8],
         GpuWriteLock { encoder, device }: &mut GpuWriteLock,
@@ -158,7 +158,7 @@ macro_rules! write_impl {
             }
 
             fn write_raw_to(&mut self, data: &[u8], lock: &mut GpuWriteLock) {
-                self.buffers.$index.write_raw(data, lock, &mut self.staging_belt);
+                self.buffers.$index.write_raw_internal(data, lock, &mut self.staging_belt);
             }
         }
     }
