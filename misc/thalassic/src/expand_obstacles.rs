@@ -4,15 +4,15 @@ build_shader!(
     pub(crate) ExpandObstacles,
 r#"
 
-    #[buffer(HostReadWrite)] var<storage, read_write> obstacles: array<u32>;
+    #[buffer(HostWriteOnly)] var<storage, read_write> obstacles: array<u32>;
 
     // (x, y) means "the closest obstacle to this position is at (x-1, y-1) 
     // (0, 0) means "don't know where the closest obstacle is"
     #[buffer(HostReadOnly)] var<storage, read_write> closest: array<u32>;
     
     #[buffer(HostReadOnly)] var<storage, read_write> expanded: array<u32>;
+    #[buffer(HostWriteOnly)] var<uniform> radius: f32;
     
-    const RADIUS: f32 = {{radius}};
     const GRID_WIDTH: NonZeroU32 = {{grid_width}};
     const GRID_HEIGHT: NonZeroU32 = {{grid_height}};
     
@@ -25,10 +25,8 @@ r#"
         
         if (obstacles[i] == 1) {
             set_closest(pos, pos + 1); 
-        }
-        else {
-    
-            var min_dist: f32 = RADIUS;
+        } else {
+            var min_dist: f32 = radius;
     
             var dirs = array<vec2i, 4>(
                 vec2i( 0,  1),

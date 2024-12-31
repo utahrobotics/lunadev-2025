@@ -14,18 +14,21 @@ build_shader!(
     #[buffer(HostReadOnly)] var<storage, read_write> gradient_map: array<f32, CELL_COUNT>;
 
     @compute
-    @workgroup_size(1, 1, 1)
+    @workgroup_size(8, 8, 1)
     fn grad(
-        @builtin(workgroup_id) workgroup_id : vec3u,
+        @builtin(global_invocation_id) global_invocation_id : vec3u,
     ) {
-        var minHeight = heightmap[workgroup_id.y * HEIGHTMAP_WIDTH + workgroup_id.x];
+        if (global_invocation_id.x + 2 >= HEIGHTMAP_WIDTH || global_invocation_id.y + 2 >= CELL_COUNT / HEIGHTMAP_WIDTH) {
+            return;
+        }
+        var minHeight = heightmap[global_invocation_id.y * HEIGHTMAP_WIDTH + global_invocation_id.x];
         var minCoords = vec2f(0, 0);
-        var maxHeight = heightmap[workgroup_id.y * HEIGHTMAP_WIDTH + workgroup_id.x];
+        var maxHeight = minHeight;
         var maxCoords = vec2f(0, 0);
 
         for (var y = 0u; y < 3u; y++) {
             for (var x = 0u; x < 3u; x++) {
-                let height = heightmap[(workgroup_id.y + y) * HEIGHTMAP_WIDTH + workgroup_id.x + x];
+                let height = heightmap[(global_invocation_id.y + y) * HEIGHTMAP_WIDTH + global_invocation_id.x + x];
                 // height is exactly 0.0 if it is not set
                 if (height == 0.0) {
                     continue;
@@ -43,11 +46,11 @@ build_shader!(
 
         let dx = length(maxCoords - minCoords) * CELL_SIZE;
         if (dx == 0.0) {
-            gradient_map[(workgroup_id.y + 1) * HEIGHTMAP_WIDTH + workgroup_id.x + 1] = 0.0;
+            gradient_map[(global_invocation_id.y + 1) * HEIGHTMAP_WIDTH + global_invocation_id.x + 1] = 0.0;
             return;
         }
         let dy = maxHeight - minHeight;
-        gradient_map[(workgroup_id.y + 1) * HEIGHTMAP_WIDTH + workgroup_id.x + 1] = atan(dy / dx);
+        gradient_map[(global_invocation_id.y + 1) * HEIGHTMAP_WIDTH + global_invocation_id.x + 1] = atan(dy / dx);
     }
     "#
 );

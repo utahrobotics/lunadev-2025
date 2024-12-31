@@ -61,10 +61,9 @@ pub fn spawn_thalassic_pipeline(
 
     if is_gputter_initialized() {
         let mut pipeline = ThalassicBuilder {
-            heightmap_width: NonZeroU32::new(128).unwrap(),
-            max_point_count: NonZeroU32::new(max_point_count).unwrap(),
+            heightmap_dimensions: Vector2::new(NonZeroU32::new(128).unwrap(), NonZeroU32::new(256).unwrap()),
             cell_size: 0.03125,
-            cell_count: NonZeroU32::new(CELL_COUNT).unwrap(),
+            max_point_count: NonZeroU32::new(max_point_count).unwrap(),
         }
         .build();
 

@@ -15,11 +15,11 @@ const PIXEL_COUNT: NonZeroU32 = {{pixel_count}};
 const HALF_PIXEL_COUNT: NonZeroU32 = {{half_pixel_count}};
 
 @compute
-@workgroup_size(1, 1, 1)
+@workgroup_size(8, 8, 1)
 fn depth(
-    @builtin(workgroup_id) workgroup_id : vec3u,
+    @builtin(global_invocation_id) global_invocation_id : vec3u,
 ) {
-    let i = workgroup_id.x + workgroup_id.y * IMAGE_WIDTH;
+    let i = global_invocation_id.x + global_invocation_id.y * IMAGE_WIDTH;
     let double_depth = depths[i / 2];
     var depthu: u32;
     if i % 2 == 1 {
@@ -34,8 +34,8 @@ fn depth(
     }
 
     let depth = f32(depthu) * depth_scale;
-    let x = (f32(workgroup_id.x) - PRINCIPAL_POINT_PX.x) / FOCAL_LENGTH_PX;
-    let y = (f32(workgroup_id.y) - PRINCIPAL_POINT_PX.y) / FOCAL_LENGTH_PX;
+    let x = (f32(global_invocation_id.x) - PRINCIPAL_POINT_PX.x) / FOCAL_LENGTH_PX;
+    let y = (f32(global_invocation_id.y) - PRINCIPAL_POINT_PX.y) / FOCAL_LENGTH_PX;
 
     let point = normalize(vec3(x, y, -1)) * depth;
     var point_transformed = transform * vec4<f32>(point, 1.0);

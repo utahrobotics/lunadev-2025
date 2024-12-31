@@ -12,6 +12,7 @@ fxhash.workspace = true
 linfa-clustering = "0.7.0"
 linfa = "0.7.0"
 ndarray = "0.15"
+glidesort.workspace = true
 # linfa-datasets = { version = "0.7.0", features = ["generate"] }
 # ndarray-rand = "0.15.0"
 # rand_xoshiro = "0.6.0"

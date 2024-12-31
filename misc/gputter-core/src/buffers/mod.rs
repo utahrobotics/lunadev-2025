@@ -40,7 +40,7 @@ pub trait WritableGpuBuffer: GpuBuffer {
         GpuWriteLock { encoder, device }: &mut GpuWriteLock,
         staging_belt: &mut StagingBelt,
     ) {
-        let bytes = &bytes[0..self.get_buffer().size().try_into().unwrap()];
+        // let bytes = &bytes[0..self.get_buffer().size().try_into().unwrap()];
         staging_belt
             .write_buffer(
                 encoder,
