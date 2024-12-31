@@ -314,7 +314,7 @@ impl ThalassicBuilder {
             points_buffer: Vec::new(),
             new_radius_cells: Some(1.5),
             new_max_gradient: Some(45.0f32.to_radians()),
-            expander_input_grp_zeros: vec![0; cell_count.get() as usize].into_boxed_slice(),
+            expander_input_grp_zeros: vec![0; cell_count.get() as usize * 2].into_boxed_slice(),
             cell_size: self.cell_size,
         }
     }
@@ -464,7 +464,7 @@ impl ThalassicPipeline {
         ) = bind_grps;
         height_grp.buffers.0.read(out_heightmap);
         grad_grp.buffers.0.read(out_gradient);
-        expanded_obstacles
+        obstacle_map
             .buffers
             .0
             .read(bytemuck::cast_slice_mut(out_expanded_obstacles));

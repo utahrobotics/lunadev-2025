@@ -5,10 +5,7 @@ edition = "2021"
 
 [dependencies]
 urobotics = { workspace = true, features = [
-    "serial",
-    "python",
     "app",
-    "video",
 ] }
 serde = { workspace = true }
 cakap2 = { workspace = true }
@@ -21,7 +18,6 @@ nalgebra = { workspace = true }
 rayon = { workspace = true }
 k = { workspace = true }
 fxhash = { workspace = true }
-# recycler = { workspace = true }
 bitcode = { workspace = true }
 thalassic.workspace = true
 gputter.workspace = true
@@ -29,9 +25,10 @@ lunabot-ai = { path = "../lunabot-ai" }
 vesc_translator = { git = "https://github.com/Hydro111/vesc-translator.git", optional = true }
 realsense-rust = { version = "1.2", optional = true }
 urobotics-apriltag = { workspace = true, optional = true }
+urobotics-serial = { workspace = true, optional = true }
 udev = { version = "0.9.1", optional = true }
 v4l = { version = "0.14.0", optional = true }
 openh264 = { version = "0.6.3", optional = true }
 
 [features]
-production = ["realsense-rust", "urobotics-apriltag", "udev", "v4l", "openh264", "vesc_translator"]
+production = ["realsense-rust", "urobotics-apriltag", "udev", "v4l", "openh264", "vesc_translator", "urobotics-apriltag"]
