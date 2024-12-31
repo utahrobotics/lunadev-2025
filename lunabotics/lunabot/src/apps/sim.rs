@@ -254,6 +254,7 @@ impl Runnable for LunasimbotApp {
                       heightmap,
                       gradmap,
                       expanded_obstacle_map,
+                      ..
                   }| {
                 let bytes = bitcode_buffer.encode(&FromLunasimbot::Thalassic {
                     heightmap: heightmap.to_vec().into_boxed_slice(),
@@ -363,7 +364,15 @@ impl Runnable for LunasimbotApp {
                         lunasim_stdin.write(bytes);
                     }
                     Action::CalculatePath { from, to, mut into } => {
-                        let data = shared_thalassic_data.get();
+                        let mut data = shared_thalassic_data.get();
+                        loop {
+                            if data.current_robot_radius == 1.5 {
+                                break;
+                            }
+                            data.set_robot_radius(1.5);
+                            drop(data);
+                            data = shared_thalassic_data.get();
+                        }
                         finder.append_path(
                             from,
                             to,
@@ -373,6 +382,14 @@ impl Runnable for LunasimbotApp {
                         );
                         if into.len() == 1 {
                             warn!("Failed to find path, loosening threshold...");
+                            loop {
+                                data.set_robot_radius(0.5);
+                                drop(data);
+                                data = shared_thalassic_data.get();
+                                if data.current_robot_radius == 0.5 {
+                                    break;
+                                }
+                            }
                             into.clear();
                             finder.append_path(
                                 from,

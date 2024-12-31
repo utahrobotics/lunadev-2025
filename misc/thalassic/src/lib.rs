@@ -5,7 +5,7 @@ use depth2pcl::Depth2Pcl;
 use gputter::{
     buffers::{
         storage::{
-            HostHidden, HostReadOnly, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, StorageBuffer,
+            HostReadOnly, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, StorageBuffer,
         },
         uniform::UniformBuffer,
         GpuBufferSet,
@@ -284,12 +284,12 @@ impl ThalassicBuilder {
         }
         .compile();
 
-        let mut pipeline = ComputePipeline::new([&height_fn, &grad_fn, &obstacle_fn, &expand_fn]);
+        let mut pipeline = ComputePipeline::new([&height_fn, &grad_fn, &obstacle_fn, &expand_fn, &expand_fn, &expand_fn, &expand_fn]);
         pipeline.workgroups = [Vector3::new(
             self.heightmap_dimensions.x.get() / 8,
             self.heightmap_dimensions.y.get() / 8,
             1,
-        ); 4];
+        ); 7];
 
         let bind_grps = (
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
@@ -301,7 +301,7 @@ impl ThalassicBuilder {
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
             GpuBufferSet::from((UniformBuffer::new(),)),
             GpuBufferSet::from((
-                StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),
+                StorageBuffer::new_dyn(cell_count.get() as usize * 2).unwrap(),
                 UniformBuffer::new(),
             )),
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
@@ -313,7 +313,7 @@ impl ThalassicBuilder {
             triangle_buffer: Vec::new(),
             points_buffer: Vec::new(),
             new_radius_cells: Some(1.5),
-            new_max_gradient: Some(20.0f32.to_radians()),
+            new_max_gradient: Some(45.0f32.to_radians()),
             expander_input_grp_zeros: vec![0; cell_count.get() as usize].into_boxed_slice(),
             cell_size: self.cell_size,
         }
@@ -333,7 +333,7 @@ impl Occupancy {
 }
 
 pub struct ThalassicPipeline {
-    pipeline: ComputePipeline<BetaBindGroups, 4>,
+    pipeline: ComputePipeline<BetaBindGroups, 7>,
     bind_grps: Option<(
         GpuBufferSet<HeightMapBindGrp>,
         GpuBufferSet<PclBindGrp>,
@@ -480,5 +480,9 @@ impl ThalassicPipeline {
         ));
         points_storage.points_grp = points_grp;
         points_storage
+    }
+
+    pub fn set_radius(&mut self, radius: f32) {
+        self.new_radius_cells = Some(radius / self.cell_size);
     }
 }

@@ -12,6 +12,8 @@ pub struct ThalassicData {
     pub heightmap: [f32; CELL_COUNT as usize],
     pub gradmap: [f32; CELL_COUNT as usize],
     pub expanded_obstacle_map: [Occupancy; CELL_COUNT as usize],
+    pub current_robot_radius: f32,
+    new_robot_radius: AtomicCell<Option<f32>>,
 }
 
 impl Default for ThalassicData {
@@ -20,7 +22,15 @@ impl Default for ThalassicData {
             heightmap: [0.0; CELL_COUNT as usize],
             gradmap: [0.0; CELL_COUNT as usize],
             expanded_obstacle_map: [Occupancy::FREE; CELL_COUNT as usize],
+            new_robot_radius: AtomicCell::new(None),
+            current_robot_radius: 1.5,
         }
+    }
+}
+
+impl ThalassicData {
+    pub fn set_robot_radius(&self, radius: f32) {
+        self.new_robot_radius.store(Some(radius));
     }
 }
 
@@ -88,7 +98,14 @@ pub fn spawn_thalassic_pipeline(
                     heightmap,
                     gradmap,
                     expanded_obstacle_map,
+                    new_robot_radius,
+                    current_robot_radius,
                 } = &mut *owned;
+
+                if let Some(radius) = new_robot_radius.take() {
+                    *current_robot_radius = radius;
+                    pipeline.set_radius(radius);
+                }
 
                 for (channel, mut points) in points_vec {
                     points =
