@@ -4,9 +4,7 @@ use wgpu::{ShaderModule, SubmissionIndex};
 
 use crate::{
     buffers::{
-        storage::{HostHidden, HostReadOnly, HostReadWrite, HostWriteOnly, StorageBuffer},
-        uniform::UniformBuffer,
-        GpuBufferSet, GpuBufferTuple,
+        storage::StorageBuffer, uniform::UniformBuffer, GpuBuffer, GpuBufferSet, GpuBufferTuple,
     },
     tuple::StaticIndexable,
     types::GpuType,
@@ -157,46 +155,7 @@ impl<T: GpuType + ?Sized, HM, SM, S> BufferGroupBinding<StorageBuffer<T, HM, SM>
             phantom: PhantomData,
         }
     }
-
-    pub const fn cast_hidden(self) -> BufferGroupBinding<StorageBuffer<T, HostHidden, SM>, S> {
-        BufferGroupBinding {
-            group_index: self.group_index,
-            binding_index: self.binding_index,
-            phantom: PhantomData,
-        }
-    }
 }
-
-impl<T: GpuType + ?Sized, SM, S> BufferGroupBinding<StorageBuffer<T, HostReadWrite, SM>, S> {
-    pub const fn cast_host_read_only(
-        self,
-    ) -> BufferGroupBinding<StorageBuffer<T, HostReadOnly, SM>, S> {
-        BufferGroupBinding {
-            group_index: self.group_index,
-            binding_index: self.binding_index,
-            phantom: PhantomData,
-        }
-    }
-    pub const fn cast_host_write_only(
-        self,
-    ) -> BufferGroupBinding<StorageBuffer<T, HostWriteOnly, SM>, S> {
-        BufferGroupBinding {
-            group_index: self.group_index,
-            binding_index: self.binding_index,
-            phantom: PhantomData,
-        }
-    }
-}
-
-// impl<B, S> std::fmt::Display for BufferGroupBinding<B, S> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(
-//             f,
-//             "@group({}) @binding({}) ",
-//             self.group_index, self.binding_index
-//         )
-//     }
-// }
 
 pub struct ComputeFn<S> {
     pub(crate) shader: Arc<ShaderModule>,
@@ -250,14 +209,19 @@ tuple_impl!(3, 0 A, 1 B, 2 C);
 tuple_impl!(4, 0 A, 1 B, 2 C, 3 D);
 tuple_impl!(5, 0 A, 1 B, 2 C, 3 D, 4 E);
 tuple_impl!(6, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F);
+tuple_impl!(7, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F, 6 G);
+tuple_impl!(8, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F, 6 G, 7 H);
+tuple_impl!(9, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F, 6 G, 7 H, 8 I);
+tuple_impl!(10, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F, 6 G, 7 H, 8 I, 9 J);
 
 impl<S, const I1: usize, const I2: usize> IndexGpuBufferTupleList<I1, I2> for S
 where
     S: StaticIndexable<I1>,
     <S as StaticIndexable<I1>>::Output: StaticIndexable<I2>,
+    <<S as StaticIndexable<I1>>::Output as StaticIndexable<I2>>::Output: GpuBuffer,
 {
     type Binding =
-        BufferGroupBinding<<<S as StaticIndexable<I1>>::Output as StaticIndexable<I2>>::Output, S>;
+        BufferGroupBinding<<<<S as StaticIndexable<I1>>::Output as StaticIndexable<I2>>::Output as GpuBuffer>::HostHidden, S>;
 
     fn get() -> Self::Binding {
         BufferGroupBinding {

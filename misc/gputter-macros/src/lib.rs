@@ -20,10 +20,7 @@ use unfmt::unformat;
 
 enum StorageType {
     Uniform,
-    Storage {
-        host_rw_mode: &'static str,
-        shader_read_only: bool,
-    },
+    Storage { shader_read_only: bool },
 }
 
 struct BuildShader {
@@ -180,21 +177,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         .collect();
 
     // Split by buffer annotations
-    let re = Regex::new(r"#\[buffer\(([a-zA-Z0-9]+)\)\]").unwrap();
-
-    let buffer_rw_modes: Vec<_> = re
-        .captures_iter(&shader)
-        .map(|caps| {
-            let (_, [rw_mode]) = caps.extract();
-            match rw_mode {
-                "HostHidden" => "HostHidden",
-                "HostReadOnly" => "HostReadOnly",
-                "HostWriteOnly" => "HostWriteOnly",
-                "HostReadWrite" => "HostReadWrite",
-                _ => panic!("Unsupported buffer host read-write mode: {rw_mode}"),
-            }
-        })
-        .collect();
+    let re = Regex::new(r"#\[buffer\]").unwrap();
 
     // Parse all buffer definitions
     // They should come immediately after the buffer annotation,
@@ -218,28 +201,16 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                 .unwrap();
 
             buffer_types.push(type_resolver(ty.trim(), &uint_consts));
-            let host_rw_mode = buffer_rw_modes[buffer_storage_types.len()];
             buffer_storage_types.push(if storage_ty.trim() == "uniform" {
-                if host_rw_mode != "HostWriteOnly" {
-                    panic!("Uniform buffer must be HostWriteOnly");
-                }
                 StorageType::Uniform
             } else if let Some((_, shader_rw_mode)) = unformat!("{}storage,{}", storage_ty) {
                 match shader_rw_mode.trim() {
                     "read_write" => StorageType::Storage {
-                        host_rw_mode,
                         shader_read_only: false,
                     },
-                    "read" => {
-                        // relaxed for now, maybe forever
-                        // if host_rw_mode != "HostWriteOnly" && host_rw_mode != "HostReadWrite" {
-                        //     panic!("Read only storage buffer must be writable by host (HostWriteOnly or HostReadWrite)");
-                        // }
-                        StorageType::Storage {
-                            host_rw_mode,
-                            shader_read_only: true,
-                        }
-                    }
+                    "read" => StorageType::Storage {
+                        shader_read_only: true,
+                    },
                     _ => panic!("Unsupported shader read-write mode: {shader_rw_mode}"),
                 }
             } else {
@@ -403,9 +374,9 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
         .map(|((&name, ty), storage_ty)| {
             let stream = match storage_ty {
                 StorageType::Uniform => format!("pub {name}: gputter::shader::BufferGroupBinding<gputter::buffers::uniform::UniformBuffer<{ty}>, S>"),
-                StorageType::Storage { host_rw_mode, shader_read_only } => {
+                StorageType::Storage { shader_read_only } => {
                     let shader_read_only = if *shader_read_only { "ShaderReadOnly" } else { "ShaderReadWrite" };
-                    format!("pub {name}: gputter::shader::BufferGroupBinding<gputter::buffers::storage::StorageBuffer<{ty}, gputter::buffers::storage::{host_rw_mode}, gputter::buffers::storage::{shader_read_only}>, S>")
+                    format!("pub {name}: gputter::shader::BufferGroupBinding<gputter::buffers::storage::StorageBuffer<{ty}, gputter::buffers::storage::HostHidden, gputter::buffers::storage::{shader_read_only}>, S>")
                 }
             };
             proc_macro2::TokenStream::from_str(&stream).unwrap()

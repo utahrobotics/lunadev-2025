@@ -26,6 +26,7 @@ pub enum FromLunasimbot {
     Thalassic {
         heightmap: Box<[f32]>,
         gradmap: Box<[f32]>,
+        obstaclemap: Box<[bool]>,
     },
     Isometry {
         axis: [f32; 3],

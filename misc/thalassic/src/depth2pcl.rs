@@ -3,10 +3,10 @@ use gputter::build_shader;
 build_shader!(
     pub(crate) Depth2Pcl,
     r#"
-#[buffer(HostWriteOnly)] var<storage, read> depths: array<u32, HALF_PIXEL_COUNT>;
-#[buffer(HostReadOnly)] var<storage, read_write> points: array<vec4f, PIXEL_COUNT>;
-#[buffer(HostWriteOnly)] var<uniform> transform: mat4x4f;
-#[buffer(HostWriteOnly)] var<uniform> depth_scale: f32;
+#[buffer] var<storage, read> depths: array<u32, HALF_PIXEL_COUNT>;
+#[buffer] var<storage, read_write> points: array<vec4f, PIXEL_COUNT>;
+#[buffer] var<uniform> transform: mat4x4f;
+#[buffer] var<uniform> depth_scale: f32;
 
 const IMAGE_WIDTH: NonZeroU32 = {{image_width}};
 const FOCAL_LENGTH_PX: f32 = {{focal_length_px}};

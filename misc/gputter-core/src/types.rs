@@ -61,7 +61,10 @@ macro_rules! define_aligned {
             }
         }
 
-        impl<N> Default for $name<N> where $inner<N>: Default {
+        impl<N> Default for $name<N>
+        where
+            $inner<N>: Default,
+        {
             fn default() -> Self {
                 Self::from(<$inner<N>>::default())
             }

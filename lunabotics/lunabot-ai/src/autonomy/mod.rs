@@ -1,7 +1,10 @@
 use std::time::{Duration, Instant};
 
 use ares_bt::{
-    converters::AssertCancelSafe, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, InfallibleStatus, Status
+    converters::AssertCancelSafe,
+    looping::WhileLoop,
+    sequence::{ParallelAny, Sequence},
+    Behavior, InfallibleStatus, Status,
 };
 use common::{FromLunabase, Steering};
 use dig::dig;
@@ -61,7 +64,7 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
                             *blackboard.get_autonomy() = Autonomy::None;
                             warn!("Received steering message while in autonomy mode");
                             return Status::Success;
-                        },
+                        }
                         FromLunabase::SoftStop => {
                             blackboard.pop_from_lunabase();
                             return Status::Failure;

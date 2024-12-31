@@ -10,8 +10,8 @@ build_shader!(
     const PI: f32 = 3.141592653589793;
 
     // Shader is read_write as it is written to in another shader
-    #[buffer(HostHidden)] var<storage, read_write> heightmap: array<f32, CELL_COUNT>;
-    #[buffer(HostReadOnly)] var<storage, read_write> gradient_map: array<f32, CELL_COUNT>;
+    #[buffer] var<storage, read_write> heightmap: array<f32, CELL_COUNT>;
+    #[buffer] var<storage, read_write> gradient_map: array<f32, CELL_COUNT>;
 
     @compute
     @workgroup_size(8, 8, 1)

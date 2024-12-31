@@ -8,6 +8,7 @@ pub mod storage;
 pub mod uniform;
 
 pub trait GpuBuffer {
+    type HostHidden;
     type Data: GpuType + ?Sized;
     type PostSubmission<'a>
     where
@@ -201,6 +202,9 @@ tuple_impl!(3, 0 A, 1 B, 2 C);
 tuple_impl!(4, 0 A, 1 B, 2 C, 3 D);
 tuple_impl!(5, 0 A, 1 B, 2 C, 3 D, 4 E);
 tuple_impl!(6, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F);
+tuple_impl!(7, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F, 6 G);
+tuple_impl!(8, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F, 6 G, 7 H);
+tuple_impl!(9, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F, 6 G, 7 H, 8 I);
 
 set_impl!(1, 0 A);
 set_impl!(2, 0 A, 1 B);
@@ -208,6 +212,9 @@ set_impl!(3, 0 A, 1 B, 2 C);
 set_impl!(4, 0 A, 1 B, 2 C, 3 D);
 set_impl!(5, 0 A, 1 B, 2 C, 3 D, 4 E);
 set_impl!(6, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F);
+set_impl!(7, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F, 6 G);
+set_impl!(8, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F, 6 G, 7 H);
+set_impl!(9, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F, 6 G, 7 H, 8 I);
 
 write_impl!(0 A, A);
 
@@ -235,3 +242,11 @@ write_impl!(2 C, A B C D E F);
 write_impl!(3 D, A B C D E F);
 write_impl!(4 E, A B C D E F);
 write_impl!(5 F, A B C D E F);
+
+write_impl!(0 A, A B C D E F G);
+write_impl!(1 B, A B C D E F G);
+write_impl!(2 C, A B C D E F G);
+write_impl!(3 D, A B C D E F G);
+write_impl!(4 E, A B C D E F G);
+write_impl!(5 F, A B C D E F G);
+write_impl!(6 G, A B C D E F G);

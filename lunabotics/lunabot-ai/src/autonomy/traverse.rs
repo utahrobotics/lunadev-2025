@@ -1,7 +1,12 @@
 use std::time::Duration;
 
 use ares_bt::{
-    action::{AlwaysFail, AlwaysSucceed}, branching::IfElse, converters::{AssertCancelSafe, InfallibleShim}, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, CancelSafe, Status
+    action::{AlwaysFail, AlwaysSucceed},
+    branching::IfElse,
+    converters::{AssertCancelSafe, InfallibleShim},
+    looping::WhileLoop,
+    sequence::{ParallelAny, Sequence},
+    Behavior, CancelSafe, Status,
 };
 use common::LunabotStage;
 use log::{info, warn};
@@ -34,7 +39,10 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                     ParallelAny::new((
                         Sequence::new((
                             AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-                                blackboard.calculate_path(blackboard.get_robot_isometry().translation.vector.into(), Point3::new(-3.0, 0.0, -6.0));
+                                blackboard.calculate_path(
+                                    blackboard.get_robot_isometry().translation.vector.into(),
+                                    Point3::new(-3.0, 0.0, -6.0),
+                                );
                                 Status::Success
                             }),
                             AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
@@ -46,10 +54,7 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                             }),
                             InfallibleShim(AssertCancelSafe(follow_path)),
                         )),
-                        Sequence::new((
-                            WaitBehavior::from(Duration::from_secs(3)),
-                            AlwaysFail
-                        ))
+                        Sequence::new((WaitBehavior::from(Duration::from_secs(3)), AlwaysFail)),
                     )),
                     AlwaysFail,
                     Sequence::new((
@@ -59,7 +64,7 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                             Status::Success
                         }),
                         WaitBehavior::from(Duration::from_secs(2)),
-                    ))
+                    )),
                 ),
             ),
             AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {

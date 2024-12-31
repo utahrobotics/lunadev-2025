@@ -4,18 +4,18 @@ build_shader!(
     pub(crate) ExpandObstacles,
 r#"
 
-    #[buffer(HostWriteOnly)] var<storage, read_write> obstacles: array<u32>;
+    #[buffer] var<storage, read_write> obstacles: array<u32>;
 
     // (x, y) means "the closest obstacle to this position is at (x-1, y-1) 
     // (0, 0) means "don't know where the closest obstacle is"
-    #[buffer(HostReadOnly)] var<storage, read_write> closest: array<u32>;
+    #[buffer] var<storage, read_write> closest: array<u32>;
     
-    #[buffer(HostReadOnly)] var<storage, read_write> expanded: array<u32>;
-    #[buffer(HostWriteOnly)] var<uniform> radius: f32;
+    #[buffer] var<storage, read_write> expanded: array<u32>;
+    #[buffer] var<uniform> radius: f32;
     
     const GRID_WIDTH: NonZeroU32 = {{grid_width}};
     const GRID_HEIGHT: NonZeroU32 = {{grid_height}};
-    
+
     @compute
     @workgroup_size(8, 8, 1)
     fn main(@builtin(global_invocation_id) cell: vec3u) {
@@ -49,7 +49,7 @@ r#"
                     continue;
                 }
                 
-                let dist_to_closest_at_adj = dist( pos, closest_at_adj - 1 );
+                let dist_to_closest_at_adj = distance(vec2f(pos), vec2f(closest_at_adj - 1));
     
                 // if this adjacent cell has the closest obstacle to this position than any other adjacent cell, 
                 // make that the closest obstacle to this position
@@ -84,9 +84,8 @@ r#"
     fn index_to_xy(index: u32) -> vec2u {
         return vec2u(index % GRID_WIDTH, index / GRID_WIDTH);
     } 
-    fn dist(a: vec2u, b: vec2u) -> f32 {
-        return sqrt(f32( (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y) ));
-    }
-    
+    // fn dist(a: vec2u, b: vec2u) -> f32 {
+    //     return sqrt(f32(a.x - b.x) * f32(a.x - b.x) + f32(a.y - b.y) * f32(a.y - b.y) );
+    // }
 "#
 );

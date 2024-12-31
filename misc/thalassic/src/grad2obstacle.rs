@@ -5,13 +5,12 @@ build_shader!(
     pub(crate) Grad2Obstacle,
     r#"
     const HEIGHTMAP_WIDTH: NonZeroU32 = {{heightmap_width}};
-    const CELL_SIZE: f32 = {{cell_size}};
     const CELL_COUNT: NonZeroU32 = {{cell_count}};
 
     // Shader is read_write as it is written to in another shader
-    #[buffer(HostHidden)] var<storage, read_write> obstacle_map: array<u32, CELL_COUNT>;
-    #[buffer(HostHidden)] var<storage, read_write> gradient_map: array<f32, CELL_COUNT>;
-    #[buffer(HostWriteOnly)] var<uniform> max_gradient: f32;
+    #[buffer] var<storage, read_write> obstacle_map: array<u32, CELL_COUNT>;
+    #[buffer] var<storage, read_write> gradient_map: array<f32, CELL_COUNT>;
+    #[buffer] var<uniform> max_gradient: f32;
 
     @compute
     @workgroup_size(8, 8, 1)

@@ -15,6 +15,7 @@ pub struct UniformBuffer<T: GpuType + ?Sized> {
 }
 
 impl<T: GpuType + ?Sized> GpuBuffer for UniformBuffer<T> {
+    type HostHidden = Self;
     type PostSubmission<'a>
         = ()
     where

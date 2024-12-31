@@ -1,9 +1,12 @@
 use std::num::NonZeroU32;
 
+use bytemuck::{Pod, Zeroable};
 use depth2pcl::Depth2Pcl;
 use gputter::{
     buffers::{
-        storage::{HostReadOnly, HostReadWrite, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, StorageBuffer},
+        storage::{
+            HostHidden, HostReadOnly, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, StorageBuffer,
+        },
         uniform::UniformBuffer,
         GpuBufferSet,
     },
@@ -11,15 +14,16 @@ use gputter::{
     shader::BufferGroupBinding,
     types::{AlignedMatrix4, AlignedVec3, AlignedVec4},
 };
+use grad2obstacle::Grad2Obstacle;
 use height2grad::Height2Grad;
 use nalgebra::{Vector2, Vector3, Vector4};
 use pcl2height::Pcl2HeightV2;
 
 mod clustering;
 mod depth2pcl;
+mod grad2obstacle;
 mod height2grad;
 mod pcl2height;
-mod grad2obstacle;
 pub use clustering::Clusterer;
 
 mod expand_obstacles;
@@ -45,6 +49,9 @@ type PointsBindGrp = (
     UniformBuffer<u32>,
 );
 
+/// The set of bind groups used by the DepthProjector
+type AlphaBindGroups = (GpuBufferSet<DepthBindGrp>, GpuBufferSet<PointsBindGrp>);
+
 /// 1. The height of each cell in the heightmap.
 /// The actual type is `f32`, but it is stored as `u32` in the shader to allow for atomic operations, with conversion being a bitwise cast.
 /// The units are meters.
@@ -66,8 +73,29 @@ type PclBindGrp = (
 /// This bind group is the output of the gradientmapper ([`height2grad`]) and the input for the obstaclemapper.
 type GradMapBindGrp = (StorageBuffer<[f32], HostReadOnly, ShaderReadWrite>,);
 
-/// The set of bind groups used by the DepthProjector
-type AlphaBindGroups = (GpuBufferSet<DepthBindGrp>, GpuBufferSet<PointsBindGrp>);
+/// 1. Whether or not each cell is an obstacle, denoted with `1` or `0`.
+///
+/// This bind group is the output of the obstaclemapper and input to the obstacle expander.
+type ObstacleMapBindGrp = (StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,);
+
+/// 1. The maximum safe gradient.
+///
+/// This bind group is the input to the obstaclemapper.
+type ObstacleMapperInputBindGrp = (UniformBuffer<f32>,);
+
+/// 1. The position of the closest obstacle to each position. (should be filled with `0`, used during calculation)
+/// 2. The radius of the robot in meters
+///
+/// This bind group is the input to the expander.
+type ExpanderInputBindGrp = (
+    StorageBuffer<[u32], HostWriteOnly, ShaderReadWrite>,
+    UniformBuffer<f32>,
+);
+
+/// 1. Whether or not each cell is an obstacle, denoted with `1` or `0`.
+///
+/// This bind group is the output of the obstacle expander and input to the pathfinder.
+type ExpandedObstacleMapBindGrp = (StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,);
 
 /// The set of bind groups used by the rest of the thalassic pipeline
 type BetaBindGroups = (
@@ -75,28 +103,10 @@ type BetaBindGroups = (
     GpuBufferSet<HeightMapBindGrp>,
     GpuBufferSet<PclBindGrp>,
     GpuBufferSet<GradMapBindGrp>,
-);
-
-/// 1. Whether or not each cell is an obstacle, denoted with `1` or `0`.
-/// 2. The position of the closest obstacle to each position. (should be filled with `0`, used during calculation)
-/// 
-/// This bind group is the input to the expander.
-type ExpanderInputBindGrp = (
-    StorageBuffer<[u32], HostReadWrite, ShaderReadWrite>,
-    StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,
-);
-
-/// 1. Whether or not each cell is an obstacle, denoted with `1` or `0`.
-/// 
-/// This bind group is the output of the expander and input to the pathfinder?.
-type ExpanderOutputBindGrp = (
-    StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,
-);
-
-/// The set of bind groups used by the expander
-type ExpanderBindGroups = (
+    GpuBufferSet<ObstacleMapBindGrp>,
+    GpuBufferSet<ObstacleMapperInputBindGrp>,
     GpuBufferSet<ExpanderInputBindGrp>,
-    GpuBufferSet<ExpanderOutputBindGrp>,
+    GpuBufferSet<ExpandedObstacleMapBindGrp>,
 );
 
 #[derive(Debug, Clone, Copy)]
@@ -226,19 +236,15 @@ pub struct ThalassicBuilder {
 
 impl ThalassicBuilder {
     pub fn build(self) -> ThalassicPipeline {
-        let max_triangle_count = (self.heightmap_dimensions.x.get() - 1) * (self.heightmap_dimensions.y.get() - 1) * 2;
-        let max_triangle_count = NonZeroU32::new(max_triangle_count).expect("max triangle count is 0, each projection dimension must be at least 2");
+        let max_triangle_count =
+            (self.heightmap_dimensions.x.get() - 1) * (self.heightmap_dimensions.y.get() - 1) * 2;
+        let max_triangle_count = NonZeroU32::new(max_triangle_count)
+            .expect("max triangle count is 0, each projection dimension must be at least 2");
         let cell_count = self.heightmap_dimensions.x.get() * self.heightmap_dimensions.y.get();
         let cell_count = NonZeroU32::new(cell_count).unwrap();
 
-        let bind_grps = (
-            GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
-            GpuBufferSet::from((StorageBuffer::new_dyn(max_triangle_count.get() as usize).unwrap(), UniformBuffer::new())),
-            GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
-        );
-
         let [height_fn] = Pcl2HeightV2 {
-            points: BufferGroupBinding::<_, BetaBindGroups>::get::<0, 0>().cast_hidden().unchecked_cast(),
+            points: BufferGroupBinding::<_, BetaBindGroups>::get::<0, 0>().unchecked_cast(),
             heightmap: BufferGroupBinding::<_, BetaBindGroups>::get::<1, 0>(),
             cell_size: self.cell_size,
             heightmap_width: self.heightmap_dimensions.x,
@@ -251,7 +257,7 @@ impl ThalassicBuilder {
         .compile();
 
         let [grad_fn] = Height2Grad {
-            heightmap: BufferGroupBinding::<_, BetaBindGroups>::get::<1, 0>().cast_hidden(),
+            heightmap: BufferGroupBinding::<_, BetaBindGroups>::get::<1, 0>(),
             gradient_map: BufferGroupBinding::<_, BetaBindGroups>::get::<3, 0>(),
             cell_size: self.cell_size,
             heightmap_width: self.heightmap_dimensions.x,
@@ -259,32 +265,90 @@ impl ThalassicBuilder {
         }
         .compile();
 
-        let mut pipeline = ComputePipeline::new([&height_fn, &grad_fn]);
-        pipeline.workgroups[0] = 
-            Vector3::new(
-                self.heightmap_dimensions.x.get() / 8,
-                self.heightmap_dimensions.y.get() / 8,
-                1,
-            );
-        pipeline.workgroups[1] = pipeline.workgroups[0];
+        let [obstacle_fn] = Grad2Obstacle {
+            obstacle_map: BufferGroupBinding::<_, BetaBindGroups>::get::<4, 0>(),
+            gradient_map: BufferGroupBinding::<_, BetaBindGroups>::get::<3, 0>(),
+            max_gradient: BufferGroupBinding::<_, BetaBindGroups>::get::<5, 0>(),
+            heightmap_width: self.heightmap_dimensions.x,
+            cell_count,
+        }
+        .compile();
+
+        let [expand_fn] = ExpandObstacles {
+            obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<4, 0>(),
+            closest: BufferGroupBinding::<_, BetaBindGroups>::get::<6, 0>(),
+            expanded: BufferGroupBinding::<_, BetaBindGroups>::get::<7, 0>(),
+            radius: BufferGroupBinding::<_, BetaBindGroups>::get::<6, 1>(),
+            grid_width: self.heightmap_dimensions.x,
+            grid_height: self.heightmap_dimensions.y,
+        }
+        .compile();
+
+        let mut pipeline = ComputePipeline::new([&height_fn, &grad_fn, &obstacle_fn, &expand_fn]);
+        pipeline.workgroups = [Vector3::new(
+            self.heightmap_dimensions.x.get() / 8,
+            self.heightmap_dimensions.y.get() / 8,
+            1,
+        ); 4];
+
+        let bind_grps = (
+            GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
+            GpuBufferSet::from((
+                StorageBuffer::new_dyn(max_triangle_count.get() as usize).unwrap(),
+                UniformBuffer::new(),
+            )),
+            GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
+            GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
+            GpuBufferSet::from((UniformBuffer::new(),)),
+            GpuBufferSet::from((
+                StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),
+                UniformBuffer::new(),
+            )),
+            GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
+        );
+
         ThalassicPipeline {
             pipeline,
             bind_grps: Some(bind_grps),
             triangle_buffer: Vec::new(),
             points_buffer: Vec::new(),
+            new_radius_cells: Some(1.5),
+            new_max_gradient: Some(20.0f32.to_radians()),
+            expander_input_grp_zeros: vec![0; cell_count.get() as usize].into_boxed_slice(),
+            cell_size: self.cell_size,
         }
     }
 }
 
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+pub struct Occupancy(u32);
+
+impl Occupancy {
+    pub const FREE: Self = Self(0);
+
+    pub fn occupied(self) -> bool {
+        self.0 != 0
+    }
+}
+
 pub struct ThalassicPipeline {
-    pipeline: ComputePipeline<BetaBindGroups, 2>,
+    pipeline: ComputePipeline<BetaBindGroups, 4>,
     bind_grps: Option<(
         GpuBufferSet<HeightMapBindGrp>,
         GpuBufferSet<PclBindGrp>,
         GpuBufferSet<GradMapBindGrp>,
+        GpuBufferSet<ObstacleMapBindGrp>,
+        GpuBufferSet<ObstacleMapperInputBindGrp>,
+        GpuBufferSet<ExpanderInputBindGrp>,
+        GpuBufferSet<ExpandedObstacleMapBindGrp>,
     )>,
     triangle_buffer: Vec<Vector4<u32>>,
     points_buffer: Vec<AlignedVec4<f32>>,
+    new_radius_cells: Option<f32>,
+    new_max_gradient: Option<f32>,
+    expander_input_grp_zeros: Box<[u32]>,
+    cell_size: f32,
 }
 
 impl ThalassicPipeline {
@@ -293,11 +357,19 @@ impl ThalassicPipeline {
         mut points_storage: PointCloudStorage,
         out_heightmap: &mut [f32],
         out_gradient: &mut [f32],
+        out_expanded_obstacles: &mut [Occupancy],
     ) -> PointCloudStorage {
         let image_width = points_storage.image_size.x.get();
         let image_height = points_storage.image_size.y.get();
-        self.points_buffer.resize(image_width as usize * image_height as usize, AlignedVec4::default());
-        points_storage.points_grp.buffers.0.read(&mut self.points_buffer);
+        self.points_buffer.resize(
+            image_width as usize * image_height as usize,
+            AlignedVec4::default(),
+        );
+        points_storage
+            .points_grp
+            .buffers
+            .0
+            .read(&mut self.points_buffer);
 
         self.triangle_buffer.clear();
         self.triangle_buffer.extend(
@@ -308,10 +380,7 @@ impl ThalassicPipeline {
                     let next = current + 1;
                     let below = current + image_width;
                     let below_next = below + 1;
-                    [
-                        (current, below, next),
-                        (next, below, below_next),
-                    ]
+                    [(current, below, next), (next, below, below_next)]
                 })
                 .filter_map(|(x, y, z)| {
                     let v1 = self.points_buffer[x as usize];
@@ -321,22 +390,43 @@ impl ThalassicPipeline {
                     if v1.w == 0.0 || v2.w == 0.0 || v3.w == 0.0 {
                         None
                     } else {
-                        Some(
-                            Vector4::new(x, y, z, f32::to_bits((v1.y + v2.y + v3.y) / 3.0)),
-                        )
+                        Some(Vector4::new(
+                            x,
+                            y,
+                            z,
+                            f32::to_bits((v1.y + v2.y + v3.y) / 3.0),
+                        ))
                     }
-                })
+                }),
         );
         if self.triangle_buffer.is_empty() {
             return points_storage;
         }
-        glidesort::sort_by(&mut self.triangle_buffer, |a, b| {
-            f32::from_bits(a.w).total_cmp(&f32::from_bits(b.w)).reverse()
+        glidesort::sort_in_vec_by(&mut self.triangle_buffer, |a, b| {
+            f32::from_bits(a.w)
+                .total_cmp(&f32::from_bits(b.w))
+                .reverse()
         });
 
-        let (height_grp, pcl_grp, grad_grp) = self.bind_grps.take().unwrap();
-        let mut bind_grps: BetaBindGroups =
-            (points_storage.points_grp, height_grp, pcl_grp, grad_grp);
+        let (
+            height_grp,
+            pcl_grp,
+            grad_grp,
+            obstacle_map,
+            obstacle_mapper_input_grp,
+            expander_input_grp,
+            expanded_obstacles,
+        ) = self.bind_grps.take().unwrap();
+        let mut bind_grps: BetaBindGroups = (
+            points_storage.points_grp,
+            height_grp,
+            pcl_grp,
+            grad_grp,
+            obstacle_map,
+            obstacle_mapper_input_grp,
+            expander_input_grp,
+            expanded_obstacles,
+        );
 
         self.pipeline
             .new_pass(|mut lock| {
@@ -347,73 +437,48 @@ impl ThalassicPipeline {
                 bind_grps
                     .2
                     .write::<1, _>(&(self.triangle_buffer.len() as u32), &mut lock);
+                bind_grps
+                    .6
+                    .write::<0, _>(&self.expander_input_grp_zeros, &mut lock);
+                if let Some(new_radius_cells) = self.new_radius_cells.take() {
+                    bind_grps
+                        .6
+                        .write::<1, _>(&(new_radius_cells / self.cell_size), &mut lock);
+                }
+                if let Some(new_max_gradient) = self.new_max_gradient.take() {
+                    bind_grps.5.write::<0, _>(&new_max_gradient, &mut lock);
+                }
                 &mut bind_grps
             })
             .finish();
 
-        let (points_grp, height_grp, pcl_grp, grad_grp) = bind_grps;
+        let (
+            points_grp,
+            height_grp,
+            pcl_grp,
+            grad_grp,
+            obstacle_map,
+            obstacle_mapper_input_grp,
+            expander_input_grp,
+            expanded_obstacles,
+        ) = bind_grps;
         height_grp.buffers.0.read(out_heightmap);
         grad_grp.buffers.0.read(out_gradient);
+        expanded_obstacles
+            .buffers
+            .0
+            .read(bytemuck::cast_slice_mut(out_expanded_obstacles));
 
-        self.bind_grps = Some((height_grp, pcl_grp, grad_grp));
+        self.bind_grps = Some((
+            height_grp,
+            pcl_grp,
+            grad_grp,
+            obstacle_map,
+            obstacle_mapper_input_grp,
+            expander_input_grp,
+            expanded_obstacles,
+        ));
         points_storage.points_grp = points_grp;
         points_storage
     }
 }
-
-// pub struct Expander {}
-// impl Expander {
-
-//     //TODO: populate constants
-//     const RADIUS: f32 = 3.0;
-//     const GRID_WIDTH: u32 = 10;
-//     const GRID_HEIGHT: u32 = 10;
-    
-//     pub fn expand(obstacles: &[u32]) -> GpuBufferSet<ExpanderOutputBindGrp> {        
-//         let grid_size = (Self::GRID_WIDTH * Self::GRID_HEIGHT) as usize;
-
-//         let [expand_fn] = ExpandObstacles {
-//             obstacles: BufferGroupBinding::<_, ExpanderBindGroups>::get::<0, 0>(),
-//             closest: BufferGroupBinding::<_, ExpanderBindGroups>::get::<0, 1>(),
-//             expanded: BufferGroupBinding::<_, ExpanderBindGroups>::get::<1, 0>(),
-//             radius: Self::RADIUS,
-//             grid_width: NonZeroU32::new(Self::GRID_WIDTH).unwrap(),
-//             grid_height: NonZeroU32::new(Self::GRID_HEIGHT).unwrap(),
-//         }
-//         .compile();
-
-//         let mut pipeline = ComputePipeline::new([&expand_fn]);
-//         pipeline.workgroups = [Vector3::new(
-//             Self::GRID_WIDTH,
-//             Self::GRID_HEIGHT,
-//             1,
-//         )];
-
-//         let mut bind_grps = (
-//             GpuBufferSet::from((
-//                 StorageBuffer::new_dyn(grid_size).unwrap(), 
-//                 StorageBuffer::new_dyn(grid_size * 2).unwrap(),
-//             )), 
-//             GpuBufferSet::from((
-//                 StorageBuffer::new_dyn(grid_size).unwrap(), 
-//             ))
-//         );
-
-//         // write obstacle data to buffer before the first pass...
-//         pipeline
-//             .new_pass(|mut lock| {
-//                 bind_grps.0.write::<0, _>( obstacles, &mut lock);
-//                 &mut bind_grps
-//             })
-//             .finish();
-
-//         // ...no need to touch buffers again in the remaining (radius-1) passes
-//         for _ in 0..(Self::RADIUS as usize) {
-//             pipeline
-//                 .new_pass(|mut _lock| &mut bind_grps)
-//                 .finish();
-//         }
-
-//         bind_grps.1
-//     }
-// }

@@ -56,21 +56,37 @@ mesh = SubResource("PointMesh_fxwe8")
 [sub_resource type="GDScript" id="GDScript_03k1a"]
 script/source = "extends MultiMeshInstance3D
 
+enum DisplayMode {
+	GRADIENT,
+	OCCUPANCY
+}
 
 const CELL_SIZE := 0.03125
+var display_mode: DisplayMode = DisplayMode.OCCUPANCY
 
 
 func _ready() -> void:
 	var mesh: MultiMesh = multimesh
 	mesh.instance_count = 256 * 128
 	LunasimNode.thalassic.connect(
-		func(heights: PackedFloat32Array, grads: PackedFloat32Array):
+		func(heights: PackedFloat32Array, grads: PackedFloat32Array, obstaclemap: PackedByteArray):
 			var i := 0
-			for z in range(256):
-				for x in range(128):
-					mesh.set_instance_transform(i, Transform3D(Basis(), Vector3(-x * CELL_SIZE, heights[i], -z * CELL_SIZE)))
-					mesh.set_instance_color(i, Color.GREEN.lerp(Color.RED, grads[i] / PI * 2))
-					i += 1
+			match display_mode:
+				DisplayMode.GRADIENT:
+					for z in range(256):
+						for x in range(128):
+							mesh.set_instance_transform(i, Transform3D(Basis(), Vector3(-x * CELL_SIZE, heights[i], -z * CELL_SIZE)))
+							mesh.set_instance_color(i, Color.GREEN.lerp(Color.RED, grads[i] / PI * 2))
+							i += 1
+				DisplayMode.OCCUPANCY:
+					for z in range(256):
+						for x in range(128):
+							mesh.set_instance_transform(i, Transform3D(Basis(), Vector3(-x * CELL_SIZE, heights[i], -z * CELL_SIZE)))
+							if obstaclemap[i] == 1:
+								mesh.set_instance_color(i, Color.BROWN)
+							else:
+								mesh.set_instance_color(i, Color.SEA_GREEN)
+							i += 1
 	)
 "
 

@@ -3,7 +3,7 @@ use std::{num::NonZeroU32, sync::Arc};
 use crossbeam::atomic::AtomicCell;
 use gputter::is_gputter_initialized;
 use nalgebra::Vector2;
-use thalassic::{PointCloudStorage, ThalassicBuilder};
+use thalassic::{Occupancy, PointCloudStorage, ThalassicBuilder};
 use urobotics::shared::OwnedData;
 
 const CELL_COUNT: u32 = 128 * 256;
@@ -11,6 +11,7 @@ const CELL_COUNT: u32 = 128 * 256;
 pub struct ThalassicData {
     pub heightmap: [f32; CELL_COUNT as usize],
     pub gradmap: [f32; CELL_COUNT as usize],
+    pub expanded_obstacle_map: [Occupancy; CELL_COUNT as usize],
 }
 
 impl Default for ThalassicData {
@@ -18,6 +19,7 @@ impl Default for ThalassicData {
         Self {
             heightmap: [0.0; CELL_COUNT as usize],
             gradmap: [0.0; CELL_COUNT as usize],
+            expanded_obstacle_map: [Occupancy::FREE; CELL_COUNT as usize],
         }
     }
 }
@@ -61,7 +63,10 @@ pub fn spawn_thalassic_pipeline(
 
     if is_gputter_initialized() {
         let mut pipeline = ThalassicBuilder {
-            heightmap_dimensions: Vector2::new(NonZeroU32::new(128).unwrap(), NonZeroU32::new(256).unwrap()),
+            heightmap_dimensions: Vector2::new(
+                NonZeroU32::new(128).unwrap(),
+                NonZeroU32::new(256).unwrap(),
+            ),
             cell_size: 0.03125,
             max_point_count: NonZeroU32::new(max_point_count).unwrap(),
         }
@@ -79,10 +84,15 @@ pub fn spawn_thalassic_pipeline(
 
             if !points_vec.is_empty() {
                 let mut owned = buffer.recall_or_replace_with(Default::default);
-                let ThalassicData { heightmap, gradmap } = &mut *owned;
+                let ThalassicData {
+                    heightmap,
+                    gradmap,
+                    expanded_obstacle_map,
+                } = &mut *owned;
 
                 for (channel, mut points) in points_vec {
-                    points = pipeline.provide_points(points, heightmap, gradmap);
+                    points =
+                        pipeline.provide_points(points, heightmap, gradmap, expanded_obstacle_map);
                     channel.finished.store(Some(points));
                 }
 

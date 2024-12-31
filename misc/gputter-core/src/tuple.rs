@@ -48,3 +48,30 @@ tuple_idx_impl!(2 C A, B, C, D, E, F);
 tuple_idx_impl!(3 D A, B, C, D, E, F);
 tuple_idx_impl!(4 E A, B, C, D, E, F);
 tuple_idx_impl!(5 F A, B, C, D, E, F);
+
+tuple_idx_impl!(0 A A, B, C, D, E, F, G);
+tuple_idx_impl!(1 B A, B, C, D, E, F, G);
+tuple_idx_impl!(2 C A, B, C, D, E, F, G);
+tuple_idx_impl!(3 D A, B, C, D, E, F, G);
+tuple_idx_impl!(4 E A, B, C, D, E, F, G);
+tuple_idx_impl!(5 F A, B, C, D, E, F, G);
+tuple_idx_impl!(6 G A, B, C, D, E, F, G);
+
+tuple_idx_impl!(0 A A, B, C, D, E, F, G, H);
+tuple_idx_impl!(1 B A, B, C, D, E, F, G, H);
+tuple_idx_impl!(2 C A, B, C, D, E, F, G, H);
+tuple_idx_impl!(3 D A, B, C, D, E, F, G, H);
+tuple_idx_impl!(4 E A, B, C, D, E, F, G, H);
+tuple_idx_impl!(5 F A, B, C, D, E, F, G, H);
+tuple_idx_impl!(6 G A, B, C, D, E, F, G, H);
+tuple_idx_impl!(7 H A, B, C, D, E, F, G, H);
+
+tuple_idx_impl!(0 A A, B, C, D, E, F, G, H, I);
+tuple_idx_impl!(1 B A, B, C, D, E, F, G, H, I);
+tuple_idx_impl!(2 C A, B, C, D, E, F, G, H, I);
+tuple_idx_impl!(3 D A, B, C, D, E, F, G, H, I);
+tuple_idx_impl!(4 E A, B, C, D, E, F, G, H, I);
+tuple_idx_impl!(5 F A, B, C, D, E, F, G, H, I);
+tuple_idx_impl!(6 G A, B, C, D, E, F, G, H, I);
+tuple_idx_impl!(7 H A, B, C, D, E, F, G, H, I);
+tuple_idx_impl!(8 I A, B, C, D, E, F, G, H, I);

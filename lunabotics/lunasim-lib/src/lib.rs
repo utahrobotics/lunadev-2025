@@ -163,12 +163,25 @@ impl INode for Lunasim {
                     self.base_mut()
                         .emit_signal("drive", &[left.to_variant(), right.to_variant()]);
                 }
-                FromLunasimbot::Thalassic { heightmap, gradmap } => {
+                FromLunasimbot::Thalassic {
+                    heightmap,
+                    gradmap,
+                    obstaclemap,
+                } => {
                     let heights: PackedFloat32Array = Box::into_iter(heightmap).collect();
                     let grads: PackedFloat32Array = Box::into_iter(gradmap).collect();
+                    let obstacles: PackedByteArray = Box::into_iter(obstaclemap)
+                        .map(|occupied| if occupied { 1 } else { 0 })
+                        .collect();
 
-                    self.base_mut()
-                        .emit_signal("thalassic", &[heights.to_variant(), grads.to_variant()]);
+                    self.base_mut().emit_signal(
+                        "thalassic",
+                        &[
+                            heights.to_variant(),
+                            grads.to_variant(),
+                            obstacles.to_variant(),
+                        ],
+                    );
                 }
                 FromLunasimbot::Path(path) => {
                     let path: Vec<_> = Box::into_iter(path)
@@ -208,7 +221,11 @@ impl Lunasim {
     #[signal]
     fn path(points: Vec<Vector3>);
     #[signal]
-    fn thalassic(heights: PackedFloat32Array, grads: PackedFloat32Array);
+    fn thalassic(
+        heights: PackedFloat32Array,
+        grads: PackedFloat32Array,
+        obstaclemap: PackedByteArray,
+    );
     #[signal]
     fn transform(transform: Transform3D);
     #[signal]

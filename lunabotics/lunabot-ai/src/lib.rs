@@ -1,8 +1,4 @@
-use std::{
-    sync::Arc,
-    time::Instant,
-    vec,
-};
+use std::{sync::Arc, time::Instant, vec};
 
 use ares_bt::{
     action::AlwaysSucceed,
@@ -108,4 +104,3 @@ pub fn run_ai(
         }
     }
 }
-

@@ -3,10 +3,10 @@ use gputter::build_shader;
 build_shader!(
     pub(crate) Pcl2HeightV2,
     r#"
-    #[buffer(HostReadOnly)] var<storage, read_write> heightmap: array<f32, CELL_COUNT>;
-    #[buffer(HostHidden)] var<storage, read_write> points: array<vec3f, MAX_POINT_COUNT>;
-    #[buffer(HostWriteOnly)] var<storage, read> sorted_triangle_indices: array<vec3u, MAX_TRIANGLE_COUNT>;
-    #[buffer(HostWriteOnly)] var<uniform> triangle_count: u32;
+    #[buffer] var<storage, read_write> heightmap: array<f32, CELL_COUNT>;
+    #[buffer] var<storage, read_write> points: array<vec3f, MAX_POINT_COUNT>;
+    #[buffer] var<storage, read> sorted_triangle_indices: array<vec3u, MAX_TRIANGLE_COUNT>;
+    #[buffer] var<uniform> triangle_count: u32;
     
     const HEIGHTMAP_WIDTH: NonZeroU32 = {{heightmap_width}};
     const CELL_SIZE: f32 = {{cell_size}};

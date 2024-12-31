@@ -6,14 +6,14 @@ use crate::blackboard::LunabotBlackboard;
 
 pub struct WaitBehavior {
     pub duration: Duration,
-    start_time: Option<Instant>
+    start_time: Option<Instant>,
 }
 
 impl From<Duration> for WaitBehavior {
     fn from(duration: Duration) -> Self {
         Self {
             duration,
-            start_time: None
+            start_time: None,
         }
     }
 }

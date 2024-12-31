@@ -249,13 +249,20 @@ impl Runnable for LunasimbotApp {
 
         let lunasim_stdin2 = lunasim_stdin.clone();
         let mut bitcode_buffer = bitcode::Buffer::new();
-        buffer.add_callback(move |ThalassicData { heightmap, gradmap }| {
-            let bytes = bitcode_buffer.encode(&FromLunasimbot::Thalassic {
-                heightmap: heightmap.to_vec().into_boxed_slice(),
-                gradmap: gradmap.to_vec().into_boxed_slice(),
-            });
-            lunasim_stdin2.write(bytes);
-        });
+        buffer.add_callback(
+            move |ThalassicData {
+                      heightmap,
+                      gradmap,
+                      expanded_obstacle_map,
+                  }| {
+                let bytes = bitcode_buffer.encode(&FromLunasimbot::Thalassic {
+                    heightmap: heightmap.to_vec().into_boxed_slice(),
+                    gradmap: gradmap.to_vec().into_boxed_slice(),
+                    obstaclemap: expanded_obstacle_map.iter().map(|o| o.occupied()).collect(),
+                });
+                lunasim_stdin2.write(bytes);
+            },
+        );
 
         spawn_thalassic_pipeline(buffer, Box::new([pcl_storage_channel.clone()]));
 
@@ -361,8 +368,7 @@ impl Runnable for LunasimbotApp {
                             from,
                             to,
                             &data.heightmap,
-                            &data.gradmap,
-                            20.0f32.to_radians(),
+                            |index| !data.expanded_obstacle_map[index].occupied(),
                             &mut into,
                         );
                         if into.len() == 1 {
@@ -372,8 +378,7 @@ impl Runnable for LunasimbotApp {
                                 from,
                                 to,
                                 &data.heightmap,
-                                &data.gradmap,
-                                45.0f32.to_radians(),
+                                |index| !data.expanded_obstacle_map[index].occupied(),
                                 &mut into,
                             );
                             if into.len() == 1 {
@@ -384,7 +389,9 @@ impl Runnable for LunasimbotApp {
                             }
                         }
                         let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
-                            into.iter().map(|p| p.coords.cast::<f32>().data.0[0]).collect(),
+                            into.iter()
+                                .map(|p| p.coords.cast::<f32>().data.0[0])
+                                .collect(),
                         ));
                         lunasim_stdin.write(bytes);
                         inputs.push(Input::PathCalculated(into));
