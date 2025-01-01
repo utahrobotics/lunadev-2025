@@ -1,0 +1,12 @@
+[package]
+name = "lumpur"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+ctrlc = "3.4.5"
+cursive = "0.21"
+# log.workspace = true
+tracing = "0.1.41"
+tracing-log = "0.2.0"
