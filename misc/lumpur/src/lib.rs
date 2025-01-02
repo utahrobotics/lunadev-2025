@@ -7,7 +7,6 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::Sender;
 
-use anyhow::Context;
 use cursive::event::{Event, EventResult, Key};
 use cursive::theme::{Color, ColorStyle, ColorType, Effect, Style, Theme};
 use cursive::utils::markup::StyledString;
@@ -15,6 +14,9 @@ use cursive::view::{Nameable, Resizable, ScrollStrategy, Scrollable};
 use cursive::views::{Button, HideableView, Layer, LinearLayout, NamedView, ScrollView, TextView, ThemedView};
 use cursive::Cursive;
 use parking_lot::Mutex;
+use raw_sync::events::{EventInit, EventState};
+use raw_sync::Timeout;
+use shared_memory::{ShmemConf, ShmemError};
 use tracing::Level;
 use tracing_subscriber::fmt::time::Uptime;
 use unfmt::unformat;
@@ -48,8 +50,16 @@ struct LogMessage {
 
 const EMBEDDED_KEY: &str = "__LUMPUR_EMBEDDED";
 const EMBEDDED_VAL: &str = "1";
+const SHMEM_VAR_KEY: &str = "__LUMPUR_SHMEM_FLINK";
 const LOG_VIEW: &str = "log_view";
 const LOG_SCROLL_VIEW: &str = "log_scroll_view";
+
+static ON_EXIT: Mutex<Option<Box<dyn FnOnce() -> () + Send>>> = Mutex::new(None);
+
+
+pub fn set_on_exit(f: impl FnOnce() -> () + Send + 'static) {
+    *ON_EXIT.lock() = Some(Box::new(f));
+}
 
 
 pub fn init() -> anyhow::Result<()> {
@@ -57,10 +67,10 @@ pub fn init() -> anyhow::Result<()> {
     match env_var {
         Ok(val) => {
             if val == EMBEDDED_VAL {
-                let file = std::fs::File::create("app.log")?;
-                let mut file = LineWriter::new(file);
-                writeln!(file, "!Program started with pid: {}", std::process::id())?;
-                let file: &_ = Box::leak(Box::new(Mutex::new(file)));
+                let log_file = std::fs::File::create("app.log")?;
+                let mut log_file = LineWriter::new(log_file);
+                writeln!(log_file, "!Program started with pid: {}", std::process::id())?;
+                let log_file: &_ = Box::leak(Box::new(Mutex::new(log_file)));
 
                 let sub = tracing_subscriber::FmtSubscriber::builder()
                     .with_file(true)
@@ -72,11 +82,43 @@ pub fn init() -> anyhow::Result<()> {
                     .with_timer(Uptime::default())
                     .with_writer(|| EventWriter {
                         stdout: std::io::stdout(),
-                        file,
+                        file: log_file,
                     })
                     .finish();
 
                 tracing::subscriber::set_global_default(sub)?;
+                let flink = std::env::var(SHMEM_VAR_KEY).unwrap();
+
+                std::thread::spawn(move || {
+                    let shmem = match ShmemConf::new().size(4096).flink(&flink).open() {
+                        Ok(shmem) => shmem,
+                        Err(e) => {
+                            tracing::error!("Failed to open shared memory segment: {e}");
+                            return;
+                        }
+                    };
+                    let result = unsafe { raw_sync::events::Event::from_existing(shmem.as_ptr()) };
+                    let (evt, _used_bytes) = match result {
+                        Ok(evt) => evt,
+                        Err(e) => {
+                            tracing::error!("Failed to create ctrl-c event listener: {e}");
+                            return;
+                        }
+                    };
+                    if let Err(e) = evt.wait(Timeout::Infinite) {
+                        tracing::error!("Failed to wait for ctrl-c event: {e}");
+                    }
+                    tracing::warn!("Ctrl-C event received. Exiting...");
+                    let mut guard = log_file.lock();
+                    let _ = guard.flush();
+                    drop(shmem);
+                    drop(evt);
+                    if let Some(f) = ON_EXIT.lock().take() {
+                        f();
+                    } else {
+                        std::process::exit(0);
+                    }
+                });
                 return Ok(());
             }
         }
@@ -84,15 +126,33 @@ pub fn init() -> anyhow::Result<()> {
         Err(e) => return Err(e.into()),
     }
 
+    let mut shmem = None;
+    let mut flink = String::new();
+    for i in 0..1024 {
+        flink = format!(".lumpur-{i}.shmem");
+        match ShmemConf::new().size(4096).flink(&flink).create() {
+            Ok(m) => {
+                shmem = Some(m);
+                break;
+            }
+            Err(ShmemError::LinkExists) => {}
+            Err(e) => return Err(anyhow::anyhow!("Failed to create shared memory segment: {e}")),
+        };
+    }
+    let Some(shmem) = shmem else {
+        return Err(anyhow::anyhow!("Failed to create shared memory segment. All slots occupied"));
+    };
+    let (ctrlc_evt, _used_bytes) = unsafe { raw_sync::events::Event::new(shmem.as_ptr(), true).map_err(|e| anyhow::anyhow!("Failed to create ctrl-c event: {e}"))? };
+
     let max_lines: usize = std::env::var("MAX_LINES").map(|s| s.parse().unwrap_or(1000)).unwrap_or(1000);
     let mut child = Command::new(std::env::current_exe()?)
         .env(EMBEDDED_KEY, EMBEDDED_VAL)
+        .env(SHMEM_VAR_KEY, flink)
         .args(std::env::args().skip(1))
-        .stdin(Stdio::inherit())
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
-    let id = child.id();
     let (log_tx, log_rx) = std::sync::mpsc::channel::<LogMessage>();
     let stdout = BufReader::new(child.stdout.take().unwrap());
     let stderr = BufReader::new(child.stderr.take().unwrap());
@@ -170,11 +230,6 @@ pub fn init() -> anyhow::Result<()> {
         }
     });
 
-    let ctrlc_count: &_ = Box::leak(Box::new(AtomicUsize::new(0)));
-    ctrlc::set_handler(move || {
-        ctrlc_count.fetch_add(1, Ordering::Relaxed);
-    })
-    .context("Setting Ctrl-C Handler")?;
 
     let mut siv = cursive::default();
     let theme = Theme::terminal_default();
@@ -267,12 +322,17 @@ pub fn init() -> anyhow::Result<()> {
         StyledString::styled("Clear (Ctrl-W)", menu_style),
         clear_callback,
     );
+
+    let ctrlc_count: &_ = Box::leak(Box::new(AtomicUsize::new(0)));
     siv.menubar().add_leaf(
         StyledString::styled("Quit (Ctrl-C)", menu_style),
         |_| {
             ctrlc_count.fetch_add(1, Ordering::Relaxed);
         },
     );
+    siv.set_global_callback(Event::CtrlChar('c'), move |_| {
+        ctrlc_count.fetch_add(1, Ordering::Relaxed);
+    });
 
     siv.set_autohide_menu(false);
 
@@ -402,21 +462,8 @@ pub fn init() -> anyhow::Result<()> {
         if new_ctrlc_count != last_ctrlc_count {
             last_ctrlc_count = new_ctrlc_count;
             if new_ctrlc_count == 1 {
-                let result = Command::new("kill")
-                    .args(["-s", "INT", &id.to_string()])
-                    .stdin(Stdio::null())
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::piped())
-                    .output();
-                match result {
-                    Ok(output) => {
-                        if !output.status.success() {
-                            eprintln!("Prcoess did not exit successfully: {:?}", output);
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to send SIGINT to child process: {e}");
-                    }
+                if let Err(e) = ctrlc_evt.set(EventState::Signaled) {
+                    eprintln!("Failed to signal ctrl-c event: {e}");
                 }
             } else {
                 exit_code = 1;
@@ -429,5 +476,7 @@ pub fn init() -> anyhow::Result<()> {
     }
     // Very important to drop to return the terminal to its original state
     drop(siv);
+    drop(ctrlc_evt);
+    drop(shmem);
     std::process::exit(exit_code);
 }
