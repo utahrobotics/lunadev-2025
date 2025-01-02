@@ -7,6 +7,7 @@ edition = "2021"
 anyhow.workspace = true
 ctrlc = "3.4.5"
 cursive = "0.21"
-# log.workspace = true
+parking_lot.workspace = true
 tracing = "0.1.41"
-tracing-log = "0.2.0"
+tracing-subscriber = { version = "0.3.19" }
+unfmt.workspace = true

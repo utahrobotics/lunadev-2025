@@ -4,9 +4,7 @@ use bytemuck::{Pod, Zeroable};
 use depth2pcl::Depth2Pcl;
 use gputter::{
     buffers::{
-        storage::{
-            HostReadOnly, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, StorageBuffer,
-        },
+        storage::{HostReadOnly, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, StorageBuffer},
         uniform::UniformBuffer,
         GpuBufferSet,
     },
@@ -284,7 +282,15 @@ impl ThalassicBuilder {
         }
         .compile();
 
-        let mut pipeline = ComputePipeline::new([&height_fn, &grad_fn, &obstacle_fn, &expand_fn, &expand_fn, &expand_fn, &expand_fn]);
+        let mut pipeline = ComputePipeline::new([
+            &height_fn,
+            &grad_fn,
+            &obstacle_fn,
+            &expand_fn,
+            &expand_fn,
+            &expand_fn,
+            &expand_fn,
+        ]);
         pipeline.workgroups = [Vector3::new(
             self.heightmap_dimensions.x.get() / 8,
             self.heightmap_dimensions.y.get() / 8,
