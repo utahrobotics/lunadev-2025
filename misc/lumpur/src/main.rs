@@ -7,7 +7,8 @@ fn main() -> anyhow::Result<()> {
         std::thread::sleep(std::time::Duration::from_secs(3));
     });
     loop {
-        warn!("HGELLO");
-        std::thread::sleep(std::time::Duration::from_secs(2));
+        println!("A");
+        // warn!("HGELLO");
+        std::thread::sleep(std::time::Duration::from_secs(1));
     }
 }

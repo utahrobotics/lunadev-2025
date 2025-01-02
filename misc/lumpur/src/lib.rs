@@ -8,12 +8,12 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::Sender;
 
 use anyhow::Context;
-use cursive::event::EventResult;
-use cursive::theme::{Color, ColorStyle, ColorType, Style, Theme};
+use cursive::event::{Event, EventResult, Key};
+use cursive::theme::{Color, ColorStyle, ColorType, Effect, Style, Theme};
+use cursive::utils::markup::StyledString;
 use cursive::view::{Nameable, Resizable, ScrollStrategy, Scrollable};
-use cursive::views::{
-    Button, HideableView, Layer, LinearLayout, NamedView, TextView, ThemedView
-};
+use cursive::views::{Button, HideableView, Layer, LinearLayout, NamedView, ScrollView, TextView, ThemedView};
+use cursive::Cursive;
 use parking_lot::Mutex;
 use tracing::Level;
 use tracing_subscriber::fmt::time::Uptime;
@@ -49,6 +49,8 @@ struct LogMessage {
 const EMBEDDED_KEY: &str = "__LUMPUR_EMBEDDED";
 const EMBEDDED_VAL: &str = "1";
 const LOG_VIEW: &str = "log_view";
+const LOG_SCROLL_VIEW: &str = "log_scroll_view";
+
 
 pub fn init() -> anyhow::Result<()> {
     let env_var = std::env::var(EMBEDDED_KEY);
@@ -56,7 +58,9 @@ pub fn init() -> anyhow::Result<()> {
         Ok(val) => {
             if val == EMBEDDED_VAL {
                 let file = std::fs::File::create("app.log")?;
-                let file: &_ = Box::leak(Box::new(Mutex::new(LineWriter::new(file))));
+                let mut file = LineWriter::new(file);
+                writeln!(file, "!Program started with pid: {}", std::process::id())?;
+                let file: &_ = Box::leak(Box::new(Mutex::new(file)));
 
                 let sub = tracing_subscriber::FmtSubscriber::builder()
                     .with_file(true)
@@ -80,6 +84,7 @@ pub fn init() -> anyhow::Result<()> {
         Err(e) => return Err(e.into()),
     }
 
+    let max_lines: usize = std::env::var("MAX_LINES").map(|s| s.parse().unwrap_or(1000)).unwrap_or(1000);
     let mut child = Command::new(std::env::current_exe()?)
         .env(EMBEDDED_KEY, EMBEDDED_VAL)
         .args(std::env::args().skip(1))
@@ -98,7 +103,7 @@ pub fn init() -> anyhow::Result<()> {
             macro_rules! default {
                 () => {
                     let _ = line_tx.send(LogMessage {
-                        timestamp: -1.0,
+                        timestamp: f32::NAN,
                         level: fallback_ty,
                         thread_name: String::new(),
                         target: String::new(),
@@ -175,12 +180,7 @@ pub fn init() -> anyhow::Result<()> {
     let theme = Theme::terminal_default();
     siv.set_theme(theme);
 
-    let style = Style {
-        effects: Default::default(),
-        color: ColorStyle::terminal_default(),
-    };
-
-    let mut first_line_style = style;
+    let mut first_line_style = Style::terminal_default();
     first_line_style.color.front = ColorType::Color(Color::Rgb(50, 200, 50));
 
     siv.add_fullscreen_layer(
@@ -195,29 +195,51 @@ pub fn init() -> anyhow::Result<()> {
                     }
                     EventResult::Consumed(None)
                 })
-                .scroll_strategy(ScrollStrategy::StickToBottom),
+                .scroll_strategy(ScrollStrategy::StickToBottom)
+                .with_name(LOG_SCROLL_VIEW),
             ColorStyle::terminal_default(),
         )
         .full_width(),
     );
     let extra_info_visible: &_ = Box::leak(Box::new(AtomicBool::new(false)));
-    siv.set_global_callback('e', move |siv| {
+    let extra_info_callback = move |siv: &mut Cursive| {
+        let extra_info_visible = !extra_info_visible.fetch_not(Ordering::Relaxed);
+
+        siv.call_on_name(LOG_SCROLL_VIEW, |log_scroll_view: &mut ScrollView<LinearLayout>| {
+            if extra_info_visible {
+                log_scroll_view.set_scroll_strategy(ScrollStrategy::KeepRow);
+            } else {
+                log_scroll_view.set_scroll_strategy(ScrollStrategy::StickToBottom);
+            }
+        });
+
         siv.call_on_name(LOG_VIEW, |log_view: &mut LinearLayout| {
-            let extra_info_visible = !extra_info_visible.fetch_not(Ordering::Relaxed);
-            for i in 1..log_view.len() {
+            for i in 0..log_view.len() {
+                if let Some(_) = log_view.get_child_mut(i).unwrap().downcast_mut::<TextView>() {
+                    continue;
+                }
                 let line: &mut ThemedView<NamedView<LinearLayout>> =
                     log_view.get_child_mut(i).unwrap().downcast_mut().unwrap();
                 let line = &mut *line.get_inner_mut().get_mut();
                 let top: &mut LinearLayout = line.get_child_mut(0).unwrap().downcast_mut().unwrap();
-                let button_container: &mut LinearLayout = top.get_child_mut(0).unwrap().downcast_mut().unwrap();
+                let button_container: &mut LinearLayout =
+                    top.get_child_mut(0).unwrap().downcast_mut().unwrap();
 
                 if extra_info_visible {
                     button_container.remove_child(1);
-                    let hideable: &mut HideableView<Button> = button_container.get_child_mut(0).unwrap().downcast_mut().unwrap();
+                    let hideable: &mut HideableView<Button> = button_container
+                        .get_child_mut(0)
+                        .unwrap()
+                        .downcast_mut()
+                        .unwrap();
                     hideable.unhide();
                 } else {
                     button_container.add_child(TextView::new(" "));
-                    let hideable: &mut HideableView<Button> = button_container.get_child_mut(0).unwrap().downcast_mut().unwrap();
+                    let hideable: &mut HideableView<Button> = button_container
+                        .get_child_mut(0)
+                        .unwrap()
+                        .downcast_mut()
+                        .unwrap();
                     hideable.hide();
                     if line.len() > 1 {
                         line.remove_child(1);
@@ -225,7 +247,34 @@ pub fn init() -> anyhow::Result<()> {
                 }
             }
         });
-    });
+    };
+    siv.add_global_callback('e', extra_info_callback);
+    let mut menu_style = Style::terminal_default();
+    menu_style.color.back = ColorType::Color(Color::Rgb(80, 80, 80));
+    siv.menubar().add_leaf(
+        StyledString::styled("[E]xtras", menu_style),
+        extra_info_callback,
+    );
+    siv.add_global_callback(Key::Esc, |s| s.select_menubar());
+
+    let clear_callback = move |siv: &mut Cursive| {
+        siv.call_on_name(LOG_VIEW, |log_view: &mut LinearLayout| {
+            log_view.clear();
+        });
+    };
+    siv.add_global_callback(Event::CtrlChar('w'), clear_callback);
+    siv.menubar().add_leaf(
+        StyledString::styled("Clear (Ctrl-W)", menu_style),
+        clear_callback,
+    );
+    siv.menubar().add_leaf(
+        StyledString::styled("Quit (Ctrl-C)", menu_style),
+        |_| {
+            ctrlc_count.fetch_add(1, Ordering::Relaxed);
+        },
+    );
+
+    siv.set_autohide_menu(false);
 
     // We must not drop any errors past this point as the UI has spun up
 
@@ -234,6 +283,8 @@ pub fn init() -> anyhow::Result<()> {
     siv.refresh();
     let mut exit_code = 0;
     let mut line_id = 0usize;
+    let mut last_message_aggregate = String::new();
+    let mut last_message_count = 0usize;
 
     while siv.is_running() {
         siv.step();
@@ -249,6 +300,29 @@ pub fn init() -> anyhow::Result<()> {
         }) = log_rx.try_recv()
         {
             siv.call_on_name::<LinearLayout, _, _>(LOG_VIEW, |log_view| {
+                let current_message_aggregate = format!("{timestamp}{level}{thread_name}{target}{filename}{line_number:?}{message}");
+                if !log_view.is_empty() {
+                    if current_message_aggregate == last_message_aggregate {
+                        last_message_count += 1;
+                        let line: &mut ThemedView<NamedView<LinearLayout>> =
+                            log_view.get_child_mut(log_view.len() - 1).unwrap().downcast_mut().unwrap();
+                        let line = &mut *line.get_inner_mut().get_mut();
+                        let top: &mut LinearLayout = line.get_child_mut(0).unwrap().downcast_mut().unwrap();
+                        let repetition_text: &mut TextView =
+                            top.get_child_mut(1).unwrap().downcast_mut().unwrap();
+                        let mut style = Style::inherit_parent();
+                        style.effects.insert(Effect::Bold);
+                        repetition_text.set_content(StyledString::styled(format!(" x{: <4}", last_message_count), style));
+                        return;
+                    }
+                }
+                last_message_aggregate = current_message_aggregate;
+                last_message_count = 1;
+
+                if log_view.len() >= max_lines {
+                    log_view.remove_child(0);
+                }
+
                 let mut theme = Theme::terminal_default();
                 match level {
                     Level::ERROR => {
@@ -274,11 +348,11 @@ pub fn init() -> anyhow::Result<()> {
                                                 if line.len() == 1 {
                                                     if let Some(line_number) = line_number {
                                                         line.add_child(
-                                                            TextView::new(format!("           ({target}:{thread_name})  {filename}:{line_number}"))
+                                                            TextView::new(format!("           target: {target}    location: {filename}:{line_number}    thread: {thread_name}  "))
                                                         );
                                                     } else {
                                                         line.add_child(
-                                                            TextView::new(format!("           ({target}:{thread_name})  {filename}"))
+                                                            TextView::new(format!("           location: {filename} (avoid using println or eprintln)"))
                                                         );
                                                     }
                                                 } else {
@@ -297,9 +371,9 @@ pub fn init() -> anyhow::Result<()> {
                                     })
                                     .child(TextView::new("      "))
                                     .child(TextView::new(format!("[{timestamp:.2}s {level}] {message}")))
-                                )
-                                .with_name(line_name2)
-                        )
+                            )
+                            .with_name(line_name2)
+                    )
                 );
                 line_id += 1;
             });
