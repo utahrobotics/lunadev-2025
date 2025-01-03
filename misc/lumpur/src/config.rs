@@ -95,7 +95,7 @@ macro_rules! define_configuration {
                             accessed_vars.remove(param_name);
                         }
                         for var_name in accessed_vars {
-                            tracing::debug!("Environment Variable {} was accessed", var_name);
+                            tracing::debug!("Environment Variable {:?} was accessed", var_name);
                         }
 
                         let dummy: Dummy = match cmd_config.try_into() {

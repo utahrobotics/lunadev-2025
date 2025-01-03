@@ -49,15 +49,30 @@ impl From<SerdeLevel> for Level {
     }
 }
 
-#[derive(Debug)]
-struct LogMessage {
-    timestamp: f32,
-    level: Level,
-    thread_name: String,
-    target: String,
-    filename: String,
-    line_number: Option<usize>,
-    fields: BTreeMap<String, serde_json::Value>,
+enum LogMessage {
+    Stdio {
+        level: Level,
+        stdio: String,
+        message: String,
+    },
+    Standard {
+        timestamp: f32,
+        level: Level,
+        thread_name: String,
+        target: String,
+        filename: String,
+        line_number: usize,
+        fields: BTreeMap<String, serde_json::Value>,
+    },
+}
+
+impl LogMessage {
+    fn aggregate(&self) -> String {
+        match self {
+            LogMessage::Stdio { level, stdio, message } => format!("{level}{stdio}{message}"),
+            LogMessage::Standard { timestamp, level, thread_name, target, filename, line_number, fields } => format!("{timestamp}{level}{thread_name}{target}{filename}{line_number}{fields:?}"),
+        }
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -68,7 +83,7 @@ struct RawLogMessage {
     thread_name: String,
     target: String,
     filename: String,
-    line_number: Option<usize>,
+    line_number: usize,
     fields: BTreeMap<String, serde_json::Value>,
 }
 
@@ -93,6 +108,7 @@ fn subprocess_fn<C: Configuration>() -> C {
         .json()
         .with_thread_names(true)
         .with_timer(Uptime::default())
+        .with_max_level(Level::TRACE)
         .with_writer(std::io::stderr)
         .finish();
 
@@ -159,6 +175,62 @@ fn subprocess_fn<C: Configuration>() -> C {
     }
 }
 
+fn make_line_f(
+    log_tx: Sender<Arc<LogMessage>>,
+    write_tx: Sender<Arc<LogMessage>>,
+    stdio_level: Level,
+    stdio_name: &'static str,
+    current_dir: &'static Path,
+) -> impl Fn(String) {
+    move |line: String| {
+        let log = match serde_json::from_str::<RawLogMessage>(&line) {
+            Ok(log) => log,
+            Err(_) => {
+                let log = Arc::new(LogMessage::Stdio {
+                    level: stdio_level,
+                    stdio: stdio_name.into(),
+                    message: line,
+                });
+                let _ = log_tx.send(log.clone());
+                let _ = write_tx.send(log);
+                return;
+            }
+        };
+        let level = log.level.into();
+        let log = Arc::new(LogMessage::Standard {
+            timestamp: {
+                log.timestamp
+                    .trim_start()
+                    .strip_suffix('s')
+                    .unwrap()
+                    .parse()
+                    .unwrap_or(f32::NAN)
+            },
+            level,
+            thread_name: log.thread_name,
+            target: log.target,
+            filename: {
+                // This corrects the slashes in the filename
+                let filename = Path::new(&log.filename)
+                    .canonicalize()
+                    .unwrap_or_else(|_| PathBuf::from(&log.filename));
+                filename
+                    .strip_prefix(&current_dir)
+                    .unwrap_or(&filename)
+                    .to_string_lossy()
+                    .into_owned()
+            },
+            line_number: log.line_number,
+            fields: log.fields,
+        });
+
+        if level <= Level::INFO {
+            let _ = log_tx.send(log.clone());
+        }
+        let _ = write_tx.send(log);
+    }
+}
+
 pub fn init<C: Configuration>() -> C {
     let env_var = std::env::var(EMBEDDED_KEY);
     match env_var {
@@ -192,8 +264,7 @@ pub fn init<C: Configuration>() -> C {
         panic!("Failed to create shared memory segment. All slots occupied");
     };
     let (ctrlc_evt, _used_bytes) = unsafe {
-        raw_sync::events::Event::new(shmem.as_ptr(), true)
-            .expect("Failed to create ctrl-c event")
+        raw_sync::events::Event::new(shmem.as_ptr(), true).expect("Failed to create ctrl-c event")
     };
 
     let log_file = std::fs::File::create("app.log").expect("Failed to create log file (app.log)");
@@ -202,7 +273,8 @@ pub fn init<C: Configuration>() -> C {
         log_file,
         "!Program started with pid: {}",
         std::process::id()
-    ).expect("Failed to write to log file (app.log)");
+    )
+    .expect("Failed to write to log file (app.log)");
     if std::env::args().len() > 1 {
         write!(log_file, "!Arguments:").expect("Failed to write to log file (app.log)");
         for arg in std::env::args().skip(1) {
@@ -210,13 +282,53 @@ pub fn init<C: Configuration>() -> C {
         }
         writeln!(log_file).expect("Failed to write to log file (app.log)");
     } else {
-        writeln!(log_file, "!No arguments provided").expect("Failed to write to log file (app.log)");
+        writeln!(log_file, "!No arguments provided")
+            .expect("Failed to write to log file (app.log)");
     }
     let (write_tx, write_rx) = std::sync::mpsc::channel::<Arc<LogMessage>>();
     let write_thr = std::thread::spawn(move || {
         while let Ok(msg) = write_rx.recv() {
-            // TODO improve
-            let _ = writeln!(log_file, "{msg:?}");
+            match &*msg {
+                LogMessage::Stdio {
+                    level,
+                    stdio,
+                    message,
+                } => {
+                    let _ = writeln!(log_file, "[         {level: <5} {stdio}] {message}");
+                }
+                LogMessage::Standard {
+                    timestamp,
+                    level,
+                    thread_name,
+                    target,
+                    filename,
+                    line_number,
+                    fields,
+                } => {
+                    let mut message = fields
+                        .get("message")
+                        .map(|v| {
+                            if let Some(msg) = v.as_str() {
+                                msg.replace('\n', "\n    ")
+                            } else {
+                                v.to_string()
+                            }
+                        })
+                        .unwrap_or_default();
+
+                    if message.is_empty() || fields.len() > 1 {
+                        message += "    {";
+                        for (k, v) in fields {
+                            if k == "message" {
+                                continue;
+                            }
+                            message += &format!(" {k}: {v},");
+                        }
+                        message += " }";
+                    }
+                    let _ = writeln!(log_file, "[{timestamp: >7.2}s {level: <5} {target: <10} {thread_name: <12} {filename}:{line_number}] {message}");
+                }
+            }
         }
         let _ = log_file.flush();
         // let mut log_file = BufWriter::new(log_file.into_inner().unwrap());
@@ -242,66 +354,19 @@ pub fn init<C: Configuration>() -> C {
     let (log_tx, log_rx) = std::sync::mpsc::channel::<Arc<LogMessage>>();
     let stdout = BufReader::new(child.stdout.take().unwrap());
     let stderr = BufReader::new(child.stderr.take().unwrap());
-    let current_dir: &_ = std::env::current_dir().expect("Failed to get current dir").canonicalize().expect("Failed to canonicalize current dir").leak();
+    let current_dir: &_ = std::env::current_dir()
+        .expect("Failed to get current dir")
+        .canonicalize()
+        .expect("Failed to canonicalize current dir")
+        .leak();
 
-    let make_line_f = |line_tx: Sender<Arc<LogMessage>>,
-                       write_tx: Sender<Arc<LogMessage>>,
-                       fallback_ty,
-                       fallback_loc: &'static str| {
-        move |line: String| {
-            let log = match serde_json::from_str::<RawLogMessage>(&line) {
-                Ok(log) => log,
-                Err(_) => {
-                    let log = Arc::new(LogMessage {
-                        timestamp: f32::NAN,
-                        level: fallback_ty,
-                        thread_name: String::new(),
-                        target: String::new(),
-                        filename: fallback_loc.into(),
-                        line_number: None,
-                        fields: {
-                            let mut fields = BTreeMap::new();
-                            fields.insert("message".into(), line.into());
-                            fields
-                        },
-                    });
-                    let _ = line_tx.send(log.clone());
-                    let _ = write_tx.send(log);
-                    return;
-                }
-            };
-            let log = Arc::new(LogMessage {
-                timestamp: {
-                    log.timestamp
-                        .trim_start()
-                        .strip_suffix('s')
-                        .unwrap()
-                        .parse()
-                        .unwrap_or(f32::NAN)
-                },
-                level: log.level.into(),
-                thread_name: log.thread_name,
-                target: log.target,
-                filename: {
-                    // This corrects the slashes in the filename
-                    let filename = Path::new(&log.filename)
-                        .canonicalize()
-                        .unwrap_or_else(|_| PathBuf::from(&log.filename));
-                    filename
-                        .strip_prefix(&current_dir)
-                        .unwrap_or(&filename)
-                        .to_string_lossy()
-                        .into_owned()
-                },
-                line_number: log.line_number,
-                fields: log.fields,
-            });
-
-            let _ = line_tx.send(log.clone());
-            let _ = write_tx.send(log);
-        }
-    };
-    let f = make_line_f(log_tx.clone(), write_tx.clone(), Level::INFO, "stdout");
+    let f = make_line_f(
+        log_tx.clone(),
+        write_tx.clone(),
+        Level::INFO,
+        "stdout",
+        current_dir,
+    );
     std::thread::spawn(move || {
         for line in stdout.lines() {
             let Ok(line) = line else {
@@ -310,7 +375,7 @@ pub fn init<C: Configuration>() -> C {
             f(line);
         }
     });
-    let f = make_line_f(log_tx, write_tx, Level::ERROR, "stderr");
+    let f = make_line_f(log_tx, write_tx, Level::ERROR, "stderr", current_dir);
     std::thread::spawn(move || {
         for line in stderr.lines() {
             let Ok(line) = line else {
@@ -324,13 +389,13 @@ pub fn init<C: Configuration>() -> C {
     let theme = Theme::terminal_default();
     siv.set_theme(theme);
 
-    let mut first_line_style = Style::terminal_default();
-    first_line_style.color.front = ColorType::Color(Color::Rgb(50, 200, 50));
+    let mut program_info_style = Style::terminal_default();
+    program_info_style.color.front = ColorType::Color(Color::Rgb(50, 200, 50));
 
     siv.add_fullscreen_layer(
         Layer::with_color(
             LinearLayout::vertical()
-                .child(TextView::new("       [PROGRAM STARTED]").style(first_line_style))
+                .child(TextView::new("       [PROGRAM STARTED]").style(program_info_style))
                 .with_name(LOG_VIEW)
                 .scrollable()
                 .on_scroll_inner(move |scroll, _| {
@@ -445,26 +510,9 @@ pub fn init<C: Configuration>() -> C {
         siv.step();
         let mut updated = false;
         while let Ok(log) = log_rx.try_recv() {
-            let timestamp = log.timestamp;
-            let level = log.level;
-            let thread_name = log.thread_name.clone();
-            let target = log.target.clone();
-            let filename = log.filename.clone();
-            let line_number = log.line_number;
-            let fields = &log.fields;
-            let message = fields
-                .get("message")
-                .map(|v| {
-                    if let Some(msg) = v.as_str() {
-                        msg.replace('\n', "\n    ")
-                    } else {
-                        v.to_string()
-                    }
-                })
-                .unwrap_or_else(|| format!("{fields:?}"));
+            let current_message_aggregate = log.aggregate();
 
             siv.call_on_name::<LinearLayout, _, _>(LOG_VIEW, |log_view| {
-                let current_message_aggregate = format!("{timestamp}{level}{thread_name}{target}{filename}{line_number:?}{message}");
                 if !log_view.is_empty() {
                     if current_message_aggregate == last_message_aggregate {
                         last_message_count += 1;
@@ -488,17 +536,25 @@ pub fn init<C: Configuration>() -> C {
                 }
 
                 let mut theme = Theme::terminal_default();
-                match level {
-                    Level::ERROR => {
+                match &*log {
+                    LogMessage::Stdio { level: Level::ERROR, .. } | LogMessage::Standard { level: Level::ERROR, .. } => {
                         theme.palette.set_color("Primary", Color::Rgb(240, 10, 30));
                     }
-                    Level::WARN => {
+                    LogMessage::Stdio { level: Level::WARN, .. } | LogMessage::Standard { level: Level::WARN, .. } => {
                         theme.palette.set_color("Primary", Color::Rgb(200, 200, 40));
                     }
                     _ => {}
                 };
                 let line_name = line_id.to_string();
                 let line_name2 = line_name.clone();
+                let extra_info_text = match &*log {
+                    LogMessage::Standard { target, filename, line_number, thread_name, .. } => {
+                        format!("           target: {target}    location: {filename}:{line_number}    thread: {thread_name}  ")
+                    }
+                    LogMessage::Stdio { stdio, .. } => {
+                        format!("           location: {stdio} (avoid using println or eprintln)")
+                    }
+                };
                 log_view.add_child(
                     ThemedView::new(
                         theme,
@@ -510,15 +566,9 @@ pub fn init<C: Configuration>() -> C {
                                             Button::new_raw("+", move |siv| {
                                             siv.call_on_name(&line_name, |line: &mut LinearLayout| {
                                                 if line.len() == 1 {
-                                                    if let Some(line_number) = line_number {
-                                                        line.add_child(
-                                                            TextView::new(format!("           target: {target}    location: {filename}:{line_number}    thread: {thread_name}  "))
-                                                        );
-                                                    } else {
-                                                        line.add_child(
-                                                            TextView::new(format!("           location: {filename} (avoid using println or eprintln)"))
-                                                        );
-                                                    }
+                                                    line.add_child(
+                                                        TextView::new(extra_info_text.clone())
+                                                    );
                                                 } else {
                                                     line.remove_child(1);
                                                 }
@@ -535,10 +585,23 @@ pub fn init<C: Configuration>() -> C {
                                     })
                                     .child(TextView::new("      "))
                                     .child({
-                                        if timestamp.is_nan() {
-                                            TextView::new(format!("[{level}] {message}"))
-                                        } else {
-                                            TextView::new(format!("[{timestamp:.2}s {level}] {message}"))
+                                        match &*log {
+                                            LogMessage::Standard { timestamp, level, fields, .. } => {
+                                                let message = fields
+                                                    .get("message")
+                                                    .map(|v| {
+                                                        if let Some(msg) = v.as_str() {
+                                                            msg.replace('\n', "\n    ")
+                                                        } else {
+                                                            v.to_string()
+                                                        }
+                                                    })
+                                                    .unwrap_or_else(|| format!("{fields:?}"));
+                                                TextView::new(format!("[{timestamp: >7.2}s {level: <5}] {message}"))
+                                            }
+                                            LogMessage::Stdio { level, message, ..  } => {
+                                                TextView::new(format!("[         {level: <5}] {message}"))
+                                            }
                                         }
                                     })
                             )
@@ -559,7 +622,7 @@ pub fn init<C: Configuration>() -> C {
                     siv.call_on_name::<LinearLayout, _, _>(LOG_VIEW, |log_view| {
                         log_view.add_child(
                             TextView::new("       [PROGRAM ENDED (Press Ctrl-C again)]")
-                                .style(first_line_style),
+                                .style(program_info_style),
                         );
                     });
                     updated = true;
@@ -571,7 +634,7 @@ pub fn init<C: Configuration>() -> C {
                     siv.call_on_name::<LinearLayout, _, _>(LOG_VIEW, |log_view| {
                         log_view.add_child(
                             TextView::new(format!("       [PROGRAM WAIT ERROR] {e}"))
-                                .style(first_line_style),
+                                .style(program_info_style),
                         );
                     });
                     updated = true;
