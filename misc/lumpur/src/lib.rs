@@ -1,17 +1,23 @@
 #![feature(os_string_pathbuf_leak)]
 
+use std::collections::BTreeMap;
 use std::env::VarError;
 use std::io::{BufRead, BufReader, LineWriter, Write};
+use std::panic::set_hook;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::Sender;
+use std::sync::Arc;
 
+use config::Configuration;
 use cursive::event::{Event, EventResult, Key};
 use cursive::theme::{Color, ColorStyle, ColorType, Effect, Style, Theme};
 use cursive::utils::markup::StyledString;
 use cursive::view::{Nameable, Resizable, ScrollStrategy, Scrollable};
-use cursive::views::{Button, HideableView, Layer, LinearLayout, NamedView, ScrollView, TextView, ThemedView};
+use cursive::views::{
+    Button, HideableView, Layer, LinearLayout, NamedView, ScrollView, TextView, ThemedView,
+};
 use cursive::Cursive;
 use parking_lot::Mutex;
 use raw_sync::events::{EventInit, EventState};
@@ -19,25 +25,31 @@ use raw_sync::Timeout;
 use shared_memory::{ShmemConf, ShmemError};
 use tracing::Level;
 use tracing_subscriber::fmt::time::Uptime;
-use unfmt::unformat;
 
-struct EventWriter {
-    stdout: std::io::Stdout,
-    file: &'static Mutex<LineWriter<std::fs::File>>,
+pub mod config;
+
+#[derive(serde::Deserialize, Clone, Copy, Debug)]
+enum SerdeLevel {
+    ERROR,
+    WARN,
+    INFO,
+    DEBUG,
+    TRACE,
 }
 
-impl Write for EventWriter {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let n = self.stdout.write(buf)?;
-        self.file.lock().write_all(&buf[..n])?;
-        Ok(n)
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.stdout.flush()
+impl From<SerdeLevel> for Level {
+    fn from(level: SerdeLevel) -> Self {
+        match level {
+            SerdeLevel::ERROR => Level::ERROR,
+            SerdeLevel::WARN => Level::WARN,
+            SerdeLevel::INFO => Level::INFO,
+            SerdeLevel::DEBUG => Level::DEBUG,
+            SerdeLevel::TRACE => Level::TRACE,
+        }
     }
 }
 
+#[derive(Debug)]
 struct LogMessage {
     timestamp: f32,
     level: Level,
@@ -45,7 +57,19 @@ struct LogMessage {
     target: String,
     filename: String,
     line_number: Option<usize>,
-    message: String,
+    fields: BTreeMap<String, serde_json::Value>,
+}
+
+#[derive(serde::Deserialize)]
+struct RawLogMessage {
+    timestamp: String,
+    level: SerdeLevel,
+    #[serde(rename = "threadName")]
+    thread_name: String,
+    target: String,
+    filename: String,
+    line_number: Option<usize>,
+    fields: BTreeMap<String, serde_json::Value>,
 }
 
 const EMBEDDED_KEY: &str = "__LUMPUR_EMBEDDED";
@@ -56,74 +80,97 @@ const LOG_SCROLL_VIEW: &str = "log_scroll_view";
 
 static ON_EXIT: Mutex<Option<Box<dyn FnOnce() -> () + Send>>> = Mutex::new(None);
 
-
 pub fn set_on_exit(f: impl FnOnce() -> () + Send + 'static) {
     *ON_EXIT.lock() = Some(Box::new(f));
 }
 
+fn subprocess_fn<C: Configuration>() -> C {
+    let sub = tracing_subscriber::FmtSubscriber::builder()
+        .with_file(true)
+        .with_level(true)
+        .with_line_number(true)
+        .with_ansi(false)
+        .json()
+        .with_thread_names(true)
+        .with_timer(Uptime::default())
+        .with_writer(std::io::stderr)
+        .finish();
 
-pub fn init() -> anyhow::Result<()> {
+    tracing::subscriber::set_global_default(sub)
+        .expect("Failed to set global default tracing subscriber");
+
+    set_hook(Box::new(move |info| {
+        tracing::error!("{info}");
+    }));
+
+    let flink = std::env::var(SHMEM_VAR_KEY).unwrap();
+
+    // Ctrl-C listener
+    std::thread::spawn(move || {
+        let shmem = match ShmemConf::new().size(4096).flink(&flink).open() {
+            Ok(shmem) => shmem,
+            Err(e) => {
+                tracing::error!("Failed to open shared memory segment: {e}");
+                return;
+            }
+        };
+        let result = unsafe { raw_sync::events::Event::from_existing(shmem.as_ptr()) };
+        let (evt, _used_bytes) = match result {
+            Ok(evt) => evt,
+            Err(e) => {
+                tracing::error!("Failed to create ctrl-c event listener: {e}");
+                return;
+            }
+        };
+        if let Err(e) = evt.wait(Timeout::Infinite) {
+            tracing::error!("Failed to wait for ctrl-c event: {e}");
+        }
+        tracing::warn!("Ctrl-C event received. Exiting...");
+        if let Some(f) = ON_EXIT.lock().take() {
+            f();
+        } else {
+            std::process::exit(0);
+        }
+    });
+
+    if !Path::new("app-config.toml").exists() {
+        tracing::error!("app-config.toml not found");
+        std::process::exit(1);
+    }
+    let data = match std::fs::read_to_string("app-config.toml") {
+        Ok(data) => data,
+        Err(e) => {
+            tracing::error!("{e:?}");
+            std::process::exit(1);
+        }
+    };
+    let value = match toml::from_str(&data) {
+        Ok(value) => value,
+        Err(e) => {
+            tracing::error!("{e:?}");
+            std::process::exit(1);
+        }
+    };
+    match C::from_config_file(value) {
+        Some(out) => out,
+        None => {
+            std::process::exit(1);
+        }
+    }
+}
+
+pub fn init<C: Configuration>() -> C {
     let env_var = std::env::var(EMBEDDED_KEY);
     match env_var {
         Ok(val) => {
             if val == EMBEDDED_VAL {
-                let log_file = std::fs::File::create("app.log")?;
-                let mut log_file = LineWriter::new(log_file);
-                writeln!(log_file, "!Program started with pid: {}", std::process::id())?;
-                let log_file: &_ = Box::leak(Box::new(Mutex::new(log_file)));
-
-                let sub = tracing_subscriber::FmtSubscriber::builder()
-                    .with_file(true)
-                    .with_level(true)
-                    .with_line_number(true)
-                    .with_ansi(false)
-                    .compact()
-                    .with_thread_names(true)
-                    .with_timer(Uptime::default())
-                    .with_writer(|| EventWriter {
-                        stdout: std::io::stdout(),
-                        file: log_file,
-                    })
-                    .finish();
-
-                tracing::subscriber::set_global_default(sub)?;
-                let flink = std::env::var(SHMEM_VAR_KEY).unwrap();
-
-                std::thread::spawn(move || {
-                    let shmem = match ShmemConf::new().size(4096).flink(&flink).open() {
-                        Ok(shmem) => shmem,
-                        Err(e) => {
-                            tracing::error!("Failed to open shared memory segment: {e}");
-                            return;
-                        }
-                    };
-                    let result = unsafe { raw_sync::events::Event::from_existing(shmem.as_ptr()) };
-                    let (evt, _used_bytes) = match result {
-                        Ok(evt) => evt,
-                        Err(e) => {
-                            tracing::error!("Failed to create ctrl-c event listener: {e}");
-                            return;
-                        }
-                    };
-                    if let Err(e) = evt.wait(Timeout::Infinite) {
-                        tracing::error!("Failed to wait for ctrl-c event: {e}");
-                    }
-                    tracing::warn!("Ctrl-C event received. Exiting...");
-                    let mut guard = log_file.lock();
-                    let _ = guard.flush();
-                    drop(shmem);
-                    drop(evt);
-                    if let Some(f) = ON_EXIT.lock().take() {
-                        f();
-                    } else {
-                        std::process::exit(0);
-                    }
-                });
-                return Ok(());
+                return subprocess_fn();
             }
         }
         Err(VarError::NotPresent) => {}
-        Err(e) => return Err(e.into()),
+        Err(e) => {
+            panic!("Failed to read environment variable: {e}");
+        }
     }
 
     let mut shmem = None;
@@ -136,82 +183,125 @@ pub fn init() -> anyhow::Result<()> {
                 break;
             }
             Err(ShmemError::LinkExists) => {}
-            Err(e) => return Err(anyhow::anyhow!("Failed to create shared memory segment: {e}")),
+            Err(e) => {
+                panic!("Failed to create shared memory segment: {e}");
+            }
         };
     }
     let Some(shmem) = shmem else {
-        return Err(anyhow::anyhow!("Failed to create shared memory segment. All slots occupied"));
+        panic!("Failed to create shared memory segment. All slots occupied");
     };
-    let (ctrlc_evt, _used_bytes) = unsafe { raw_sync::events::Event::new(shmem.as_ptr(), true).map_err(|e| anyhow::anyhow!("Failed to create ctrl-c event: {e}"))? };
+    let (ctrlc_evt, _used_bytes) = unsafe {
+        raw_sync::events::Event::new(shmem.as_ptr(), true)
+            .expect("Failed to create ctrl-c event")
+    };
 
-    let max_lines: usize = std::env::var("MAX_LINES").map(|s| s.parse().unwrap_or(1000)).unwrap_or(1000);
-    let mut child = Command::new(std::env::current_exe()?)
+    let log_file = std::fs::File::create("app.log").expect("Failed to create log file (app.log)");
+    let mut log_file = LineWriter::new(log_file);
+    writeln!(
+        log_file,
+        "!Program started with pid: {}",
+        std::process::id()
+    ).expect("Failed to write to log file (app.log)");
+    if std::env::args().len() > 1 {
+        write!(log_file, "!Arguments:").expect("Failed to write to log file (app.log)");
+        for arg in std::env::args().skip(1) {
+            write!(log_file, " {}", arg).expect("Failed to write to log file (app.log)");
+        }
+        writeln!(log_file).expect("Failed to write to log file (app.log)");
+    } else {
+        writeln!(log_file, "!No arguments provided").expect("Failed to write to log file (app.log)");
+    }
+    let (write_tx, write_rx) = std::sync::mpsc::channel::<Arc<LogMessage>>();
+    let write_thr = std::thread::spawn(move || {
+        while let Ok(msg) = write_rx.recv() {
+            // TODO improve
+            let _ = writeln!(log_file, "{msg:?}");
+        }
+        let _ = log_file.flush();
+        // let mut log_file = BufWriter::new(log_file.into_inner().unwrap());
+        // let _ = writeln!(log_file, "\n!Environment Variables:");
+        // for (k, v) in std::env::vars_os() {
+        //     let _ = writeln!(log_file, "{}={}", k.to_string_lossy(), v.to_string_lossy());
+        // }
+        // let _ = log_file.flush();
+    });
+
+    let max_lines: usize = std::env::var("MAX_LINES")
+        .map(|s| s.parse().unwrap_or(1000))
+        .unwrap_or(1000);
+    let mut child = Command::new(std::env::current_exe().expect("Failed to get current exe"))
         .env(EMBEDDED_KEY, EMBEDDED_VAL)
         .env(SHMEM_VAR_KEY, flink)
         .args(std::env::args().skip(1))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()?;
-    let (log_tx, log_rx) = std::sync::mpsc::channel::<LogMessage>();
+        .spawn()
+        .expect("Failed to spawn child process");
+    let (log_tx, log_rx) = std::sync::mpsc::channel::<Arc<LogMessage>>();
     let stdout = BufReader::new(child.stdout.take().unwrap());
     let stderr = BufReader::new(child.stderr.take().unwrap());
-    let current_dir: &_ = std::env::current_dir()?.canonicalize()?.leak();
+    let current_dir: &_ = std::env::current_dir().expect("Failed to get current dir").canonicalize().expect("Failed to canonicalize current dir").leak();
 
-    let make_line_f = |line_tx: Sender<LogMessage>, fallback_ty, fallback_loc: &'static str| {
+    let make_line_f = |line_tx: Sender<Arc<LogMessage>>,
+                       write_tx: Sender<Arc<LogMessage>>,
+                       fallback_ty,
+                       fallback_loc: &'static str| {
         move |line: String| {
-            macro_rules! default {
-                () => {
-                    let _ = line_tx.send(LogMessage {
+            let log = match serde_json::from_str::<RawLogMessage>(&line) {
+                Ok(log) => log,
+                Err(_) => {
+                    let log = Arc::new(LogMessage {
                         timestamp: f32::NAN,
                         level: fallback_ty,
                         thread_name: String::new(),
                         target: String::new(),
                         filename: fallback_loc.into(),
                         line_number: None,
-                        message: line,
+                        fields: {
+                            let mut fields = BTreeMap::new();
+                            fields.insert("message".into(), line.into());
+                            fields
+                        },
                     });
+                    let _ = line_tx.send(log.clone());
+                    let _ = write_tx.send(log);
                     return;
-                };
-            }
-            let Some((timestamp, level_thread_name_target, filename, line_num, message)) =
-                unformat!("{}s {}: {}:{}: {}", &line)
-            else {
-                default!();
+                }
             };
-            let Some((level, thread_name, target)) =
-                unformat!("{} {} {}", level_thread_name_target.trim_start())
-            else {
-                default!();
-            };
-            let mut filename = Path::new(filename)
-                .canonicalize()
-                .unwrap_or_else(|_| PathBuf::from(filename));
-            filename = filename
-                .strip_prefix(&current_dir)
-                .unwrap_or(&filename)
-                .to_path_buf();
-
-            let _ = line_tx.send(LogMessage {
-                timestamp: timestamp.trim_start().parse().unwrap_or(f32::NAN),
-                level: match level.trim() {
-                    "ERROR" => Level::ERROR,
-                    "WARN" => Level::WARN,
-                    "INFO" => Level::INFO,
-                    "DEBUG" => Level::DEBUG,
-                    "TRACE" => Level::TRACE,
-                    _ => fallback_ty,
+            let log = Arc::new(LogMessage {
+                timestamp: {
+                    log.timestamp
+                        .trim_start()
+                        .strip_suffix('s')
+                        .unwrap()
+                        .parse()
+                        .unwrap_or(f32::NAN)
                 },
-
-                thread_name: thread_name.into(),
-                target: target.into(),
-                filename: filename.to_string_lossy().into(),
-                line_number: Some(line_num.parse().unwrap_or(0)),
-                message: message.into(),
+                level: log.level.into(),
+                thread_name: log.thread_name,
+                target: log.target,
+                filename: {
+                    // This corrects the slashes in the filename
+                    let filename = Path::new(&log.filename)
+                        .canonicalize()
+                        .unwrap_or_else(|_| PathBuf::from(&log.filename));
+                    filename
+                        .strip_prefix(&current_dir)
+                        .unwrap_or(&filename)
+                        .to_string_lossy()
+                        .into_owned()
+                },
+                line_number: log.line_number,
+                fields: log.fields,
             });
+
+            let _ = line_tx.send(log.clone());
+            let _ = write_tx.send(log);
         }
     };
-    let f = make_line_f(log_tx.clone(), Level::INFO, "stdout");
+    let f = make_line_f(log_tx.clone(), write_tx.clone(), Level::INFO, "stdout");
     std::thread::spawn(move || {
         for line in stdout.lines() {
             let Ok(line) = line else {
@@ -220,7 +310,7 @@ pub fn init() -> anyhow::Result<()> {
             f(line);
         }
     });
-    let f = make_line_f(log_tx, Level::ERROR, "stderr");
+    let f = make_line_f(log_tx, write_tx, Level::ERROR, "stderr");
     std::thread::spawn(move || {
         for line in stderr.lines() {
             let Ok(line) = line else {
@@ -229,7 +319,6 @@ pub fn init() -> anyhow::Result<()> {
             f(line);
         }
     });
-
 
     let mut siv = cursive::default();
     let theme = Theme::terminal_default();
@@ -260,17 +349,24 @@ pub fn init() -> anyhow::Result<()> {
     let extra_info_callback = move |siv: &mut Cursive| {
         let extra_info_visible = !extra_info_visible.fetch_not(Ordering::Relaxed);
 
-        siv.call_on_name(LOG_SCROLL_VIEW, |log_scroll_view: &mut ScrollView<LinearLayout>| {
-            if extra_info_visible {
-                log_scroll_view.set_scroll_strategy(ScrollStrategy::KeepRow);
-            } else {
-                log_scroll_view.set_scroll_strategy(ScrollStrategy::StickToBottom);
-            }
-        });
+        siv.call_on_name(
+            LOG_SCROLL_VIEW,
+            |log_scroll_view: &mut ScrollView<LinearLayout>| {
+                if extra_info_visible {
+                    log_scroll_view.set_scroll_strategy(ScrollStrategy::KeepRow);
+                } else {
+                    log_scroll_view.set_scroll_strategy(ScrollStrategy::StickToBottom);
+                }
+            },
+        );
 
         siv.call_on_name(LOG_VIEW, |log_view: &mut LinearLayout| {
             for i in 0..log_view.len() {
-                if let Some(_) = log_view.get_child_mut(i).unwrap().downcast_mut::<TextView>() {
+                if let Some(_) = log_view
+                    .get_child_mut(i)
+                    .unwrap()
+                    .downcast_mut::<TextView>()
+                {
                     continue;
                 }
                 let line: &mut ThemedView<NamedView<LinearLayout>> =
@@ -324,12 +420,10 @@ pub fn init() -> anyhow::Result<()> {
     );
 
     let ctrlc_count: &_ = Box::leak(Box::new(AtomicUsize::new(0)));
-    siv.menubar().add_leaf(
-        StyledString::styled("Quit (Ctrl-C)", menu_style),
-        |_| {
+    siv.menubar()
+        .add_leaf(StyledString::styled("Quit (Ctrl-C)", menu_style), |_| {
             ctrlc_count.fetch_add(1, Ordering::Relaxed);
-        },
-    );
+        });
     siv.set_global_callback(Event::CtrlChar('c'), move |_| {
         ctrlc_count.fetch_add(1, Ordering::Relaxed);
     });
@@ -345,20 +439,30 @@ pub fn init() -> anyhow::Result<()> {
     let mut line_id = 0usize;
     let mut last_message_aggregate = String::new();
     let mut last_message_count = 0usize;
+    let mut child = Some(child);
 
     while siv.is_running() {
         siv.step();
         let mut updated = false;
-        while let Ok(LogMessage {
-            timestamp,
-            level,
-            thread_name,
-            target,
-            filename,
-            line_number,
-            message,
-        }) = log_rx.try_recv()
-        {
+        while let Ok(log) = log_rx.try_recv() {
+            let timestamp = log.timestamp;
+            let level = log.level;
+            let thread_name = log.thread_name.clone();
+            let target = log.target.clone();
+            let filename = log.filename.clone();
+            let line_number = log.line_number;
+            let fields = &log.fields;
+            let message = fields
+                .get("message")
+                .map(|v| {
+                    if let Some(msg) = v.as_str() {
+                        msg.replace('\n', "\n    ")
+                    } else {
+                        v.to_string()
+                    }
+                })
+                .unwrap_or_else(|| format!("{fields:?}"));
+
             siv.call_on_name::<LinearLayout, _, _>(LOG_VIEW, |log_view| {
                 let current_message_aggregate = format!("{timestamp}{level}{thread_name}{target}{filename}{line_number:?}{message}");
                 if !log_view.is_empty() {
@@ -430,7 +534,13 @@ pub fn init() -> anyhow::Result<()> {
                                         }
                                     })
                                     .child(TextView::new("      "))
-                                    .child(TextView::new(format!("[{timestamp:.2}s {level}] {message}")))
+                                    .child({
+                                        if timestamp.is_nan() {
+                                            TextView::new(format!("[{level}] {message}"))
+                                        } else {
+                                            TextView::new(format!("[{timestamp:.2}s {level}] {message}"))
+                                        }
+                                    })
                             )
                             .with_name(line_name2)
                     )
@@ -439,44 +549,65 @@ pub fn init() -> anyhow::Result<()> {
             });
             updated = true;
         }
-        if updated {
-            siv.refresh();
-        }
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                if status.success() {
-                    siv.quit();
-                } else {
-                    exit_code = 1;
-                    siv.quit();
+        if let Some(child_unwrapped) = &mut child {
+            match child_unwrapped.try_wait() {
+                Ok(Some(status)) => {
+                    if !status.success() {
+                        exit_code = 1;
+                    }
+                    child = None;
+                    siv.call_on_name::<LinearLayout, _, _>(LOG_VIEW, |log_view| {
+                        log_view.add_child(
+                            TextView::new("       [PROGRAM ENDED (Press Ctrl-C again)]")
+                                .style(first_line_style),
+                        );
+                    });
+                    updated = true;
                 }
-            }
-            Ok(None) => {}
-            Err(e) => {
-                eprintln!("Failed to wait for child process: {}", e);
-                exit_code = 1;
-                siv.quit();
+                Ok(None) => {}
+                Err(e) => {
+                    exit_code = 1;
+                    child = None;
+                    siv.call_on_name::<LinearLayout, _, _>(LOG_VIEW, |log_view| {
+                        log_view.add_child(
+                            TextView::new(format!("       [PROGRAM WAIT ERROR] {e}"))
+                                .style(first_line_style),
+                        );
+                    });
+                    updated = true;
+                }
             }
         }
         let new_ctrlc_count = ctrlc_count.load(Ordering::Relaxed);
         if new_ctrlc_count != last_ctrlc_count {
             last_ctrlc_count = new_ctrlc_count;
-            if new_ctrlc_count == 1 {
-                if let Err(e) = ctrlc_evt.set(EventState::Signaled) {
-                    eprintln!("Failed to signal ctrl-c event: {e}");
+            if let Some(child) = &mut child {
+                if new_ctrlc_count == 1 {
+                    if let Err(e) = ctrlc_evt.set(EventState::Signaled) {
+                        eprintln!("Failed to signal ctrl-c event: {e}");
+                    }
+                } else {
+                    exit_code = 1;
+                    if let Err(e) = child.kill() {
+                        eprintln!("Failed to kill child process: {e}");
+                    } else {
+                        eprintln!("Process killed");
+                    }
+                    siv.quit();
                 }
             } else {
-                exit_code = 1;
-                if let Err(e) = child.kill() {
-                    eprintln!("Failed to kill child process: {e}");
-                }
                 siv.quit();
             }
+        }
+        if updated {
+            siv.refresh();
         }
     }
     // Very important to drop to return the terminal to its original state
     drop(siv);
+    // Drop these to remove the shared memory segment file
     drop(ctrlc_evt);
     drop(shmem);
+    let _ = write_thr.join();
     std::process::exit(exit_code);
 }
