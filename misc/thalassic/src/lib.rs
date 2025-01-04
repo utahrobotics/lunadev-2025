@@ -81,19 +81,12 @@ type ObstacleMapBindGrp = (StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,)
 /// This bind group is the input to the obstaclemapper.
 type ObstacleMapperInputBindGrp = (UniformBuffer<f32>,);
 
-/// 1. The position of the closest obstacle to each position. (should be filled with `0`, used during calculation)
-/// 2. The radius of the robot in meters
+/// 1. The radius of the robot in meters
 ///
 /// This bind group is the input to the expander.
-type ExpanderInputBindGrp = (
-    StorageBuffer<[u32], HostWriteOnly, ShaderReadWrite>,
+type ExpanderBindGrp = (
     UniformBuffer<f32>,
 );
-
-/// 1. Whether or not each cell is an obstacle, denoted with `1` or `0`.
-///
-/// This bind group is the output of the obstacle expander and input to the pathfinder.
-type ExpandedObstacleMapBindGrp = (StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,);
 
 /// The set of bind groups used by the rest of the thalassic pipeline
 type BetaBindGroups = (
@@ -103,8 +96,7 @@ type BetaBindGroups = (
     GpuBufferSet<GradMapBindGrp>,
     GpuBufferSet<ObstacleMapBindGrp>,
     GpuBufferSet<ObstacleMapperInputBindGrp>,
-    GpuBufferSet<ExpanderInputBindGrp>,
-    GpuBufferSet<ExpandedObstacleMapBindGrp>,
+    GpuBufferSet<ExpanderBindGrp>,
 );
 
 #[derive(Debug, Clone, Copy)]
@@ -272,15 +264,13 @@ impl ThalassicBuilder {
         }
         .compile();
 
-        // let [expand_fn] = ExpandObstacles {
-        //     obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<4, 0>(),
-        //     closest: BufferGroupBinding::<_, BetaBindGroups>::get::<6, 0>(),
-        //     expanded: BufferGroupBinding::<_, BetaBindGroups>::get::<7, 0>(),
-        //     radius: BufferGroupBinding::<_, BetaBindGroups>::get::<6, 1>(),
-        //     grid_width: self.heightmap_dimensions.x,
-        //     grid_height: self.heightmap_dimensions.y,
-        // }
-        // .compile();
+        let [expand_fn] = ExpandObstacles {
+            obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<4, 0>(),
+            radius: BufferGroupBinding::<_, BetaBindGroups>::get::<6, 0>(),
+            grid_width: self.heightmap_dimensions.x,
+            grid_height: self.heightmap_dimensions.y,
+        }
+        .compile();
 
         let mut pipeline = ComputePipeline::new([
             &height_fn,
