@@ -87,6 +87,27 @@ impl LogMessage {
             } => format!("{level}{thread_name}{target}{filename}{line_number}{fields:?}"),
         }
     }
+
+    fn create_ui_message(&self) -> String {
+        match self {
+            LogMessage::Standard { timestamp, level, fields, .. } => {
+                let message = fields
+                    .get("message")
+                    .map(|v| {
+                        if let Some(msg) = v.as_str() {
+                            msg.replace('\n', "\n    ")
+                        } else {
+                            v.to_string()
+                        }
+                    })
+                    .unwrap_or_else(|| format!("{fields:?}"));
+                format!("[{timestamp: >7.2}s {level: <5}] {message}")
+            }
+            LogMessage::Stdio { level, message, ..  } => {
+                format!("[         {level: <5}] {message}")
+            }
+        }
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -309,13 +330,13 @@ impl NewWorkingDirectory {
                 let datetime = chrono::Local::now();
                 let mut out = PathBuf::from("output");
                 out.push(format!(
-                    "{}-{}-{}",
+                    "{}-{:0>2}-{:0>2}",
                     datetime.year(),
                     datetime.month(),
                     datetime.day()
                 ));
                 out.push(format!(
-                    "{};{};{}",
+                    "{:0>2};{:0>2};{:0>2}",
                     datetime.hour(),
                     datetime.minute(),
                     datetime.second()
@@ -719,6 +740,10 @@ impl LumpurBuilder {
                             let mut style = Style::inherit_parent();
                             style.effects.insert(Effect::Bold);
                             repetition_text.set_content(StyledString::styled(format!(" x{: <4}", last_message_count), style));
+                            let message_text: &mut TextView =
+                                top.get_child_mut(2).unwrap().downcast_mut().unwrap();
+                            // This will update the timestamp if needed
+                            message_text.set_content(log.create_ui_message());
                             return;
                         }
                     }
@@ -778,26 +803,7 @@ impl LumpurBuilder {
                                             }
                                         })
                                         .child(TextView::new("      "))
-                                        .child({
-                                            match &*log {
-                                                LogMessage::Standard { timestamp, level, fields, .. } => {
-                                                    let message = fields
-                                                        .get("message")
-                                                        .map(|v| {
-                                                            if let Some(msg) = v.as_str() {
-                                                                msg.replace('\n', "\n    ")
-                                                            } else {
-                                                                v.to_string()
-                                                            }
-                                                        })
-                                                        .unwrap_or_else(|| format!("{fields:?}"));
-                                                    TextView::new(format!("[{timestamp: >7.2}s {level: <5}] {message}"))
-                                                }
-                                                LogMessage::Stdio { level, message, ..  } => {
-                                                    TextView::new(format!("[         {level: <5}] {message}"))
-                                                }
-                                            }
-                                        })
+                                        .child(TextView::new(log.create_ui_message()))
                                 )
                                 .with_name(line_name2)
                         )
