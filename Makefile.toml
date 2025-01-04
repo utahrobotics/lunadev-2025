@@ -33,16 +33,16 @@ workspace = false
 command = "cargo"
 args = ["run", "-p", "lunabot", "--", "clean"]
 
-[tasks.mouser-web]
+[tasks.import_lunabase]
 workspace = false
-command = "npm"
-cwd = "mouser/mouser-web"
-args = ["run", "build"]
+command = "godot"
+args = ["--path", "godot/lunabase", "--import"]
 
-[tasks.mouser-host]
+[tasks.lunabase]
 workspace = false
-command = "cargo"
+command = "godot"
+args = ["--path", "godot/lunabase", "-d"]
 dependencies = [
-    "mouser-web",
+    "build_lunabase",
+    "import_lunabase",
 ]
-args = ["run", "-p", "mouser-host"]

@@ -12,7 +12,7 @@ use axum::{
 use crossbeam::{atomic::AtomicCell, utils::Backoff};
 use godot::global::godot_print;
 use tasker::shared::{MaybeOwned, SharedDataReceiver};
-use tokio::{sync::Notify, task::block_in_place};
+use tasker::tokio::{sync::Notify, task::block_in_place};
 use webrtc::{
     api::{
         interceptor_registry::register_default_interceptors,
@@ -47,7 +47,7 @@ pub fn stream_webrtc() -> (MaybeOwned<BroadcastingBuffer>, Arc<AtomicCell<Option
     let lendee_storage2 = lendee_storage.clone();
 
     std::thread::spawn(move || {
-        tokio::runtime::Builder::new_multi_thread()
+        tasker::tokio::runtime::Builder::new_multi_thread()
             .worker_threads(3)
             .enable_all()
             .build()
@@ -103,7 +103,7 @@ pub fn stream_webrtc() -> (MaybeOwned<BroadcastingBuffer>, Arc<AtomicCell<Option
                                 // Read incoming RTCP packets
                                 // Before these packets are returned they are processed by interceptors. For things
                                 // like NACK this needs to be called.
-                                tokio::spawn(async move {
+                                tasker::tokio::spawn(async move {
                                     let mut rtcp_buf = vec![0u8; 1500];
                                     while let Ok((_, _)) = rtp_sender.read(&mut rtcp_buf).await {}
                                 });
@@ -131,7 +131,7 @@ pub fn stream_webrtc() -> (MaybeOwned<BroadcastingBuffer>, Arc<AtomicCell<Option
                                     },
                                 ));
 
-                                let (to_send_tx, mut to_send_rx) = tokio::sync::mpsc::channel(1);
+                                let (to_send_tx, mut to_send_rx) = tasker::tokio::sync::mpsc::channel(1);
 
                                 let to_send_tx2 = to_send_tx.clone();
                                 peer_connection.on_ice_candidate(Box::new(
@@ -153,7 +153,7 @@ pub fn stream_webrtc() -> (MaybeOwned<BroadcastingBuffer>, Arc<AtomicCell<Option
                                 peer_connection.set_local_description(offer).await.expect("Failed to set local description");
 
                                 loop {
-                                    tokio::select! {
+                                    tasker::tokio::select! {
                                         _ = connected_notify.notified() => break,
                                         _ = disconnected_notify.notified() => {
                                             let _ = ws.close().await;
@@ -196,7 +196,7 @@ pub fn stream_webrtc() -> (MaybeOwned<BroadcastingBuffer>, Arc<AtomicCell<Option
                                     }
                                     backoff.snooze();
                                 };
-                                tokio::select! {
+                                tasker::tokio::select! {
                                     _ = async {
                                         'main: loop {
                                             // block_in_place is not appropriate to be used in select
@@ -233,7 +233,7 @@ pub fn stream_webrtc() -> (MaybeOwned<BroadcastingBuffer>, Arc<AtomicCell<Option
                         }),
                     );
 
-                let listener = tokio::net::TcpListener::bind("0.0.0.0:80")
+                let listener = tasker::tokio::net::TcpListener::bind("0.0.0.0:80")
                     .await
                     .expect("Failed to bind TCP listener");
                 godot_print!("HTTP Server started");

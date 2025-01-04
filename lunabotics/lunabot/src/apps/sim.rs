@@ -33,7 +33,7 @@ use tasker::{
     BlockOn,
 };
 use thalassic::DepthProjectorBuilder;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 use crate::pipelines::thalassic::ThalassicData;
 use crate::{
@@ -90,11 +90,27 @@ impl LunasimbotApp {
             error!("Failed to initialize gputter: {e}");
         }
 
-        let import_result = std::process::Command::new("godot")
-            .args(["--path", "godot/lunasim", "--import"])
-            .output();
+        async fn import() -> std::io::Result<std::process::Output> {
+            tokio::select! {
+                x = {
+                    info!("Importing godot project...");
+                    Command::new("godot")
+                        .args(["--path", "godot/lunasim", "--import"])
+                        .stdout(Stdio::piped())
+                        .stderr(Stdio::piped())
+                        .output()
+                } => x,
+                _ = async {
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    warn!("NOTE: If the godot editor is still open and idle, close it now");
+                    std::future::pending::<()>().await;
+                } => {
+                    unreachable!()
+                }
+            }
+        }
 
-        match import_result {
+        match import().block_on() {
             Ok(output) => {
                 if !output.status.success() {
                     error!("Failed to import godot project: {output:?}");
@@ -106,15 +122,16 @@ impl LunasimbotApp {
                 return;
             }
         }
+        info!("Godot project imported");
 
+        let _guard = get_tokio_handle().enter();
         let mut cmd = Command::new("godot");
 
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .args(["--path", "godot/lunasim"]);
+            .args(["--path", "godot/lunasim", "-d"]);
 
-        let _guard = get_tokio_handle().enter();
         let (lunasim_stdin, from_lunasim_ref) = match cmd.spawn() {
             Ok(tmp) => {
                 let child = tmp;

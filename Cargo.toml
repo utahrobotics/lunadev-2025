@@ -14,13 +14,12 @@ members = [
     "misc/gputter-macros",
     "misc/gputter",
     "misc/thalassic",
-    "mouser/mouser-host",
     "lunaserver-web/lunaserver-web-host",
     "lunaserver-web/lunaserver-web-client",
     "misc/lumpur",
 ]
 resolver = "2"
-exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/", "mouser/mouser-web", "output/"]
+exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/","output/"]
 
 [workspace.dependencies]
 fxhash = "0.2"
@@ -51,7 +50,6 @@ rayon = "1.10.0"
 parking_lot = "0.12.2"
 # bytes = "1.6.0"
 axum = { version = "0.7.7", features = ["ws", "macros"] }
-thiserror = "1.0.64"
 unfmt = "0.2.2"
 heapless = "0.8.0"
 tracing = "0.1.41"

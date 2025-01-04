@@ -1,2 +1,0 @@
-streams:
-    macos_facetime: ffmpeg:device?video=0&audio=1&video_size=1280x720&framerate=30#video=h264#audio=pcma
