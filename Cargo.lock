@@ -2738,6 +2738,7 @@ dependencies = [
 name = "lumpur"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "cursive",
  "parking_lot",
  "raw_sync",

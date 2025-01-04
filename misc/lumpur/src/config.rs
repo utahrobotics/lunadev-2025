@@ -2,6 +2,7 @@ pub use serde;
 pub use toml::{Table, Value};
 
 pub trait Configuration: Sized {
+    fn is_not_default_compatible() -> bool;
     fn from_config_file(config_file: Table) -> Option<Self>;
 }
 
@@ -31,6 +32,12 @@ macro_rules! define_configuration {
             ),*
         }
         impl $crate::config::Configuration for $name {
+            fn is_not_default_compatible() -> bool {
+                $(
+                    stringify!($cmd_name) == "Clean" || stringify!($cmd_name) == "clean"
+                )||*
+            }
+
             fn from_config_file(config_file: $crate::config::Table) -> Option<Self> {
                 use $crate::config::serde;
                 use $crate::config::Value;
