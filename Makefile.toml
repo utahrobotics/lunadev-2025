@@ -28,10 +28,10 @@ workspace = false
 command = "cargo"
 args = ["run", "--features=production", "-p", "lunabot", "--", "main"]
 
-[tasks.del-cabinet]
+[tasks.clean]
 workspace = false
 command = "cargo"
-args = ["run", "-p", "urobotics-tool", "--", "deletecabinet"]
+args = ["run", "-p", "lunabot", "--", "clean"]
 
 [tasks.mouser-web]
 workspace = false

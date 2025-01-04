@@ -9,34 +9,14 @@ use crossbeam::atomic::AtomicCell;
 use k::Chain;
 #[cfg(feature = "production")]
 pub use production::Main;
-pub use sim::{LunasimStdin, Sim};
-use urobotics::{
-    log::{error, warn},
-    tokio::{
-        self,
-        sync::{mpsc, watch},
-    },
-    BlockOn,
-};
+pub use sim::{LunasimStdin, LunasimbotApp};
+use tasker::tokio::sync::{mpsc, watch};
+use tracing::error;
 
 use crate::teleop::{LunabaseConn, PacketBuilder};
 
-fn default_max_pong_delay_ms() -> u64 {
+pub fn default_max_pong_delay_ms() -> u64 {
     1500
-}
-
-fn wait_for_ctrl_c() {
-    match tokio::signal::ctrl_c().block_on() {
-        Ok(()) => {
-            warn!("Ctrl-C Received");
-        }
-        Err(e) => {
-            error!("Failed to await ctrl_c: {e}");
-            loop {
-                std::thread::park();
-            }
-        }
-    }
 }
 
 fn log_teleop_messages() {

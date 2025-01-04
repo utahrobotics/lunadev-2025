@@ -9,8 +9,8 @@ use ares_bt::{
     Behavior, CancelSafe, Status,
 };
 use common::LunabotStage;
-use log::{info, warn};
 use nalgebra::Point3;
+use tracing::{info, warn};
 
 use crate::{blackboard::LunabotBlackboard, utils::WaitBehavior, Action};
 

@@ -3,8 +3,8 @@ use std::{num::NonZeroU32, sync::Arc};
 use crossbeam::atomic::AtomicCell;
 use gputter::is_gputter_initialized;
 use nalgebra::Vector2;
+use tasker::shared::OwnedData;
 use thalassic::{Occupancy, PointCloudStorage, ThalassicBuilder};
-use urobotics::shared::OwnedData;
 
 const CELL_COUNT: u32 = 128 * 256;
 

@@ -1,4 +1,3 @@
-use core::str;
 use std::{
     cmp::Ordering,
     collections::VecDeque,
@@ -17,22 +16,15 @@ use gputter::{
     init_gputter_blocking,
     types::{AlignedMatrix4, AlignedVec4},
 };
+use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4};
 use pathfinding::Pathfinder;
-use serde::{Deserialize, Serialize};
-use thalassic::DepthProjectorBuilder;
-use urobotics::shared::OwnedData;
-use urobotics::{
-    app::define_app,
-    log::{log_to_console, Level},
-    tokio,
-};
-use urobotics::{
-    app::Runnable,
+use tasker::shared::OwnedData;
+use tasker::tokio;
+use tasker::{
     callbacks::caller::CallbacksStorage,
     define_callbacks, fn_alias, get_tokio_handle,
-    log::{error, warn},
     tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         process::{ChildStdin, Command},
@@ -40,6 +32,8 @@ use urobotics::{
     },
     BlockOn,
 };
+use thalassic::DepthProjectorBuilder;
+use tracing::{error, warn};
 
 use crate::pipelines::thalassic::ThalassicData;
 use crate::{
@@ -47,7 +41,7 @@ use crate::{
     pipelines::thalassic::{spawn_thalassic_pipeline, PointsStorageChannel},
 };
 
-use super::{create_packet_builder, create_robot_chain, log_teleop_messages, wait_for_ctrl_c};
+use super::{create_packet_builder, create_robot_chain, log_teleop_messages};
 
 fn_alias! {
     pub type FromLunasimRef = CallbacksRef(FromLunasim) + Send
@@ -84,22 +78,14 @@ const DELIMIT: &[u8] = b"READY\r\n";
 #[cfg(not(target_os = "windows"))]
 const DELIMIT: &[u8] = b"READY\n";
 
-#[derive(Serialize, Deserialize)]
 pub struct LunasimbotApp {
     pub lunabase_address: SocketAddr,
-    #[serde(default = "super::default_max_pong_delay_ms")]
     pub max_pong_delay_ms: u64,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    #[serde(default)]
-    simulation_command: Vec<String>,
+    pub simulation_command: Vec<String>,
 }
 
-impl Runnable for LunasimbotApp {
-    fn run(mut self) {
-        log_to_console([
-            ("wgpu_hal::vulkan::instance", Level::Info),
-            ("wgpu_core::device::resource", Level::Info),
-        ]);
+impl LunasimbotApp {
+    pub fn run(mut self) {
         log_teleop_messages();
         if let Err(e) = init_gputter_blocking() {
             error!("Failed to initialize gputter: {e}");
@@ -117,14 +103,12 @@ impl Runnable for LunasimbotApp {
 
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
+            .stderr(Stdio::piped());
 
         let _guard = get_tokio_handle().enter();
-        let child;
         let (lunasim_stdin, from_lunasim_ref) = match cmd.spawn() {
             Ok(tmp) => {
-                child = tmp;
+                let child = tmp;
                 let stdin = child.stdin.unwrap();
                 let mut stdout = child.stdout.unwrap();
                 let mut stderr = child.stderr.unwrap();
@@ -225,6 +209,11 @@ impl Runnable for LunasimbotApp {
                 return;
             }
         };
+        let lunasim_stdin2 = lunasim_stdin.clone();
+        set_on_exit(move || {
+            lunasim_stdin2.write(&bitcode::encode(&FromLunasimbot::Quit));
+            std::process::exit(0);
+        });
         let robot_chain = create_robot_chain();
         let localizer = Localizer::new(robot_chain.clone(), Some(lunasim_stdin.clone()));
         let localizer_ref = localizer.get_ref();
@@ -348,31 +337,48 @@ impl Runnable for LunasimbotApp {
 
         let mut bitcode_buffer = bitcode::Buffer::new();
 
-        std::thread::spawn(move || {
-            run_ai(
-                robot_chain,
-                |action, inputs| match action {
-                    Action::SetStage(stage) => {
-                        lunabot_stage.store(stage);
+        run_ai(
+            robot_chain,
+            |action, inputs| match action {
+                Action::SetStage(stage) => {
+                    lunabot_stage.store(stage);
+                }
+                Action::SetSteering(steering) => {
+                    let (left, right) = steering.get_left_and_right();
+                    let bytes = bitcode_buffer.encode(&FromLunasimbot::Drive {
+                        left: left as f32,
+                        right: right as f32,
+                    });
+                    lunasim_stdin.write(bytes);
+                }
+                Action::CalculatePath { from, to, mut into } => {
+                    let mut data = shared_thalassic_data.get();
+                    loop {
+                        if data.current_robot_radius == 1.5 {
+                            break;
+                        }
+                        data.set_robot_radius(1.5);
+                        drop(data);
+                        data = shared_thalassic_data.get();
                     }
-                    Action::SetSteering(steering) => {
-                        let (left, right) = steering.get_left_and_right();
-                        let bytes = bitcode_buffer.encode(&FromLunasimbot::Drive {
-                            left: left as f32,
-                            right: right as f32,
-                        });
-                        lunasim_stdin.write(bytes);
-                    }
-                    Action::CalculatePath { from, to, mut into } => {
-                        let mut data = shared_thalassic_data.get();
+                    finder.append_path(
+                        from,
+                        to,
+                        &data.heightmap,
+                        |index| !data.expanded_obstacle_map[index].occupied(),
+                        &mut into,
+                    );
+                    if into.len() == 1 {
+                        warn!("Failed to find path, loosening threshold...");
                         loop {
-                            if data.current_robot_radius == 1.5 {
-                                break;
-                            }
-                            data.set_robot_radius(1.5);
+                            data.set_robot_radius(0.5);
                             drop(data);
                             data = shared_thalassic_data.get();
+                            if data.current_robot_radius == 0.5 {
+                                break;
+                            }
                         }
+                        into.clear();
                         finder.append_path(
                             from,
                             to,
@@ -381,73 +387,36 @@ impl Runnable for LunasimbotApp {
                             &mut into,
                         );
                         if into.len() == 1 {
-                            warn!("Failed to find path, loosening threshold...");
-                            loop {
-                                data.set_robot_radius(0.5);
-                                drop(data);
-                                data = shared_thalassic_data.get();
-                                if data.current_robot_radius == 0.5 {
-                                    break;
-                                }
-                            }
+                            warn!("Failed to find path, using straight line");
                             into.clear();
-                            finder.append_path(
-                                from,
-                                to,
-                                &data.heightmap,
-                                |index| !data.expanded_obstacle_map[index].occupied(),
-                                &mut into,
-                            );
-                            if into.len() == 1 {
-                                warn!("Failed to find path, using straight line");
-                                into.clear();
-                                into.push(from);
-                                into.push(to);
-                            }
+                            into.push(from);
+                            into.push(to);
                         }
-                        let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
-                            into.iter()
-                                .map(|p| p.coords.cast::<f32>().data.0[0])
-                                .collect(),
-                        ));
-                        lunasim_stdin.write(bytes);
-                        inputs.push(Input::PathCalculated(into));
                     }
-                },
-                |poll_when, inputs| {
-                    let wait_disconnect = async {
-                        if lunabot_stage.load() == LunabotStage::SoftStop {
-                            std::future::pending::<()>().await;
-                        } else {
-                            connected.wait_disconnect().await;
-                        }
-                    };
+                    let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
+                        into.iter()
+                            .map(|p| p.coords.cast::<f32>().data.0[0])
+                            .collect(),
+                    ));
+                    lunasim_stdin.write(bytes);
+                    inputs.push(Input::PathCalculated(into));
+                }
+            },
+            |poll_when, inputs| {
+                let wait_disconnect = async {
+                    if lunabot_stage.load() == LunabotStage::SoftStop {
+                        std::future::pending::<()>().await;
+                    } else {
+                        connected.wait_disconnect().await;
+                    }
+                };
 
-                    match poll_when {
-                        PollWhen::ReceivedLunabase => {
-                            while let Ok(msg) = from_lunabase_rx.try_recv() {
-                                inputs.push(Input::FromLunabase(msg));
-                            }
-                            if inputs.is_empty() {
-                                async {
-                                    tokio::select! {
-                                        result = from_lunabase_rx.recv() => {
-                                            let Some(msg) = result else {
-                                                error!("Lunabase message channel closed");
-                                                std::future::pending::<()>().await;
-                                                unreachable!();
-                                            };
-                                            inputs.push(Input::FromLunabase(msg));
-                                        }
-                                        _ = wait_disconnect => {
-                                            inputs.push(Input::LunabaseDisconnected);
-                                        }
-                                    }
-                                }
-                                .block_on();
-                            }
+                match poll_when {
+                    PollWhen::ReceivedLunabase => {
+                        while let Ok(msg) = from_lunabase_rx.try_recv() {
+                            inputs.push(Input::FromLunabase(msg));
                         }
-                        PollWhen::Instant(deadline) => {
+                        if inputs.is_empty() {
                             async {
                                 tokio::select! {
                                     result = from_lunabase_rx.recv() => {
@@ -458,7 +427,6 @@ impl Runnable for LunasimbotApp {
                                         };
                                         inputs.push(Input::FromLunabase(msg));
                                     }
-                                    _ = tokio::time::sleep_until(deadline.into()) => {}
                                     _ = wait_disconnect => {
                                         inputs.push(Input::LunabaseDisconnected);
                                     }
@@ -466,17 +434,32 @@ impl Runnable for LunasimbotApp {
                             }
                             .block_on();
                         }
-                        PollWhen::NoDelay => {
-                            // Helps prevent freezing when `NoDelay` is used frequently
-                            std::thread::yield_now();
-                        }
                     }
-                },
-            );
-        });
-
-        wait_for_ctrl_c();
+                    PollWhen::Instant(deadline) => {
+                        async {
+                            tokio::select! {
+                                result = from_lunabase_rx.recv() => {
+                                    let Some(msg) = result else {
+                                        error!("Lunabase message channel closed");
+                                        std::future::pending::<()>().await;
+                                        unreachable!();
+                                    };
+                                    inputs.push(Input::FromLunabase(msg));
+                                }
+                                _ = tokio::time::sleep_until(deadline.into()) => {}
+                                _ = wait_disconnect => {
+                                    inputs.push(Input::LunabaseDisconnected);
+                                }
+                            }
+                        }
+                        .block_on();
+                    }
+                    PollWhen::NoDelay => {
+                        // Helps prevent freezing when `NoDelay` is used frequently
+                        std::thread::yield_now();
+                    }
+                }
+            },
+        );
     }
 }
-
-define_app!(pub Sim(LunasimbotApp):  "The lunabot application in a simulated environment");

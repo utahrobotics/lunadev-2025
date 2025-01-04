@@ -37,4 +37,5 @@ pub enum FromLunasimbot {
         left: f32,
         right: f32,
     },
+    Quit,
 }

@@ -272,30 +272,27 @@ impl ThalassicBuilder {
         }
         .compile();
 
-        let [expand_fn] = ExpandObstacles {
-            obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<4, 0>(),
-            closest: BufferGroupBinding::<_, BetaBindGroups>::get::<6, 0>(),
-            expanded: BufferGroupBinding::<_, BetaBindGroups>::get::<7, 0>(),
-            radius: BufferGroupBinding::<_, BetaBindGroups>::get::<6, 1>(),
-            grid_width: self.heightmap_dimensions.x,
-            grid_height: self.heightmap_dimensions.y,
-        }
-        .compile();
+        // let [expand_fn] = ExpandObstacles {
+        //     obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<4, 0>(),
+        //     closest: BufferGroupBinding::<_, BetaBindGroups>::get::<6, 0>(),
+        //     expanded: BufferGroupBinding::<_, BetaBindGroups>::get::<7, 0>(),
+        //     radius: BufferGroupBinding::<_, BetaBindGroups>::get::<6, 1>(),
+        //     grid_width: self.heightmap_dimensions.x,
+        //     grid_height: self.heightmap_dimensions.y,
+        // }
+        // .compile();
 
         let mut pipeline = ComputePipeline::new([
             &height_fn,
             &grad_fn,
             &obstacle_fn,
-            &expand_fn,
-            &expand_fn,
-            &expand_fn,
-            &expand_fn,
+            // &expand_fn,
         ]);
         pipeline.workgroups = [Vector3::new(
             self.heightmap_dimensions.x.get() / 8,
             self.heightmap_dimensions.y.get() / 8,
             1,
-        ); 7];
+        ); 3];
 
         let bind_grps = (
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
@@ -339,7 +336,7 @@ impl Occupancy {
 }
 
 pub struct ThalassicPipeline {
-    pipeline: ComputePipeline<BetaBindGroups, 7>,
+    pipeline: ComputePipeline<BetaBindGroups, 3>,
     bind_grps: Option<(
         GpuBufferSet<HeightMapBindGrp>,
         GpuBufferSet<PclBindGrp>,

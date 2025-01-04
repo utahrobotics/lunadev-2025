@@ -11,7 +11,7 @@ use crossbeam::atomic::AtomicCell;
 use k::{Chain, Isometry3, UnitQuaternion, Vector3};
 use nalgebra::UnitVector3;
 use spin_sleep::SpinSleeper;
-use urobotics::log::error;
+use tracing::error;
 
 use crate::{
     apps::LunasimStdin,

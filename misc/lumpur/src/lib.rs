@@ -71,8 +71,20 @@ enum LogMessage {
 impl LogMessage {
     fn aggregate(&self) -> String {
         match self {
-            LogMessage::Stdio { level, stdio, message } => format!("{level}{stdio}{message}"),
-            LogMessage::Standard { timestamp, level, thread_name, target, filename, line_number, fields } => format!("{timestamp}{level}{thread_name}{target}{filename}{line_number}{fields:?}"),
+            LogMessage::Stdio {
+                level,
+                stdio,
+                message,
+            } => format!("{level}{stdio}{message}"),
+            LogMessage::Standard {
+                level,
+                thread_name,
+                target,
+                filename,
+                line_number,
+                fields,
+                ..
+            } => format!("{level}{thread_name}{target}{filename}{line_number}{fields:?}"),
         }
     }
 }
@@ -285,7 +297,7 @@ pub enum NewWorkingDirectory {
     Current,
     Custom(PathBuf),
     #[default]
-    Automatic
+    Automatic,
 }
 
 impl NewWorkingDirectory {
@@ -296,8 +308,18 @@ impl NewWorkingDirectory {
             NewWorkingDirectory::Automatic => {
                 let datetime = chrono::Local::now();
                 let mut out = PathBuf::from("output");
-                out.push(format!("{}-{}-{}", datetime.year(), datetime.month(), datetime.day()));
-                out.push(format!("{};{};{}", datetime.hour(), datetime.minute(), datetime.second()));
+                out.push(format!(
+                    "{}-{}-{}",
+                    datetime.year(),
+                    datetime.month(),
+                    datetime.day()
+                ));
+                out.push(format!(
+                    "{};{};{}",
+                    datetime.hour(),
+                    datetime.minute(),
+                    datetime.second()
+                ));
                 Some(out)
             }
         }
@@ -312,7 +334,7 @@ pub enum PathReference {
 pub struct LumpurBuilder {
     pub new_working_directory: NewWorkingDirectory,
     pub path_reference: Vec<PathReference>,
-    pub default_commands: bool
+    pub default_commands: bool,
 }
 
 impl Default for LumpurBuilder {
@@ -326,7 +348,7 @@ impl LumpurBuilder {
         Self {
             new_working_directory: NewWorkingDirectory::default(),
             path_reference: vec![PathReference::Copy(PathBuf::from("app-config.toml"))],
-            default_commands: true
+            default_commands: true,
         }
     }
 
@@ -336,12 +358,14 @@ impl LumpurBuilder {
     }
 
     pub fn symlink_path(mut self, path: impl AsRef<Path>) -> Self {
-        self.path_reference.push(PathReference::Symlink(path.as_ref().to_path_buf()));
+        self.path_reference
+            .push(PathReference::Symlink(path.as_ref().to_path_buf()));
         self
     }
 
     pub fn copy_file(mut self, path: impl AsRef<Path>) -> Self {
-        self.path_reference.push(PathReference::Copy(path.as_ref().to_path_buf()));
+        self.path_reference
+            .push(PathReference::Copy(path.as_ref().to_path_buf()));
         self
     }
 
@@ -350,7 +374,7 @@ impl LumpurBuilder {
         self
     }
 
-    fn process_default_commands(&self)  {
+    fn process_default_commands(&self) {
         let Some(cmd_name) = std::env::args().nth(1) else {
             return;
         };
@@ -370,21 +394,25 @@ impl LumpurBuilder {
                     }
                     NewWorkingDirectory::Automatic => {
                         if Path::new("output").exists() {
-                            std::fs::remove_dir_all("output").expect("Failed to remove output directory");
+                            std::fs::remove_dir_all("output")
+                                .expect("Failed to remove output directory");
                         }
                     }
                 }
                 println!("Clean Successful");
             }
-            _ => return
+            _ => return,
         }
         std::process::exit(0);
     }
 
     pub fn init<C: Configuration>(self) -> C {
-        if self.default_commands  {
+        if self.default_commands {
             if C::is_not_default_compatible() {
-                panic!("Default commands are not compatible with {}. Disable `default_commands`.", type_name::<C>());
+                panic!(
+                    "Default commands are not compatible with {}. Disable `default_commands`.",
+                    type_name::<C>()
+                );
             }
             self.process_default_commands();
         }
@@ -401,18 +429,23 @@ impl LumpurBuilder {
                 panic!("Failed to read environment variable: {e}");
             }
         }
-        
+
         if let Some(new_current_dir) = self.new_working_directory.into_path_buf() {
             std::fs::create_dir_all(&new_current_dir)
                 .expect("Failed to create new working directory");
-            let current_dir = std::env::current_dir().expect("Failed to get current directory").canonicalize().expect("Failed to canonicalize current directory");
+            let current_dir = std::env::current_dir()
+                .expect("Failed to get current directory")
+                .canonicalize()
+                .expect("Failed to canonicalize current directory");
 
             for path_ref in self.path_reference {
                 let old_path = match &path_ref {
                     PathReference::Copy(path) => path,
                     PathReference::Symlink(path) => path,
                 };
-                let path = old_path.canonicalize().expect("Failed to canonicalize path");
+                let path = old_path
+                    .canonicalize()
+                    .expect("Failed to canonicalize path");
                 if !path.starts_with(&current_dir) {
                     panic!("File reference ({old_path:?}) must be within current directory");
                 }
@@ -420,7 +453,8 @@ impl LumpurBuilder {
                 let new_path = if let Some(mut parent) = path.parent() {
                     parent = parent.strip_prefix(&current_dir).unwrap();
                     let new_parent = new_current_dir.join(parent);
-                    std::fs::create_dir_all(&new_parent).expect("Failed to create parent directory inside new working directory");
+                    std::fs::create_dir_all(&new_parent)
+                        .expect("Failed to create parent directory inside new working directory");
                     new_parent.join(path.file_name().expect("Invalid copy over path"))
                 } else {
                     new_current_dir.join(path.file_name().expect("Invalid copy over path"))
@@ -435,21 +469,24 @@ impl LumpurBuilder {
                 } else {
                     #[cfg(unix)]
                     {
-                        std::os::unix::fs::symlink(path, new_path).expect("Failed to create symlink");
+                        std::os::unix::fs::symlink(path, new_path)
+                            .expect("Failed to create symlink");
                     }
                     #[cfg(windows)]
                     {
                         if path.is_dir() {
-                            std::os::windows::fs::symlink_dir(path, new_path).expect("Failed to create symlink");
+                            std::os::windows::fs::symlink_dir(path, new_path)
+                                .expect("Failed to create symlink");
                         } else {
-                            std::os::windows::fs::symlink_file(path, new_path).expect("Failed to create symlink");
+                            std::os::windows::fs::symlink_file(path, new_path)
+                                .expect("Failed to create symlink");
                         }
                     }
                 }
             }
             std::env::set_current_dir(new_current_dir).expect("Failed to set current directory");
         }
-    
+
         let mut shmem = None;
         let mut flink = String::new();
         for i in 0..1024 {
@@ -469,10 +506,12 @@ impl LumpurBuilder {
             panic!("Failed to create shared memory segment. All slots occupied");
         };
         let (ctrlc_evt, _used_bytes) = unsafe {
-            raw_sync::events::Event::new(shmem.as_ptr(), true).expect("Failed to create ctrl-c event")
+            raw_sync::events::Event::new(shmem.as_ptr(), true)
+                .expect("Failed to create ctrl-c event")
         };
-    
-        let log_file = std::fs::File::create("app.log").expect("Failed to create log file (app.log)");
+
+        let log_file =
+            std::fs::File::create("app.log").expect("Failed to create log file (app.log)");
         let mut log_file = LineWriter::new(log_file);
         writeln!(
             log_file,
@@ -492,7 +531,7 @@ impl LumpurBuilder {
         }
         let (write_tx, write_rx) = std::sync::mpsc::channel::<Arc<LogMessage>>();
         let write_thr = std::thread::spawn(move || log_write_thread(write_rx, log_file));
-    
+
         let max_lines: usize = std::env::var("MAX_LINES")
             .map(|s| s.parse().unwrap_or(1000))
             .unwrap_or(1000);
@@ -513,7 +552,7 @@ impl LumpurBuilder {
             .canonicalize()
             .expect("Failed to canonicalize current dir")
             .leak();
-    
+
         let f = make_line_f(
             log_tx.clone(),
             write_tx.clone(),
@@ -538,14 +577,14 @@ impl LumpurBuilder {
                 f(line);
             }
         });
-    
+
         let mut siv = cursive::default();
         let theme = Theme::terminal_default();
         siv.set_theme(theme);
-    
+
         let mut program_info_style = Style::terminal_default();
         program_info_style.color.front = ColorType::Color(Color::Rgb(50, 200, 50));
-    
+
         siv.add_fullscreen_layer(
             Layer::with_color(
                 LinearLayout::vertical()
@@ -567,7 +606,7 @@ impl LumpurBuilder {
         let extra_info_visible: &_ = Box::leak(Box::new(AtomicBool::new(false)));
         let extra_info_callback = move |siv: &mut Cursive| {
             let extra_info_visible = !extra_info_visible.fetch_not(Ordering::Relaxed);
-    
+
             siv.call_on_name(
                 LOG_SCROLL_VIEW,
                 |log_scroll_view: &mut ScrollView<LinearLayout>| {
@@ -578,7 +617,7 @@ impl LumpurBuilder {
                     }
                 },
             );
-    
+
             siv.call_on_name(LOG_VIEW, |log_view: &mut LinearLayout| {
                 for i in 0..log_view.len() {
                     if let Some(_) = log_view
@@ -591,10 +630,11 @@ impl LumpurBuilder {
                     let line: &mut ThemedView<NamedView<LinearLayout>> =
                         log_view.get_child_mut(i).unwrap().downcast_mut().unwrap();
                     let line = &mut *line.get_inner_mut().get_mut();
-                    let top: &mut LinearLayout = line.get_child_mut(0).unwrap().downcast_mut().unwrap();
+                    let top: &mut LinearLayout =
+                        line.get_child_mut(0).unwrap().downcast_mut().unwrap();
                     let button_container: &mut LinearLayout =
                         top.get_child_mut(0).unwrap().downcast_mut().unwrap();
-    
+
                     if extra_info_visible {
                         button_container.remove_child(1);
                         let hideable: &mut HideableView<Button> = button_container
@@ -626,7 +666,7 @@ impl LumpurBuilder {
             extra_info_callback,
         );
         siv.add_global_callback(Key::Esc, |s| s.select_menubar());
-    
+
         let clear_callback = move |siv: &mut Cursive| {
             siv.call_on_name(LOG_VIEW, |log_view: &mut LinearLayout| {
                 log_view.clear();
@@ -637,7 +677,7 @@ impl LumpurBuilder {
             StyledString::styled("Clear (Ctrl-W)", menu_style),
             clear_callback,
         );
-    
+
         let ctrlc_count: &_ = Box::leak(Box::new(AtomicUsize::new(0)));
         siv.menubar()
             .add_leaf(StyledString::styled("Quit (Ctrl-C)", menu_style), |_| {
@@ -646,11 +686,11 @@ impl LumpurBuilder {
         siv.set_global_callback(Event::CtrlChar('c'), move |_| {
             ctrlc_count.fetch_add(1, Ordering::Relaxed);
         });
-    
+
         siv.set_autohide_menu(false);
-    
+
         // We must not drop any errors past this point as the UI has spun up
-    
+
         let mut siv = siv.into_runner();
         let mut last_ctrlc_count = 0;
         siv.refresh();
@@ -659,13 +699,13 @@ impl LumpurBuilder {
         let mut last_message_aggregate = String::new();
         let mut last_message_count = 0usize;
         let mut child = Some(child);
-    
+
         while siv.is_running() {
             siv.step();
             let mut updated = false;
             while let Ok(log) = log_rx.try_recv() {
                 let current_message_aggregate = log.aggregate();
-    
+
                 siv.call_on_name::<LinearLayout, _, _>(LOG_VIEW, |log_view| {
                     if !log_view.is_empty() {
                         if current_message_aggregate == last_message_aggregate {
@@ -684,11 +724,11 @@ impl LumpurBuilder {
                     }
                     last_message_aggregate = current_message_aggregate;
                     last_message_count = 1;
-    
+
                     if log_view.len() >= max_lines {
                         log_view.remove_child(0);
                     }
-    
+
                     let mut theme = Theme::terminal_default();
                     match &*log {
                         LogMessage::Stdio { level: Level::ERROR, .. } | LogMessage::Standard { level: Level::ERROR, .. } => {

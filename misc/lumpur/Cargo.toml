@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 cursive = "0.21"
 parking_lot.workspace = true
-tracing = "0.1.41"
+tracing.workspace = true
 tracing-subscriber = { version = "0.3.19", features = ["json"] }
 shared_memory = "0.12.4"
 raw_sync = "0.1.5"

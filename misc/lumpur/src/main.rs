@@ -17,7 +17,9 @@ define_configuration! {
 }
 
 fn main() {
-    let config: TestCommand = LumpurBuilder::new().copy_file("misc/lumpur/src/lib.rs").init();
+    let config: TestCommand = LumpurBuilder::new()
+        .copy_file("misc/lumpur/src/lib.rs")
+        .init();
     std::thread::spawn(|| loop {
         error!("{:?}", (23, 33));
         std::thread::sleep(std::time::Duration::from_secs(3));

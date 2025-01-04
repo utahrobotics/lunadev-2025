@@ -17,8 +17,10 @@ macro_rules! define_configuration {
                         $(#[env($var_name: ident)])?
                         $param: ident: $param_ty: ty
                     ),*
+                    $(,)?
                 }
             ),*
+            $(,)?
         }
     } => {
         $(#[$attr])*

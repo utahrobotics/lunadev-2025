@@ -9,8 +9,8 @@ use ares_bt::{
 use common::{FromLunabase, Steering};
 use dig::dig;
 use dump::dump;
-use log::{error, warn};
 use nalgebra::{distance, Matrix2, Point2, Point3, Vector2, Vector3};
+use tracing::{error, warn};
 use traverse::traverse;
 
 use crate::{blackboard::LunabotBlackboard, Action, PollWhen};

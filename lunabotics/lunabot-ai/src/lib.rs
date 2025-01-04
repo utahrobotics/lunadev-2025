@@ -12,9 +12,9 @@ use autonomy::autonomy;
 use blackboard::LunabotBlackboard;
 use common::{FromLunabase, LunabotStage, Steering};
 use k::Chain;
-use log::warn;
 use nalgebra::Point3;
 use teleop::teleop;
+use tracing::warn;
 
 mod autonomy;
 mod blackboard;

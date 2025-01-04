@@ -1,6 +1,6 @@
 use ares_bt::{sequence::Sequence, Behavior, Status};
 use common::{FromLunabase, LunabotStage};
-use log::{error, warn};
+use tracing::{error, warn};
 
 use crate::{
     autonomy::{Autonomy, AutonomyStage},
