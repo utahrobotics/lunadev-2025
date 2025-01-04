@@ -295,10 +295,8 @@ impl ThalassicBuilder {
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
             GpuBufferSet::from((UniformBuffer::new(),)),
             GpuBufferSet::from((
-                StorageBuffer::new_dyn(cell_count.get() as usize * 2).unwrap(),
                 UniformBuffer::new(),
             )),
-            GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
         );
 
         ThalassicPipeline {
@@ -334,8 +332,7 @@ pub struct ThalassicPipeline {
         GpuBufferSet<GradMapBindGrp>,
         GpuBufferSet<ObstacleMapBindGrp>,
         GpuBufferSet<ObstacleMapperInputBindGrp>,
-        GpuBufferSet<ExpanderInputBindGrp>,
-        GpuBufferSet<ExpandedObstacleMapBindGrp>,
+        GpuBufferSet<ExpanderBindGrp>,
     )>,
     triangle_buffer: Vec<Vector4<u32>>,
     points_buffer: Vec<AlignedVec4<f32>>,
@@ -409,7 +406,6 @@ impl ThalassicPipeline {
             obstacle_map,
             obstacle_mapper_input_grp,
             expander_input_grp,
-            expanded_obstacles,
         ) = self.bind_grps.take().unwrap();
         let mut bind_grps: BetaBindGroups = (
             points_storage.points_grp,
@@ -419,7 +415,6 @@ impl ThalassicPipeline {
             obstacle_map,
             obstacle_mapper_input_grp,
             expander_input_grp,
-            expanded_obstacles,
         );
 
         self.pipeline
@@ -431,13 +426,10 @@ impl ThalassicPipeline {
                 bind_grps
                     .2
                     .write::<1, _>(&(self.triangle_buffer.len() as u32), &mut lock);
-                bind_grps
-                    .6
-                    .write::<0, _>(&self.expander_input_grp_zeros, &mut lock);
                 if let Some(new_radius_cells) = self.new_radius_cells.take() {
                     bind_grps
                         .6
-                        .write::<1, _>(&(new_radius_cells / self.cell_size), &mut lock);
+                        .write::<0, _>(&(new_radius_cells / self.cell_size), &mut lock);
                 }
                 if let Some(new_max_gradient) = self.new_max_gradient.take() {
                     bind_grps.5.write::<0, _>(&new_max_gradient, &mut lock);
@@ -454,7 +446,6 @@ impl ThalassicPipeline {
             obstacle_map,
             obstacle_mapper_input_grp,
             expander_input_grp,
-            expanded_obstacles,
         ) = bind_grps;
         height_grp.buffers.0.read(out_heightmap);
         grad_grp.buffers.0.read(out_gradient);
@@ -470,7 +461,6 @@ impl ThalassicPipeline {
             obstacle_map,
             obstacle_mapper_input_grp,
             expander_input_grp,
-            expanded_obstacles,
         ));
         points_storage.points_grp = points_grp;
         points_storage

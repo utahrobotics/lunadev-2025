@@ -81,29 +81,38 @@ const DELIMIT: &[u8] = b"READY\n";
 pub struct LunasimbotApp {
     pub lunabase_address: SocketAddr,
     pub max_pong_delay_ms: u64,
-    pub simulation_command: Vec<String>,
 }
 
 impl LunasimbotApp {
-    pub fn run(mut self) {
+    pub fn run(self) {
         log_teleop_messages();
         if let Err(e) = init_gputter_blocking() {
             error!("Failed to initialize gputter: {e}");
         }
 
-        let mut cmd = if self.simulation_command.is_empty() {
-            let mut cmd = Command::new("godot");
-            cmd.args(["--path", "godot/lunasim"]);
-            cmd
-        } else {
-            let mut cmd = Command::new(self.simulation_command.remove(0));
-            cmd.args(self.simulation_command);
-            cmd
-        };
+        let import_result = std::process::Command::new("godot")
+            .args(["--path", "godot/lunasim", "--import"])
+            .output();
+
+        match import_result {
+            Ok(output) => {
+                if !output.status.success() {
+                    error!("Failed to import godot project: {output:?}");
+                    return;
+                }
+            }
+            Err(e) => {
+                error!("Failed to import godot project: {e}");
+                return;
+            }
+        }
+
+        let mut cmd = Command::new("godot");
 
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .stderr(Stdio::piped())
+            .args(["--path", "godot/lunasim"]);
 
         let _guard = get_tokio_handle().enter();
         let (lunasim_stdin, from_lunasim_ref) = match cmd.spawn() {

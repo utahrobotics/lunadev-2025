@@ -20,7 +20,7 @@ workspace = false
 command = "cargo"
 args = ["run", "-p", "lunabot", "--", "sim"]
 dependencies = [
-    "godot",
+    "build_lunasim",
 ]
 
 [tasks.main]

@@ -59,6 +59,8 @@ indexmap = "2.3.0"
 godot = { git = "https://github.com/godot-rust/gdext", branch = "master", features = [
     "experimental-threads",
 ] }
+openh264 = "0.6.3"
+serde_json = "1.0.134"
 
 k = { path = "misc/k" }
 glidesort = "0.1.2"

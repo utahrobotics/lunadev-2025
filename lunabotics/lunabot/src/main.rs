@@ -21,7 +21,6 @@ lumpur::define_configuration! {
         },
         Sim {
             lunabase_address: SocketAddr,
-            simulation_command: Vec<String>,
             max_pong_delay_ms: Option<u64>
         }
     }
@@ -37,12 +36,10 @@ fn main() {
     match cmd {
         Commands::Sim {
             lunabase_address,
-            simulation_command,
             max_pong_delay_ms,
         } => {
             LunasimbotApp {
                 lunabase_address,
-                simulation_command,
                 max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
             }
             .run();

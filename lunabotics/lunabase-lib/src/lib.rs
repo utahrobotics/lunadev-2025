@@ -20,9 +20,9 @@ use godot::{
     classes::{image::Format, Engine, Image},
     prelude::*,
 };
-use stream::camera_streaming;
 use tasker::shared::{OwnedData, SharedDataReceiver};
 
+#[cfg(feature = "production")]
 mod stream;
 mod urdf;
 
@@ -131,7 +131,8 @@ impl INode for LunabotConn {
                 STREAM_WIDTH as usize * STREAM_HEIGHT as usize * 3
             ]);
         let stream_lendee = shared_rgb_img.create_lendee();
-        camera_streaming(shared_rgb_img.pessimistic_share(), stream_corrupted);
+        #[cfg(feature = "production")]
+        stream::camera_streaming(shared_rgb_img.pessimistic_share(), stream_corrupted);
 
         let udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10600))
             .expect("Failed to bind to 10600");

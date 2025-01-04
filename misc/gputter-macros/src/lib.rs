@@ -143,7 +143,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
     };
 
     // Find all compute functions
-    let re = Regex::new(r"@compute[\s@a-zA-Z0-9\(\)_,\*\+\-/%]+fn\s+([a-zA-Z0-9]+)\s*\(").unwrap();
+    let re = Regex::new(r"@compute[\s@a-zA-Z0-9\(\)_,\*\+\-/%]+fn\s+([a-zA-Z0-9_]+)\s*\(").unwrap();
     let compute_fns: Vec<_> = re
         .captures_iter(&shader)
         .map(|caps| {
