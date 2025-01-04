@@ -16,7 +16,10 @@ r#"
 //      `2` if distance to the nearest obstacle <= `radius` 
 #[buffer] var<storage, read_write> obstacles: array<u32>;
 
+// radius of the robot in meters
 #[buffer] var<uniform> radius: f32;
+
+const CELL_SIZE: f32 = {{cell_size}};
 
 const GRID_WIDTH: NonZeroU32 = {{grid_width}};
 const GRID_HEIGHT: NonZeroU32 = {{grid_height}};
@@ -25,7 +28,9 @@ const GRID_HEIGHT: NonZeroU32 = {{grid_height}};
 @workgroup_size(8, 8, 1)
 fn compute_main(@builtin(global_invocation_id) cell: vec3u) {
 
-    let radius_ceil = u32(ceil(radius));
+    let radius_in_cells = radius / CELL_SIZE;
+
+    let radius_ceil = u32(ceil(radius_in_cells));
     let pos = cell.xy;
 
     if (obstacles[xy_to_index(pos)] == 1) {
@@ -44,7 +49,7 @@ fn compute_main(@builtin(global_invocation_id) cell: vec3u) {
                 let nearby_i = xy_to_index(nearby_pos);
     
                 // check if this cell is still unmarked before calculating distance
-                if (obstacles[nearby_i] == 0 && distance(vec2(f32(x), f32(y)), vec2f(pos)) <= radius) {
+                if (obstacles[nearby_i] == 0 && distance(vec2(f32(x), f32(y)), vec2f(pos)) <= radius_in_cells) {
                     obstacles[nearby_i] = u32(2);
                 }
             } 

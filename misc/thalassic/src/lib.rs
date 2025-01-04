@@ -267,6 +267,7 @@ impl ThalassicBuilder {
         let [expand_fn] = ExpandObstacles {
             obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<4, 0>(),
             radius: BufferGroupBinding::<_, BetaBindGroups>::get::<6, 0>(),
+            cell_size: self.cell_size,
             grid_width: self.heightmap_dimensions.x,
             grid_height: self.heightmap_dimensions.y,
         }
