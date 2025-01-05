@@ -54,7 +54,7 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                             }),
                             InfallibleShim(AssertCancelSafe(follow_path)),
                         )),
-                        Sequence::new((WaitBehavior::from(Duration::from_secs(3)), AlwaysFail)),
+                        Sequence::new((WaitBehavior::from(Duration::from_secs(4)), AlwaysFail)),
                     )),
                     AlwaysFail,
                     Sequence::new((

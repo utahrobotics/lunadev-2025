@@ -18,8 +18,10 @@ use gputter::{
 };
 use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
-use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4};
-use pathfinding::Pathfinder;
+use nalgebra::{
+    Isometry3, Point3, Scale3, Transform3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4,
+};
+use pathfinding::{grid::Grid, prelude::astar};
 use tasker::shared::OwnedData;
 use tasker::tokio;
 use tasker::{
@@ -35,11 +37,11 @@ use tasker::{
 use thalassic::DepthProjectorBuilder;
 use tracing::{error, info, warn};
 
-use crate::pipelines::thalassic::ThalassicData;
 use crate::{
     localization::Localizer,
     pipelines::thalassic::{spawn_thalassic_pipeline, PointsStorageChannel},
 };
+use crate::{pathfinding::DefaultPathfinder, pipelines::thalassic::ThalassicData};
 
 use super::{create_packet_builder, create_robot_chain, log_teleop_messages};
 
@@ -325,7 +327,11 @@ impl LunasimbotApp {
                 pcl_storage.read(&mut point_cloud);
                 pcl_storage_channel.set_projected(pcl_storage);
                 let msg = FromLunasimbot::PointCloud(
-                    point_cloud.iter().map(|p| [p.x, p.y, p.z]).collect(),
+                    point_cloud
+                        .iter()
+                        .filter(|p| p.w != 0.0)
+                        .map(|p| [p.x, p.y, p.z])
+                        .collect(),
                 );
                 let lunasim_stdin2 = lunasim_stdin2.clone();
                 let bytes = bitcode::encode(&msg);
@@ -351,7 +357,17 @@ impl LunasimbotApp {
             }
         });
 
-        let mut finder = Pathfinder::new(Vector2::new(4.0, 8.0), -0.03125);
+        let grid_to_world = Transform3::from_matrix_unchecked(
+            Scale3::new(-0.03125, 1.0, -0.03125).to_homogeneous(),
+        );
+        let world_to_grid = grid_to_world.try_inverse().unwrap();
+        let mut pathfinder = DefaultPathfinder {
+            world_to_grid,
+            grid_to_world,
+            grid: Grid::new(128, 256),
+        };
+        pathfinder.grid.enable_diagonal_mode();
+        pathfinder.grid.fill();
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
@@ -378,47 +394,7 @@ impl LunasimbotApp {
                     lunasim_stdin.write(bytes);
                 }
                 Action::CalculatePath { from, to, mut into } => {
-                    let mut data = shared_thalassic_data.get();
-                    loop {
-                        if data.current_robot_radius == 0.25 {
-                            break;
-                        }
-                        data.set_robot_radius(0.25);
-                        drop(data);
-                        data = shared_thalassic_data.get();
-                    }
-                    finder.append_path(
-                        from,
-                        to,
-                        &data.heightmap,
-                        |index| !data.expanded_obstacle_map[index].occupied(),
-                        &mut into,
-                    );
-                    if into.len() == 1 {
-                        warn!("Failed to find path, loosening threshold...");
-                        loop {
-                            data.set_robot_radius(0.1);
-                            drop(data);
-                            data = shared_thalassic_data.get();
-                            if data.current_robot_radius == 0.1 {
-                                break;
-                            }
-                        }
-                        into.clear();
-                        finder.append_path(
-                            from,
-                            to,
-                            &data.heightmap,
-                            |index| !data.expanded_obstacle_map[index].occupied(),
-                            &mut into,
-                        );
-                        if into.len() == 1 {
-                            warn!("Failed to find path, using straight line");
-                            into.clear();
-                            into.push(from);
-                            into.push(to);
-                        }
-                    }
+                    pathfinder.pathfind(&shared_thalassic_data, from, to, &mut into);
                     let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
                         into.iter()
                             .map(|p| p.coords.cast::<f32>().data.0[0])

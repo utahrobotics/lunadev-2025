@@ -13,7 +13,8 @@ spin_sleep.workspace = true
 anyhow = { workspace = true }
 crossbeam = { workspace = true }
 common = { path = "../common" }
-pathfinding = { path = "../pathfinding" }
+# pathfinding = { path = "../pathfinding" }
+pathfinding = "4.13.0"
 nalgebra = { workspace = true }
 rayon = { workspace = true }
 k = { workspace = true }

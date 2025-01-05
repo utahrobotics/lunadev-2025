@@ -20,6 +20,9 @@ fn depth(
     @builtin(global_invocation_id) global_invocation_id : vec3u,
 ) {
     let i = global_invocation_id.x + global_invocation_id.y * IMAGE_WIDTH;
+    if i >= PIXEL_COUNT {
+        return;
+    }
     let double_depth = depths[i / 2];
     var depthu: u32;
     if i % 2 == 1 {

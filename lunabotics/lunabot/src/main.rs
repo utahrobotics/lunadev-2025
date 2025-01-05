@@ -10,6 +10,7 @@ mod apps;
 mod localization;
 mod motors;
 // mod obstacles;
+mod pathfinding;
 mod pipelines;
 mod teleop;
 mod utils;

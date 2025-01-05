@@ -1,4 +1,4 @@
-use std::num::NonZeroU32;
+use std::{f32::consts::PI, num::NonZeroU32};
 
 use bytemuck::{Pod, Zeroable};
 use depth2pcl::Depth2Pcl;
@@ -130,7 +130,7 @@ impl DepthProjectorBuilder {
             image_size: self.image_size,
             pipeline,
             bind_grp: Some(GpuBufferSet::from((
-                StorageBuffer::new_dyn(pixel_count as usize / 2).unwrap(),
+                StorageBuffer::new_dyn(pixel_count.div_ceil(2) as usize).unwrap(),
                 UniformBuffer::new(),
                 UniformBuffer::new(),
             ))),
@@ -181,6 +181,11 @@ impl DepthProjector {
         depth_scale: f32,
     ) -> PointCloudStorage {
         debug_assert_eq!(self.image_size, points_storage.image_size);
+        debug_assert_eq!(
+            depths.len(),
+            self.image_size.x.get() as usize * self.image_size.y.get() as usize
+        );
+
         let depth_grp = self.bind_grp.take().unwrap();
 
         let mut bind_grps = (depth_grp, points_storage.points_grp);
@@ -369,12 +374,37 @@ impl ThalassicPipeline {
                     if v1.w == 0.0 || v2.w == 0.0 || v3.w == 0.0 {
                         None
                     } else {
-                        Some(Vector4::new(
-                            x,
-                            y,
-                            z,
-                            f32::to_bits((v1.y + v2.y + v3.y) / 3.0),
-                        ))
+                        let p1 = Vector3::new(v1.x, v1.y, v1.z);
+                        let p2 = Vector3::new(v2.x, v2.y, v2.z);
+                        let p3 = Vector3::new(v3.x, v3.y, v3.z);
+
+                        let mut a = p2 - p1;
+                        let mut b = p3 - p1;
+                        let mut theta = a.angle(&b);
+
+                        if theta > PI / 2.0 {
+                            a = p1 - p2;
+                            b = p3 - p2;
+                            theta = a.angle(&b);
+                        }
+
+                        let a_l = a.magnitude();
+                        let b_l = b.magnitude();
+                        let h = b_l * theta.sin();
+                        let w = a_l.max(b_l * theta.cos());
+
+                        let aspect_ratio = w.max(h) / w.min(h);
+
+                        if aspect_ratio > 2.7 {
+                            None
+                        } else {
+                            Some(Vector4::new(
+                                x,
+                                y,
+                                z,
+                                f32::to_bits((v1.y + v2.y + v3.y) / 3.0),
+                            ))
+                        }
                     }
                 }),
         );
@@ -415,9 +445,7 @@ impl ThalassicPipeline {
                     .2
                     .write::<1, _>(&(self.triangle_buffer.len() as u32), &mut lock);
                 if let Some(new_radius) = self.new_radius.take() {
-                    bind_grps
-                        .6
-                        .write::<0, _>(&new_radius, &mut lock);
+                    bind_grps.6.write::<0, _>(&new_radius, &mut lock);
                 }
                 if let Some(new_max_gradient) = self.new_max_gradient.take() {
                     bind_grps.5.write::<0, _>(&new_max_gradient, &mut lock);

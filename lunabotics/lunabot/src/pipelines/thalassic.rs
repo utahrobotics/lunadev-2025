@@ -23,7 +23,7 @@ impl Default for ThalassicData {
             gradmap: [0.0; CELL_COUNT as usize],
             expanded_obstacle_map: [Occupancy::FREE; CELL_COUNT as usize],
             new_robot_radius: AtomicCell::new(None),
-            current_robot_radius: 1.5,
+            current_robot_radius: 0.25,
         }
     }
 }
