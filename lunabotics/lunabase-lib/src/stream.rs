@@ -1,7 +1,6 @@
 use std::{
     net::{Ipv4Addr, SocketAddrV4, UdpSocket},
-    sync::
-        atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, Ordering},
     time::Duration,
 };
 
@@ -16,7 +15,9 @@ pub fn camera_streaming(
     mut shared_rgb_img: LoanedData<Vec<u8>>,
     stream_corrupted: &'static AtomicBool,
 ) {
+    #[cfg(feature = "streaming_server")]
     let (mut broadcasting_buffer, lendee_storage2) = webrtc::stream_webrtc();
+
     std::thread::spawn(move || {
         let stream_udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10601))
             .expect("Failed to bind to 10601");
@@ -115,7 +116,10 @@ pub fn camera_streaming(
                     nals.clear();
                 }
                 #[cfg(not(feature = "streaming_server"))]
-                nals.clear();
+                {
+                    let _first_nal_i = first_nal_i;
+                    nals.clear();
+                }
             }
 
             stream.drain(..last_stream_i);

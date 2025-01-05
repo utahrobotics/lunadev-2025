@@ -8,6 +8,16 @@ workspace = false
 command = "cargo"
 args = ["build", "-p", "lunabase-lib", "--release"]
 
+[tasks.build_lunabase_prod]
+workspace = false
+command = "cargo"
+args = ["build", "-p", "lunabase-lib", "--release", "--features=production"]
+
+[tasks.build_lunabase_prodx]
+workspace = false
+command = "cargo"
+args = ["build", "-p", "lunabase-lib", "--release", "--features=extended"]
+
 [tasks.godot]
 workspace = false
 dependencies = [
@@ -46,3 +56,31 @@ dependencies = [
     "build_lunabase",
     "import_lunabase",
 ]
+
+[tasks.lunabase_prod]
+workspace = false
+command = "godot"
+args = ["--path", "godot/lunabase", "-d"]
+dependencies = [
+    "build_lunabase_prod",
+    "import_lunabase",
+]
+
+[tasks.lunabase_prodx]
+workspace = false
+command = "godot"
+args = ["--path", "godot/lunabase", "-d"]
+dependencies = [
+    "build_lunabase_prodx",
+    "import_lunabase",
+]
+
+[tasks.edit_lunasim]
+workspace = false
+command = "godot"
+args = ["--path", "godot/lunasim", "-e"]
+
+[tasks.edit_lunabase]
+workspace = false
+command = "godot"
+args = ["--path", "godot/lunabase", "-e"]

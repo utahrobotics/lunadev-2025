@@ -1,7 +1,4 @@
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use axum::{
     extract::{ws, WebSocketUpgrade},
@@ -40,7 +37,10 @@ pub struct BroadcastingBuffer {
     pub packet_sizes: Vec<usize>,
 }
 
-pub fn stream_webrtc() -> (MaybeOwned<BroadcastingBuffer>, Arc<AtomicCell<Option<SharedDataReceiver<BroadcastingBuffer>>>>) {
+pub fn stream_webrtc() -> (
+    MaybeOwned<BroadcastingBuffer>,
+    Arc<AtomicCell<Option<SharedDataReceiver<BroadcastingBuffer>>>>,
+) {
     let broadcasting_buffer = MaybeOwned::from(BroadcastingBuffer::default());
     let lendee_storage: Arc<AtomicCell<Option<SharedDataReceiver<BroadcastingBuffer>>>> =
         Arc::new(AtomicCell::new(None));

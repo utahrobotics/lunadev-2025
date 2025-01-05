@@ -90,7 +90,12 @@ impl LogMessage {
 
     fn create_ui_message(&self) -> String {
         match self {
-            LogMessage::Standard { timestamp, level, fields, .. } => {
+            LogMessage::Standard {
+                timestamp,
+                level,
+                fields,
+                ..
+            } => {
                 let message = fields
                     .get("message")
                     .map(|v| {
@@ -103,7 +108,7 @@ impl LogMessage {
                     .unwrap_or_else(|| format!("{fields:?}"));
                 format!("[{timestamp: >7.2}s {level: <5}] {message}")
             }
-            LogMessage::Stdio { level, message, ..  } => {
+            LogMessage::Stdio { level, message, .. } => {
                 format!("[         {level: <5}] {message}")
             }
         }

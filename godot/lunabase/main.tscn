@@ -170,6 +170,7 @@ script/source = "extends Window
 
 
 func _ready() -> void:
+	visible = LunabotConn.CAMERA_STREAMING
 	texture_rect.texture = ImageTexture.create_from_image(Lunabot.stream_image)
 
 

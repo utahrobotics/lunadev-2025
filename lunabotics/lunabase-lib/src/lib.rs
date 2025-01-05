@@ -384,6 +384,13 @@ impl LunabotConn {
     #[signal]
     fn entered_dump(&self);
 
+    #[cfg(feature = "production")]
+    #[constant]
+    const CAMERA_STREAMING: bool = true;
+    #[cfg(not(feature = "production"))]
+    #[constant]
+    const CAMERA_STREAMING: bool = false;
+
     #[func]
     fn is_stream_corrupted(&self) -> bool {
         self.inner.as_ref().map_or(false, |inner| {

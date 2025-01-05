@@ -84,9 +84,7 @@ type ObstacleMapperInputBindGrp = (UniformBuffer<f32>,);
 /// 1. The radius of the robot in meters
 ///
 /// This bind group is the input to the expander.
-type ExpanderBindGrp = (
-    UniformBuffer<f32>,
-);
+type ExpanderBindGrp = (UniformBuffer<f32>,);
 
 /// The set of bind groups used by the rest of the thalassic pipeline
 type BetaBindGroups = (
@@ -273,17 +271,12 @@ impl ThalassicBuilder {
         }
         .compile();
 
-        let mut pipeline = ComputePipeline::new([
-            &height_fn,
-            &grad_fn,
-            &obstacle_fn,
-            // &expand_fn,
-        ]);
+        let mut pipeline = ComputePipeline::new([&height_fn, &grad_fn, &obstacle_fn, &expand_fn]);
         pipeline.workgroups = [Vector3::new(
             self.heightmap_dimensions.x.get() / 8,
             self.heightmap_dimensions.y.get() / 8,
             1,
-        ); 3];
+        ); 4];
 
         let bind_grps = (
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
@@ -294,9 +287,7 @@ impl ThalassicBuilder {
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
             GpuBufferSet::from((UniformBuffer::new(),)),
-            GpuBufferSet::from((
-                UniformBuffer::new(),
-            )),
+            GpuBufferSet::from((UniformBuffer::new(),)),
         );
 
         ThalassicPipeline {
@@ -306,7 +297,6 @@ impl ThalassicBuilder {
             points_buffer: Vec::new(),
             new_radius_cells: Some(1.5),
             new_max_gradient: Some(45.0f32.to_radians()),
-            expander_input_grp_zeros: vec![0; cell_count.get() as usize * 2].into_boxed_slice(),
             cell_size: self.cell_size,
         }
     }
@@ -325,7 +315,7 @@ impl Occupancy {
 }
 
 pub struct ThalassicPipeline {
-    pipeline: ComputePipeline<BetaBindGroups, 3>,
+    pipeline: ComputePipeline<BetaBindGroups, 4>,
     bind_grps: Option<(
         GpuBufferSet<HeightMapBindGrp>,
         GpuBufferSet<PclBindGrp>,
@@ -338,7 +328,6 @@ pub struct ThalassicPipeline {
     points_buffer: Vec<AlignedVec4<f32>>,
     new_radius_cells: Option<f32>,
     new_max_gradient: Option<f32>,
-    expander_input_grp_zeros: Box<[u32]>,
     cell_size: f32,
 }
 
