@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 
 use apps::{default_max_pong_delay_ms, LunasimbotApp};
 use lumpur::LumpurBuilder;
+use tracing::Level;
 
 mod apps;
 mod localization;
@@ -31,6 +32,9 @@ fn main() {
         .symlink_path("godot")
         .symlink_path("target")
         .symlink_path("urdf")
+        .add_ignore("k::urdf", Level::INFO)
+        .add_ignore("wgpu_core::device::resource", Level::INFO)
+        .add_ignore("wgpu_hal::vulkan::instance", Level::INFO)
         .init();
 
     match cmd {

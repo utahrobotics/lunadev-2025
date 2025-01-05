@@ -320,7 +320,7 @@ macro_rules! duration_warning {
         let result = $inner;
         let duration = start.elapsed();
         if duration > Duration::from_secs(1) {
-            $crate::log::warn!(
+            $crate::tracing::warn!(
                 "{} took {:.1} seconds",
                 stringify!($inner),
                 duration.as_secs_f32()

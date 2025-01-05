@@ -5,13 +5,13 @@ edition = "2021"
 
 [dependencies]
 cursive = "0.21"
-parking_lot.workspace = true
 tracing.workspace = true
-tracing-subscriber = { version = "0.3.19", features = ["json"] }
+tracing-subscriber = { version = "0.3.19", features = ["json", "parking_lot"] }
 shared_memory = "0.12.4"
 raw_sync = "0.1.5"
 toml.workspace = true
 serde.workspace = true
+fxhash.workspace = true
 serde_json.workspace = true
-
 chrono = { workspace = true }
+tracing-log = "0.2.0"

@@ -2298,13 +2298,14 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "cursive",
- "parking_lot",
+ "fxhash",
  "raw_sync",
  "serde",
  "serde_json",
  "shared_memory",
  "toml",
  "tracing",
+ "tracing-log",
  "tracing-subscriber",
 ]
 
@@ -4359,6 +4360,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8189decb5ac0fa7bc8b96b7cb9b2701d60d48805aca84a238004d665fcc4008"
 dependencies = [
  "nu-ansi-term",
+ "parking_lot",
  "serde",
  "serde_json",
  "sharded-slab",

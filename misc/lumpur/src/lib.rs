@@ -1,14 +1,12 @@
 #![feature(os_string_pathbuf_leak)]
 
 use std::any::type_name;
-use std::collections::BTreeMap;
+use std::collections::hash_map::Entry;
 use std::env::VarError;
 use std::io::{BufRead, BufReader, LineWriter, Write};
-use std::panic::set_hook;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 
 use chrono::{Datelike, Timelike};
@@ -21,302 +19,20 @@ use cursive::views::{
     Button, HideableView, Layer, LinearLayout, NamedView, ScrollView, TextView, ThemedView,
 };
 use cursive::Cursive;
-use parking_lot::Mutex;
+use fxhash::FxHashMap;
+use log::{log_write_thread, make_line_f, LogMessage};
 use raw_sync::events::{EventInit, EventState};
-use raw_sync::Timeout;
 use shared_memory::{ShmemConf, ShmemError};
+pub use subprocess::set_on_exit;
+use subprocess::{subprocess_fn, EMBEDDED_KEY, EMBEDDED_VAL, SHMEM_VAR_KEY};
 use tracing::Level;
-use tracing_subscriber::fmt::time::Uptime;
 
 pub mod config;
+mod log;
+mod subprocess;
 
-#[derive(serde::Deserialize, Clone, Copy, Debug)]
-enum SerdeLevel {
-    ERROR,
-    WARN,
-    INFO,
-    DEBUG,
-    TRACE,
-}
-
-impl From<SerdeLevel> for Level {
-    fn from(level: SerdeLevel) -> Self {
-        match level {
-            SerdeLevel::ERROR => Level::ERROR,
-            SerdeLevel::WARN => Level::WARN,
-            SerdeLevel::INFO => Level::INFO,
-            SerdeLevel::DEBUG => Level::DEBUG,
-            SerdeLevel::TRACE => Level::TRACE,
-        }
-    }
-}
-
-enum LogMessage {
-    Stdio {
-        level: Level,
-        stdio: String,
-        message: String,
-    },
-    Standard {
-        timestamp: f32,
-        level: Level,
-        thread_name: String,
-        target: String,
-        filename: String,
-        line_number: usize,
-        fields: BTreeMap<String, serde_json::Value>,
-    },
-}
-
-impl LogMessage {
-    fn aggregate(&self) -> String {
-        match self {
-            LogMessage::Stdio {
-                level,
-                stdio,
-                message,
-            } => format!("{level}{stdio}{message}"),
-            LogMessage::Standard {
-                level,
-                thread_name,
-                target,
-                filename,
-                line_number,
-                fields,
-                ..
-            } => format!("{level}{thread_name}{target}{filename}{line_number}{fields:?}"),
-        }
-    }
-
-    fn create_ui_message(&self) -> String {
-        match self {
-            LogMessage::Standard {
-                timestamp,
-                level,
-                fields,
-                ..
-            } => {
-                let message = fields
-                    .get("message")
-                    .map(|v| {
-                        if let Some(msg) = v.as_str() {
-                            msg.replace('\n', "\n    ")
-                        } else {
-                            v.to_string()
-                        }
-                    })
-                    .unwrap_or_else(|| format!("{fields:?}"));
-                format!("[{timestamp: >7.2}s {level: <5}] {message}")
-            }
-            LogMessage::Stdio { level, message, .. } => {
-                format!("[         {level: <5}] {message}")
-            }
-        }
-    }
-}
-
-#[derive(serde::Deserialize)]
-struct RawLogMessage {
-    timestamp: String,
-    level: SerdeLevel,
-    #[serde(rename = "threadName")]
-    thread_name: String,
-    target: String,
-    filename: String,
-    line_number: usize,
-    fields: BTreeMap<String, serde_json::Value>,
-}
-
-const EMBEDDED_KEY: &str = "__LUMPUR_EMBEDDED";
-const EMBEDDED_VAL: &str = "1";
-const SHMEM_VAR_KEY: &str = "__LUMPUR_SHMEM_FLINK";
 const LOG_VIEW: &str = "log_view";
 const LOG_SCROLL_VIEW: &str = "log_scroll_view";
-
-static ON_EXIT: Mutex<Option<Box<dyn FnOnce() -> () + Send>>> = Mutex::new(None);
-
-pub fn set_on_exit(f: impl FnOnce() -> () + Send + 'static) {
-    *ON_EXIT.lock() = Some(Box::new(f));
-}
-
-fn subprocess_fn<C: Configuration>() -> C {
-    let sub = tracing_subscriber::FmtSubscriber::builder()
-        .with_file(true)
-        .with_level(true)
-        .with_line_number(true)
-        .with_ansi(false)
-        .json()
-        .with_thread_names(true)
-        .with_timer(Uptime::default())
-        .with_max_level(Level::TRACE)
-        .with_writer(std::io::stderr)
-        .finish();
-
-    tracing::subscriber::set_global_default(sub)
-        .expect("Failed to set global default tracing subscriber");
-
-    set_hook(Box::new(move |info| {
-        tracing::error!("{info}");
-    }));
-
-    let flink = std::env::var(SHMEM_VAR_KEY).unwrap();
-
-    // Ctrl-C listener
-    std::thread::spawn(move || {
-        let shmem = match ShmemConf::new().size(4096).flink(&flink).open() {
-            Ok(shmem) => shmem,
-            Err(e) => {
-                tracing::error!("Failed to open shared memory segment: {e}");
-                return;
-            }
-        };
-        let result = unsafe { raw_sync::events::Event::from_existing(shmem.as_ptr()) };
-        let (evt, _used_bytes) = match result {
-            Ok(evt) => evt,
-            Err(e) => {
-                tracing::error!("Failed to create ctrl-c event listener: {e}");
-                return;
-            }
-        };
-        if let Err(e) = evt.wait(Timeout::Infinite) {
-            tracing::error!("Failed to wait for ctrl-c event: {e}");
-        }
-        tracing::warn!("Ctrl-C event received. Exiting...");
-        if let Some(f) = ON_EXIT.lock().take() {
-            f();
-        } else {
-            std::process::exit(0);
-        }
-    });
-
-    if !Path::new("app-config.toml").exists() {
-        tracing::error!("app-config.toml not found");
-        std::process::exit(1);
-    }
-    let data = match std::fs::read_to_string("app-config.toml") {
-        Ok(data) => data,
-        Err(e) => {
-            tracing::error!("{e:?}");
-            std::process::exit(1);
-        }
-    };
-    let value = match toml::from_str(&data) {
-        Ok(value) => value,
-        Err(e) => {
-            tracing::error!("{e:?}");
-            std::process::exit(1);
-        }
-    };
-    match C::from_config_file(value) {
-        Some(out) => out,
-        None => {
-            std::process::exit(1);
-        }
-    }
-}
-
-fn make_line_f(
-    log_tx: Sender<Arc<LogMessage>>,
-    write_tx: Sender<Arc<LogMessage>>,
-    stdio_level: Level,
-    stdio_name: &'static str,
-    current_dir: &'static Path,
-) -> impl Fn(String) {
-    move |line: String| {
-        let log = match serde_json::from_str::<RawLogMessage>(&line) {
-            Ok(log) => log,
-            Err(_) => {
-                let log = Arc::new(LogMessage::Stdio {
-                    level: stdio_level,
-                    stdio: stdio_name.into(),
-                    message: line,
-                });
-                let _ = log_tx.send(log.clone());
-                let _ = write_tx.send(log);
-                return;
-            }
-        };
-        let level = log.level.into();
-        let log = Arc::new(LogMessage::Standard {
-            timestamp: {
-                log.timestamp
-                    .trim_start()
-                    .strip_suffix('s')
-                    .unwrap()
-                    .parse()
-                    .unwrap_or(f32::NAN)
-            },
-            level,
-            thread_name: log.thread_name,
-            target: log.target,
-            filename: {
-                // This corrects the slashes in the filename
-                let filename = Path::new(&log.filename)
-                    .canonicalize()
-                    .unwrap_or_else(|_| PathBuf::from(&log.filename));
-                filename
-                    .strip_prefix(&current_dir)
-                    .unwrap_or(&filename)
-                    .to_string_lossy()
-                    .into_owned()
-            },
-            line_number: log.line_number,
-            fields: log.fields,
-        });
-
-        if level <= Level::INFO {
-            let _ = log_tx.send(log.clone());
-        }
-        let _ = write_tx.send(log);
-    }
-}
-
-fn log_write_thread(write_rx: Receiver<Arc<LogMessage>>, mut log_file: LineWriter<std::fs::File>) {
-    while let Ok(msg) = write_rx.recv() {
-        match &*msg {
-            LogMessage::Stdio {
-                level,
-                stdio,
-                message,
-            } => {
-                let _ = writeln!(log_file, "[         {level: <5} {stdio}] {message}");
-            }
-            LogMessage::Standard {
-                timestamp,
-                level,
-                thread_name,
-                target,
-                filename,
-                line_number,
-                fields,
-            } => {
-                let mut message = fields
-                    .get("message")
-                    .map(|v| {
-                        if let Some(msg) = v.as_str() {
-                            msg.replace('\n', "\n    ")
-                        } else {
-                            v.to_string()
-                        }
-                    })
-                    .unwrap_or_default();
-
-                if message.is_empty() || fields.len() > 1 {
-                    message += "    {";
-                    for (k, v) in fields {
-                        if k == "message" {
-                            continue;
-                        }
-                        message += &format!(" {k}: {v},");
-                    }
-                    message += " }";
-                }
-                let _ = writeln!(log_file, "[{timestamp: >7.2}s {level: <5} {target: <10} {thread_name: <12} {filename}:{line_number}] {message}");
-            }
-        }
-    }
-    let _ = log_file.flush();
-}
 
 #[derive(Default)]
 pub enum NewWorkingDirectory {
@@ -361,6 +77,7 @@ pub struct LumpurBuilder {
     pub new_working_directory: NewWorkingDirectory,
     pub path_reference: Vec<PathReference>,
     pub default_commands: bool,
+    pub ignores: FxHashMap<String, Level>,
 }
 
 impl Default for LumpurBuilder {
@@ -375,6 +92,7 @@ impl LumpurBuilder {
             new_working_directory: NewWorkingDirectory::default(),
             path_reference: vec![PathReference::Copy(PathBuf::from("app-config.toml"))],
             default_commands: true,
+            ignores: FxHashMap::default(),
         }
     }
 
@@ -392,6 +110,20 @@ impl LumpurBuilder {
     pub fn copy_file(mut self, path: impl AsRef<Path>) -> Self {
         self.path_reference
             .push(PathReference::Copy(path.as_ref().to_path_buf()));
+        self
+    }
+
+    pub fn add_ignore(mut self, target: impl Into<String>, level: Level) -> Self {
+        match self.ignores.entry(target.into()) {
+            Entry::Occupied(mut occupied_entry) => {
+                if &level < occupied_entry.get() {
+                    occupied_entry.insert(level);
+                }
+            }
+            Entry::Vacant(vacant_entry) => {
+                vacant_entry.insert(level);
+            }
+        }
         self
     }
 
@@ -579,12 +311,14 @@ impl LumpurBuilder {
             .expect("Failed to canonicalize current dir")
             .leak();
 
+        let ignores: &_ = Box::leak(Box::new(self.ignores));
         let f = make_line_f(
             log_tx.clone(),
             write_tx.clone(),
             Level::INFO,
             "stdout",
             current_dir,
+            ignores,
         );
         std::thread::spawn(move || {
             for line in stdout.lines() {
@@ -594,7 +328,14 @@ impl LumpurBuilder {
                 f(line);
             }
         });
-        let f = make_line_f(log_tx, write_tx, Level::ERROR, "stderr", current_dir);
+        let f = make_line_f(
+            log_tx,
+            write_tx,
+            Level::ERROR,
+            "stderr",
+            current_dir,
+            ignores,
+        );
         std::thread::spawn(move || {
             for line in stderr.lines() {
                 let Ok(line) = line else {
