@@ -27,11 +27,11 @@ and select the default options. Install `cargo-make` using `cargo install --forc
 
 ## Lunabase and Lunaserver
 
-Lunabase uses a different port than `22` and that port is not exposed to the internet. As such, a tunnel has to be made first. On your own computer, run the following command in this repository:  
+To connect Lunabase and Lunaserver, a tunnel has to be made first. On your own computer, run the following command in this repository:  
 `cargo run -p lunaserver-web-client`  
 and follow the instructions provided. After that, you can just run `lunabot` (with `cargo run -p lunabot -- main` or `cargo make main`) on Lunaserver and it will be able to connect to Lunabase running on your computer. The disadvantage is the latency is higher than if you ran Lunabase over a direct connection to Lunaserver (more on this later). The latency is worse if the quality of your internet connection is poor.
 
-If you happen to be in MEB 2340, you can connect to USR-Wifi-5G for a better connection. The password is on the bottom of the router (the scratched out number is 6). If you are connected to the router, you do not need to run `lunaserver-web-client`. Instead, you can just use your private IP address for `lunabase_address` (eg. my `lunabase_address` would be `192.168.0.100:10600`). You can find your private IP address using `ifconfig` on mac or linux, and `ipconfig` on windows. Do note that the `:10600` is not part of your private IP address; You just concatenate it after. If Lunaserver is still not able to connect, check that your firewall is disabled, or that it allows port `10600` over UDP. If you are connected to this router, you can also SSH to `192.168.0.102` for a lower latency SSH connection, but this is not as beneficial.
+If you happen to be in MEB 2340, you can connect to USR-Wifi-5G for a better connection. The password is on the bottom of the router (the scratched out number is 6). If you are connected to the router, you do not need to run `lunaserver-web-client`. Instead, you can just use your private IP address for `lunabase_address` (eg. my `lunabase_address` would be `192.168.0.100:10600`). You can find your private IP address using `ifconfig` on mac or linux, and `ipconfig` on windows, or by visiting [this website](http://192.168.0.102/ip) while connected to the router. Do note that the `:10600` is not part of your private IP address; You just concatenate it after. If Lunaserver is still not able to connect, check that your firewall is disabled, or that it allows port `10600` over UDP. If you are connected to this router, you can also SSH to `192.168.0.102` for a lower latency SSH connection, but this is not as beneficial.
 
 ## Godot
 

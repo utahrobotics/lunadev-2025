@@ -8,8 +8,15 @@ use tokio::net::UdpSocket;
 
 #[tokio::main]
 async fn main() {
-    let port = std::env::args().skip(1).next().map(|arg| arg.parse::<u16>().expect("Invalid port")).unwrap_or(10600);
-    let prob = std::env::args().skip(2).next().map(|arg| arg.parse::<f64>().expect("Invalid probability"));
+    let port = std::env::args()
+        .skip(1)
+        .next()
+        .map(|arg| arg.parse::<u16>().expect("Invalid port"))
+        .unwrap_or(10600);
+    let prob = std::env::args()
+        .skip(2)
+        .next()
+        .map(|arg| arg.parse::<f64>().expect("Invalid probability"));
     let response = Client::default()
         .get("ws://lunaserver.coe.utah.edu/udp-ws")
         .upgrade() // Prepares the WebSocket upgrade.
@@ -18,12 +25,26 @@ async fn main() {
         .expect("Failed to connect to lunaserver");
 
     // Turns the response into a WebSocket stream.
-    let mut websocket = response.into_websocket().await.expect("Failed to upgrade to WebSocket");
-    let udp = UdpSocket::bind("0.0.0.0:0").await.expect("Failed to bind UDP socket");
-    eprintln!("Bound to {}", udp.local_addr().expect("Failed to get local address"));
-    udp.connect(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)).await.expect("Failed to connect to lunabase UDP socket");
+    let mut websocket = response
+        .into_websocket()
+        .await
+        .expect("Failed to upgrade to WebSocket");
+    let udp = UdpSocket::bind("0.0.0.0:0")
+        .await
+        .expect("Failed to bind UDP socket");
+    eprintln!(
+        "Bound to {}",
+        udp.local_addr().expect("Failed to get local address")
+    );
+    udp.connect(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port))
+        .await
+        .expect("Failed to connect to lunabase UDP socket");
 
-    let init_msg = websocket.try_next().await.expect("Failed to receive initial message from lunaserver").expect("Failed to receive initial message from lunaserver");
+    let init_msg = websocket
+        .try_next()
+        .await
+        .expect("Failed to receive initial message from lunaserver")
+        .expect("Failed to receive initial message from lunaserver");
     if let Message::Text(text) = init_msg {
         println!("{text}")
     } else {

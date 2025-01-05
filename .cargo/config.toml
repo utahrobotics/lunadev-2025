@@ -1,5 +1,8 @@
 [build]
-rustflags = ["-Ctarget-cpu=native"]
+rustflags = ["-Ctarget-cpu=native", "-Z", "threads=8"]
+
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
 
 [env]
 RUST_BACKTRACE = "1"

@@ -1,6 +1,6 @@
 # Outreach
 
-To pilot Lunabot remotely using Lunabase (our mission control software), whether it be for outreach or testing, follow the steps listed below:
+To pilot Lunabot remotely using Lunabase (our mission control software), whether it be for outreach or testing, follow the steps listed below. Keep in mind, the `outreach` account on the computer (lunabot) needs to be unlocked by an administrator account before you can do this.
 
 0. Download Lunabase onto your laptop (link pending). Also verify that the necessary USB devices are plugged into the computer.
 1. Turn on the router. It's network name (SSID) is USR-Wifi-5G. At least one of the icons on the top of the router should be green.

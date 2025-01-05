@@ -1,59 +1,62 @@
-#![feature(result_flattening, deadline_api, never_type, thread_sleep_until, array_chunks, sync_unsafe_cell)]
+#![feature(result_flattening, array_chunks, iterator_try_collect)]
 
-use std::path::Path;
+use std::net::SocketAddr;
 
-use apps::Sim;
-use urobotics::{
-    app::{adhoc_app, application},
-    python, serial,
-    video::info::list_media_input,
-    BlockOn,
-};
+use apps::{default_max_pong_delay_ms, LunasimbotApp};
+use lumpur::LumpurBuilder;
+use tracing::Level;
 
 mod apps;
 mod localization;
 mod motors;
 // mod obstacles;
+mod pathfinding;
 mod pipelines;
 mod teleop;
 mod utils;
 
-fn info_app() {
-    match list_media_input().block_on() {
-        Ok(list) => {
-            if list.is_empty() {
-                println!("No media input found");
-            } else {
-                println!("Media inputs:");
-                for info in list {
-                    println!("\t{} ({})", info.name, info.media_type);
-                }
-            }
+lumpur::define_configuration! {
+    pub enum Commands {
+        Production {
+            lunabase_address: SocketAddr,
+            max_pong_delay_ms: Option<u64>
+        },
+        Sim {
+            lunabase_address: SocketAddr,
+            max_pong_delay_ms: Option<u64>
         }
-        Err(e) => eprintln!("Failed to list media input: {e}"),
     }
-    println!();
 }
 
-adhoc_app!(InfoApp(info_app): "Print diagnostics");
-
 fn main() {
-    let mut app = application!();
-    if Path::new("urobotics-venv").exists() {
-        app.cabinet_builder.create_symlink_for("urobotics-venv");
-    }
-    app.cabinet_builder.create_symlink_for("godot");
-    app.cabinet_builder.create_symlink_for("target");
-    app.cabinet_builder.create_symlink_for("urdf");
+    let cmd: Commands = LumpurBuilder::default()
+        .symlink_path("godot")
+        .symlink_path("target")
+        .symlink_path("urdf")
+        .add_ignore("k::urdf", Level::INFO)
+        .add_ignore("wgpu_core::device::resource", Level::INFO)
+        .add_ignore("wgpu_hal::vulkan::instance", Level::INFO)
+        .init();
 
-    app = app
-        .add_app::<serial::app::Serial>()
-        .add_app::<python::app::Python>()
-        .add_app::<InfoApp>()
-        .add_app::<Sim>();
-    #[cfg(feature = "production")]
-    {
-        app = app.add_app::<apps::Main>();
+    match cmd {
+        Commands::Sim {
+            lunabase_address,
+            max_pong_delay_ms,
+        } => {
+            LunasimbotApp {
+                lunabase_address,
+                max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
+            }
+            .run();
+        }
+        #[cfg(not(feature = "production"))]
+        Commands::Production { .. } => {
+            tracing::error!("Production mode is not enabled");
+        }
+        #[cfg(feature = "production")]
+        Commands::Production {
+            lunabase_address,
+            max_pong_delay_ms,
+        } => {}
     }
-    app.run();
 }

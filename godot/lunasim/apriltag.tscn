@@ -1,14 +1,13 @@
 [gd_scene load_steps=3 format=3 uid="uid://y0gvb4s2mi2x"]
 
 [ext_resource type="Script" path="res://apriltag.gd" id="1_pdjyq"]
-[ext_resource type="Texture2D" uid="uid://dugwow22qjjib" path="res://tag16_05_00000.png" id="2_quuis"]
+[ext_resource type="Texture2D" uid="uid://dkm0ojr547ecu" path="res://tag36_11_00000.png" id="2_5jfy1"]
 
 [node name="Apriltag" type="Marker3D" groups=["Apriltags"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.447899, 0.50416)
 script = ExtResource("1_pdjyq")
 
 [node name="Decal" type="Decal" parent="."]
 transform = Transform3D(-1, -3.82137e-15, 8.74228e-08, -8.74228e-08, 4.37114e-08, -1, 0, -1, -4.37114e-08, 0, 0, 0)
 size = Vector3(0.6, 0.1, 0.6)
-texture_albedo = ExtResource("2_quuis")
+texture_albedo = ExtResource("2_5jfy1")
 cull_mask = 2

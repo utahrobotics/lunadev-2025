@@ -1,11 +1,7 @@
-#![allow(unused_imports)]
-
-use std::{
-    net::SocketAddr,
-    sync::{mpsc, Arc},
-};
+use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Context;
+use apriltag::Apriltag;
 use camera::enumerate_cameras;
 use common::LunabotStage;
 use crossbeam::atomic::AtomicCell;
@@ -13,43 +9,46 @@ use depth::enumerate_depth_cameras;
 use fxhash::FxHashMap;
 use gputter::init_gputter_blocking;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
-use nalgebra::{UnitVector3, Vector2, Vector4};
-use serde::{Deserialize, Serialize};
+use nalgebra::Vector2;
+use pathfinding::Pathfinder;
+use serde::Deserialize;
 use streaming::camera_streaming;
 use urobotics::{
-    app::{define_app, Runnable}, callbacks::caller::CallbacksStorage, get_tokio_handle, log::{error, log_to_console, Level}, tokio,
-    BlockOn,
+    app::{define_app, Runnable},
+    get_tokio_handle,
+    log::{error, log_to_console, Level},
+    shared::OwnedData,
+    tokio, BlockOn,
 };
-use urobotics_apriltag::image::{DynamicImage, ImageBuffer};
 
 use crate::{
-    apps::log_teleop_messages, localization::Localizer,
-    pipelines::thalassic::spawn_thalassic_pipeline,
+    apps::log_teleop_messages, localization::Localizer, pipelines::thalassic::ThalassicData,
 };
 
 use super::{create_packet_builder, create_robot_chain, wait_for_ctrl_c};
 
+mod apriltag;
 mod camera;
-mod streaming;
 mod depth;
+mod streaming;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 struct CameraInfo {
     link_name: String,
     focal_length_x_px: f64,
     focal_length_y_px: f64,
-    stream_index: usize
+    stream_index: usize,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 struct DepthCameraInfo {
     link_name: String,
     #[serde(default)]
     ignore_apriltags: bool,
-    stream_index: usize
+    stream_index: usize,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 pub struct LunabotApp {
     lunabase_address: SocketAddr,
     lunabase_streaming_address: Option<SocketAddr>,
@@ -59,18 +58,32 @@ pub struct LunabotApp {
     cameras: FxHashMap<String, CameraInfo>,
     #[serde(default)]
     depth_cameras: FxHashMap<String, DepthCameraInfo>,
+    #[serde(default)]
+    apriltags: FxHashMap<String, Apriltag>,
 }
 
-// const PROJECTION_SIZE: Vector2<u32> = Vector2::new(36, 24);
-
 impl Runnable for LunabotApp {
-
     fn run(self) {
-        log_to_console([("wgpu_hal::vulkan::instance", Level::Info), ("wgpu_core::device::resource", Level::Info)]);
+        log_to_console([
+            ("wgpu_hal::vulkan::instance", Level::Info),
+            ("wgpu_core::device::resource", Level::Info),
+        ]);
         log_teleop_messages();
         if let Err(e) = init_gputter_blocking() {
             error!("Failed to initialize gputter: {e}");
         }
+        let apriltags = match self
+            .apriltags
+            .into_iter()
+            .map(|(id_str, apriltag)| id_str.parse().map(|id| (id, apriltag)))
+            .try_collect::<FxHashMap<_, _>>()
+        {
+            Ok(apriltags) => apriltags,
+            Err(e) => {
+                error!("Failed to parse apriltags: {e}");
+                return;
+            }
+        };
 
         let _guard = get_tokio_handle().enter();
 
@@ -79,13 +92,15 @@ impl Runnable for LunabotApp {
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
 
-        if let Err(e) = camera_streaming(
-            self.lunabase_streaming_address.unwrap_or_else(|| {
-                let mut addr = self.lunabase_address;
+        if let Err(e) = camera_streaming(self.lunabase_streaming_address.unwrap_or_else(|| {
+            let mut addr = self.lunabase_address;
+            if addr.port() == u16::MAX {
+                addr.set_port(65534);
+            } else {
                 addr.set_port(addr.port() + 1);
-                addr
             }
-        )) {
+            addr
+        })) {
             error!("Failed to start camera streaming: {e}");
         }
 
@@ -98,7 +113,7 @@ impl Runnable for LunabotApp {
                         link_name,
                         focal_length_x_px,
                         focal_length_y_px,
-                        stream_index
+                        stream_index,
                     },
                 )| {
                     (
@@ -111,16 +126,33 @@ impl Runnable for LunabotApp {
                                 .clone(),
                             focal_length_x_px,
                             focal_length_y_px,
-                            stream_index
+                            stream_index,
                         },
                     )
                 },
             ),
+            &apriltags,
         ) {
             error!("Failed to enumerate cameras: {e}");
         }
 
-        let (heightmap_callbacks, result) = enumerate_depth_cameras(
+        let mut buffer = OwnedData::from(ThalassicData::default());
+        let shared_thalassic_data = buffer.create_lendee();
+        // buffer.add_callback(|ThalassicData { heightmap, .. }| {
+        //     debug_assert_eq!(heightmap.len(), 128 * 64);
+        //     let max = heightmap.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        //     let min = heightmap.iter().copied().fold(f32::INFINITY, f32::min);
+        //     println!("min: {}, max: {}", min, max);
+        //     let rgb: Vec<_> = heightmap
+        //         .iter()
+        //         .map(|&h| ((h - min) / (max - min) * 255.0) as u8)
+        //         .collect();
+        //     let _ = DynamicImage::ImageLuma8(ImageBuffer::from_raw(64, 128, rgb).unwrap())
+        //         .save("heights.png");
+        // });
+
+        if let Err(e) = enumerate_depth_cameras(
+            buffer,
             localizer_ref,
             self.depth_cameras.into_iter().map(
                 |(
@@ -128,7 +160,7 @@ impl Runnable for LunabotApp {
                     DepthCameraInfo {
                         link_name,
                         ignore_apriltags: observe_apriltags,
-                        stream_index
+                        stream_index,
                     },
                 )| {
                     (
@@ -140,26 +172,17 @@ impl Runnable for LunabotApp {
                                 .unwrap()
                                 .clone(),
                             ignore_apriltags: observe_apriltags,
-                            stream_index
+                            stream_index,
                         },
                     )
                 },
             ),
-        );
-        // heightmap_callbacks.add_dyn_fn(Box::new(|heights| {
-        //     let max = heights.iter().copied().fold(f32::NEG_INFINITY, f32::max);
-        //     let min = heights.iter().copied().fold(f32::INFINITY, f32::min);
-        //     println!("min: {}, max: {}", min, max);
-        //     let rgb: Vec<_> = heights.iter().map(|&h| {
-        //         ((h - min) / (max - min) * 255.0) as u8
-        //     }).collect();
-        //     debug_assert_eq!(heights.len(), 128 * 64);
-        //     let _ = DynamicImage::ImageLuma8(ImageBuffer::from_raw(64, 128, rgb).unwrap()).save("heights.png");
-        // }));
-
-        if let Err(e) = result {
+            &apriltags,
+        ) {
             error!("Failed to enumerate depth cameras: {e}");
         }
+
+        let mut finder = Pathfinder::new(Vector2::new(32.0, 16.0), 0.03125);
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
@@ -181,8 +204,15 @@ impl Runnable for LunabotApp {
                         // TODO
                     }
                     Action::CalculatePath { from, to, mut into } => {
-                        into.push(from);
-                        into.push(to);
+                        let data = shared_thalassic_data.get();
+                        finder.append_path(
+                            from,
+                            to,
+                            &data.heightmap,
+                            &data.gradmap,
+                            1.0,
+                            &mut into,
+                        );
                         inputs.push(Input::PathCalculated(into));
                     }
                 },

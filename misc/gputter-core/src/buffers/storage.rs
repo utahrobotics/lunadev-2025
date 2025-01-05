@@ -178,6 +178,7 @@ where
     T: GpuType + ?Sized,
     SM: ShaderStorageBufferMode,
 {
+    type HostHidden = Self;
     type PostSubmission<'a>
         = ()
     where
@@ -217,6 +218,7 @@ where
     T: GpuType + ?Sized,
     SM: ShaderStorageBufferMode,
 {
+    type HostHidden = StorageBuffer<T, HostHidden, SM>;
     type PostSubmission<'a>
         = ()
     where
@@ -280,6 +282,7 @@ impl<T> GpuBuffer for StorageBuffer<T, HostReadOnly, ShaderReadWrite>
 where
     T: GpuType + ?Sized,
 {
+    type HostHidden = StorageBuffer<T, HostHidden, ShaderReadWrite>;
     type PostSubmission<'a>
         = wgpu::BufferSlice<'a>
     where
@@ -311,6 +314,7 @@ impl<T> GpuBuffer for StorageBuffer<T, HostReadWrite, ShaderReadWrite>
 where
     T: GpuType + ?Sized,
 {
+    type HostHidden = StorageBuffer<T, HostHidden, ShaderReadWrite>;
     type PostSubmission<'a>
         = wgpu::BufferSlice<'a>
     where

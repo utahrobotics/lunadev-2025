@@ -22,7 +22,12 @@ pub enum FromLunasim {
 #[derive(Debug, Encode, Decode, Clone)]
 pub enum FromLunasimbot {
     PointCloud(Box<[[f32; 3]]>),
-    HeightMap(Box<[f32]>),
+    Path(Box<[[f32; 3]]>),
+    Thalassic {
+        heightmap: Box<[f32]>,
+        gradmap: Box<[f32]>,
+        obstaclemap: Box<[bool]>,
+    },
     Isometry {
         axis: [f32; 3],
         angle: f32,
@@ -32,4 +37,5 @@ pub enum FromLunasimbot {
         left: f32,
         right: f32,
     },
+    Quit,
 }

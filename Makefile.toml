@@ -1,12 +1,22 @@
 [tasks.build_lunasim]
 workspace = false
 command = "cargo"
-args = ["build", "-p", "lunasim-lib"]
+args = ["build", "-p", "lunasim-lib", "--release"]
 
 [tasks.build_lunabase]
 workspace = false
 command = "cargo"
-args = ["build", "-p", "lunabase-lib"]
+args = ["build", "-p", "lunabase-lib", "--release"]
+
+[tasks.build_lunabase_prod]
+workspace = false
+command = "cargo"
+args = ["build", "-p", "lunabase-lib", "--release", "--features=production"]
+
+[tasks.build_lunabase_prodx]
+workspace = false
+command = "cargo"
+args = ["build", "-p", "lunabase-lib", "--release", "--features=extended"]
 
 [tasks.godot]
 workspace = false
@@ -19,27 +29,58 @@ dependencies = [
 workspace = false
 command = "cargo"
 args = ["run", "-p", "lunabot", "--", "sim"]
+dependencies = [
+    "build_lunasim",
+]
 
 [tasks.main]
 workspace = false
 command = "cargo"
-args = ["run", "--release", "--features=production", "-p", "lunabot", "--", "main"]
+args = ["run", "--features=production", "-p", "lunabot", "--", "main"]
 
-[tasks.del-cabinet]
+[tasks.clean]
 workspace = false
 command = "cargo"
-args = ["run", "-p", "urobotics-tool", "--", "deletecabinet"]
+args = ["run", "-p", "lunabot", "--", "clean"]
 
-[tasks.mouser-web]
+[tasks.import_lunabase]
 workspace = false
-command = "npm"
-cwd = "mouser/mouser-web"
-args = ["run", "build"]
+command = "godot"
+args = ["--path", "godot/lunabase", "--import"]
 
-[tasks.mouser-host]
+[tasks.lunabase]
 workspace = false
-command = "cargo"
+command = "godot"
+args = ["--path", "godot/lunabase", "-d"]
 dependencies = [
-    "mouser-web",
+    "build_lunabase",
+    "import_lunabase",
 ]
-args = ["run", "-p", "mouser-host"]
+
+[tasks.lunabase_prod]
+workspace = false
+command = "godot"
+args = ["--path", "godot/lunabase", "-d"]
+dependencies = [
+    "build_lunabase_prod",
+    "import_lunabase",
+]
+
+[tasks.lunabase_prodx]
+workspace = false
+command = "godot"
+args = ["--path", "godot/lunabase", "-d"]
+dependencies = [
+    "build_lunabase_prodx",
+    "import_lunabase",
+]
+
+[tasks.edit_lunasim]
+workspace = false
+command = "godot"
+args = ["--path", "godot/lunasim", "-e"]
+
+[tasks.edit_lunabase]
+workspace = false
+command = "godot"
+args = ["--path", "godot/lunabase", "-e"]

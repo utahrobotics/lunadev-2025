@@ -41,7 +41,7 @@ glow_enabled = true
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wujp8"]
 shading_mode = 0
-albedo_color = Color(0.904334, 0.364874, 0.918573, 1)
+vertex_color_use_as_albedo = true
 use_point_size = true
 point_size = 5.0
 
@@ -50,25 +50,43 @@ material = SubResource("StandardMaterial3D_wujp8")
 
 [sub_resource type="MultiMesh" id="MultiMesh_yaeoc"]
 transform_format = 1
+use_colors = true
 mesh = SubResource("PointMesh_fxwe8")
 
 [sub_resource type="GDScript" id="GDScript_03k1a"]
 script/source = "extends MultiMeshInstance3D
 
+enum DisplayMode {
+	GRADIENT,
+	OCCUPANCY
+}
 
-const CELL_SIZE := 0.0625
+const CELL_SIZE := 0.03125
+var display_mode: DisplayMode = DisplayMode.OCCUPANCY
 
 
 func _ready() -> void:
 	var mesh: MultiMesh = multimesh
-	mesh.instance_count = 8192
-	LunasimNode.heightmap.connect(
-		func(heights: PackedFloat32Array):
+	mesh.instance_count = 256 * 128
+	LunasimNode.thalassic.connect(
+		func(heights: PackedFloat32Array, grads: PackedFloat32Array, obstaclemap: PackedByteArray):
 			var i := 0
-			for z in range(128):
-				for x in range(64):
-					mesh.set_instance_transform(i, Transform3D(Basis(), Vector3(-x * CELL_SIZE, heights[i], -z * CELL_SIZE)))
-					i += 1
+			match display_mode:
+				DisplayMode.GRADIENT:
+					for z in range(256):
+						for x in range(128):
+							mesh.set_instance_transform(i, Transform3D(Basis(), Vector3(-x * CELL_SIZE, heights[i], -z * CELL_SIZE)))
+							mesh.set_instance_color(i, Color.GREEN.lerp(Color.RED, grads[i] / PI * 2))
+							i += 1
+				DisplayMode.OCCUPANCY:
+					for z in range(256):
+						for x in range(128):
+							mesh.set_instance_transform(i, Transform3D(Basis(), Vector3(-x * CELL_SIZE, heights[i], -z * CELL_SIZE)))
+							if obstaclemap[i] == 1:
+								mesh.set_instance_color(i, Color.BROWN)
+							else:
+								mesh.set_instance_color(i, Color.SEA_GREEN)
+							i += 1
 	)
 "
 
@@ -307,7 +325,6 @@ func _on_pressed() -> void:
 script = SubResource("GDScript_lj4gt")
 
 [node name="PathManager" type="Path3D" parent="."]
-visible = false
 curve = SubResource("Curve3D_yjb38")
 script = ExtResource("1_ohl8f")
 test_path = Array[Vector3]([Vector3(-2.5, 1, -3.5), Vector3(-2, 0.5, -6)])
@@ -398,7 +415,7 @@ layers = 3
 mesh = SubResource("PlaneMesh_reayg")
 
 [node name="Rocks" type="Node3D" parent="Arena"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.25613, 0, -6.70293)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.906988, 0, -2.93281)
 
 [node name="Rock" type="Node3D" parent="Arena/Rocks"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.861442, 2.20208, -1.0874)
@@ -432,7 +449,7 @@ remote_path = NodePath("../../CanvasLayer/TabContainer/RearCamera/AspectRatioCon
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -1)
 
 [node name="Apriltag" parent="." instance=ExtResource("2_nhvh2")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.610044, 0.50416)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.370852, 0.610044, -0.00139198)
 explicit = true
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]

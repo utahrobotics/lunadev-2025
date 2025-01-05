@@ -117,6 +117,7 @@ impl_seq!(3 A 0 B 1 C 2);
 impl_seq!(4 A 0 B 1 C 2 D 3);
 impl_seq!(5 A 0 B 1 C 2 D 3 E 4);
 impl_seq!(6 A 0 B 1 C 2 D 3 E 4 F 5);
+impl_seq!(7 A 0 B 1 C 2 D 3 E 4 F 5 G 6);
 
 impl<A> Sequence<A> {
     pub fn new(body: A) -> Self {
@@ -238,6 +239,7 @@ impl_sel!(3 A 0 B 1 C 2);
 impl_sel!(4 A 0 B 1 C 2 D 3);
 impl_sel!(5 A 0 B 1 C 2 D 3 E 4);
 impl_sel!(6 A 0 B 1 C 2 D 3 E 4 F 5);
+impl_sel!(7 A 0 B 1 C 2 D 3 E 4 F 5 G 6);
 
 impl<A> Select<A> {
     pub fn new(body: A) -> Self {
@@ -409,6 +411,7 @@ impl_seq!(3 A 0 B 1 C 2);
 impl_seq!(4 A 0 B 1 C 2 D 3);
 impl_seq!(5 A 0 B 1 C 2 D 3 E 4);
 impl_seq!(6 A 0 B 1 C 2 D 3 E 4 F 5);
+impl_seq!(7 A 0 B 1 C 2 D 3 E 4 F 5 G 6);
 
 impl<A> ParallelSequence<A> {
     pub fn new(body: A) -> Self {
@@ -584,6 +587,7 @@ impl_sel!(3 A 0 B 1 C 2);
 impl_sel!(4 A 0 B 1 C 2 D 3);
 impl_sel!(5 A 0 B 1 C 2 D 3 E 4);
 impl_sel!(6 A 0 B 1 C 2 D 3 E 4 F 5);
+impl_sel!(7 A 0 B 1 C 2 D 3 E 4 F 5 G 6);
 
 impl<A> ParallelSelect<A> {
     pub fn new(body: A) -> Self {

@@ -8,6 +8,7 @@ pub mod storage;
 pub mod uniform;
 
 pub trait GpuBuffer {
+    type HostHidden;
     type Data: GpuType + ?Sized;
     type PostSubmission<'a>
     where
@@ -32,15 +33,15 @@ pub trait WritableGpuBuffer: GpuBuffer {
         lock: &mut GpuWriteLock,
         staging_belt: &mut StagingBelt,
     ) {
-        self.write_raw(data.to_bytes(), lock, staging_belt);
+        self.write_raw_internal(data.to_bytes(), lock, staging_belt);
     }
-    fn write_raw(
+    fn write_raw_internal(
         &mut self,
         bytes: &[u8],
         GpuWriteLock { encoder, device }: &mut GpuWriteLock,
         staging_belt: &mut StagingBelt,
     ) {
-        let bytes = &bytes[0..self.get_buffer().size().try_into().unwrap()];
+        // let bytes = &bytes[0..self.get_buffer().size().try_into().unwrap()];
         staging_belt
             .write_buffer(
                 encoder,
@@ -158,7 +159,7 @@ macro_rules! write_impl {
             }
 
             fn write_raw_to(&mut self, data: &[u8], lock: &mut GpuWriteLock) {
-                self.buffers.$index.write_raw(data, lock, &mut self.staging_belt);
+                self.buffers.$index.write_raw_internal(data, lock, &mut self.staging_belt);
             }
         }
     }
@@ -201,6 +202,9 @@ tuple_impl!(3, 0 A, 1 B, 2 C);
 tuple_impl!(4, 0 A, 1 B, 2 C, 3 D);
 tuple_impl!(5, 0 A, 1 B, 2 C, 3 D, 4 E);
 tuple_impl!(6, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F);
+tuple_impl!(7, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F, 6 G);
+tuple_impl!(8, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F, 6 G, 7 H);
+tuple_impl!(9, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F, 6 G, 7 H, 8 I);
 
 set_impl!(1, 0 A);
 set_impl!(2, 0 A, 1 B);
@@ -208,6 +212,9 @@ set_impl!(3, 0 A, 1 B, 2 C);
 set_impl!(4, 0 A, 1 B, 2 C, 3 D);
 set_impl!(5, 0 A, 1 B, 2 C, 3 D, 4 E);
 set_impl!(6, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F);
+set_impl!(7, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F, 6 G);
+set_impl!(8, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F, 6 G, 7 H);
+set_impl!(9, 0 A, 1 B, 2 C, 3 D, 4 E, 5 F, 6 G, 7 H, 8 I);
 
 write_impl!(0 A, A);
 
@@ -235,3 +242,11 @@ write_impl!(2 C, A B C D E F);
 write_impl!(3 D, A B C D E F);
 write_impl!(4 E, A B C D E F);
 write_impl!(5 F, A B C D E F);
+
+write_impl!(0 A, A B C D E F G);
+write_impl!(1 B, A B C D E F G);
+write_impl!(2 C, A B C D E F G);
+write_impl!(3 D, A B C D E F G);
+write_impl!(4 E, A B C D E F G);
+write_impl!(5 F, A B C D E F G);
+write_impl!(6 G, A B C D E F G);

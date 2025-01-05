@@ -17,7 +17,6 @@ use std::{
 };
 
 use crossbeam::queue::SegQueue;
-pub use log;
 pub use parking_lot;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 pub use tokio;
@@ -118,7 +117,7 @@ fn with_tokio_runtime_handle<T>(
                         for drop_notify in &attached_guards {
                             backtraces.push_str(&format!("{:?}\n\n", drop_notify.backtrace));
                         }
-                        log::warn!(
+                        tracing::warn!(
                             "The following guards have not dropped after {:.1} seconds\n\n{backtraces}",
                             config.thread_delayed_warning.as_secs_f32()
                         );
@@ -132,7 +131,7 @@ fn with_tokio_runtime_handle<T>(
             std::thread::spawn(move || {
                 std::thread::sleep(config.shutdown_delayed_warning);
                 if !runtime_ended2.notified.load(Ordering::Acquire) {
-                    log::warn!(
+                    tracing::warn!(
                         "Tokio runtime has not ended after {:.1} seconds",
                         config.shutdown_delayed_warning.as_secs_f32()
                     );
@@ -321,7 +320,7 @@ macro_rules! duration_warning {
         let result = $inner;
         let duration = start.elapsed();
         if duration > Duration::from_secs(1) {
-            $crate::log::warn!(
+            $crate::tracing::warn!(
                 "{} took {:.1} seconds",
                 stringify!($inner),
                 duration.as_secs_f32()

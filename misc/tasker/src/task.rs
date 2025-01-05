@@ -33,13 +33,13 @@ impl Loggable for ! {
 
 impl Loggable for String {
     fn log(&self) {
-        log::info!("{self}");
+        tracing::info!("{self}");
     }
 }
 
 impl Loggable for &'static str {
     fn log(&self) {
-        log::info!("{self}");
+        tracing::info!("{self}");
     }
 }
 
@@ -47,7 +47,7 @@ impl<T: Loggable, E: std::fmt::Display> Loggable for Result<T, E> {
     fn log(&self) {
         match self {
             Ok(t) => t.log(),
-            Err(e) => log::error!("{e}"),
+            Err(e) => tracing::error!("{e}"),
         }
     }
 }

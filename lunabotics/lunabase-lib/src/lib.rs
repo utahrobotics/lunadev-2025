@@ -1,6 +1,13 @@
 #![feature(backtrace_frames)]
+
 use std::{
-    collections::VecDeque, net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket}, sync::{atomic::{AtomicBool, Ordering}, Once}, time::{Duration, Instant}
+    collections::VecDeque,
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Once,
+    },
+    time::{Duration, Instant},
 };
 
 use bitcode::encode;
@@ -9,9 +16,18 @@ use cakap2::{
     Event, PeerStateMachine, RecommendedAction,
 };
 use common::{FromLunabase, FromLunabot, LunabotStage, Steering};
-use godot::{classes::{image::Format, Engine, Image}, prelude::*};
-use openh264::{decoder::Decoder, nal_units};
+use godot::{
+    classes::{image::Format, Engine, Image},
+    prelude::*,
+};
 use tasker::shared::{OwnedData, SharedDataReceiver};
+
+#[cfg(feature = "production")]
+mod stream;
+mod urdf;
+
+const STREAM_WIDTH: u32 = 1920;
+const STREAM_HEIGHT: u32 = 720;
 
 struct LunabaseLib;
 
@@ -68,7 +84,7 @@ struct LunabotConnInner {
     last_steering: Option<(Steering, ReliableIndex)>,
     send_to: Option<SocketAddr>,
     stream_lendee: SharedDataReceiver<Vec<u8>>,
-    stream_corrupted: &'static AtomicBool
+    stream_corrupted: &'static AtomicBool,
 }
 
 #[derive(GodotClass)]
@@ -79,7 +95,7 @@ struct LunabotConn {
     #[var]
     stream_image: Gd<Image>,
     #[var]
-    stream_image_updated: bool
+    stream_image_updated: bool,
 }
 
 thread_local! {
@@ -91,16 +107,32 @@ thread_local! {
 #[godot_api]
 impl INode for LunabotConn {
     fn init(base: Base<Node>) -> Self {
-        let stream_image = Image::create_empty(2556, 960, false, Format::RGB8).unwrap();
+        let stream_image = Image::create_empty(
+            STREAM_WIDTH as i32,
+            STREAM_HEIGHT as i32,
+            false,
+            Format::RGB8,
+        )
+        .unwrap();
         if Engine::singleton().is_editor_hint() {
-            return Self { inner: None, base, stream_image, stream_image_updated: false };
+            return Self {
+                inner: None,
+                base,
+                stream_image,
+                stream_image_updated: false,
+            };
         }
         init_panic_hook();
 
         let stream_corrupted: &_ = Box::leak(Box::new(AtomicBool::new(false)));
-        let mut shared_rgb_img = OwnedData::from(vec![0u8; 2556 * 960 * 3]);
+        let mut shared_rgb_img =
+            OwnedData::from(vec![
+                0u8;
+                STREAM_WIDTH as usize * STREAM_HEIGHT as usize * 3
+            ]);
         let stream_lendee = shared_rgb_img.create_lendee();
-        let mut shared_rgb_img = shared_rgb_img.pessimistic_share();
+        #[cfg(feature = "production")]
+        stream::camera_streaming(shared_rgb_img.pessimistic_share(), stream_corrupted);
 
         let udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10600))
             .expect("Failed to bind to 10600");
@@ -108,65 +140,7 @@ impl INode for LunabotConn {
         udp.set_nonblocking(true)
             .expect("Failed to set non-blocking");
 
-        let stream_udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10601))
-            .expect("Failed to bind to 10601");
-        
-        std::thread::spawn(move || {
-            if let Err(e) = Decoder::new() {
-                godot_error!("Failed to initialize decoder: {e}");
-                return;
-            }
-            let mut dec = Decoder::new().expect("Failed to initialize decoder");
-            let mut buf = [0u8; 1400];
-            let mut stream = vec![];
-
-            godot_print!("Stream server started");
-
-            loop {
-                match stream_udp.recv(&mut buf) {
-                    Ok(n) => {
-                        stream.extend_from_slice(&buf[..n]);
-                    }
-                    Err(e) => {
-                        godot_error!("Failed to receive stream data: {e}");
-                        break;
-                    }
-                }
-                
-                let mut last_i = 0usize;
-                let start_i = stream.as_ptr() as usize;
-                let mut nals: Vec<_> = nal_units(&stream).collect();
-                nals.pop();
-
-                for packet in nals {
-                    last_i = packet.as_ptr() as usize - start_i + packet.len();
-                    match dec.decode(packet) {
-                        Ok(Some(frame)) => {
-                            stream_corrupted.store(false, Ordering::Relaxed);
-                            match shared_rgb_img.try_recall() {
-                                Ok(mut owned) => {
-                                    frame.write_rgb8(&mut owned);
-                                    shared_rgb_img = owned.pessimistic_share();
-                                }
-                                Err(shared) => {
-                                    shared_rgb_img = shared;
-                                }
-                            }
-                        }
-                        Ok(None) => {
-                            stream_corrupted.store(false, Ordering::Relaxed);
-                        }
-                        Err(_) => {
-                            stream_corrupted.store(true, Ordering::Relaxed);
-                        }
-                    }
-                }
-                stream.drain(0..last_i);
-            }
-        });
-
         let cakap_sm = PeerStateMachine::new(Duration::from_millis(150), 1024, 1400);
-        // godot_warn!("LunabotConn initialized");
 
         Self {
             inner: Some(LunabotConnInner {
@@ -178,11 +152,11 @@ impl INode for LunabotConn {
                 last_steering: None,
                 send_to: None,
                 stream_lendee,
-                stream_corrupted
+                stream_corrupted,
             }),
             base,
             stream_image,
-            stream_image_updated: false
+            stream_image_updated: false,
         }
     }
 
@@ -191,7 +165,13 @@ impl INode for LunabotConn {
             let mut received = false;
 
             if let Some(data) = inner.stream_lendee.try_get() {
-                self.stream_image.set_data(2556, 960, false, Format::RGB8, &PackedByteArray::from(&**data));
+                self.stream_image.set_data(
+                    STREAM_WIDTH as i32,
+                    STREAM_HEIGHT as i32,
+                    false,
+                    Format::RGB8,
+                    &PackedByteArray::from(&**data),
+                );
                 self.stream_image_updated = true;
                 received = true;
             }
@@ -346,6 +326,35 @@ impl LunabotConn {
         }
     }
 
+    fn set_steering(&mut self, new_steering: Steering) {
+        if let Some(inner) = &mut self.inner {
+            let mut last_steering_reliable_idx = None;
+            if let Some((old_steering, old_idx)) = inner.last_steering {
+                last_steering_reliable_idx = Some(old_idx);
+                if old_steering == new_steering {
+                    return;
+                }
+            }
+            let msg = FromLunabase::Steering(new_steering);
+            match inner
+                .cakap_sm
+                .get_packet_builder()
+                .new_reliable(encode(&msg).into())
+            {
+                Ok(packet) => {
+                    if let Some(old_idx) = last_steering_reliable_idx {
+                        inner.to_lunabot.push_back(Action::CancelReliable(old_idx));
+                    }
+                    inner.last_steering = Some((new_steering, packet.get_index()));
+                    inner.to_lunabot.push_back(Action::SendReliable(packet));
+                }
+                Err(e) => {
+                    godot_error!("Failed to build reliable packet: {e}");
+                }
+            }
+        }
+    }
+
     // fn send_unreliable(&mut self, msg: &FromLunabase) {
     //     if let Some(inner) = &mut self.inner {
     //         match inner.cakap_sm.get_packet_builder().new_unreliable(encode(msg).into()) {
@@ -375,38 +384,18 @@ impl LunabotConn {
     #[signal]
     fn entered_dump(&self);
 
+    #[cfg(feature = "production")]
+    #[constant]
+    const CAMERA_STREAMING: bool = true;
+    #[cfg(not(feature = "production"))]
+    #[constant]
+    const CAMERA_STREAMING: bool = false;
+
     #[func]
     fn is_stream_corrupted(&self) -> bool {
-        self.inner.as_ref().map_or(false, |inner| inner.stream_corrupted.load(Ordering::Relaxed))
-    }
-
-    fn set_steering(&mut self, new_steering: Steering) {
-        if let Some(inner) = &mut self.inner {
-            let mut last_steering_reliable_idx = None;
-            if let Some((old_steering, old_idx)) = inner.last_steering {
-                last_steering_reliable_idx = Some(old_idx);
-                if old_steering == new_steering {
-                    return;
-                }
-            }
-            let msg = FromLunabase::Steering(new_steering);
-            match inner
-                .cakap_sm
-                .get_packet_builder()
-                .new_reliable(encode(&msg).into())
-            {
-                Ok(packet) => {
-                    if let Some(old_idx) = last_steering_reliable_idx {
-                        inner.to_lunabot.push_back(Action::CancelReliable(old_idx));
-                    }
-                    inner.last_steering = Some((new_steering, packet.get_index()));
-                    inner.to_lunabot.push_back(Action::SendReliable(packet));
-                }
-                Err(e) => {
-                    godot_error!("Failed to build reliable packet: {e}");
-                }
-            }
-        }
+        self.inner.as_ref().map_or(false, |inner| {
+            inner.stream_corrupted.load(Ordering::Relaxed)
+        })
     }
 
     #[func]

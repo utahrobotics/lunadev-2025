@@ -44,7 +44,7 @@
   <joint name="camera_joint" type="fixed">
     <parent link="base_link"/>
     <child link="depth_camera_link"/>
-    <origin xyz="0 0.573 -0.298" rpy="-0.23387411976724016330777456297747 0 0"/>
+    <origin xyz="0 0.573 -0.298" rpy="-0.52359877559829887307710723054658 0 0"/>
   </joint>
 
   <!-- Joint connecting base_link and body_link -->

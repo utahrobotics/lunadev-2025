@@ -2,24 +2,24 @@ use std::time::{Duration, Instant};
 
 use ares_bt::{Behavior, CancelSafe, InfallibleBehavior, InfallibleStatus, Status};
 
-use crate::{blackboard::LunabotBlackboard, Action};
+use crate::blackboard::LunabotBlackboard;
 
 pub struct WaitBehavior {
     pub duration: Duration,
-    start_time: Option<Instant>
+    start_time: Option<Instant>,
 }
 
 impl From<Duration> for WaitBehavior {
     fn from(duration: Duration) -> Self {
         Self {
             duration,
-            start_time: None
+            start_time: None,
         }
     }
 }
 
-impl InfallibleBehavior<LunabotBlackboard, Action> for WaitBehavior {
-    fn run_infallible(&mut self, blackboard: &mut LunabotBlackboard) -> InfallibleStatus<Action> {
+impl InfallibleBehavior<LunabotBlackboard> for WaitBehavior {
+    fn run_infallible(&mut self, blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
         if let Some(start) = self.start_time {
             if start.elapsed() >= self.duration {
                 self.start_time = None;
@@ -28,7 +28,7 @@ impl InfallibleBehavior<LunabotBlackboard, Action> for WaitBehavior {
         } else {
             self.start_time = Some(blackboard.get_now());
         }
-        InfallibleStatus::Running(Action::WaitUntil(self.start_time.unwrap() + self.duration))
+        InfallibleStatus::Running
     }
 }
 
@@ -38,8 +38,8 @@ impl CancelSafe for WaitBehavior {
     }
 }
 
-impl Behavior<LunabotBlackboard, Action> for WaitBehavior {
-    fn run(&mut self, blackboard: &mut LunabotBlackboard) -> Status<Action> {
+impl Behavior<LunabotBlackboard> for WaitBehavior {
+    fn run(&mut self, blackboard: &mut LunabotBlackboard) -> Status {
         self.run_infallible(blackboard).into()
     }
 }

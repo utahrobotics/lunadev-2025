@@ -88,7 +88,7 @@ impl INode for Lunasim {
                     match bitcode_buffer.decode(&bytes) {
                         Ok(msg) => shared2.from_lunasimbot.push(msg),
                         Err(e) => {
-                            godot_error!("Failed to deserialize from lunasim: {e}");
+                            godot_error!("Failed to deserialize from lunasimbot: {e}");
                             continue;
                         }
                     }
@@ -134,6 +134,9 @@ impl INode for Lunasim {
     fn process(&mut self, _delta: f64) {
         while let Some(msg) = self.shared.from_lunasimbot.pop() {
             match msg {
+                FromLunasimbot::Quit => {
+                    self.base().get_tree().map(|mut tree| tree.quit());
+                }
                 FromLunasimbot::PointCloud(points) => {
                     let points: Vec<_> = Box::into_iter(points)
                         .map(|[x, y, z]| Vector3 { x, y, z })
@@ -163,11 +166,32 @@ impl INode for Lunasim {
                     self.base_mut()
                         .emit_signal("drive", &[left.to_variant(), right.to_variant()]);
                 }
-                FromLunasimbot::HeightMap(heights) => {
-                    let heights: PackedFloat32Array = Box::into_iter(heights).collect();
+                FromLunasimbot::Thalassic {
+                    heightmap,
+                    gradmap,
+                    obstaclemap,
+                } => {
+                    let heights: PackedFloat32Array = Box::into_iter(heightmap).collect();
+                    let grads: PackedFloat32Array = Box::into_iter(gradmap).collect();
+                    let obstacles: PackedByteArray = Box::into_iter(obstaclemap)
+                        .map(|occupied| if occupied { 1 } else { 0 })
+                        .collect();
 
-                    self.base_mut()
-                        .emit_signal("heightmap", &[heights.to_variant()]);
+                    self.base_mut().emit_signal(
+                        "thalassic",
+                        &[
+                            heights.to_variant(),
+                            grads.to_variant(),
+                            obstacles.to_variant(),
+                        ],
+                    );
+                }
+                FromLunasimbot::Path(path) => {
+                    let path: Vec<_> = Box::into_iter(path)
+                        .map(|[x, y, z]| Vector3 { x, y, z })
+                        .collect();
+
+                    self.base_mut().emit_signal("path", &[path.to_variant()]);
                 }
             }
         }
@@ -198,7 +222,13 @@ impl Lunasim {
     #[signal]
     fn fitted_points(points: Vec<Vector3>);
     #[signal]
-    fn heightmap(heights: PackedFloat32Array);
+    fn path(points: Vec<Vector3>);
+    #[signal]
+    fn thalassic(
+        heights: PackedFloat32Array,
+        grads: PackedFloat32Array,
+        obstaclemap: PackedByteArray,
+    );
     #[signal]
     fn transform(transform: Transform3D);
     #[signal]

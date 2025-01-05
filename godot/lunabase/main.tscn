@@ -125,7 +125,7 @@ func _on_pressed() -> void:
 	Lunabot.current_state = Lunabot.State.AUTO
 	$\"../Buttons Label\".text = \"Current Stage: TeleOp\"
 	$\"../../StateInfoTabContainer\".current_tab = 0
-	#Lunabot.run_auto()
+	Lunabot.traverse_obstacles()
 "
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_u8rpt"]
@@ -170,6 +170,7 @@ script/source = "extends Window
 
 
 func _ready() -> void:
+	visible = LunabotConn.CAMERA_STREAMING
 	texture_rect.texture = ImageTexture.create_from_image(Lunabot.stream_image)
 
 
@@ -342,7 +343,9 @@ offset_bottom = 23.0
 text = "Stopped data goes here"
 
 [node name="Window" type="Window" parent="."]
+position = Vector2i(0, 36)
 size = Vector2i(720, 480)
+visible = false
 script = SubResource("GDScript_cj7ej")
 
 [node name="TextureRect" type="TextureRect" parent="Window"]
