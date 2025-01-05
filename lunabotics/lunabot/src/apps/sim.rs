@@ -380,10 +380,10 @@ impl LunasimbotApp {
                 Action::CalculatePath { from, to, mut into } => {
                     let mut data = shared_thalassic_data.get();
                     loop {
-                        if data.current_robot_radius == 1.5 {
+                        if data.current_robot_radius == 0.25 {
                             break;
                         }
-                        data.set_robot_radius(1.5);
+                        data.set_robot_radius(0.25);
                         drop(data);
                         data = shared_thalassic_data.get();
                     }
@@ -397,10 +397,10 @@ impl LunasimbotApp {
                     if into.len() == 1 {
                         warn!("Failed to find path, loosening threshold...");
                         loop {
-                            data.set_robot_radius(0.5);
+                            data.set_robot_radius(0.1);
                             drop(data);
                             data = shared_thalassic_data.get();
-                            if data.current_robot_radius == 0.5 {
+                            if data.current_robot_radius == 0.1 {
                                 break;
                             }
                         }

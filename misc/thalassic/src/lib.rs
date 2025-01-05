@@ -257,6 +257,7 @@ impl ThalassicBuilder {
             obstacle_map: BufferGroupBinding::<_, BetaBindGroups>::get::<4, 0>(),
             gradient_map: BufferGroupBinding::<_, BetaBindGroups>::get::<3, 0>(),
             max_gradient: BufferGroupBinding::<_, BetaBindGroups>::get::<5, 0>(),
+            height_map: BufferGroupBinding::<_, BetaBindGroups>::get::<1, 0>(),
             heightmap_width: self.heightmap_dimensions.x,
             cell_count,
         }
@@ -295,9 +296,8 @@ impl ThalassicBuilder {
             bind_grps: Some(bind_grps),
             triangle_buffer: Vec::new(),
             points_buffer: Vec::new(),
-            new_radius_cells: Some(1.5),
+            new_radius: Some(0.25),
             new_max_gradient: Some(45.0f32.to_radians()),
-            cell_size: self.cell_size,
         }
     }
 }
@@ -326,9 +326,8 @@ pub struct ThalassicPipeline {
     )>,
     triangle_buffer: Vec<Vector4<u32>>,
     points_buffer: Vec<AlignedVec4<f32>>,
-    new_radius_cells: Option<f32>,
+    new_radius: Option<f32>,
     new_max_gradient: Option<f32>,
-    cell_size: f32,
 }
 
 impl ThalassicPipeline {
@@ -415,10 +414,10 @@ impl ThalassicPipeline {
                 bind_grps
                     .2
                     .write::<1, _>(&(self.triangle_buffer.len() as u32), &mut lock);
-                if let Some(new_radius_cells) = self.new_radius_cells.take() {
+                if let Some(new_radius) = self.new_radius.take() {
                     bind_grps
                         .6
-                        .write::<0, _>(&(new_radius_cells / self.cell_size), &mut lock);
+                        .write::<0, _>(&new_radius, &mut lock);
                 }
                 if let Some(new_max_gradient) = self.new_max_gradient.take() {
                     bind_grps.5.write::<0, _>(&new_max_gradient, &mut lock);
@@ -456,6 +455,6 @@ impl ThalassicPipeline {
     }
 
     pub fn set_radius(&mut self, radius: f32) {
-        self.new_radius_cells = Some(radius / self.cell_size);
+        self.new_radius = Some(radius);
     }
 }
