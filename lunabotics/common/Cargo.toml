@@ -5,3 +5,8 @@ edition = "2021"
 
 [dependencies]
 bitcode = { workspace = true }
+k = { workspace = true, optional = true }
+godot = { workspace = true, optional = true }
+
+[features]
+godot_urdf = ["godot", "k"]

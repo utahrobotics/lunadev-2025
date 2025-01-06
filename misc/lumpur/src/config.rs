@@ -55,6 +55,9 @@ macro_rules! define_configuration {
                     if let Ok(n) = string.parse() {
                         return Value::Float(n);
                     }
+                    if let Ok(b) = string.parse() {
+                        return Value::Boolean(b);
+                    }
                     Value::String(string)
                 }
 

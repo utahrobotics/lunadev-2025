@@ -24,7 +24,6 @@ use tasker::shared::{OwnedData, SharedDataReceiver};
 
 #[cfg(feature = "production")]
 mod stream;
-mod urdf;
 
 const STREAM_WIDTH: u32 = 1920;
 const STREAM_HEIGHT: u32 = 720;

@@ -8,7 +8,7 @@ crate-type = ["cdylib"]  # Compile this crate to a dynamic C library.
 
 [dependencies]
 godot = { workspace = true }
-common = { path = "../common" }
+common = { path = "../common", features = ["godot_urdf"] }
 cakap2 = { workspace = true }
 bitcode = { workspace = true }
 tasker.workspace = true
