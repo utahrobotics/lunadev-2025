@@ -78,7 +78,8 @@ impl INode3D for RobotNode {
 
         if let Some(node) = self.k_node {
             let transform = node.origin();
-            self.base_mut().set_global_transform(get_transform(transform));
+            self.base_mut()
+                .set_global_transform(get_transform(transform));
         }
     }
 }

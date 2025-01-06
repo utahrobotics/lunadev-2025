@@ -2,9 +2,9 @@ use std::io::Write;
 
 use bitcode::{Decode, Encode};
 
-pub mod lunasim;
 #[cfg(feature = "godot_urdf")]
 pub mod godot_urdf;
+pub mod lunasim;
 
 #[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]
 pub enum LunabotStage {

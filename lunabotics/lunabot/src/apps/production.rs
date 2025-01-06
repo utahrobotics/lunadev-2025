@@ -1,7 +1,6 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Context;
-use apriltag::Apriltag;
 use camera::enumerate_cameras;
 use common::LunabotStage;
 use crossbeam::atomic::AtomicCell;
@@ -9,31 +8,29 @@ use depth::enumerate_depth_cameras;
 use fxhash::FxHashMap;
 use gputter::init_gputter_blocking;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
-use nalgebra::Vector2;
-use pathfinding::Pathfinder;
+use nalgebra::{Scale3, Transform3};
+use pathfinding::grid::Grid;
 use serde::Deserialize;
 use streaming::camera_streaming;
-use urobotics::{
-    app::{define_app, Runnable},
-    get_tokio_handle,
-    log::{error, log_to_console, Level},
-    shared::OwnedData,
-    tokio, BlockOn,
-};
+use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn};
+use tracing::error;
 
 use crate::{
-    apps::log_teleop_messages, localization::Localizer, pipelines::thalassic::ThalassicData,
+    apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,
+    pipelines::thalassic::ThalassicData,
 };
 
-use super::{create_packet_builder, create_robot_chain, wait_for_ctrl_c};
+use super::{create_packet_builder, create_robot_chain};
 
 mod apriltag;
 mod camera;
 mod depth;
 mod streaming;
 
+pub use apriltag::Apriltag;
+
 #[derive(Deserialize, Debug)]
-struct CameraInfo {
+pub struct CameraInfo {
     link_name: String,
     focal_length_x_px: f64,
     focal_length_y_px: f64,
@@ -41,33 +38,24 @@ struct CameraInfo {
 }
 
 #[derive(Deserialize, Debug)]
-struct DepthCameraInfo {
+pub struct DepthCameraInfo {
     link_name: String,
     #[serde(default)]
     ignore_apriltags: bool,
     stream_index: usize,
 }
 
-#[derive(Deserialize)]
 pub struct LunabotApp {
-    lunabase_address: SocketAddr,
-    lunabase_streaming_address: Option<SocketAddr>,
-    #[serde(default = "super::default_max_pong_delay_ms")]
-    max_pong_delay_ms: u64,
-    #[serde(default)]
-    cameras: FxHashMap<String, CameraInfo>,
-    #[serde(default)]
-    depth_cameras: FxHashMap<String, DepthCameraInfo>,
-    #[serde(default)]
-    apriltags: FxHashMap<String, Apriltag>,
+    pub lunabase_address: SocketAddr,
+    pub lunabase_streaming_address: Option<SocketAddr>,
+    pub max_pong_delay_ms: u64,
+    pub cameras: FxHashMap<String, CameraInfo>,
+    pub depth_cameras: FxHashMap<String, DepthCameraInfo>,
+    pub apriltags: FxHashMap<String, Apriltag>,
 }
 
-impl Runnable for LunabotApp {
-    fn run(self) {
-        log_to_console([
-            ("wgpu_hal::vulkan::instance", Level::Info),
-            ("wgpu_core::device::resource", Level::Info),
-        ]);
+impl LunabotApp {
+    pub fn run(self) {
         log_teleop_messages();
         if let Err(e) = init_gputter_blocking() {
             error!("Failed to initialize gputter: {e}");
@@ -182,7 +170,17 @@ impl Runnable for LunabotApp {
             error!("Failed to enumerate depth cameras: {e}");
         }
 
-        let mut finder = Pathfinder::new(Vector2::new(32.0, 16.0), 0.03125);
+        let grid_to_world = Transform3::from_matrix_unchecked(
+            Scale3::new(-0.03125, 1.0, -0.03125).to_homogeneous(),
+        );
+        let world_to_grid = grid_to_world.try_inverse().unwrap();
+        let mut pathfinder = DefaultPathfinder {
+            world_to_grid,
+            grid_to_world,
+            grid: Grid::new(128, 256),
+        };
+        pathfinder.grid.enable_diagonal_mode();
+        pathfinder.grid.fill();
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
@@ -192,64 +190,36 @@ impl Runnable for LunabotApp {
             self.max_pong_delay_ms,
         );
 
-        std::thread::spawn(move || {
-            run_ai(
-                robot_chain,
-                |action, inputs| match action {
-                    Action::SetStage(stage) => {
-                        lunabot_stage.store(stage);
+        run_ai(
+            robot_chain,
+            |action, inputs| match action {
+                Action::SetStage(stage) => {
+                    lunabot_stage.store(stage);
+                }
+                Action::SetSteering(steering) => {
+                    let (left, right) = steering.get_left_and_right();
+                    // TODO
+                }
+                Action::CalculatePath { from, to, mut into } => {
+                    pathfinder.pathfind(&shared_thalassic_data, from, to, &mut into);
+                    inputs.push(Input::PathCalculated(into));
+                }
+            },
+            |poll_when, inputs| {
+                let wait_disconnect = async {
+                    if lunabot_stage.load() == LunabotStage::SoftStop {
+                        std::future::pending::<()>().await;
+                    } else {
+                        connected.wait_disconnect().await;
                     }
-                    Action::SetSteering(steering) => {
-                        let (left, right) = steering.get_left_and_right();
-                        // TODO
-                    }
-                    Action::CalculatePath { from, to, mut into } => {
-                        let data = shared_thalassic_data.get();
-                        finder.append_path(
-                            from,
-                            to,
-                            &data.heightmap,
-                            &data.gradmap,
-                            1.0,
-                            &mut into,
-                        );
-                        inputs.push(Input::PathCalculated(into));
-                    }
-                },
-                |poll_when, inputs| {
-                    let wait_disconnect = async {
-                        if lunabot_stage.load() == LunabotStage::SoftStop {
-                            std::future::pending::<()>().await;
-                        } else {
-                            connected.wait_disconnect().await;
-                        }
-                    };
+                };
 
-                    match poll_when {
-                        PollWhen::ReceivedLunabase => {
-                            while let Ok(msg) = from_lunabase_rx.try_recv() {
-                                inputs.push(Input::FromLunabase(msg));
-                            }
-                            if inputs.is_empty() {
-                                async {
-                                    tokio::select! {
-                                        result = from_lunabase_rx.recv() => {
-                                            let Some(msg) = result else {
-                                                error!("Lunabase message channel closed");
-                                                std::future::pending::<()>().await;
-                                                unreachable!();
-                                            };
-                                            inputs.push(Input::FromLunabase(msg));
-                                        }
-                                        _ = wait_disconnect => {
-                                            inputs.push(Input::LunabaseDisconnected);
-                                        }
-                                    }
-                                }
-                                .block_on();
-                            }
+                match poll_when {
+                    PollWhen::ReceivedLunabase => {
+                        while let Ok(msg) = from_lunabase_rx.try_recv() {
+                            inputs.push(Input::FromLunabase(msg));
                         }
-                        PollWhen::Instant(deadline) => {
+                        if inputs.is_empty() {
                             async {
                                 tokio::select! {
                                     result = from_lunabase_rx.recv() => {
@@ -260,7 +230,6 @@ impl Runnable for LunabotApp {
                                         };
                                         inputs.push(Input::FromLunabase(msg));
                                     }
-                                    _ = tokio::time::sleep_until(deadline.into()) => {}
                                     _ = wait_disconnect => {
                                         inputs.push(Input::LunabaseDisconnected);
                                     }
@@ -268,17 +237,32 @@ impl Runnable for LunabotApp {
                             }
                             .block_on();
                         }
-                        PollWhen::NoDelay => {
-                            // Helps prevent freezing when `NoDelay` is used frequently
-                            std::thread::yield_now();
-                        }
                     }
-                },
-            );
-        });
-
-        wait_for_ctrl_c();
+                    PollWhen::Instant(deadline) => {
+                        async {
+                            tokio::select! {
+                                result = from_lunabase_rx.recv() => {
+                                    let Some(msg) = result else {
+                                        error!("Lunabase message channel closed");
+                                        std::future::pending::<()>().await;
+                                        unreachable!();
+                                    };
+                                    inputs.push(Input::FromLunabase(msg));
+                                }
+                                _ = tokio::time::sleep_until(deadline.into()) => {}
+                                _ = wait_disconnect => {
+                                    inputs.push(Input::LunabaseDisconnected);
+                                }
+                            }
+                        }
+                        .block_on();
+                    }
+                    PollWhen::NoDelay => {
+                        // Helps prevent freezing when `NoDelay` is used frequently
+                        std::thread::yield_now();
+                    }
+                }
+            },
+        );
     }
 }
-
-define_app!(pub Main(LunabotApp):  "The lunabot application");

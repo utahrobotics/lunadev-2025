@@ -114,7 +114,7 @@ pub(crate) fn make_line_f(
     stdio_level: Level,
     stdio_name: &'static str,
     current_dir: &'static Path,
-    ignores: &'static FxHashMap<String, Level>,
+    ignores: &'static FxHashMap<String, (Level, bool)>,
 ) -> impl Fn(String) {
     move |line: String| {
         let log = match serde_json::from_str::<RawLogMessage>(&line) {
@@ -161,15 +161,18 @@ pub(crate) fn make_line_f(
             unreachable!()
         };
 
-        let _ = write_tx.send(log.clone());
-        if level <= Level::INFO {
-            if let Some(ignore_level) = ignores.get(target) {
-                if level >= *ignore_level {
-                    return;
+        if let Some((ignore_level, still_write_to_file)) = ignores.get(target) {
+            if level >= *ignore_level {
+                if *still_write_to_file {
+                    let _ = write_tx.send(log.clone());
                 }
+                return;
             }
-            let _ = console_tx.send(log);
         }
+        if level <= Level::INFO {
+            let _ = console_tx.send(log.clone());
+        }
+        let _ = write_tx.send(log);
     }
 }
 

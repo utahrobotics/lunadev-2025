@@ -77,7 +77,7 @@ pub struct LumpurBuilder {
     pub new_working_directory: NewWorkingDirectory,
     pub path_reference: Vec<PathReference>,
     pub default_commands: bool,
-    pub ignores: FxHashMap<String, Level>,
+    pub ignores: FxHashMap<String, (Level, bool)>,
 }
 
 impl Default for LumpurBuilder {
@@ -113,15 +113,15 @@ impl LumpurBuilder {
         self
     }
 
-    pub fn add_ignore(mut self, target: impl Into<String>, level: Level) -> Self {
+    pub fn add_ignore(mut self, target: impl Into<String>, level: Level, still_write_to_file: bool) -> Self {
         match self.ignores.entry(target.into()) {
             Entry::Occupied(mut occupied_entry) => {
-                if &level < occupied_entry.get() {
-                    occupied_entry.insert(level);
+                if level < occupied_entry.get().0 {
+                    occupied_entry.insert((level, still_write_to_file));
                 }
             }
             Entry::Vacant(vacant_entry) => {
-                vacant_entry.insert(level);
+                vacant_entry.insert((level, still_write_to_file));
             }
         }
         self
@@ -288,6 +288,7 @@ impl LumpurBuilder {
                 .expect("Failed to write to log file (app.log)");
         }
         let (write_tx, write_rx) = std::sync::mpsc::channel::<Arc<LogMessage>>();
+        let ignores: &_ = Box::leak(Box::new(self.ignores));
         let write_thr = std::thread::spawn(move || log_write_thread(write_rx, log_file));
 
         let max_lines: usize = std::env::var("MAX_LINES")
@@ -311,7 +312,6 @@ impl LumpurBuilder {
             .expect("Failed to canonicalize current dir")
             .leak();
 
-        let ignores: &_ = Box::leak(Box::new(self.ignores));
         let f = make_line_f(
             log_tx.clone(),
             write_tx.clone(),

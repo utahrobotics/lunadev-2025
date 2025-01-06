@@ -11,12 +11,10 @@ use realsense_rust::{
     kind::{Rs2CameraInfo, Rs2Format, Rs2ProductLine, Rs2StreamKind},
     pipeline::InactivePipeline,
 };
+use tasker::shared::OwnedData;
 use thalassic::DepthProjectorBuilder;
-use urobotics::{
-    log::{error, warn},
-    shared::OwnedData,
-};
-use urobotics_apriltag::{
+use tracing::{error, warn};
+use super::apriltag::{
     image::{ImageBuffer, Luma},
     AprilTagDetector,
 };
