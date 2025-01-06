@@ -2498,8 +2498,8 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "cursive",
- "fxhash",
  "raw_sync",
+ "regex",
  "serde",
  "serde_json",
  "shared_memory",

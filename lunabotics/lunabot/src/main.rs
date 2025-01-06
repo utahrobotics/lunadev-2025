@@ -49,17 +49,20 @@ fn main() {
         .symlink_path("godot")
         .symlink_path("target")
         .symlink_path("urdf")
-        .add_ignore("k::urdf", Level::INFO, false)
-        .add_ignore("wgpu_core::device::resource", Level::INFO, false)
-        .add_ignore("wgpu_core::device::life", Level::INFO, false)
-        .add_ignore("wgpu_core::device::global", Level::INFO, false)
-        .add_ignore("wgpu_hal::gles::adapter", Level::INFO, false)
-        .add_ignore("wgpu_hal::vulkan::instance", Level::INFO, false)
-        .add_ignore("wgpu_hal::gles::egl", Level::INFO, false)
-        .add_ignore("wgpu_core::storage", Level::INFO, false)
-        .add_ignore("yaserde_derive", Level::INFO, false)
-        .add_ignore("yaserde::de", Level::INFO, false)
-        .add_ignore("wgpu_core::instance", Level::INFO, false)
+        .set_total_ignores(
+            [
+                ("wgpu_core.*", Level::INFO),
+                ("wgpu_hal.*", Level::INFO),
+                ("yaserde.*", Level::INFO),
+                ("mio.*", Level::INFO),
+                ("naga.*", Level::INFO)
+            ]
+        )
+        .set_console_ignores(
+            [
+                ("k::urdf", Level::INFO),
+            ]
+        )
         .init();
 
     match cmd {
