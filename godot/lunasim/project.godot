@@ -52,6 +52,9 @@ pan_camera={
 3d_render/layer_1="default"
 3d_render/layer_2="wall"
 3d_render/layer_3="estimate"
+3d_physics/layer_1="Ground"
+3d_physics/layer_2="Walls"
+3d_physics/layer_3="Crater"
 
 [physics]
 

@@ -42,6 +42,12 @@ func _ready() -> void:
 	_drive_noise.seed = randi()
 	_drive_noise.frequency = 0.03
 	push_warning("Using drive noise: %s" % _drive_noise.seed)
+	set_physics_process(false)
+	
+	for _i in range(10):
+		await get_tree().physics_frame
+	
+	set_physics_process(true)
 
 
 func _physics_process(delta: float) -> void:
