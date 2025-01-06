@@ -3,7 +3,7 @@
 use fxhash::FxHashMap;
 use std::net::SocketAddr;
 
-use apps::{default_max_pong_delay_ms, Apriltag, LunabotApp, LunasimbotApp};
+use apps::default_max_pong_delay_ms;
 use lumpur::LumpurBuilder;
 use tracing::Level;
 
@@ -16,6 +16,7 @@ mod pipelines;
 mod teleop;
 mod utils;
 
+#[cfg(feature = "production")]
 lumpur::define_configuration! {
     pub enum Commands {
         Main {
@@ -24,8 +25,18 @@ lumpur::define_configuration! {
             lunabase_streaming_address: Option<SocketAddr>,
             cameras: FxHashMap<String, apps::CameraInfo>,
             depth_cameras: FxHashMap<String, apps::DepthCameraInfo>,
-            apriltags: FxHashMap<String, Apriltag>
+            apriltags: FxHashMap<String, apps::Apriltag>
         },
+        Sim {
+            lunabase_address: SocketAddr,
+            max_pong_delay_ms: Option<u64>
+        }
+    }
+}
+#[cfg(not(feature = "production"))]
+lumpur::define_configuration! {
+    pub enum Commands {
+        Main {},
         Sim {
             lunabase_address: SocketAddr,
             max_pong_delay_ms: Option<u64>
@@ -56,7 +67,7 @@ fn main() {
             lunabase_address,
             max_pong_delay_ms,
         } => {
-            LunasimbotApp {
+            apps::LunasimbotApp {
                 lunabase_address,
                 max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
             }
@@ -75,7 +86,7 @@ fn main() {
             depth_cameras,
             apriltags,
         } => {
-            LunabotApp {
+            apps::LunabotApp {
                 lunabase_address,
                 lunabase_streaming_address,
                 max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
