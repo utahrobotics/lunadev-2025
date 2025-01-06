@@ -378,24 +378,18 @@ impl ThalassicPipeline {
                         let p2 = Vector3::new(v2.x, v2.y, v2.z);
                         let p3 = Vector3::new(v3.x, v3.y, v3.z);
 
-                        let mut a = p2 - p1;
-                        let mut b = p3 - p1;
-                        let mut theta = a.angle(&b);
+                        let l1 = (p1 - p2).magnitude();
+                        let l2 = (p2 - p3).magnitude();
+                        let l3 = (p3 - p1).magnitude();
 
-                        if theta > PI / 2.0 {
-                            a = p1 - p2;
-                            b = p3 - p2;
-                            theta = a.angle(&b);
-                        }
+                        // Heron's formula
+                        let s = (l1 + l2 + l3) / 2.0;
+                        let triangle_area = (s * (s - l1) * (s - l2) * (s - l3)).sqrt();
 
-                        let a_l = a.magnitude();
-                        let b_l = b.magnitude();
-                        let h = b_l * theta.sin();
-                        let w = a_l.max(b_l * theta.cos());
+                        let circumradius = l1 * l2 * l3 / (4.0 * triangle_area);
+                        let circle_area = PI * circumradius * circumradius;
 
-                        let aspect_ratio = w.max(h) / w.min(h);
-
-                        if aspect_ratio > 2.7 {
+                        if triangle_area / circle_area < 0.2 {
                             None
                         } else {
                             Some(Vector4::new(
