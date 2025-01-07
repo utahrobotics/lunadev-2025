@@ -8,7 +8,7 @@ use std::{
     },
 };
 
-use fxhash::FxHashMap;
+use regex::RegexSet;
 use tracing::Level;
 
 #[derive(serde::Deserialize, Clone, Copy, Debug)]
@@ -114,7 +114,8 @@ pub(crate) fn make_line_f(
     stdio_level: Level,
     stdio_name: &'static str,
     current_dir: &'static Path,
-    ignores: &'static FxHashMap<String, Level>,
+    total_ignores: &'static RegexSet,
+    console_ignores: &'static RegexSet,
 ) -> impl Fn(String) {
     move |line: String| {
         let log = match serde_json::from_str::<RawLogMessage>(&line) {
@@ -131,6 +132,12 @@ pub(crate) fn make_line_f(
             }
         };
         let level = log.level.into();
+        let statement = format!("{}={level}", log.target);
+
+        if total_ignores.is_match(&statement) {
+            return;
+        }
+
         let log = Arc::new(LogMessage::Standard {
             timestamp: {
                 log.timestamp
@@ -157,19 +164,13 @@ pub(crate) fn make_line_f(
             line_number: log.line_number,
             fields: log.fields,
         });
-        let LogMessage::Standard { target, .. } = &*log else {
-            unreachable!()
-        };
-
-        let _ = write_tx.send(log.clone());
+        
         if level <= Level::INFO {
-            if let Some(ignore_level) = ignores.get(target) {
-                if level >= *ignore_level {
-                    return;
-                }
+            if !console_ignores.is_match(&statement) {
+                let _ = console_tx.send(log.clone());
             }
-            let _ = console_tx.send(log);
         }
+        let _ = write_tx.send(log);
     }
 }
 

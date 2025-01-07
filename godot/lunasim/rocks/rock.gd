@@ -21,7 +21,7 @@ const CHOICES: Array[PackedScene] = [
 
 
 func _ready() -> void:
-	for _i in range(5):
+	for _i in range(12):
 		await get_tree().physics_frame
 		
 	var rock: Node = CHOICES.pick_random().instantiate()

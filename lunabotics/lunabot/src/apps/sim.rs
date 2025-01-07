@@ -19,9 +19,9 @@ use gputter::{
 use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{
-    Isometry3, Point3, Scale3, Transform3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4,
+    Isometry3, Scale3, Transform3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4,
 };
-use pathfinding::{grid::Grid, prelude::astar};
+use pathfinding::grid::Grid;
 use tasker::shared::OwnedData;
 use tasker::tokio;
 use tasker::{

@@ -1,8 +1,9 @@
 #![feature(result_flattening, array_chunks, iterator_try_collect)]
 
+use fxhash::FxHashMap;
 use std::net::SocketAddr;
 
-use apps::{default_max_pong_delay_ms, LunasimbotApp};
+use apps::default_max_pong_delay_ms;
 use lumpur::LumpurBuilder;
 use tracing::Level;
 
@@ -15,12 +16,27 @@ mod pipelines;
 mod teleop;
 mod utils;
 
+#[cfg(feature = "production")]
 lumpur::define_configuration! {
     pub enum Commands {
-        Production {
+        Main {
+            lunabase_address: SocketAddr,
+            max_pong_delay_ms: Option<u64>,
+            lunabase_streaming_address: Option<SocketAddr>,
+            cameras: FxHashMap<String, apps::CameraInfo>,
+            depth_cameras: FxHashMap<String, apps::DepthCameraInfo>,
+            apriltags: FxHashMap<String, apps::Apriltag>
+        },
+        Sim {
             lunabase_address: SocketAddr,
             max_pong_delay_ms: Option<u64>
-        },
+        }
+    }
+}
+#[cfg(not(feature = "production"))]
+lumpur::define_configuration! {
+    pub enum Commands {
+        Main {},
         Sim {
             lunabase_address: SocketAddr,
             max_pong_delay_ms: Option<u64>
@@ -33,9 +49,20 @@ fn main() {
         .symlink_path("godot")
         .symlink_path("target")
         .symlink_path("urdf")
-        .add_ignore("k::urdf", Level::INFO)
-        .add_ignore("wgpu_core::device::resource", Level::INFO)
-        .add_ignore("wgpu_hal::vulkan::instance", Level::INFO)
+        .set_total_ignores(
+            [
+                ("wgpu_core.*", Level::INFO),
+                ("wgpu_hal.*", Level::INFO),
+                ("yaserde.*", Level::INFO),
+                ("mio.*", Level::INFO),
+                ("naga.*", Level::INFO)
+            ]
+        )
+        .set_console_ignores(
+            [
+                ("k::urdf", Level::INFO),
+            ]
+        )
         .init();
 
     match cmd {
@@ -43,20 +70,34 @@ fn main() {
             lunabase_address,
             max_pong_delay_ms,
         } => {
-            LunasimbotApp {
+            apps::LunasimbotApp {
                 lunabase_address,
                 max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
             }
             .run();
         }
         #[cfg(not(feature = "production"))]
-        Commands::Production { .. } => {
+        Commands::Main { .. } => {
             tracing::error!("Production mode is not enabled");
         }
         #[cfg(feature = "production")]
-        Commands::Production {
+        Commands::Main {
             lunabase_address,
             max_pong_delay_ms,
-        } => {}
+            lunabase_streaming_address,
+            cameras,
+            depth_cameras,
+            apriltags,
+        } => {
+            apps::LunabotApp {
+                lunabase_address,
+                lunabase_streaming_address,
+                max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
+                cameras,
+                depth_cameras,
+                apriltags,
+            }
+            .run();
+        }
     }
 }

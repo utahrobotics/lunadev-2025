@@ -8,7 +8,7 @@ use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
 use k::Chain;
 #[cfg(feature = "production")]
-pub use production::Main;
+pub use production::{Apriltag, CameraInfo, DepthCameraInfo, LunabotApp};
 pub use sim::{LunasimStdin, LunasimbotApp};
 use tasker::tokio::sync::{mpsc, watch};
 use tracing::error;
