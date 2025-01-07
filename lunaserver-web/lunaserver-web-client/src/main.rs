@@ -43,7 +43,8 @@ async fn main() {
     let init_msg = websocket
         .try_next()
         .await
-        .expect("Failed to receive initial message from lunaserver")
+        .ok()
+        .flatten()
         .expect("Failed to receive initial message from lunaserver");
     if let Message::Text(text) = init_msg {
         println!("{text}")

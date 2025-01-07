@@ -57,7 +57,7 @@ dependencies = [
     "import_lunabase",
 ]
 
-[tasks.lunabase_prod]
+[tasks.internal_lunabase_prod]
 workspace = false
 command = "godot"
 args = ["--path", "godot/lunabase", "-d"]
@@ -66,7 +66,11 @@ dependencies = [
     "import_lunabase",
 ]
 
-[tasks.lunabase_prodx]
+[tasks.lunabase_prod]
+workspace = false
+run_task = { name = ["internal_lunabase_prod", "lunaserver-web-client-controls", "lunaserver-web-client-streaming"], parallel = true }
+
+[tasks.internal_lunabase_prodx]
 workspace = false
 command = "godot"
 args = ["--path", "godot/lunabase", "-d"]
@@ -84,3 +88,13 @@ args = ["--path", "godot/lunasim", "-e"]
 workspace = false
 command = "godot"
 args = ["--path", "godot/lunabase", "-e"]
+
+[tasks.lunaserver-web-client-controls]
+workspace = false
+command = "cargo"
+args = ["run", "-p", "lunaserver-web-client", "--", "10600"]
+
+[tasks.lunaserver-web-client-streaming]
+workspace = false
+command = "cargo"
+args = ["run", "-p", "lunaserver-web-client", "--", "10601"]
