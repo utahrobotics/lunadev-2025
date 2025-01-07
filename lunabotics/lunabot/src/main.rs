@@ -10,7 +10,6 @@ use tracing::Level;
 mod apps;
 mod localization;
 mod motors;
-// mod obstacles;
 mod pathfinding;
 mod pipelines;
 mod teleop;
@@ -23,8 +22,11 @@ lumpur::define_configuration! {
             lunabase_address: SocketAddr,
             max_pong_delay_ms: Option<u64>,
             lunabase_streaming_address: Option<SocketAddr>,
+            #[serde(default)]
             cameras: FxHashMap<String, apps::CameraInfo>,
+            #[serde(default)]
             depth_cameras: FxHashMap<String, apps::DepthCameraInfo>,
+            #[serde(default)]
             apriltags: FxHashMap<String, apps::Apriltag>
         },
         Sim {
@@ -55,12 +57,14 @@ fn main() {
                 ("wgpu_hal.*", Level::INFO),
                 ("yaserde.*", Level::INFO),
                 ("mio.*", Level::INFO),
-                ("naga.*", Level::INFO)
+                ("naga.*", Level::INFO),
             ]
         )
         .set_console_ignores(
             [
                 ("k::urdf", Level::INFO),
+                ("wgpu_hal::gles::egl", Level::WARN),
+                ("wgpu_hal::vulkan::instance", Level::WARN)
             ]
         )
         .init();

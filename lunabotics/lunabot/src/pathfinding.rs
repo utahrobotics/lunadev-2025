@@ -17,8 +17,8 @@ impl DefaultPathfinder {
     pub fn pathfind(
         &self,
         shared_thalassic_data: &SharedDataReceiver<ThalassicData>,
-        mut from: Point3<f64>,
-        mut to: Point3<f64>,
+        from: Point3<f64>,
+        to: Point3<f64>,
         into: &mut Vec<Point3<f64>>,
     ) {
         let mut data = shared_thalassic_data.get();

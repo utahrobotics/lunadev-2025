@@ -225,14 +225,11 @@ pub struct ThalassicBuilder {
     pub heightmap_dimensions: Vector2<NonZeroU32>,
     pub cell_size: f32,
     pub max_point_count: NonZeroU32,
+    pub max_triangle_count: NonZeroU32
 }
 
 impl ThalassicBuilder {
     pub fn build(self) -> ThalassicPipeline {
-        let max_triangle_count =
-            (self.heightmap_dimensions.x.get() - 1) * (self.heightmap_dimensions.y.get() - 1) * 2;
-        let max_triangle_count = NonZeroU32::new(max_triangle_count)
-            .expect("max triangle count is 0, each projection dimension must be at least 2");
         let cell_count = self.heightmap_dimensions.x.get() * self.heightmap_dimensions.y.get();
         let cell_count = NonZeroU32::new(cell_count).unwrap();
 
@@ -245,7 +242,7 @@ impl ThalassicBuilder {
             max_point_count: self.max_point_count,
             sorted_triangle_indices: BufferGroupBinding::<_, BetaBindGroups>::get::<2, 0>(),
             triangle_count: BufferGroupBinding::<_, BetaBindGroups>::get::<2, 1>(),
-            max_triangle_count,
+            max_triangle_count: self.max_triangle_count,
         }
         .compile();
 
@@ -287,7 +284,7 @@ impl ThalassicBuilder {
         let bind_grps = (
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
             GpuBufferSet::from((
-                StorageBuffer::new_dyn(max_triangle_count.get() as usize).unwrap(),
+                StorageBuffer::new_dyn(self.max_triangle_count.get() as usize).unwrap(),
                 UniformBuffer::new(),
             )),
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),

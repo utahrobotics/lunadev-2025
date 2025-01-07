@@ -72,7 +72,7 @@ gputter = { path = "misc/gputter" }
 thalassic = { path = "misc/thalassic" }
 
 [profile.dev.package.lunabot]
-opt-level = 3
+opt-level = 2
 
 [profile.dev.package.lunasim-lib]
 opt-level = 3
@@ -87,3 +87,8 @@ debug-assertions = true
 [profile.release.package.lunabot]
 debug = true
 debug-assertions = true
+
+[profile.optdebug]
+inherits = "dev"
+opt-level = 3
+lto = "thin"

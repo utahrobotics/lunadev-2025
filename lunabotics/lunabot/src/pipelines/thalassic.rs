@@ -71,6 +71,12 @@ pub fn spawn_thalassic_pipeline(
         return;
     };
 
+    let max_triangle_count = point_cloud_channels
+        .iter()
+        .map(|channel| (channel.image_size.x.get() - 1) * (channel.image_size.y.get() - 1) * 2)
+        .max()
+        .unwrap();
+
     if is_gputter_initialized() {
         let mut pipeline = ThalassicBuilder {
             heightmap_dimensions: Vector2::new(
@@ -79,6 +85,7 @@ pub fn spawn_thalassic_pipeline(
             ),
             cell_size: 0.03125,
             max_point_count: NonZeroU32::new(max_point_count).unwrap(),
+            max_triangle_count: NonZeroU32::new(max_triangle_count).unwrap(),
         }
         .build();
 
