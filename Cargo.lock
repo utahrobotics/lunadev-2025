@@ -2534,6 +2534,7 @@ dependencies = [
  "apriltag",
  "apriltag-image",
  "apriltag-nalgebra",
+ "arc-swap",
  "bitcode",
  "cakap2",
  "common",
