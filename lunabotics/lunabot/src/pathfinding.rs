@@ -32,6 +32,7 @@ impl DefaultPathfinder {
             drop(data);
             data = shared_thalassic_data.get();
         }
+        set_observe_depth(false);
 
         macro_rules! neighbours {
             ($p: ident) => {

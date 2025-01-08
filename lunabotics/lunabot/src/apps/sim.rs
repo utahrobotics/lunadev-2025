@@ -39,7 +39,7 @@ use tracing::{error, info, warn};
 
 use crate::{
     localization::Localizer,
-    pipelines::thalassic::{spawn_thalassic_pipeline, PointsStorageChannel},
+    pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline, PointsStorageChannel},
 };
 use crate::{pathfinding::DefaultPathfinder, pipelines::thalassic::ThalassicData};
 
@@ -311,7 +311,7 @@ impl LunasimbotApp {
                 localizer_ref.set_angular_velocity(axis_angle(axis, angle));
             }
             common::lunasim::FromLunasim::DepthMap(depths) => {
-                if localizer_ref.is_in_motion() {
+                if !get_observe_depth() {
                     return;
                 }
                 let Some(camera_transform) = camera_link.world_transform() else {
