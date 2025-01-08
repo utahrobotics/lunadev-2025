@@ -313,7 +313,7 @@ pub fn enumerate_depth_cameras(
             let observe_depth = get_observe_depth();
             for frame in frames.frames_of_type::<DepthFrame>() {
                 if !observe_depth {
-                    return;
+                    continue;
                 }
                 if !matches!(frame.get(0, 0), Some(PixelKind::Z16 { .. })) {
                     error!("Unexpected depth pixel kind: {:?}", frame.get(0, 0));
