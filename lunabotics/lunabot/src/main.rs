@@ -22,6 +22,7 @@ lumpur::define_configuration! {
             lunabase_address: SocketAddr,
             max_pong_delay_ms: Option<u64>,
             lunabase_streaming_address: Option<SocketAddr>,
+            lunabase_audio_streaming_address: Option<SocketAddr>,
             #[serde(default)]
             cameras: FxHashMap<String, apps::CameraInfo>,
             #[serde(default)]
@@ -89,6 +90,7 @@ fn main() {
             lunabase_address,
             max_pong_delay_ms,
             lunabase_streaming_address,
+            lunabase_audio_streaming_address,
             cameras,
             depth_cameras,
             apriltags,
@@ -97,6 +99,7 @@ fn main() {
                 lunabase_address,
                 lunabase_streaming_address,
                 max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
+                lunabase_audio_streaming_address,
                 cameras,
                 depth_cameras,
                 apriltags,

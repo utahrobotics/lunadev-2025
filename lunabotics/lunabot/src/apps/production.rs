@@ -1,6 +1,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Context;
+use audio_streaming::audio_streaming;
 use camera::enumerate_cameras;
 use common::LunabotStage;
 use crossbeam::atomic::AtomicCell;
@@ -26,6 +27,7 @@ mod apriltag;
 mod camera;
 mod depth;
 mod streaming;
+mod audio_streaming;
 
 pub use apriltag::Apriltag;
 
@@ -48,6 +50,7 @@ pub struct DepthCameraInfo {
 pub struct LunabotApp {
     pub lunabase_address: SocketAddr,
     pub lunabase_streaming_address: Option<SocketAddr>,
+    pub lunabase_audio_streaming_address: Option<SocketAddr>,
     pub max_pong_delay_ms: u64,
     pub cameras: FxHashMap<String, CameraInfo>,
     pub depth_cameras: FxHashMap<String, DepthCameraInfo>,
@@ -79,8 +82,7 @@ impl LunabotApp {
         let localizer = Localizer::new(robot_chain.clone(), None);
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
-
-        if let Err(e) = camera_streaming(self.lunabase_streaming_address.unwrap_or_else(|| {
+        let camera_streaming_address = self.lunabase_streaming_address.unwrap_or_else(|| {
             let mut addr = self.lunabase_address;
             if addr.port() == u16::MAX {
                 addr.set_port(65534);
@@ -88,8 +90,22 @@ impl LunabotApp {
                 addr.set_port(addr.port() + 1);
             }
             addr
-        })) {
+        });
+
+        if let Err(e) = camera_streaming(camera_streaming_address) {
             error!("Failed to start camera streaming: {e}");
+        }
+
+        if let Err(e) = audio_streaming(self.lunabase_audio_streaming_address.unwrap_or_else(|| {
+            let mut addr = camera_streaming_address;
+            if addr.port() == u16::MAX {
+                addr.set_port(65534);
+            } else {
+                addr.set_port(addr.port() + 1);
+            }
+            addr
+        })) {
+            error!("Failed to start audio streaming: {e}");
         }
 
         if let Err(e) = enumerate_cameras(
