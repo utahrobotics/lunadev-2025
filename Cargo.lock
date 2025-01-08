@@ -2676,6 +2676,7 @@ dependencies = [
  "godot",
  "k",
  "openh264",
+ "opus",
  "serde_json",
  "tasker",
  "webrtc",

@@ -14,7 +14,7 @@ pub fn audio_streaming(lunabase_audio_streaming_address: SocketAddr) -> anyhow::
         .default_input_device()
         .context("No input device")?;
 
-    let mut enc = opus::Encoder::new(48000, opus::Channels::Mono, opus::Application::LowDelay)?;
+    let mut enc = opus::Encoder::new(AUDIO_SAMPLE_RATE, opus::Channels::Mono, opus::Application::LowDelay)?;
     enc.set_inband_fec(true)?;
     enc.set_bitrate(opus::Bitrate::Bits(96000))?;
     let mut encoded = [0u8; 4096];

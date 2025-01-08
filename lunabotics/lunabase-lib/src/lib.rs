@@ -10,6 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use audio::AudioStreaming;
 use bitcode::encode;
 use cakap2::{
     packet::{Action, ReliableIndex},
@@ -17,13 +18,15 @@ use cakap2::{
 };
 use common::{FromLunabase, FromLunabot, LunabotStage, Steering};
 use godot::{
-    classes::{image::Format, Engine, Image},
+    classes::{image::Format, AudioStreamGenerator, AudioStreamGeneratorPlayback, Engine, Image},
     prelude::*,
 };
 use tasker::shared::{OwnedData, SharedDataReceiver};
 
 #[cfg(feature = "production")]
 mod stream;
+#[cfg(feature = "production")]
+mod audio;
 
 const STREAM_WIDTH: u32 = 1920;
 const STREAM_HEIGHT: u32 = 720;
@@ -95,6 +98,8 @@ struct LunabotConn {
     stream_image: Gd<Image>,
     #[var]
     stream_image_updated: bool,
+    #[cfg(feature = "production")]
+    audio_streaming: Option<AudioStreaming>
 }
 
 thread_local! {
@@ -119,9 +124,11 @@ impl INode for LunabotConn {
                 base,
                 stream_image,
                 stream_image_updated: false,
+                audio_streaming: None
             };
         }
         init_panic_hook();
+
 
         let stream_corrupted: &_ = Box::leak(Box::new(AtomicBool::new(false)));
         let mut shared_rgb_img =
@@ -140,8 +147,11 @@ impl INode for LunabotConn {
             .expect("Failed to set non-blocking");
 
         let cakap_sm = PeerStateMachine::new(Duration::from_millis(150), 1024, 1400);
+        #[cfg(feature = "production")]
+        let (audio_streaming, player) = AudioStreaming::new();
 
-        Self {
+        #[allow(unused_mut)]
+        let mut out = Self {
             inner: Some(LunabotConnInner {
                 udp,
                 cakap_sm,
@@ -156,7 +166,12 @@ impl INode for LunabotConn {
             base,
             stream_image,
             stream_image_updated: false,
-        }
+            #[cfg(feature = "production")]
+            audio_streaming: Some(audio_streaming)
+        };
+        #[cfg(feature = "production")]
+        out.base_mut().add_child(&player);
+        out
     }
 
     fn process(&mut self, _delta: f64) {
@@ -303,6 +318,10 @@ impl INode for LunabotConn {
             if received {
                 self.base_mut().emit_signal("something_received", &[]);
             }
+        }
+        #[cfg(feature = "production")]
+        if let Some(audio_streaming) = &mut self.audio_streaming {
+            audio_streaming.poll();
         }
     }
 }

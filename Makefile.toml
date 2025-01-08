@@ -102,3 +102,8 @@ args = ["run", "-p", "lunaserver-web-client", "--", "10600"]
 workspace = false
 command = "cargo"
 args = ["run", "-p", "lunaserver-web-client", "--", "10601"]
+
+[tasks.lunaserver-web-client-audio]
+workspace = false
+command = "cargo"
+args = ["run", "-p", "lunaserver-web-client", "--", "10602"]
