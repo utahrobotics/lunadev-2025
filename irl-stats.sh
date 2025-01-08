@@ -1,0 +1,1 @@
+(trap 'kill 0' SIGINT; gnome-system-monitor & radeontop)
