@@ -186,7 +186,8 @@ impl Runnable for LunabotApp {
             error!("Failed to enumerate depth cameras: {e}");
         }
 
-        let mut motors = VescUartSerialMotor::new_from_path("/dev/ttyACM0");
+        let mut motors1 = VescUartSerialMotor::new_from_path("/dev/ttyACM0");
+        let mut motors2 = VescUartSerialMotor::new_from_path("/dev/ttyACM1");
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
@@ -205,7 +206,8 @@ impl Runnable for LunabotApp {
                     }
                     Action::SetSteering(steering) => {
                         let (left, right) = steering.get_left_and_right();
-                        motors.send_message(CommandType::SetDutyCycle, left as f32);
+                        motors2.send_message(CommandType::SetDutyCycle, left as f32);
+                        motors1.send_message(CommandType::SetDutyCycle, -right as f32);
                     }
                     Action::CalculatePath { from, to, mut into } => {
                         into.push(from);
