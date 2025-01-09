@@ -9,8 +9,8 @@ var markers :=[]
 func _ready() -> void:
 	line_mesh.material=path_mat
 	LunasimNode.path.connect(create_path)
-	#create_path([Vector3(-1.5,0.5,-4),Vector3(-2.5,0.5,-5)]) # Comment this when implementing with rust
-	#create_path(test_path)
+	create_path([Vector3(-1.5,0.5,-4),Vector3(-2.5,0.5,-5),Vector3(-2.5,0.5,-5)]) # Comment this when implementing with rust
+	create_path(test_path)
 func create_path(path:Array[Vector3]):
 	for marker in markers:
 		marker.queue_free()
