@@ -32,3 +32,6 @@ mouser-config.toml
 output/
 
 *.shmem
+flamegraph.svg
+perf.data**
+perf.data

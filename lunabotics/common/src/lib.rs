@@ -2,6 +2,11 @@ use std::io::Write;
 
 use bitcode::{Decode, Encode};
 
+pub const AUDIO_FRAME_SIZE: u32 = 960;
+pub const AUDIO_SAMPLE_RATE: u32 = 48000;
+
+#[cfg(feature = "godot_urdf")]
+pub mod godot_urdf;
 pub mod lunasim;
 
 #[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]

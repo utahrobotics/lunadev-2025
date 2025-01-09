@@ -11,12 +11,10 @@ use realsense_rust::{
     kind::{Rs2CameraInfo, Rs2Format, Rs2ProductLine, Rs2StreamKind},
     pipeline::InactivePipeline,
 };
+use tasker::shared::OwnedData;
 use thalassic::DepthProjectorBuilder;
-use urobotics::{
-    log::{error, warn},
-    shared::OwnedData,
-};
-use urobotics_apriltag::{
+use tracing::{error, warn};
+use super::apriltag::{
     image::{ImageBuffer, Luma},
     AprilTagDetector,
 };
@@ -24,7 +22,7 @@ use urobotics_apriltag::{
 use crate::{
     apps::production::streaming::DownscaleRgbImageReader,
     localization::LocalizerRef,
-    pipelines::thalassic::{spawn_thalassic_pipeline, PointsStorageChannel, ThalassicData},
+    pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline, PointsStorageChannel, ThalassicData},
 };
 
 use super::{apriltag::Apriltag, streaming::CameraStream};
@@ -312,7 +310,11 @@ pub fn enumerate_depth_cameras(
                 shared_luma_img = Some(luma_img);
             }
 
+            let observe_depth = get_observe_depth();
             for frame in frames.frames_of_type::<DepthFrame>() {
+                if !observe_depth {
+                    continue;
+                }
                 if !matches!(frame.get(0, 0), Some(PixelKind::Z16 { .. })) {
                     error!("Unexpected depth pixel kind: {:?}", frame.get(0, 0));
                 }

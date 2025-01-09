@@ -1,10 +1,27 @@
-use std::{num::NonZeroU32, sync::Arc};
+use std::{num::NonZeroU32, sync::{atomic::{AtomicBool, Ordering}, Arc}};
 
-use crossbeam::atomic::AtomicCell;
+use arc_swap::ArcSwapOption;
+use crossbeam::{atomic::AtomicCell, sync::{Parker, Unparker}};
 use gputter::is_gputter_initialized;
 use nalgebra::Vector2;
 use tasker::shared::OwnedData;
 use thalassic::{Occupancy, PointCloudStorage, ThalassicBuilder};
+
+static OBSERVE_DEPTH: AtomicBool = AtomicBool::new(false);
+static DEPTH_UNPARKER: ArcSwapOption<Unparker> = ArcSwapOption::const_empty();
+
+pub fn set_observe_depth(value: bool) {
+    OBSERVE_DEPTH.store(value, Ordering::Release);
+    if value {
+        if let Some(inner) = &*DEPTH_UNPARKER.load() {
+            inner.unpark();
+        }
+    }
+}
+
+pub fn get_observe_depth() -> bool {
+    OBSERVE_DEPTH.load( Ordering::Acquire)
+}
 
 const CELL_COUNT: u32 = 128 * 256;
 
@@ -60,7 +77,7 @@ impl PointsStorageChannel {
 
 pub fn spawn_thalassic_pipeline(
     buffer: OwnedData<ThalassicData>,
-    mut point_cloud_channels: Box<[Arc<PointsStorageChannel>]>,
+    point_cloud_channels: Box<[Arc<PointsStorageChannel>]>,
 ) {
     let mut buffer = buffer.pessimistic_share();
     let Some(max_point_count) = point_cloud_channels
@@ -71,6 +88,12 @@ pub fn spawn_thalassic_pipeline(
         return;
     };
 
+    let max_triangle_count = point_cloud_channels
+        .iter()
+        .map(|channel| (channel.image_size.x.get() - 1) * (channel.image_size.y.get() - 1) * 2)
+        .max()
+        .unwrap();
+
     if is_gputter_initialized() {
         let mut pipeline = ThalassicBuilder {
             heightmap_dimensions: Vector2::new(
@@ -79,13 +102,20 @@ pub fn spawn_thalassic_pipeline(
             ),
             cell_size: 0.03125,
             max_point_count: NonZeroU32::new(max_point_count).unwrap(),
+            max_triangle_count: NonZeroU32::new(max_triangle_count).unwrap(),
         }
         .build();
 
+        let parker = Parker::new();
+        DEPTH_UNPARKER.store(Some(parker.unparker().clone().into()));
+
         std::thread::spawn(move || loop {
+            if !get_observe_depth() {
+                parker.park();
+            }
             let mut points_vec = vec![];
 
-            for channel in &mut point_cloud_channels {
+            for channel in &point_cloud_channels {
                 let Some(points) = channel.projected.take() else {
                     continue;
                 };

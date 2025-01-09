@@ -62,9 +62,9 @@ impl LocalizerRef {
         self.inner.angular_velocity.load()
     }
 
-    pub fn is_in_motion(&self) -> bool {
-        self.inner.in_motion.load(Ordering::Relaxed)
-    }
+    // pub fn is_in_motion(&self) -> bool {
+    //     self.inner.in_motion.load(Ordering::Relaxed)
+    // }
 }
 
 pub struct Localizer {

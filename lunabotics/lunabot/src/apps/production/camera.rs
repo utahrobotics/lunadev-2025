@@ -1,12 +1,10 @@
 use std::io::Cursor;
 
 use fxhash::{FxHashMap, FxHashSet};
+use tasker::shared::OwnedData;
+use tracing::{error, warn};
 use udev::Udev;
-use urobotics::{
-    log::{error, warn},
-    shared::OwnedData,
-};
-use urobotics_apriltag::{
+use super::apriltag::{
     image::{self, ImageBuffer, ImageDecoder, Luma},
     AprilTagDetector,
 };

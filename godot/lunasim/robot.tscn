@@ -127,8 +127,10 @@ remote_path = NodePath("../OriginOnly")
 update_rotation = false
 update_scale = false
 
-[node name="DepthCamera" type="RemoteTransform3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 0.572526, -0.298189)
+[node name="DepthCamera" type="RobotNode" parent="."]
+link_name = &"depth_camera_link"
+verify_only = true
+transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 0.573, -0.298)
 
 [node name="RearCamera" type="RemoteTransform3D" parent="."]
 transform = Transform3D(-1, -2.02066e-08, 8.50555e-08, 0, 0.972921, 0.231137, -8.74228e-08, 0.231137, -0.972921, 0, 0.572526, 0.248651)

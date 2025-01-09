@@ -1,7 +1,6 @@
 #![feature(os_string_pathbuf_leak)]
 
 use std::any::type_name;
-use std::collections::hash_map::Entry;
 use std::env::VarError;
 use std::io::{BufRead, BufReader, LineWriter, Write};
 use std::path::{Path, PathBuf};
@@ -19,9 +18,9 @@ use cursive::views::{
     Button, HideableView, Layer, LinearLayout, NamedView, ScrollView, TextView, ThemedView,
 };
 use cursive::Cursive;
-use fxhash::FxHashMap;
 use log::{log_write_thread, make_line_f, LogMessage};
 use raw_sync::events::{EventInit, EventState};
+use regex::RegexSet;
 use shared_memory::{ShmemConf, ShmemError};
 pub use subprocess::set_on_exit;
 use subprocess::{subprocess_fn, EMBEDDED_KEY, EMBEDDED_VAL, SHMEM_VAR_KEY};
@@ -77,7 +76,9 @@ pub struct LumpurBuilder {
     pub new_working_directory: NewWorkingDirectory,
     pub path_reference: Vec<PathReference>,
     pub default_commands: bool,
-    pub ignores: FxHashMap<String, Level>,
+    // pub ignores: FxHashMap<String, (Level, bool)>,
+    pub console_ignores: RegexSet,
+    pub total_ignores: RegexSet,
 }
 
 impl Default for LumpurBuilder {
@@ -92,7 +93,8 @@ impl LumpurBuilder {
             new_working_directory: NewWorkingDirectory::default(),
             path_reference: vec![PathReference::Copy(PathBuf::from("app-config.toml"))],
             default_commands: true,
-            ignores: FxHashMap::default(),
+            console_ignores: Default::default(),
+            total_ignores: Default::default(),
         }
     }
 
@@ -113,19 +115,55 @@ impl LumpurBuilder {
         self
     }
 
-    pub fn add_ignore(mut self, target: impl Into<String>, level: Level) -> Self {
-        match self.ignores.entry(target.into()) {
-            Entry::Occupied(mut occupied_entry) => {
-                if &level < occupied_entry.get() {
-                    occupied_entry.insert(level);
-                }
-            }
-            Entry::Vacant(vacant_entry) => {
-                vacant_entry.insert(level);
-            }
-        }
+    fn into_regex_set(regexes_levels: impl IntoIterator<Item = (impl Into<String>, Level)>) -> RegexSet {
+        RegexSet::new(
+            regexes_levels
+                .into_iter()
+                .map(|(regex, level)| {
+                    let mut regex = regex.into();
+                    const LEVELS: [Level; 5] = [
+                        Level::ERROR,
+                        Level::WARN,
+                        Level::INFO,
+                        Level::DEBUG,
+                        Level::TRACE,
+                    ];
+                    let index = LEVELS.iter().position(|&l| l == level).expect("Invalid level");
+                    regex.push_str("=(");
+                    regex.push_str(&level.to_string());
+                    for i in (index + 1)..LEVELS.len() {
+                        regex.push_str("|");
+                        regex.push_str(&LEVELS[i].to_string());
+                    }
+                    regex.push_str(")");
+                    regex
+                })
+        ).expect("Failed to create regex set")
+    }
+
+    pub fn set_console_ignores(mut self, regexes_levels: impl IntoIterator<Item = (impl Into<String>, Level)>) -> Self {
+        self.console_ignores = Self::into_regex_set(regexes_levels);
         self
     }
+
+    pub fn set_total_ignores(mut self, regexes_levels: impl IntoIterator<Item = (impl Into<String>, Level)>) -> Self {
+        self.total_ignores = Self::into_regex_set(regexes_levels);
+        self
+    }
+
+    // pub fn add_ignore(mut self, target: impl Into<String>, level: Level, still_write_to_file: bool) -> Self {
+    //     match self.ignores.entry(target.into()) {
+    //         Entry::Occupied(mut occupied_entry) => {
+    //             if level < occupied_entry.get().0 {
+    //                 occupied_entry.insert((level, still_write_to_file));
+    //             }
+    //         }
+    //         Entry::Vacant(vacant_entry) => {
+    //             vacant_entry.insert((level, still_write_to_file));
+    //         }
+    //     }
+    //     self
+    // }
 
     pub fn set_default_commands(mut self, default_commands: bool) -> Self {
         self.default_commands = default_commands;
@@ -288,6 +326,8 @@ impl LumpurBuilder {
                 .expect("Failed to write to log file (app.log)");
         }
         let (write_tx, write_rx) = std::sync::mpsc::channel::<Arc<LogMessage>>();
+        let total_ignores: &_ = Box::leak(Box::new(self.total_ignores));
+        let console_ignores: &_ = Box::leak(Box::new(self.console_ignores));
         let write_thr = std::thread::spawn(move || log_write_thread(write_rx, log_file));
 
         let max_lines: usize = std::env::var("MAX_LINES")
@@ -311,14 +351,14 @@ impl LumpurBuilder {
             .expect("Failed to canonicalize current dir")
             .leak();
 
-        let ignores: &_ = Box::leak(Box::new(self.ignores));
         let f = make_line_f(
             log_tx.clone(),
             write_tx.clone(),
             Level::INFO,
             "stdout",
             current_dir,
-            ignores,
+            total_ignores,
+            console_ignores
         );
         std::thread::spawn(move || {
             for line in stdout.lines() {
@@ -334,7 +374,8 @@ impl LumpurBuilder {
             Level::ERROR,
             "stderr",
             current_dir,
-            ignores,
+            total_ignores,
+            console_ignores
         );
         std::thread::spawn(move || {
             for line in stderr.lines() {

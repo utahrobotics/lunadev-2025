@@ -15,6 +15,7 @@ macro_rules! define_configuration {
                 $cmd_name: ident {
                     $(
                         $(#[env($var_name: ident)])?
+                        $(#[serde($($token: tt)+)])?
                         $param: ident: $param_ty: ty
                     ),*
                     $(,)?
@@ -55,6 +56,9 @@ macro_rules! define_configuration {
                     if let Ok(n) = string.parse() {
                         return Value::Float(n);
                     }
+                    if let Ok(b) = string.parse() {
+                        return Value::Boolean(b);
+                    }
                     Value::String(string)
                 }
 
@@ -63,6 +67,7 @@ macro_rules! define_configuration {
                         #[derive(serde::Deserialize)]
                         struct Dummy {
                             $(
+                                $(#[serde($($token)+)])?
                                 $param: $param_ty
                             ),*
                         }

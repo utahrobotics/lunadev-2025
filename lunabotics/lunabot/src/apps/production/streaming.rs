@@ -16,10 +16,8 @@ use openh264::{
     OpenH264API,
 };
 use spin_sleep::SpinSleeper;
-use urobotics::{
-    log::{error, info},
-    parking_lot::RwLock,
-};
+use tasker::parking_lot::RwLock;
+use tracing::{error, info};
 
 const CAMERA_COL_COUNT: usize = 3;
 const CAMERA_ROW_COUNT: usize = 2;

@@ -1,4 +1,4 @@
-use std::{panic::set_hook, path::Path, sync::Mutex};
+use std::{backtrace::Backtrace, panic::set_hook, path::Path, sync::Mutex};
 
 use raw_sync::{events::EventInit, Timeout};
 use shared_memory::ShmemConf;
@@ -35,7 +35,8 @@ pub(crate) fn subprocess_fn<C: Configuration>() -> C {
         .expect("Failed to set global default tracing subscriber");
 
     set_hook(Box::new(move |info| {
-        tracing::error!("{info}");
+        let backtrace = Backtrace::capture();
+        tracing::error!("{info}\n{backtrace}");
     }));
 
     let flink = std::env::var(SHMEM_VAR_KEY).unwrap();

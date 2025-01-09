@@ -3,7 +3,7 @@ use pathfinding::{grid::Grid, prelude::astar};
 use tasker::shared::SharedDataReceiver;
 use tracing::{error, warn};
 
-use crate::pipelines::thalassic::ThalassicData;
+use crate::pipelines::thalassic::{set_observe_depth, ThalassicData};
 
 const REACH: usize = 10;
 
@@ -17,10 +17,12 @@ impl DefaultPathfinder {
     pub fn pathfind(
         &self,
         shared_thalassic_data: &SharedDataReceiver<ThalassicData>,
-        mut from: Point3<f64>,
-        mut to: Point3<f64>,
+        from: Point3<f64>,
+        to: Point3<f64>,
         into: &mut Vec<Point3<f64>>,
     ) {
+        shared_thalassic_data.try_get();
+        set_observe_depth(true);
         let mut data = shared_thalassic_data.get();
         loop {
             if data.current_robot_radius == 0.5 {
@@ -30,6 +32,7 @@ impl DefaultPathfinder {
             drop(data);
             data = shared_thalassic_data.get();
         }
+        set_observe_depth(false);
 
         macro_rules! neighbours {
             ($p: ident) => {

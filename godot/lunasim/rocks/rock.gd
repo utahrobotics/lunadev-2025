@@ -14,12 +14,16 @@ const CHOICES: Array[PackedScene] = [
 	preload("res://rocks/Low_Poly_Rock_004.glb"),
 	preload("res://rocks/Low_Poly_Rock_005.glb"),
 	preload("res://rocks/Low_Poly_Rock_Small_001.glb"),
-	preload("res://rocks/Low_Poly_Rock_Small_002.glb"),
+	# This rock is quite large
+	#preload("res://rocks/Low_Poly_Rock_Small_002.glb"),
 	preload("res://rocks/Low_Poly_Rock_Small_004.glb")
 ]
 
 
 func _ready() -> void:
+	for _i in range(12):
+		await get_tree().physics_frame
+		
 	var rock: Node = CHOICES.pick_random().instantiate()
 	rock.get_child(0).get_child(0).collision_layer = 16
 	rotation.y = randf() * TAU

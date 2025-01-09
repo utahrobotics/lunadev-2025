@@ -12,3 +12,6 @@ macos.debug =            "res://../../target/release/liblunasim_lib.dylib"
 macos.release =          "res://../../target/release/liblunasim_lib.dylib"
 macos.debug.arm64 =      "res://../../target/release/liblunasim_lib.dylib"
 macos.release.arm64 =    "res://../../target/release/liblunasim_lib.dylib"
+
+[icons]
+RobotNode = "Node3D"

@@ -24,7 +24,8 @@ use tasker::shared::{OwnedData, SharedDataReceiver};
 
 #[cfg(feature = "production")]
 mod stream;
-mod urdf;
+#[cfg(feature = "production")]
+mod audio;
 
 const STREAM_WIDTH: u32 = 1920;
 const STREAM_HEIGHT: u32 = 720;
@@ -96,6 +97,8 @@ struct LunabotConn {
     stream_image: Gd<Image>,
     #[var]
     stream_image_updated: bool,
+    #[cfg(feature = "production")]
+    audio_streaming: Option<audio::AudioStreaming>
 }
 
 thread_local! {
@@ -120,6 +123,8 @@ impl INode for LunabotConn {
                 base,
                 stream_image,
                 stream_image_updated: false,
+                #[cfg(feature = "production")]
+                audio_streaming: None
             };
         }
         init_panic_hook();
@@ -141,6 +146,8 @@ impl INode for LunabotConn {
             .expect("Failed to set non-blocking");
 
         let cakap_sm = PeerStateMachine::new(Duration::from_millis(150), 1024, 1400);
+        #[cfg(feature = "production")]
+        let audio_streaming = audio::AudioStreaming::new();
 
         Self {
             inner: Some(LunabotConnInner {
@@ -157,6 +164,8 @@ impl INode for LunabotConn {
             base,
             stream_image,
             stream_image_updated: false,
+            #[cfg(feature = "production")]
+            audio_streaming: Some(audio_streaming)
         }
     }
 
@@ -304,6 +313,11 @@ impl INode for LunabotConn {
             if received {
                 self.base_mut().emit_signal("something_received", &[]);
             }
+        }
+        #[cfg(feature = "production")]
+        if let Some(mut audio_streaming) = self.audio_streaming.take() {
+            audio_streaming.poll(self.base_mut());
+            self.audio_streaming = Some(audio_streaming);
         }
     }
 }
