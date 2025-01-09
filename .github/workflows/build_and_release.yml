@@ -10,36 +10,35 @@ permissions:
 
 jobs:
   build:
-    name: ${{ matrix.platform.os_name }} with rust ${{ matrix.toolchain }}
-    runs-on: ${{ matrix.platform.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - os_name: Windows-x86_64
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-            bin: lunabase_lib.dll
-        toolchain:
-          - nightly
+    name: Export Lunabase Windows
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Build binary
-        uses: houseabsolute/actions-rust-cross@v0
+      - name: Install cargo-make
+        uses: actions-rs/cargo@v1
         with:
-          command: "build"
-          target: ${{ matrix.platform.target }}
-          toolchain: ${{ matrix.toolchain }}
-          args: "--locked --release -p lunabase-lib"
-          strip: true
-      # - name: Rename binary (windows)
-      #   run: mv target/${{ matrix.platform.target }}/release/lunabase_lib.dll target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
-      #   if: matrix.platform.os_name == 'Windows-x86_64'
-      - name: Generate SHA-256
-        run: shasum -a 256 target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }} | cut -d ' ' -f 1 > target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}.sha256
+          command: install
+          args: --debug cargo-make
+      - name: Run CI
+        uses: actions-rs/cargo@v1
+        with:
+          command: make
+          args: build_lunabase
+      - name: Setup Godot
+        uses: lihop/setup-godot@v2
+        with:
+          version: 4.3-stable
+          export-templates: true
+      - run: godot --headless --export-release "Windows Desktop" lunabase/Lunabase.exe
+        working-directory: godot/lunabase
+      - name: Compress Directory
+        uses: somaz94/compress-decompress@v1
+        with:
+          command: compress
+          source: ./godot/lunabase/lunabase
+          format: zip
       - name: Release binary and SHA-256 checksum to GitHub
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
-            target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}.sha256
+            godot/lunabase/lunabase.zip
