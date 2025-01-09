@@ -19,6 +19,10 @@ func create_path(path:Array[Vector3]):
 	self.curve.add_point(Vector3(robot.position.x, robot.position.y+0.5, robot.position.z))
 	for i in path.size():
 		var point_pos=Vector3(path[i].x, path[i].y, path[i].z)
+		if i!=0:
+			var prev_pos = Vector3(path[i-1].x, path[i-1].y, path[i-1].z)
+			if prev_pos-point_pos == Vector3.ZERO:
+				continue
 		self.curve.add_point(point_pos)
 		place_marker(point_pos,str(i))
 
