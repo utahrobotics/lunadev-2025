@@ -10,7 +10,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use audio::AudioStreaming;
 use bitcode::encode;
 use cakap2::{
     packet::{Action, ReliableIndex},
@@ -18,7 +17,7 @@ use cakap2::{
 };
 use common::{FromLunabase, FromLunabot, LunabotStage, Steering};
 use godot::{
-    classes::{image::Format, AudioStreamGenerator, AudioStreamGeneratorPlayback, Engine, Image},
+    classes::{image::Format, Engine, Image},
     prelude::*,
 };
 use tasker::shared::{OwnedData, SharedDataReceiver};
@@ -99,7 +98,7 @@ struct LunabotConn {
     #[var]
     stream_image_updated: bool,
     #[cfg(feature = "production")]
-    audio_streaming: Option<AudioStreaming>
+    audio_streaming: Option<audio::AudioStreaming>
 }
 
 thread_local! {
@@ -124,11 +123,11 @@ impl INode for LunabotConn {
                 base,
                 stream_image,
                 stream_image_updated: false,
+                #[cfg(feature = "production")]
                 audio_streaming: None
             };
         }
         init_panic_hook();
-
 
         let stream_corrupted: &_ = Box::leak(Box::new(AtomicBool::new(false)));
         let mut shared_rgb_img =
@@ -148,10 +147,9 @@ impl INode for LunabotConn {
 
         let cakap_sm = PeerStateMachine::new(Duration::from_millis(150), 1024, 1400);
         #[cfg(feature = "production")]
-        let (audio_streaming, player) = AudioStreaming::new();
+        let audio_streaming = audio::AudioStreaming::new();
 
-        #[allow(unused_mut)]
-        let mut out = Self {
+        Self {
             inner: Some(LunabotConnInner {
                 udp,
                 cakap_sm,
@@ -168,10 +166,7 @@ impl INode for LunabotConn {
             stream_image_updated: false,
             #[cfg(feature = "production")]
             audio_streaming: Some(audio_streaming)
-        };
-        #[cfg(feature = "production")]
-        out.base_mut().add_child(&player);
-        out
+        }
     }
 
     fn process(&mut self, _delta: f64) {
@@ -320,8 +315,9 @@ impl INode for LunabotConn {
             }
         }
         #[cfg(feature = "production")]
-        if let Some(audio_streaming) = &mut self.audio_streaming {
-            audio_streaming.poll();
+        if let Some(mut audio_streaming) = self.audio_streaming.take() {
+            audio_streaming.poll(self.base_mut());
+            self.audio_streaming = Some(audio_streaming);
         }
     }
 }
