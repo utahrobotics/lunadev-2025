@@ -23,6 +23,8 @@ jobs:
         with:
           version: 4.3-stable
           export-templates: true
+      - name: Create Export Directory
+        run: mkdir godot/lunabase/lunabase
       - name: Export Lunabase Windows
         run: godot --headless --export-release "Windows Desktop" lunabase/Lunabase.exe
         working-directory: godot/lunabase
