@@ -22,6 +22,7 @@ serde_json = { workspace = true, optional = true }
 opus = { workspace = true, optional = true }
 
 [features]
-extended = ["streaming_server"]
+extended = ["streaming_server", "audio_streaming"]
 streaming_server = ["webrtc", "axum", "production", "serde_json", "crossbeam"]
-production = ["openh264", "opus"]
+production = ["openh264"]
+audio_streaming = ["opus"]

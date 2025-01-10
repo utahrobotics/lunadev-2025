@@ -24,7 +24,7 @@ use tasker::shared::{OwnedData, SharedDataReceiver};
 
 #[cfg(feature = "production")]
 mod stream;
-#[cfg(feature = "production")]
+#[cfg(feature = "audio_streaming")]
 mod audio;
 
 const STREAM_WIDTH: u32 = 1920;
@@ -97,7 +97,7 @@ struct LunabotConn {
     stream_image: Gd<Image>,
     #[var]
     stream_image_updated: bool,
-    #[cfg(feature = "production")]
+    #[cfg(feature = "audio_streaming")]
     audio_streaming: Option<audio::AudioStreaming>
 }
 
@@ -123,7 +123,7 @@ impl INode for LunabotConn {
                 base,
                 stream_image,
                 stream_image_updated: false,
-                #[cfg(feature = "production")]
+                #[cfg(feature = "audio_streaming")]
                 audio_streaming: None
             };
         }
@@ -136,7 +136,7 @@ impl INode for LunabotConn {
                 STREAM_WIDTH as usize * STREAM_HEIGHT as usize * 3
             ]);
         let stream_lendee = shared_rgb_img.create_lendee();
-        #[cfg(feature = "production")]
+        #[cfg(feature = "audio_streaming")]
         stream::camera_streaming(shared_rgb_img.pessimistic_share(), stream_corrupted);
 
         let udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10600))
@@ -146,7 +146,7 @@ impl INode for LunabotConn {
             .expect("Failed to set non-blocking");
 
         let cakap_sm = PeerStateMachine::new(Duration::from_millis(150), 1024, 1400);
-        #[cfg(feature = "production")]
+        #[cfg(feature = "audio_streaming")]
         let audio_streaming = audio::AudioStreaming::new();
 
         Self {
@@ -164,7 +164,7 @@ impl INode for LunabotConn {
             base,
             stream_image,
             stream_image_updated: false,
-            #[cfg(feature = "production")]
+            #[cfg(feature = "audio_streaming")]
             audio_streaming: Some(audio_streaming)
         }
     }
@@ -314,7 +314,7 @@ impl INode for LunabotConn {
                 self.base_mut().emit_signal("something_received", &[]);
             }
         }
-        #[cfg(feature = "production")]
+        #[cfg(feature = "audio_streaming")]
         if let Some(mut audio_streaming) = self.audio_streaming.take() {
             audio_streaming.poll(self.base_mut());
             self.audio_streaming = Some(audio_streaming);
