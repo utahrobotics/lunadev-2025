@@ -9,7 +9,7 @@ var maps:Array[Image] = [null,null,null,null,null]
 
 func set_image_maps(depth:Image,point:Image,height:Image,gradient:Image,obstacle:Image):
 	maps[0]=depth
-	maps[1]=point
+	maps[1]=$SubViewport.get_texture()
 	maps[2]=height
 	maps[3]=gradient
 	maps[4]=obstacle
@@ -21,7 +21,7 @@ func _ready() -> void:
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta: float) -> void:
 	map_texture.texture=maps[current_map]
-	if map_texture.texture==null: generate_placeholder(64,64)
+	if map_texture.texture==null: generate_placeholder(20,10)
 
 func set_message(msg: String, color: Color):
 	var message:=Label.new()
@@ -41,7 +41,6 @@ func generate_placeholder(width:int, height:int):
 			image.set_pixel(x,y,color)
 	var texture= ImageTexture.create_from_image(image)
 	map_texture.texture=texture
-
 
 
 func _on_depth_map_button_down() -> void:

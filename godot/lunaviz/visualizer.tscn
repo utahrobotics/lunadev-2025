@@ -452,10 +452,6 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 9.0
-offset_top = 8.0
-offset_right = -11.0
-offset_bottom = -10.0
 grow_horizontal = 2
 grow_vertical = 2
 
@@ -469,11 +465,16 @@ horizontal_alignment = 1
 [node name="MapTexture" type="TextureRect" parent="CanvasLayer/VizHBox/ImagePanel/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
+stretch_mode = 5
 
 [node name="Send Button" type="Button" parent="CanvasLayer/VizHBox"]
 layout_mode = 2
 theme = ExtResource("4_qsdjn")
 text = "Send"
+
+[node name="SubViewport" type="SubViewport" parent="."]
+
+[node name="Camera3D" type="Camera3D" parent="SubViewport"]
 
 [connection signal="button_down" from="CanvasLayer/VizHBox/DataVBox/Depth Map" to="." method="_on_depth_map_button_down"]
 [connection signal="button_down" from="CanvasLayer/VizHBox/DataVBox/Point Map" to="." method="_on_point_map_button_down"]
