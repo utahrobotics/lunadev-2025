@@ -16,15 +16,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: davidB/rust-cargo-make@v1
       - uses: actions/checkout@v3
-      - run: cargo make build_lunabase
+      - name: Build Lunabase Lib
+        run: cargo make build_lunabase
       - name: Setup Godot
         uses: lihop/setup-godot@v2
         with:
           version: 4.3-stable
           export-templates: true
-      - run: godot --headless --export-release "Windows Desktop" lunabase/Lunabase.exe
+      - name: Export Lunabase Windows
+        run: godot --headless --export-release "Windows Desktop" lunabase/Lunabase.exe
         working-directory: godot/lunabase
-      - run: 7z a -tzip lunabase_windows.zip ./godot/lunabase/lunabase
+      - name: Archive Lunabase Windows
+        run: 7z a -tzip lunabase_windows.zip ./godot/lunabase/lunabase/
       - name: Release binary and SHA-256 checksum to GitHub
         uses: softprops/action-gh-release@v1
         with:
