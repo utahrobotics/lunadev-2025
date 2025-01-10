@@ -136,7 +136,7 @@ impl INode for LunabotConn {
                 STREAM_WIDTH as usize * STREAM_HEIGHT as usize * 3
             ]);
         let stream_lendee = shared_rgb_img.create_lendee();
-        #[cfg(feature = "audio_streaming")]
+        #[cfg(feature = "production")]
         stream::camera_streaming(shared_rgb_img.pessimistic_share(), stream_corrupted);
 
         let udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10600))
