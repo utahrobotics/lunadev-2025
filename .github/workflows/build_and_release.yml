@@ -24,9 +24,9 @@ jobs:
           export-templates: true
       - run: godot --headless --export-release "Windows Desktop" lunabase/Lunabase.exe
         working-directory: godot/lunabase
-      - run: 7z a -tzip lunabase.zip ./godot/lunabase/lunabase
+      - run: 7z a -tzip lunabase_windows.zip ./godot/lunabase/lunabase
       - name: Release binary and SHA-256 checksum to GitHub
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            godot/lunabase/lunabase.zip
+            ./lunabase_windows.zip
