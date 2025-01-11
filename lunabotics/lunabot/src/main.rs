@@ -99,12 +99,15 @@ fn main() {
                 lunabase_address,
                 lunabase_streaming_address,
                 max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
+                #[cfg(feature = "experimental")]
                 lunabase_audio_streaming_address,
                 cameras,
                 depth_cameras,
                 apriltags,
             }
             .run();
+            #[cfg(not(feature = "experimental"))]
+            let _ = lunabase_audio_streaming_address;
         }
     }
 }

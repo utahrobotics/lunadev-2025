@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Instant, vec};
 
 use ares_bt::{
-    action::AlwaysSucceed,
+    action::{AlwaysFail, AlwaysSucceed},
     branching::TryCatch,
     converters::{CatchPanic, Invert},
     looping::WhileLoop,

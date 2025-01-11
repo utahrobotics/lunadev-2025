@@ -1,7 +1,6 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Context;
-use audio_streaming::audio_streaming;
 use camera::enumerate_cameras;
 use common::LunabotStage;
 use crossbeam::atomic::AtomicCell;
@@ -27,7 +26,7 @@ mod apriltag;
 mod camera;
 mod depth;
 mod streaming;
-mod audio_streaming;
+// mod audio_streaming;
 
 pub use apriltag::Apriltag;
 
@@ -50,6 +49,7 @@ pub struct DepthCameraInfo {
 pub struct LunabotApp {
     pub lunabase_address: SocketAddr,
     pub lunabase_streaming_address: Option<SocketAddr>,
+    #[cfg(feature = "experimental")]
     pub lunabase_audio_streaming_address: Option<SocketAddr>,
     pub max_pong_delay_ms: u64,
     pub cameras: FxHashMap<String, CameraInfo>,
@@ -96,7 +96,8 @@ impl LunabotApp {
             error!("Failed to start camera streaming: {e}");
         }
 
-        if let Err(e) = audio_streaming(self.lunabase_audio_streaming_address.unwrap_or_else(|| {
+        #[cfg(feature = "experimental")]
+        if let Err(e) = audio_streaming::audio_streaming(self.lunabase_audio_streaming_address.unwrap_or_else(|| {
             let mut addr = camera_streaming_address;
             if addr.port() == u16::MAX {
                 addr.set_port(65534);
