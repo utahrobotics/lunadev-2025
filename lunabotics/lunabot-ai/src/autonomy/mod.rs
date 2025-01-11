@@ -9,7 +9,7 @@ use ares_bt::{
 use common::{FromLunabase, Steering};
 use dig::dig;
 use dump::dump;
-use nalgebra::{distance, Matrix2, Point2, Point3, Vector2, Vector3};
+use nalgebra::{distance, Const, Matrix2, OPoint, Point2, Point3, Vector2, Vector3};
 use tracing::{error, warn};
 use traverse::traverse;
 
@@ -83,6 +83,7 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
     let Some(mut path) = blackboard.get_path() else {
         return InfallibleStatus::Success;
     };
+
     let robot = blackboard.get_robot_isometry();
     let pos = Point2::new(robot.translation.x, robot.translation.z);
     let heading = robot
@@ -90,7 +91,7 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
         .transform_vector(&Vector3::new(0.0, 0.0, -1.0))
         .xz();
 
-    match find_target_point(pos, path) {
+    match find_target_point_index(pos, path) {
         Some(i) => {
             let heading_angle = heading.angle(&Vector2::new(0.0, -1.0));
             let to_first_point = (path[i].xz() - pos).normalize();
@@ -156,35 +157,29 @@ fn within_arc(path: &[Point3<f64>], i: usize) -> bool {
 }
 
 /// min distance for robot to be considered at a point
-const AT_POINT_THRESHOLD: f64 = 0.1;
+const AT_POINT_THRESHOLD: f64 = 0.05;
 
 /// find index of the next point the robot should move towards, based on which path segment the robot is closest to
 ///
 /// returns `None` if robot is at the last point
-fn find_target_point(pos: Point2<f64>, path: &[Point3<f64>]) -> Option<usize> {
-    for i in 0..path.len() {
-        if distance(&pos, &path[i].xz()) < AT_POINT_THRESHOLD {
-            return if i == path.len() - 1 {
-                None
-            } else {
-                Some(i + 1)
-            };
-        }
+fn find_target_point_index(pos: Point2<f64>, path: &[Point3<f64>]) -> Option<usize> {
+    if distance(&pos, &path[path.len()-1].xz()) < AT_POINT_THRESHOLD {
+        return None;
     }
 
     let mut min_dist = distance(&pos, &path[0].xz());
-    let mut target_point = 0;
+    let mut target_point_index = 0;
 
     for i in 1..path.len() {
         let dist = dist_to_segment(pos, path[i - 1].xz(), path[i].xz());
 
         if dist < min_dist {
             min_dist = dist;
-            target_point = i;
+            target_point_index = i;
         }
     }
 
-    Some(target_point)
+    Some(target_point_index)
 }
 
 fn dist_to_segment(point: Point2<f64>, a: Point2<f64>, b: Point2<f64>) -> f64 {

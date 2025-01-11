@@ -16,7 +16,7 @@ members = [
     "misc/thalassic",
     "lunaserver-web/lunaserver-web-host",
     "lunaserver-web/lunaserver-web-client",
-    "misc/lumpur",
+    "misc/lumpur", "embedded/imu_chip",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/","output/"]

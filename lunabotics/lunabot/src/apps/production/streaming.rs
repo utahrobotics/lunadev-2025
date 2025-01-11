@@ -69,7 +69,7 @@ impl CameraStream {
         let global_frame_row_length = individual_frame_row_length * CAMERA_COL_COUNT;
 
         let start =
-            (cam_y * global_frame_row_length + cam_x * individual_frame_row_length) as usize;
+            (cam_y * global_frame_row_length * CAMERA_RESOLUTION.y as usize + cam_x * individual_frame_row_length) as usize;
         for y in 0..CAMERA_RESOLUTION.y as usize {
             let start = start + y * global_frame_row_length;
             let row = unsafe {
@@ -78,7 +78,7 @@ impl CameraStream {
                     individual_frame_row_length,
                 )
             };
-            src.read(row)?;
+            src.read_exact(row)?;
         }
         Ok(())
     }
