@@ -2,7 +2,7 @@ use urobotics::{serial, tokio::io::{AsyncWriteExt, WriteHalf}, BlockOn};
 use vesc_translator::{CommandType, Message, VescSendable};
 use tokio_serial::SerialStream;
 
-//use socketcan::{socket::*, CanFrame, EmbeddedFrame, ExtendedId}; used for CAN comms, not supported yet
+use socketcan::{socket::*, CanFrame, EmbeddedFrame, ExtendedId};
 
 /// The Motor trait is the basis for interactions with vesc-translator that use comms.
 /// A common, provided implementer for this trait is VescCanMotor.
@@ -67,7 +67,7 @@ impl Motor for VescUartSerialMotor {
 	}
 }
 
-/* Implements CAN motors, not supported yet
+
 /// A common implementation of the Motor trait, which uses the 
 /// VESC message generation of the messages package, and sends
 /// its messages over serial port CAN bus using socketcan.
@@ -100,7 +100,7 @@ impl VescCanMotor {
 impl Motor for VescCanMotor {
     
 
-    fn send_message(&self, command: CommandType, payload: f32) {
+    fn send_message(&mut self, command: CommandType, payload: f32) {
         // Create the message object
         let msg = Message::new(command, self.id, payload);
 
@@ -110,4 +110,4 @@ impl Motor for VescCanMotor {
         // Send it
         _ = self.soc.write_frame_insist(&frame);
     }
-}*/
+}
