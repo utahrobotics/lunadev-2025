@@ -1212,7 +1212,7 @@ dependencies = [
  "enumset",
  "lazy_static",
  "log",
- "num",
+ "num 0.4.3",
  "parking_lot",
  "serde_json",
  "time",
@@ -1560,6 +1560,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "embassy-net"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed041cc19a603d657124fddefdcbe5ef8bd60e77d972793ebb57de93394f5949"
+dependencies = [
+ "document-features",
+ "embassy-net-driver",
+ "embassy-sync",
+ "embassy-time",
+ "embedded-io-async",
+ "embedded-nal-async",
+ "heapless",
+ "managed",
+ "smoltcp",
+]
+
+[[package]]
 name = "embassy-net-driver"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1725,6 +1742,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "embedded-hal-mock"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9a0f04f8886106faf281c47b6a0e4054a369baedaf63591fdb8da9761f3f379"
+dependencies = [
+ "embedded-hal 0.2.7",
+ "embedded-hal 1.0.0",
+ "embedded-hal-nb",
+ "embedded-time",
+ "nb 1.1.0",
+ "void",
+]
+
+[[package]]
 name = "embedded-hal-nb"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1750,6 +1781,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "embedded-nal"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c56a28be191a992f28f178ec338a0bf02f63d7803244add736d026a471e6ed77"
+dependencies = [
+ "nb 1.1.0",
+]
+
+[[package]]
+name = "embedded-nal-async"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76959917cd2b86f40a98c28dd5624eddd1fa69d746241c8257eac428d83cb211"
+dependencies = [
+ "embedded-io-async",
+ "embedded-nal",
+]
+
+[[package]]
 name = "embedded-storage"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1762,6 +1812,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1763775e2323b7d5f0aa6090657f5e21cfa02ede71f5dc40eead06d64dcd15cc"
 dependencies = [
  "embedded-storage",
+]
+
+[[package]]
+name = "embedded-time"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7a4b4d10ac48d08bfe3db7688c402baadb244721f30a77ce360bd24c3dffe58"
+dependencies = [
+ "num 0.3.1",
 ]
 
 [[package]]
@@ -2911,9 +2970,11 @@ dependencies = [
  "defmt-rtt",
  "embassy-executor",
  "embassy-futures",
+ "embassy-net",
  "embassy-rp",
+ "embassy-time",
  "embassy-usb",
- "embedded-hal 1.0.0",
+ "heapless",
  "lsm6dsox",
  "panic-probe",
  "panic-semihosting",
@@ -3311,12 +3372,11 @@ checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
 [[package]]
 name = "lsm6dsox"
 version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c417d2c1a4bf89a49d422d0609fcf9cdfd1f940ae390a1ef0b8d7571e2248ce3"
 dependencies = [
  "accelerometer",
  "byteorder",
- "embedded-hal 0.2.7",
+ "embedded-hal 1.0.0",
+ "embedded-hal-mock",
  "enumflags2",
  "measurements",
  "num_enum 0.5.11",
@@ -3449,6 +3509,12 @@ checksum = "62bb907fe88d54d8d9ce32a3cceab4218ed2f6b7d35617cafe9adf84e43919cb"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "managed"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
 
 [[package]]
 name = "matchit"
@@ -3607,8 +3673,8 @@ dependencies = [
  "bytemuck",
  "matrixmultiply",
  "nalgebra-macros",
- "num-complex",
- "num-rational",
+ "num-complex 0.4.6",
+ "num-rational 0.4.2",
  "num-traits",
  "serde",
  "simba 0.8.1",
@@ -3687,7 +3753,7 @@ checksum = "adb12d4e967ec485a5f71c6311fe28158e9d6f4bc4a447b474184d0f91a8fa32"
 dependencies = [
  "approx 0.4.0",
  "matrixmultiply",
- "num-complex",
+ "num-complex 0.4.6",
  "num-integer",
  "num-traits",
  "rawpointer",
@@ -3701,7 +3767,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "882ed72dce9365842bf196bdeedf5055305f11fc8c03dee7bb0194a6cad34841"
 dependencies = [
  "matrixmultiply",
- "num-complex",
+ "num-complex 0.4.6",
  "num-integer",
  "num-traits",
  "portable-atomic",
@@ -3839,14 +3905,27 @@ dependencies = [
 
 [[package]]
 name = "num"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b7a8e9be5e039e2ff869df49155f1c06bd01ade2117ec783e56ab0932b67a8f"
+dependencies = [
+ "num-complex 0.3.1",
+ "num-integer",
+ "num-iter",
+ "num-rational 0.3.2",
+ "num-traits",
+]
+
+[[package]]
+name = "num"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35bd024e8b2ff75562e5f34e7f4905839deb4b22955ef5e73d2fea1b9813cb23"
 dependencies = [
- "num-complex",
+ "num-complex 0.4.6",
  "num-integer",
  "num-iter",
- "num-rational",
+ "num-rational 0.4.2",
  "num-traits",
 ]
 
@@ -3857,6 +3936,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
 dependencies = [
  "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-complex"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "747d632c0c558b87dbabbe6a82f3b4ae03720d0646ac5b7b4dae89394be5f2c5"
+dependencies = [
  "num-traits",
 ]
 
@@ -3912,6 +4000,17 @@ name = "num-iter"
 version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1429034a0490724d0075ebb2bc9e875d6503c3cf69e235a8941aa757d83ef5bf"
+dependencies = [
+ "autocfg",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-rational"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12ac428b1cb17fce6f731001d307d351ec70a6d202fc2e60f7d4c5e42d8f4f07"
 dependencies = [
  "autocfg",
  "num-integer",
@@ -5348,7 +5447,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f3fd720c48c53cace224ae62bef1bbff363a70c68c4802a78b5cc6159618176"
 dependencies = [
  "approx 0.5.1",
- "num-complex",
+ "num-complex 0.4.6",
  "num-traits",
  "paste",
  "wide",
@@ -5361,7 +5460,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "061507c94fc6ab4ba1c9a0305018408e312e17c041eb63bef8aa726fa33aceae"
 dependencies = [
  "approx 0.5.1",
- "num-complex",
+ "num-complex 0.4.6",
  "num-traits",
  "paste",
  "wide",
@@ -5431,6 +5530,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "smoltcp"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dad095989c1533c1c266d9b1e8d70a1329dd3723c3edac6d03bbd67e7bf6f4bb"
+dependencies = [
+ "bitflags 1.3.2",
+ "byteorder",
+ "cfg-if 1.0.0",
+ "heapless",
+ "managed",
+]
+
+[[package]]
 name = "socket2"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5487,7 +5599,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "704ef26d974e8a452313ed629828cd9d4e4fa34667ca1ad9d6b1fffa43c6e166"
 dependencies = [
  "ndarray 0.16.1",
- "num-complex",
+ "num-complex 0.4.6",
  "num-traits",
  "smallvec",
 ]

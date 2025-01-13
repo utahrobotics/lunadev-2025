@@ -14,6 +14,7 @@ members = [
     "misc/gputter-macros",
     "misc/gputter",
     "misc/thalassic",
+    "misc/lsm6dsox",
     "lunaserver-web/lunaserver-web-host",
     "lunaserver-web/lunaserver-web-client",
     "misc/lumpur", "embedded/imu_chip",
@@ -71,6 +72,7 @@ lunabase-lib = { path = "lunabotics/lunabase-lib" }
 ares-bt = { path = "misc/ares-bt" }
 gputter = { path = "misc/gputter" }
 thalassic = { path = "misc/thalassic" }
+
 
 [profile.dev.package.lunabot]
 opt-level = 2
