@@ -5,23 +5,17 @@
 #![no_std]
 #![no_main]
 
-use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
+use defmt::info;
 use embassy_executor::Spawner;
-use embassy_futures::join::join;
-use embassy_rp::{bind_interrupts, gpio, i2c};
-use embassy_rp::gpio::Level;
+use embassy_rp::pwm::{self, Pwm};
+use embassy_rp::{bind_interrupts, gpio, i2c, Peripherals};
+use embassy_rp::gpio::{Level, Output};
 use embassy_rp::i2c::{Async, I2c};
 use embassy_rp::peripherals::{I2C0, USB};
-use embassy_rp::pio::Pin;
-use embassy_rp::usb::{Driver, Instance, InterruptHandler};
+use embassy_rp::usb::{Driver, InterruptHandler};
 use embassy_time::{Delay, Duration, Ticker, Timer};
-use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
-use embassy_usb::driver::EndpointError;
-use embassy_usb::UsbDevice;
 use static_cell::StaticCell;
-use lsm6dsox::accelerometer::Accelerometer;
 use lsm6dsox::*;
-use core::panic::PanicInfo;
 use {defmt_rtt as _, panic_probe as _}; // global logger
 
 bind_interrupts!(struct Irqs {
@@ -31,10 +25,10 @@ bind_interrupts!(struct Irqs {
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    let p = embassy_rp::init(Default::default());
+    let p: Peripherals = embassy_rp::init(Default::default());
     // Create the driver, from the HAL.
     let driver: Driver<USB> = Driver::new(p.USB, Irqs);
-    spawner.spawn(logger_task(driver));
+    let _ = spawner.spawn(logger_task(driver));
     Timer::after_millis(5000).await;
 
     let i2c = I2c::new_async(p.I2C0, p.PIN_1, p.PIN_0, Irqs, i2c::Config::default());
@@ -49,7 +43,8 @@ async fn main(spawner: Spawner) {
             }
         }
     }
-    spawner.spawn(read_sensors_loop(lsm));
+    
+    let _ = spawner.spawn(read_sensors_loop(lsm));
     let mut counter = 0;
     loop {
         counter += 1;
@@ -61,9 +56,18 @@ async fn main(spawner: Spawner) {
 
 fn setup_lsm(lsm: &mut Lsm6dsox<I2c<'_, I2C0, Async>, Delay>) -> Result<u8, lsm6dsox::Error> {
     lsm.setup()?;
+    lsm.check_id().map_err(|e| {
+        log::error!("error checking id of lsm6dsox: {:?}", e);
+        lsm6dsox::Error::NotSupported
+    })
     lsm.set_gyro_sample_rate(DataRate::Freq52Hz)?;
     lsm.set_gyro_scale(GyroscopeScale::Dps2000)?;
-    lsm.check_id().map_err(|e| {lsm6dsox::Error::NotSupported})
+}
+
+fn initialize_motors(p: Peripherals) {
+    let m1_slp = Output::new(p.PIN_10, Level::Low);
+    let m1_dir = Output::new(p.PIN_15, Level::Low);
+    let m1_pwm = Pwm::new_output_b(p.PWM_SLICE4, p.PIN_9, pwm::Config::default());
 }
 
 #[embassy_executor::task]
@@ -86,7 +90,7 @@ async fn read_sensors_loop(lsm: &'static mut Lsm6dsox<I2c<'static, I2C0, Async>,
     loop {
         match lsm.angular_rate() {
             Ok(AngularRate{x,y,z}) => {
-
+                info!("x: {}, y: {}, z: {}", x.as_radians_per_second(),y.as_radians_per_second(),z.as_radians_per_second());
             }
             Err(_) => {
             }
