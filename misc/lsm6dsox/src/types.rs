@@ -8,12 +8,13 @@
 //!
 //! Structs and Enums representing the sensors configuration, readings and states.
 
+use defmt::Format;
 use enumflags2::bitflags;
 use measurements::AngularVelocity;
 use num_enum::TryFromPrimitive;
 
 /// Lsm6dsox errors
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Format)]
 pub enum Error {
     I2cWriteError,
     I2cReadError,
