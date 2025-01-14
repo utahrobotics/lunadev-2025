@@ -5,7 +5,7 @@
 #![no_std]
 #![no_main]
 
-use accelerometer::vector::F32x3;
+use accelerometer::vector::{F32x3, I16x3};
 use defmt::info;
 use embassy_executor::Spawner;
 use embassy_rp::pwm::{self, Pwm};
@@ -18,6 +18,7 @@ use embassy_time::{Delay, Duration, Ticker, Timer};
 use static_cell::StaticCell;
 use lsm6dsox::*;
 use lsm6dsox::accelerometer::Accelerometer;
+use lsm6dsox::accelerometer::RawAccelerometer;
 use {defmt_rtt as _, panic_probe as _}; // global logger
 
 bind_interrupts!(struct Irqs {
@@ -60,6 +61,8 @@ fn setup_lsm(lsm: &mut Lsm6dsox<I2c<'_, I2C0, Async>, Delay>) -> Result<u8, lsm6
     lsm.setup()?;
     lsm.set_gyro_sample_rate(DataRate::Freq52Hz)?;
     lsm.set_gyro_scale(GyroscopeScale::Dps2000)?;
+    lsm.set_accel_sample_rate(DataRate::Freq52Hz)?;
+    lsm.set_accel_scale(AccelerometerScale::Accel4g)?;
     lsm.check_id().map_err(|e| {
         log::error!("error checking id of lsm6dsox: {:?}", e);
         lsm6dsox::Error::NotSupported
@@ -92,7 +95,7 @@ async fn read_sensors_loop(lsm: &'static mut Lsm6dsox<I2c<'static, I2C0, Async>,
     loop {
         match lsm.angular_rate() {
             Ok(AngularRate{x,y,z}) => {
-                log::info!("gyro: x: {}, y: {}, z: {}", x.as_radians_per_second(),y.as_radians_per_second(),z.as_radians_per_second());
+                log::info!("gyro: x: {}, y: {}, z: {} (radians per sec)", x.as_radians_per_second(),y.as_radians_per_second(),z.as_radians_per_second());
             }
             Err(e) => {
                 log::error!("failed to read gyro: {:?}", e);
@@ -100,7 +103,7 @@ async fn read_sensors_loop(lsm: &'static mut Lsm6dsox<I2c<'static, I2C0, Async>,
         }
         match lsm.accel_norm() {
             Ok(F32x3{x,y,z}) => {
-                log::info!("accel: x: {}, y: {}, z: {}", x,y,z);
+                log::info!("accel: x: {}, y: {}, z: {} (In G's)", x,y,z);
             }
             Err(e) => {
                 log::error!("failed to read accel: {:?}", e);
