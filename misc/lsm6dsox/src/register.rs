@@ -147,6 +147,7 @@ where
         bitmask: u8,
     ) -> Result<(), Error> {
         let reg_address = self.select_register_page(reg)?;
+        log::info!("selected register page");
         self.update_reg_address(reg_address, data, bitmask)
     }
 

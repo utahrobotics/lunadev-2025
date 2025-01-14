@@ -20,9 +20,7 @@ use accelerometer::{
     Accelerometer, RawAccelerometer,
 };
 use byteorder::{ByteOrder, LittleEndian};
-use embedded_hal::i2c;
-use embedded_hal::delay::DelayNs;
-use embedded_hal::i2c::I2c;
+use embedded_hal::{delay::DelayNs, i2c::I2c};
 use enumflags2::BitFlags;
 
 /// Representation of a LSM6DSOX. Stores the address and device peripherals.
@@ -82,12 +80,14 @@ where
     /// A software reset is performed and common settings are applied. The accelerometer and
     /// gyroscope are initialized with [`DataRate::PowerDown`].
     pub fn setup(&mut self) -> Result<(), Error> {
+        log::info!("setup started");
         self.update_reg_command(Command::SwReset)?;
-
+        log::info!("updated reg");
         // Give it 5 tries
         // A delay is necessary here, otherwise reset may never finish because the lsm is too busy.
         let mut ctrl3_c_val = 0xFF;
         for _ in 0..5 {
+            log::info!("reg read");
             self.delay.delay_ms(10);
             ctrl3_c_val = self.registers.read_reg(PrimaryRegister::CTRL3_C)?;
             if ctrl3_c_val & 1 == 0 {

@@ -5,6 +5,7 @@
 #![no_std]
 #![no_main]
 
+use accelerometer::vector::F32x3;
 use defmt::info;
 use embassy_executor::Spawner;
 use embassy_rp::pwm::{self, Pwm};
@@ -16,6 +17,7 @@ use embassy_rp::usb::{Driver, InterruptHandler};
 use embassy_time::{Delay, Duration, Ticker, Timer};
 use static_cell::StaticCell;
 use lsm6dsox::*;
+use lsm6dsox::accelerometer::Accelerometer;
 use {defmt_rtt as _, panic_probe as _}; // global logger
 
 bind_interrupts!(struct Irqs {
@@ -33,7 +35,7 @@ async fn main(spawner: Spawner) {
 
     let i2c = I2c::new_async(p.I2C0, p.PIN_1, p.PIN_0, Irqs, i2c::Config::default());
     static LSM: StaticCell<Lsm6dsox<I2c<'_, I2C0, Async>, Delay>> = StaticCell::new();
-    let lsm = LSM.init(lsm6dsox::Lsm6dsox::new(i2c, SlaveAddress::Low, Delay{}));
+    let lsm = LSM.init(lsm6dsox::Lsm6dsox::new(i2c, SlaveAddress::High, Delay{}));
     match setup_lsm(lsm) {
         Ok(id) => log::info!("lsm setup sucessfully, id: {}", id),
         Err(e) => {
@@ -56,12 +58,12 @@ async fn main(spawner: Spawner) {
 
 fn setup_lsm(lsm: &mut Lsm6dsox<I2c<'_, I2C0, Async>, Delay>) -> Result<u8, lsm6dsox::Error> {
     lsm.setup()?;
+    lsm.set_gyro_sample_rate(DataRate::Freq52Hz)?;
+    lsm.set_gyro_scale(GyroscopeScale::Dps2000)?;
     lsm.check_id().map_err(|e| {
         log::error!("error checking id of lsm6dsox: {:?}", e);
         lsm6dsox::Error::NotSupported
     })
-    lsm.set_gyro_sample_rate(DataRate::Freq52Hz)?;
-    lsm.set_gyro_scale(GyroscopeScale::Dps2000)?;
 }
 
 fn initialize_motors(p: Peripherals) {
@@ -86,13 +88,22 @@ async fn pos_handler() {
 
 #[embassy_executor::task]
 async fn read_sensors_loop(lsm: &'static mut Lsm6dsox<I2c<'static, I2C0, Async>, Delay>) {
-    let mut ticker = Ticker::every(Duration::from_millis(10));
+    let mut ticker = Ticker::every(Duration::from_millis(100));
     loop {
         match lsm.angular_rate() {
             Ok(AngularRate{x,y,z}) => {
-                info!("x: {}, y: {}, z: {}", x.as_radians_per_second(),y.as_radians_per_second(),z.as_radians_per_second());
+                log::info!("gyro: x: {}, y: {}, z: {}", x.as_radians_per_second(),y.as_radians_per_second(),z.as_radians_per_second());
             }
-            Err(_) => {
+            Err(e) => {
+                log::error!("failed to read gyro: {:?}", e);
+            }
+        }
+        match lsm.accel_norm() {
+            Ok(F32x3{x,y,z}) => {
+                log::info!("accel: x: {}, y: {}, z: {}", x,y,z);
+            }
+            Err(e) => {
+                log::error!("failed to read accel: {:?}", e);
             }
         }
         ticker.next().await;
