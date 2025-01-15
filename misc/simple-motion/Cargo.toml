@@ -1,0 +1,11 @@
+[package]
+name = "simple-motion"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+nalgebra.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+crossbeam.workspace = true
+tracing.workspace = true
