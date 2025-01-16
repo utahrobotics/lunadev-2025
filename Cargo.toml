@@ -71,6 +71,7 @@ lunabase-lib = { path = "lunabotics/lunabase-lib" }
 ares-bt = { path = "misc/ares-bt" }
 gputter = { path = "misc/gputter" }
 thalassic = { path = "misc/thalassic" }
+simple-motion = { path = "misc/simple-motion" }
 
 [profile.dev.package.lunabot]
 opt-level = 2
