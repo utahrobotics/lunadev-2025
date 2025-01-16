@@ -128,7 +128,7 @@ update_rotation = false
 update_scale = false
 
 [node name="DepthCamera" type="RobotNode" parent="."]
-link_name = &"depth_camera_link"
+link_name = &"depth_camera"
 verify_only = true
 transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 0.573, -0.298)
 

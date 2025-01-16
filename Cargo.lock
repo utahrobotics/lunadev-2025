@@ -869,7 +869,8 @@ version = "0.1.0"
 dependencies = [
  "bitcode",
  "godot",
- "k",
+ "nalgebra",
+ "simple-motion",
 ]
 
 [[package]]
@@ -2303,7 +2304,7 @@ version = "0.2.1"
 source = "git+https://github.com/godot-rust/gdext?branch=master#3c56b3fed129d6ba38dd47173a7b024d78c8b522"
 dependencies = [
  "godot-bindings",
- "heck 0.5.0",
+ "heck",
  "nanoserde",
  "proc-macro2",
  "quote",
@@ -2526,12 +2527,6 @@ dependencies = [
  "hash32",
  "stable_deref_trait",
 ]
-
-[[package]]
-name = "heck"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 
 [[package]]
 name = "heck"
@@ -3075,18 +3070,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "k"
-version = "0.31.0"
-dependencies = [
- "nalgebra",
- "serde",
- "simba 0.7.3",
- "thiserror 1.0.69",
- "tracing",
- "urdf-rs",
-]
-
-[[package]]
 name = "kdtree"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3349,7 +3332,6 @@ dependencies = [
  "common",
  "crossbeam",
  "godot",
- "k",
  "openh264",
  "opus",
  "serde_json",
@@ -3398,7 +3380,6 @@ version = "0.1.0"
 dependencies = [
  "ares-bt",
  "common",
- "k",
  "nalgebra",
  "simple-motion",
  "tracing",
@@ -3612,7 +3593,7 @@ dependencies = [
  "num-rational",
  "num-traits",
  "serde",
- "simba 0.8.1",
+ "simba",
  "typenum",
 ]
 
@@ -5344,19 +5325,6 @@ dependencies = [
 
 [[package]]
 name = "simba"
-version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f3fd720c48c53cace224ae62bef1bbff363a70c68c4802a78b5cc6159618176"
-dependencies = [
- "approx 0.5.1",
- "num-complex",
- "num-traits",
- "paste",
- "wide",
-]
-
-[[package]]
-name = "simba"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "061507c94fc6ab4ba1c9a0305018408e312e17c041eb63bef8aa726fa33aceae"
@@ -6218,20 +6186,6 @@ name = "untrusted"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
-
-[[package]]
-name = "urdf-rs"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b6b807c8ad1334d2cbb9924bf286f4f0e1e244c519771aa924ddb470fd319d7"
-dependencies = [
- "once_cell",
- "regex",
- "thiserror 1.0.69",
- "xml-rs",
- "yaserde",
- "yaserde_derive",
-]
 
 [[package]]
 name = "url"
@@ -7292,30 +7246,6 @@ name = "xml-rs"
 version = "0.8.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea8b391c9a790b496184c29f7f93b9ed5b16abb306c05415b68bcc16e4d06432"
-
-[[package]]
-name = "yaserde"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bf52af554a50b866aaad63d7eabd6fca298db3dfe49afd50b7ba5a33dfa0582"
-dependencies = [
- "log",
- "xml-rs",
-]
-
-[[package]]
-name = "yaserde_derive"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ab8bd5c76eebb8380b26833d30abddbdd885b00dd06178412e0d51d5bfc221f"
-dependencies = [
- "heck 0.4.1",
- "log",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
- "xml-rs",
-]
 
 [[package]]
 name = "yasna"

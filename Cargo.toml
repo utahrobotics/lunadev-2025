@@ -6,7 +6,6 @@ members = [
     "lunabotics/pathfinding",
     "lunabotics/lunabase-lib",
     "lunabotics/lunasim-lib",
-    "misc/k",
     "lunabotics/lunabot-ai",
     "misc/ares-bt",
     "misc/cakap2",
@@ -60,7 +59,6 @@ godot = { git = "https://github.com/godot-rust/gdext", branch = "master", featur
 openh264 = "0.6.3"
 serde_json = "1.0.134"
 
-k = { path = "misc/k" }
 glidesort = "0.1.2"
 opus = "0.3.0"
 

@@ -51,7 +51,6 @@ fn main() {
     let cmd: Commands = LumpurBuilder::default()
         .symlink_path("godot")
         .symlink_path("target")
-        .symlink_path("urdf")
         .symlink_path("robot-layout")
         .set_total_ignores([
             ("wgpu_core.*", Level::INFO),
