@@ -5,6 +5,7 @@ use super::apriltag::{
     AprilTagDetector,
 };
 use fxhash::{FxHashMap, FxHashSet};
+use simple_motion::StaticImmutableNode;
 use tasker::shared::OwnedData;
 use tracing::{error, warn};
 use udev::Udev;
@@ -18,7 +19,7 @@ use super::{
 };
 
 pub struct CameraInfo {
-    pub k_node: k::Node<f64>,
+    pub k_node: StaticImmutableNode,
     pub focal_length_x_px: f64,
     pub focal_length_y_px: f64,
     pub stream_index: usize,
@@ -128,7 +129,7 @@ pub fn enumerate_cameras(
                 det.add_tag(tag.tag_position, tag.get_quat(), tag.tag_width, tag_id);
             }
             let localizer_ref = localizer_ref.clone();
-            let mut inverse_local = k_node.origin();
+            let mut inverse_local = k_node.get_local_isometry();
             inverse_local.inverse_mut();
             det.detection_callbacks_ref().add_fn(move |observation| {
                 // println!(

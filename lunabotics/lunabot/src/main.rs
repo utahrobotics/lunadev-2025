@@ -28,7 +28,8 @@ lumpur::define_configuration! {
             #[serde(default)]
             depth_cameras: FxHashMap<String, apps::DepthCameraInfo>,
             #[serde(default)]
-            apriltags: FxHashMap<String, apps::Apriltag>
+            apriltags: FxHashMap<String, apps::Apriltag>,
+            robot_layout: Option<String>
         },
         Sim {
             lunabase_address: SocketAddr,
@@ -90,6 +91,7 @@ fn main() {
             cameras,
             depth_cameras,
             apriltags,
+            robot_layout
         } => {
             apps::LunabotApp {
                 lunabase_address,
@@ -100,6 +102,7 @@ fn main() {
                 cameras,
                 depth_cameras,
                 apriltags,
+                robot_layout: robot_layout.unwrap_or_else(|| "robot-layout/lunabot.json".to_string())
             }
             .run();
             #[cfg(not(feature = "experimental"))]
