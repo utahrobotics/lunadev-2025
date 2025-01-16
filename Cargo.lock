@@ -3372,7 +3372,6 @@ dependencies = [
  "crossbeam",
  "fxhash",
  "gputter",
- "k",
  "lumpur",
  "lunabot-ai",
  "nalgebra",
@@ -3383,6 +3382,7 @@ dependencies = [
  "realsense-rust",
  "rodio",
  "serde",
+ "simple-motion",
  "spin_sleep",
  "tasker",
  "thalassic",
@@ -3400,6 +3400,7 @@ dependencies = [
  "common",
  "k",
  "nalgebra",
+ "simple-motion",
  "tracing",
 ]
 

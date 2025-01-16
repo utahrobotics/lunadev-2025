@@ -9,3 +9,4 @@ nalgebra = { workspace = true }
 common = { path = "../common" }
 tracing = { workspace = true }
 k = { workspace = true }
+simple-motion.workspace = true

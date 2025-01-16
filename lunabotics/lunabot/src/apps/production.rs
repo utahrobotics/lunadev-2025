@@ -97,15 +97,17 @@ impl LunabotApp {
         }
 
         #[cfg(feature = "experimental")]
-        if let Err(e) = audio_streaming::audio_streaming(self.lunabase_audio_streaming_address.unwrap_or_else(|| {
-            let mut addr = camera_streaming_address;
-            if addr.port() == u16::MAX {
-                addr.set_port(65534);
-            } else {
-                addr.set_port(addr.port() + 1);
-            }
-            addr
-        })) {
+        if let Err(e) = audio_streaming::audio_streaming(
+            self.lunabase_audio_streaming_address.unwrap_or_else(|| {
+                let mut addr = camera_streaming_address;
+                if addr.port() == u16::MAX {
+                    addr.set_port(65534);
+                } else {
+                    addr.set_port(addr.port() + 1);
+                }
+                addr
+            }),
+        ) {
             error!("Failed to start audio streaming: {e}");
         }
 

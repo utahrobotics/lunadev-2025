@@ -70,7 +70,7 @@ impl From<TranslationRestriction> for TranslationRestrictionState {
                 axis,
                 min_length,
                 max_length,
-                current_length
+                current_length,
             } => TranslationRestrictionState::Linear {
                 start_origin,
                 axis,
@@ -81,13 +81,11 @@ impl From<TranslationRestriction> for TranslationRestrictionState {
                         current_origin: start_origin + axis.into_inner() * current_length,
                         current_length,
                     }
-
                 } else if let Some(min_length) = min_length {
                     LinearDynamicState {
                         current_origin: start_origin + axis.into_inner() * min_length,
                         current_length: min_length,
                     }
-
                 } else {
                     LinearDynamicState {
                         current_origin: start_origin,
@@ -127,15 +125,13 @@ enum RotationRestrictionState {
 impl From<RotationRestriction> for RotationRestrictionState {
     fn from(rotation: RotationRestriction) -> Self {
         match rotation {
-            RotationRestriction::Fixed { rotation } => {
-                RotationRestrictionState::Fixed { rotation }
-            }
+            RotationRestriction::Fixed { rotation } => RotationRestrictionState::Fixed { rotation },
             RotationRestriction::OneAxis {
                 start_rotation,
                 axis,
                 min_angle,
                 max_angle,
-                current_angle
+                current_angle,
             } => RotationRestrictionState::OneAxis {
                 start_rotation,
                 axis,
@@ -143,12 +139,14 @@ impl From<RotationRestriction> for RotationRestrictionState {
                 max_angle,
                 dynamic: AtomicCell::new(if let Some(current_angle) = current_angle {
                     OneAxisDynamicState {
-                        current_rotation: UnitQuaternion::from_axis_angle(&axis, current_angle) * start_rotation,
+                        current_rotation: UnitQuaternion::from_axis_angle(&axis, current_angle)
+                            * start_rotation,
                         current_angle,
                     }
                 } else if let Some(min_angle) = min_angle {
                     OneAxisDynamicState {
-                        current_rotation: UnitQuaternion::from_axis_angle(&axis, min_angle) * start_rotation,
+                        current_rotation: UnitQuaternion::from_axis_angle(&axis, min_angle)
+                            * start_rotation,
                         current_angle: min_angle,
                     }
                 } else {
@@ -211,27 +209,45 @@ impl ImmutableTransformable {
     }
 
     pub fn is_origin_fixed(&self) -> bool {
-        matches!(&self.translation_restriction, TranslationRestrictionState::Fixed { .. })
+        matches!(
+            &self.translation_restriction,
+            TranslationRestrictionState::Fixed { .. }
+        )
     }
 
     pub fn is_rotation_fixed(&self) -> bool {
-        matches!(&self.rotation_restriction, RotationRestrictionState::Fixed { .. })
+        matches!(
+            &self.rotation_restriction,
+            RotationRestrictionState::Fixed { .. }
+        )
     }
 
     pub fn is_origin_linear(&self) -> bool {
-        matches!(&self.translation_restriction, TranslationRestrictionState::Linear { .. })
+        matches!(
+            &self.translation_restriction,
+            TranslationRestrictionState::Linear { .. }
+        )
     }
 
     pub fn is_rotation_one_axis(&self) -> bool {
-        matches!(&self.rotation_restriction, RotationRestrictionState::OneAxis { .. })
+        matches!(
+            &self.rotation_restriction,
+            RotationRestrictionState::OneAxis { .. }
+        )
     }
 
     pub fn is_origin_free(&self) -> bool {
-        matches!(&self.translation_restriction, TranslationRestrictionState::Free { .. })
+        matches!(
+            &self.translation_restriction,
+            TranslationRestrictionState::Free { .. }
+        )
     }
 
     pub fn is_rotation_free(&self) -> bool {
-        matches!(&self.rotation_restriction, RotationRestrictionState::Free { .. })
+        matches!(
+            &self.rotation_restriction,
+            RotationRestrictionState::Free { .. }
+        )
     }
 }
 
@@ -284,6 +300,22 @@ impl Transformable {
         }
     }
 
+    pub fn try_set_rotation(&self, new_rotation: UnitQuaternion<f64>) -> bool {
+        match &self.0.rotation_restriction {
+            RotationRestrictionState::Free { rotation } => {
+                rotation.store(new_rotation);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn set_rotation(&self, new_rotation: UnitQuaternion<f64>) {
+        if !self.try_set_rotation(new_rotation) {
+            error!("Cannot set rotation for a non-free rotation restriction");
+        }
+    }
+
     pub fn try_set_angle_one_axis(&self, mut new_angle: f64) -> bool {
         match &self.0.rotation_restriction {
             RotationRestrictionState::OneAxis {
@@ -314,6 +346,17 @@ impl Transformable {
     pub fn set_angle_one_axis(&self, new_angle: f64) {
         if !self.try_set_angle_one_axis(new_angle) {
             error!("Cannot set angle for a non-one-axis rotation restriction");
+        }
+    }
+
+    pub fn try_set_isometry(&self, new_isometry: Isometry3<f64>) -> bool {
+        self.try_set_origin(new_isometry.translation.vector.into())
+            && self.try_set_rotation(new_isometry.rotation)
+    }
+
+    pub fn set_isometry(&self, new_isometry: Isometry3<f64>) {
+        if !self.try_set_isometry(new_isometry) {
+            error!("Cannot set isometry for a non-free transformable");
         }
     }
 }
@@ -381,6 +424,13 @@ impl<S: Deref<Target = [NodeData]> + Clone> ImmutableNode<S> {
             }
         })
     }
+
+    pub fn get_global_isometry(&self) -> Isometry3<f64> {
+        let Some(parent) = self.get_parent() else {
+            return self.arena[self.index].transformable.get_local_isometry();
+        };
+        parent.get_global_isometry() * self.arena[self.index].transformable.get_local_isometry()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -408,6 +458,10 @@ impl<S: Deref<Target = [NodeData]> + Clone> Node<S> {
     pub fn get_node_with_name(&self, name: &str) -> Option<Self> {
         self.0.get_node_with_name(name).map(Node)
     }
+
+    pub fn get_global_isometry(&self) -> Isometry3<f64> {
+        self.0.get_global_isometry()
+    }
 }
 
 pub type StaticImmutableNode = ImmutableNode<&'static [NodeData]>;
@@ -419,17 +473,28 @@ pub struct ChainBuilder {
 
 impl ChainBuilder {
     pub fn new_fixed() -> Self {
-        Self::new(TranslationRestriction::Fixed { origin: Point3::origin() }, RotationRestriction::Fixed { rotation: UnitQuaternion::identity() })
+        Self::new(
+            TranslationRestriction::Fixed {
+                origin: Point3::origin(),
+            },
+            RotationRestriction::Fixed {
+                rotation: UnitQuaternion::identity(),
+            },
+        )
     }
 
     pub fn new_free() -> Self {
-        Self::new(TranslationRestriction::Free { origin: Point3::origin() }, RotationRestriction::Free { rotation: UnitQuaternion::identity() })
+        Self::new(
+            TranslationRestriction::Free {
+                origin: Point3::origin(),
+            },
+            RotationRestriction::Free {
+                rotation: UnitQuaternion::identity(),
+            },
+        )
     }
 
-    pub fn new(
-        translation: TranslationRestriction,
-        rotation: RotationRestriction,
-    ) -> Self {
+    pub fn new(translation: TranslationRestriction, rotation: RotationRestriction) -> Self {
         Self {
             nodes: vec![NodeData {
                 transformable: ImmutableTransformable {
@@ -467,7 +532,7 @@ impl ChainBuilder {
     pub fn finish_with<S>(self, f: impl FnOnce(Vec<NodeData>) -> S) -> Node<S> {
         Node(ImmutableNode {
             arena: f(self.nodes),
-            index: 0
+            index: 0,
         })
     }
 
@@ -476,7 +541,7 @@ impl ChainBuilder {
     }
 
     pub fn finish_static(self) -> StaticNode {
-        self.finish_with(|nodes| {
+        self.finish_with(|nodes: Vec<NodeData>| {
             let out: &_ = Box::leak(nodes.into_boxed_slice());
             out
         })
@@ -511,28 +576,34 @@ enum TranslationRestrictionSerde {
 
 impl Default for TranslationRestrictionSerde {
     fn default() -> Self {
-        TranslationRestrictionSerde::Fixed { origin: [0.0, 0.0, 0.0] }
+        TranslationRestrictionSerde::Fixed {
+            origin: [0.0, 0.0, 0.0],
+        }
     }
 }
 
 impl From<TranslationRestrictionSerde> for TranslationRestriction {
     fn from(translation: TranslationRestrictionSerde) -> Self {
         match translation {
-            TranslationRestrictionSerde::Fixed { origin } => {
-                TranslationRestriction::Fixed { origin: Point3::from(origin) }
-            }
-            TranslationRestrictionSerde::Linear { start_origin, axis, min_length, max_length, current_length } => {
-                TranslationRestriction::Linear {
-                    start_origin: Point3::from(start_origin),
-                    axis: UnitVector3::try_new(Vector3::from(axis), 0.1).expect("Axis is too short"),
-                    min_length,
-                    max_length,
-                    current_length,
-                }
-            }
-            TranslationRestrictionSerde::Free { free_origin } => {
-                TranslationRestriction::Free { origin: Point3::from(free_origin) }
-            }
+            TranslationRestrictionSerde::Fixed { origin } => TranslationRestriction::Fixed {
+                origin: Point3::from(origin),
+            },
+            TranslationRestrictionSerde::Linear {
+                start_origin,
+                axis,
+                min_length,
+                max_length,
+                current_length,
+            } => TranslationRestriction::Linear {
+                start_origin: Point3::from(start_origin),
+                axis: UnitVector3::try_new(Vector3::from(axis), 0.1).expect("Axis is too short"),
+                min_length,
+                max_length,
+                current_length,
+            },
+            TranslationRestrictionSerde::Free { free_origin } => TranslationRestriction::Free {
+                origin: Point3::from(free_origin),
+            },
         }
     }
 }
@@ -562,29 +633,46 @@ enum RotationRestrictionSerde {
 
 impl Default for RotationRestrictionSerde {
     fn default() -> Self {
-        RotationRestrictionSerde::Fixed { euler: [0.0, 0.0, 0.0] }
+        RotationRestrictionSerde::Fixed {
+            euler: [0.0, 0.0, 0.0],
+        }
     }
 }
-
 
 impl From<RotationRestrictionSerde> for RotationRestriction {
     fn from(rotation: RotationRestrictionSerde) -> Self {
         match rotation {
-            RotationRestrictionSerde::Fixed { euler } => {
-                RotationRestriction::Fixed { rotation: UnitQuaternion::from_euler_angles(euler[0], euler[1], euler[2]) }
-            }
-            RotationRestrictionSerde::OneAxis { start_euler, axis, min_angle, max_angle, current_angle } => {
-                RotationRestriction::OneAxis {
-                    start_rotation: UnitQuaternion::from_euler_angles(start_euler[0], start_euler[1], start_euler[2]),
-                    axis: UnitVector3::try_new(Vector3::from(axis), 0.1).expect("Axis is too short"),
-                    min_angle,
-                    max_angle,
-                    current_angle,
-                }
-            }
-            RotationRestrictionSerde::Free { free_euler } => {
-                RotationRestriction::Free { rotation: UnitQuaternion::from_euler_angles(free_euler[0], free_euler[1], free_euler[2]) }
-            }
+            RotationRestrictionSerde::Fixed { euler } => RotationRestriction::Fixed {
+                rotation: UnitQuaternion::from_euler_angles(
+                    euler[0].to_radians(),
+                    euler[1].to_radians(),
+                    euler[2].to_radians(),
+                ),
+            },
+            RotationRestrictionSerde::OneAxis {
+                start_euler,
+                axis,
+                min_angle,
+                max_angle,
+                current_angle,
+            } => RotationRestriction::OneAxis {
+                start_rotation: UnitQuaternion::from_euler_angles(
+                    start_euler[0].to_radians(),
+                    start_euler[1].to_radians(),
+                    start_euler[2].to_radians(),
+                ),
+                axis: UnitVector3::try_new(Vector3::from(axis), 0.1).expect("Axis is too short"),
+                min_angle,
+                max_angle,
+                current_angle,
+            },
+            RotationRestrictionSerde::Free { free_euler } => RotationRestriction::Free {
+                rotation: UnitQuaternion::from_euler_angles(
+                    free_euler[0].to_radians(),
+                    free_euler[1].to_radians(),
+                    free_euler[2].to_radians(),
+                ),
+            },
         }
     }
 }
@@ -593,7 +681,6 @@ impl From<RotationRestrictionSerde> for RotationRestriction {
 fn all_zeros(v: &[f64; 3]) -> bool {
     v.iter().all(|&x| x == 0.0)
 }
-
 
 #[derive(Deserialize)]
 pub struct NodeSerde {
@@ -607,9 +694,17 @@ pub struct NodeSerde {
 }
 
 impl From<NodeSerde> for ChainBuilder {
-    fn from(NodeSerde { name, fields, children }: NodeSerde) -> Self {
-        let translation: TranslationRestrictionSerde = serde_json::from_value(serde_json::Value::Object(fields.clone())).unwrap();
-        let rotation: RotationRestrictionSerde = serde_json::from_value(serde_json::Value::Object(fields)).unwrap();
+    fn from(
+        NodeSerde {
+            name,
+            fields,
+            children,
+        }: NodeSerde,
+    ) -> Self {
+        let translation: TranslationRestrictionSerde =
+            serde_json::from_value(serde_json::Value::Object(fields.clone())).unwrap();
+        let rotation: RotationRestrictionSerde =
+            serde_json::from_value(serde_json::Value::Object(fields)).unwrap();
 
         let mut builder = ChainBuilder::new(translation.into(), rotation.into());
         if let Some(name) = name {
@@ -619,14 +714,22 @@ impl From<NodeSerde> for ChainBuilder {
         let mut queue: VecDeque<_> = children.into_iter().zip(std::iter::repeat(0)).collect();
 
         while let Some((node_serde, parent_idx)) = queue.pop_front() {
-            let translation: TranslationRestrictionSerde = serde_json::from_value(serde_json::Value::Object(node_serde.fields.clone())).unwrap();
-            let rotation: RotationRestrictionSerde = serde_json::from_value(serde_json::Value::Object(node_serde.fields)).unwrap();
-            
+            let translation: TranslationRestrictionSerde =
+                serde_json::from_value(serde_json::Value::Object(node_serde.fields.clone()))
+                    .unwrap();
+            let rotation: RotationRestrictionSerde =
+                serde_json::from_value(serde_json::Value::Object(node_serde.fields)).unwrap();
+
             let index = builder.add_node(parent_idx, translation.into(), rotation.into());
             if let Some(name) = node_serde.name {
                 builder.set_node_name(index, name);
             }
-            queue.extend(node_serde.children.into_iter().zip(std::iter::repeat(index)));
+            queue.extend(
+                node_serde
+                    .children
+                    .into_iter()
+                    .zip(std::iter::repeat(index)),
+            );
         }
 
         builder
@@ -657,10 +760,13 @@ mod tests {
         assert!(node.is_rotation_fixed());
 
         assert_eq!(node.get_local_origin(), nalgebra::Point3::origin());
-        assert_eq!(node.get_local_rotation(), nalgebra::UnitQuaternion::identity());
+        assert_eq!(
+            node.get_local_rotation(),
+            nalgebra::UnitQuaternion::identity()
+        );
     }
 
-    #[test] 
+    #[test]
     fn simple_deserialize_json02() {
         let json = serde_json::json!({
             "origin": [0.0, 1.0, 0.0]
@@ -671,7 +777,13 @@ mod tests {
         assert!(node.is_origin_fixed());
         assert!(node.is_rotation_fixed());
 
-        assert_eq!(node.get_local_origin(), nalgebra::Point3::new(0.0, 1.0, 0.0));
-        assert_eq!(node.get_local_rotation(), nalgebra::UnitQuaternion::identity());
+        assert_eq!(
+            node.get_local_origin(),
+            nalgebra::Point3::new(0.0, 1.0, 0.0)
+        );
+        assert_eq!(
+            node.get_local_rotation(),
+            nalgebra::UnitQuaternion::identity()
+        );
     }
 }

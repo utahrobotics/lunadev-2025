@@ -1,13 +1,13 @@
 use std::io::Cursor;
 
-use fxhash::{FxHashMap, FxHashSet};
-use tasker::shared::OwnedData;
-use tracing::{error, warn};
-use udev::Udev;
 use super::apriltag::{
     image::{self, ImageBuffer, ImageDecoder, Luma},
     AprilTagDetector,
 };
+use fxhash::{FxHashMap, FxHashSet};
+use tasker::shared::OwnedData;
+use tracing::{error, warn};
+use udev::Udev;
 use v4l::{buffer::Type, io::traits::CaptureStream, prelude::MmapStream, video::Capture};
 
 use crate::localization::LocalizerRef;

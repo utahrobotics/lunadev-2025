@@ -8,8 +8,8 @@ use std::{
 
 use common::lunasim::FromLunasimbot;
 use crossbeam::atomic::AtomicCell;
-use k::{Chain, Isometry3, UnitQuaternion, Vector3};
-use nalgebra::UnitVector3;
+use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector3};
+use simple_motion::StaticNode;
 use spin_sleep::SpinSleeper;
 use tracing::error;
 
@@ -68,15 +68,15 @@ impl LocalizerRef {
 }
 
 pub struct Localizer {
-    robot_chain: Arc<Chain<f64>>,
+    root_node: StaticNode,
     lunasim_stdin: Option<LunasimStdin>,
     localizer_ref: LocalizerRef,
 }
 
 impl Localizer {
-    pub fn new(robot_chain: Arc<Chain<f64>>, lunasim_stdin: Option<LunasimStdin>) -> Self {
+    pub fn new(root_node: StaticNode, lunasim_stdin: Option<LunasimStdin>) -> Self {
         Self {
-            robot_chain,
+            root_node,
             lunasim_stdin,
             localizer_ref: LocalizerRef {
                 inner: Default::default(),
@@ -96,7 +96,7 @@ impl Localizer {
 
         loop {
             spin_sleeper.sleep(Duration::from_secs_f64(LOCALIZATION_DELTA));
-            let mut isometry = self.robot_chain.origin();
+            let mut isometry = self.root_node.get_global_isometry();
 
             'check: {
                 if isometry.translation.x.is_nan()
@@ -128,7 +128,7 @@ impl Localizer {
                     .inner
                     .in_motion
                     .store(false, Ordering::Relaxed);
-                self.robot_chain.set_origin(Isometry3::identity());
+                self.root_node.set_isometry(Isometry3::identity());
             }
 
             let mut down_axis = UnitVector3::new_unchecked(Vector3::new(0.0, -1.0, 0.0));
@@ -169,7 +169,7 @@ impl Localizer {
             }
 
             let currently_in_motion = (isometry.translation.vector
-                - self.robot_chain.origin().translation.vector)
+                - self.root_node.get_global_isometry().translation.vector)
                 .magnitude()
                 / LOCALIZATION_DELTA
                 > IN_MOTION_THRESHOLD;
@@ -195,8 +195,7 @@ impl Localizer {
                     .store(true, Ordering::Relaxed);
             }
 
-            self.robot_chain.set_origin(isometry);
-            self.robot_chain.update_transforms();
+            self.root_node.set_isometry(isometry);
 
             if let Some(lunasim_stdin) = &self.lunasim_stdin {
                 let (axis, angle) = isometry

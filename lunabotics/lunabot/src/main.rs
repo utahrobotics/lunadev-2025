@@ -52,22 +52,19 @@ fn main() {
         .symlink_path("godot")
         .symlink_path("target")
         .symlink_path("urdf")
-        .set_total_ignores(
-            [
-                ("wgpu_core.*", Level::INFO),
-                ("wgpu_hal.*", Level::INFO),
-                ("yaserde.*", Level::INFO),
-                ("mio.*", Level::INFO),
-                ("naga.*", Level::INFO),
-            ]
-        )
-        .set_console_ignores(
-            [
-                ("k::urdf", Level::INFO),
-                ("wgpu_hal::gles::egl", Level::WARN),
-                ("wgpu_hal::vulkan::instance", Level::WARN)
-            ]
-        )
+        .symlink_path("robot-layout")
+        .set_total_ignores([
+            ("wgpu_core.*", Level::INFO),
+            ("wgpu_hal.*", Level::INFO),
+            ("yaserde.*", Level::INFO),
+            ("mio.*", Level::INFO),
+            ("naga.*", Level::INFO),
+        ])
+        .set_console_ignores([
+            ("k::urdf", Level::INFO),
+            ("wgpu_hal::gles::egl", Level::WARN),
+            ("wgpu_hal::vulkan::instance", Level::WARN),
+        ])
         .init();
 
     match cmd {

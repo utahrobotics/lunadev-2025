@@ -1,5 +1,9 @@
 use std::{num::NonZeroU32, sync::Arc};
 
+use super::apriltag::{
+    image::{ImageBuffer, Luma},
+    AprilTagDetector,
+};
 use anyhow::Context;
 use fxhash::FxHashMap;
 use gputter::types::{AlignedMatrix4, AlignedVec4};
@@ -14,15 +18,13 @@ use realsense_rust::{
 use tasker::shared::OwnedData;
 use thalassic::DepthProjectorBuilder;
 use tracing::{error, warn};
-use super::apriltag::{
-    image::{ImageBuffer, Luma},
-    AprilTagDetector,
-};
 
 use crate::{
     apps::production::streaming::DownscaleRgbImageReader,
     localization::LocalizerRef,
-    pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline, PointsStorageChannel, ThalassicData},
+    pipelines::thalassic::{
+        get_observe_depth, spawn_thalassic_pipeline, PointsStorageChannel, ThalassicData,
+    },
 };
 
 use super::{apriltag::Apriltag, streaming::CameraStream};

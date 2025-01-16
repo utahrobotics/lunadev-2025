@@ -1,7 +1,7 @@
-use std::{sync::Arc, time::Instant, vec};
+use std::{time::Instant, vec};
 
 use ares_bt::{
-    action::{AlwaysFail, AlwaysSucceed},
+    action::AlwaysSucceed,
     branching::TryCatch,
     converters::{CatchPanic, Invert},
     looping::WhileLoop,
@@ -11,8 +11,8 @@ use ares_bt::{
 use autonomy::autonomy;
 use blackboard::LunabotBlackboard;
 use common::{FromLunabase, LunabotStage, Steering};
-use k::Chain;
 use nalgebra::Point3;
+use simple_motion::StaticImmutableNode;
 use teleop::teleop;
 use tracing::warn;
 
@@ -45,7 +45,7 @@ pub enum PollWhen {
 }
 
 pub fn run_ai(
-    chain: Arc<Chain<f64>>,
+    chain: StaticImmutableNode,
     mut on_action: impl FnMut(Action, &mut Vec<Input>),
     mut polling: impl FnMut(PollWhen, &mut Vec<Input>),
 ) {

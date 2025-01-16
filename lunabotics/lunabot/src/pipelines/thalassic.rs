@@ -1,7 +1,16 @@
-use std::{num::NonZeroU32, sync::{atomic::{AtomicBool, Ordering}, Arc}};
+use std::{
+    num::NonZeroU32,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 use arc_swap::ArcSwapOption;
-use crossbeam::{atomic::AtomicCell, sync::{Parker, Unparker}};
+use crossbeam::{
+    atomic::AtomicCell,
+    sync::{Parker, Unparker},
+};
 use gputter::is_gputter_initialized;
 use nalgebra::Vector2;
 use tasker::shared::OwnedData;
@@ -20,7 +29,7 @@ pub fn set_observe_depth(value: bool) {
 }
 
 pub fn get_observe_depth() -> bool {
-    OBSERVE_DEPTH.load( Ordering::Acquire)
+    OBSERVE_DEPTH.load(Ordering::Acquire)
 }
 
 const CELL_COUNT: u32 = 128 * 256;
