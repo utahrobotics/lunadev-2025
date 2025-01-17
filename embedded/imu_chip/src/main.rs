@@ -5,108 +5,120 @@
 #![no_std]
 #![no_main]
 
-use defmt::{info, panic, unwrap};
+use accelerometer::vector::{F32x3, I16x3};
+use defmt::info;
 use embassy_executor::Spawner;
-use embassy_rp::bind_interrupts;
-use embassy_rp::peripherals::USB;
-use embassy_rp::usb::{Driver, Instance, InterruptHandler};
-use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
-use embassy_usb::driver::EndpointError;
-use embassy_usb::UsbDevice;
+use embassy_rp::pwm::{self, Pwm};
+use embassy_rp::{bind_interrupts, gpio, i2c, Peripherals};
+use embassy_rp::gpio::{Level, Output};
+use embassy_rp::i2c::{Async, I2c};
+use embassy_rp::peripherals::{I2C0, USB};
+use embassy_rp::usb::{Driver, InterruptHandler};
+use embassy_time::{Delay, Duration, Ticker, Timer};
 use static_cell::StaticCell;
-use {defmt_rtt as _, panic_probe as _};
+use lsm6dsox::*;
+use lsm6dsox::accelerometer::Accelerometer;
+use lsm6dsox::accelerometer::RawAccelerometer;
+use {defmt_rtt as _, panic_probe as _}; // global logger
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
+    I2C0_IRQ => i2c::InterruptHandler<I2C0>;
 });
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    info!("Hello there!");
-
-    let p = embassy_rp::init(Default::default());
-
+    let p: Peripherals = embassy_rp::init(Default::default());
     // Create the driver, from the HAL.
-    let driver = Driver::new(p.USB, Irqs);
+    let driver: Driver<USB> = Driver::new(p.USB, Irqs);
+    let _ = spawner.spawn(logger_task(driver));
+    Timer::after_millis(5000).await;
 
-    // Create embassy-usb Config
-    let config = {
-        let mut config = embassy_usb::Config::new(0xc0de, 0xcafe);
-        config.manufacturer = Some("Embassy");
-        config.product = Some("USB-serial example");
-        config.serial_number = Some("12345678");
-        config.max_power = 100;
-        config.max_packet_size_0 = 64;
-        config
-    };
-
-    // Create embassy-usb DeviceBuilder using the driver and config.
-    // It needs some buffers for building the descriptors.
-    let mut builder = {
-        static CONFIG_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
-        static BOS_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
-        static CONTROL_BUF: StaticCell<[u8; 64]> = StaticCell::new();
-
-        let builder = embassy_usb::Builder::new(
-            driver,
-            config,
-            CONFIG_DESCRIPTOR.init([0; 256]),
-            BOS_DESCRIPTOR.init([0; 256]),
-            &mut [], // no msos descriptors
-            CONTROL_BUF.init([0; 64]),
-        );
-        builder
-    };
-
-    // Create classes on the builder.
-    let mut class = {
-        static STATE: StaticCell<State> = StaticCell::new();
-        let state = STATE.init(State::new());
-        CdcAcmClass::new(&mut builder, state, 64)
-    };
-
-    // Build the builder.
-    let usb = builder.build();
-
-    // Run the USB device.
-    unwrap!(spawner.spawn(usb_task(usb)));
-
-    // Do stuff with the class!
-    loop {
-        class.wait_connection().await;
-        info!("Connected");
-        let _ = echo(&mut class).await;
-        info!("Disconnected");
-    }
-}
-
-type MyUsbDriver = Driver<'static, USB>;
-type MyUsbDevice = UsbDevice<'static, MyUsbDriver>;
-
-#[embassy_executor::task]
-async fn usb_task(mut usb: MyUsbDevice) -> ! {
-    usb.run().await
-}
-
-struct Disconnected {}
-
-impl From<EndpointError> for Disconnected {
-    fn from(val: EndpointError) -> Self {
-        match val {
-            EndpointError::BufferOverflow => panic!("Buffer overflow"),
-            EndpointError::Disabled => Disconnected {},
+    let i2c = I2c::new_async(p.I2C0, p.PIN_1, p.PIN_0, Irqs, i2c::Config::default());
+    static LSM: StaticCell<Lsm6dsox<I2c<'_, I2C0, Async>, Delay>> = StaticCell::new();
+    let lsm = LSM.init(lsm6dsox::Lsm6dsox::new(i2c, SlaveAddress::High, Delay{}));
+    match setup_lsm(lsm) {
+        Ok(id) => log::info!("lsm setup sucessfully, id: {}", id),
+        Err(e) => {
+            loop {
+                log::error!("lsm failed to setup: {:?}", e);
+                Timer::after_secs(1).await;
+            }
         }
     }
+    
+    let _ = spawner.spawn(read_sensors_loop(lsm, 100));
+    let mut counter = 0;
+    loop {
+        counter += 1;
+        log::info!("Tick {}", counter);
+        Timer::after_secs(1).await;
+    }
+
 }
 
-async fn echo<'d, T: Instance + 'd>(
-    class: &mut CdcAcmClass<'d, Driver<'d, T>>,
-) -> Result<(), Disconnected> {
-    let mut buf = [0; 64];
+fn setup_lsm(lsm: &mut Lsm6dsox<I2c<'_, I2C0, Async>, Delay>) -> Result<u8, lsm6dsox::Error> {
+    lsm.setup()?;
+    lsm.set_gyro_sample_rate(DataRate::Freq52Hz)?;
+    lsm.set_gyro_scale(GyroscopeScale::Dps2000)?;
+    lsm.set_accel_sample_rate(DataRate::Freq52Hz)?;
+    lsm.set_accel_scale(AccelerometerScale::Accel4g)?;
+    lsm.check_id().map_err(|e| {
+        log::error!("error checking id of lsm6dsox: {:?}", e);
+        lsm6dsox::Error::NotSupported
+    })
+}
+
+fn initialize_motors(p: Peripherals) {
+    let m1_slp = Output::new(p.PIN_10, Level::Low);
+    let m1_dir = Output::new(p.PIN_15, Level::Low);
+    let m1_pwm = Pwm::new_output_b(p.PWM_SLICE4, p.PIN_9, pwm::Config::default());
+}
+
+#[embassy_executor::task]
+async fn logger_task(driver: Driver<'static, USB>) {
+    embassy_usb_logger::run!(1024, log::LevelFilter::Info, driver);
+}
+
+#[embassy_executor::task]
+async fn pos_handler() {
+    let mut ticker = Ticker::every(Duration::from_millis(10));
     loop {
-        let n = class.read_packet(&mut buf).await?;
-        let data = &buf[..n];
-        info!("data: {:x}", data);
-        class.write_packet(data).await?;
+        // position handling stuff
+        ticker.next().await;
+    }
+}
+
+#[embassy_executor::task]
+async fn read_sensors_loop(lsm: &'static mut Lsm6dsox<I2c<'static, I2C0, Async>, Delay>, delay_ms: u64) {
+    let mut ticker = Ticker::every(Duration::from_millis(delay_ms));
+    loop {
+        match lsm.angular_rate() {
+            Ok(AngularRate{x,y,z}) => {
+                log::info!("gyro: x: {}, y: {}, z: {} (radians per sec)", x.as_radians_per_second(),y.as_radians_per_second(),z.as_radians_per_second());
+            }
+            Err(e) => {
+                log::error!("failed to read gyro: {:?}", e);
+            }
+        }
+        match lsm.accel_norm() {
+            Ok(F32x3{x,y,z}) => {
+                log::info!("accel: x: {}, y: {}, z: {} m/s normalized", x,y,z);
+            }
+            Err(e) => {
+                log::error!("failed to read accel: {:?}", e);
+            }
+        }
+        ticker.next().await;
+    }
+}
+
+async fn blink_twice<'a>(p1: &mut gpio::Output<'a>, p2: &mut gpio::Output<'a>) {
+    for _ in 0..2 {
+        p1.set_high();
+        p2.set_high();
+        Timer::after_millis(200).await;
+        p1.set_low();
+        p2.set_low();
     }
 }
