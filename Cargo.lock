@@ -5051,6 +5051,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rp2040"
+version = "0.1.0"
+dependencies = [
+ "embedded_common",
+]
+
+[[package]]
 name = "rp2040-boot2"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
