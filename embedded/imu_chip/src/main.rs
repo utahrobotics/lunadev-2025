@@ -47,7 +47,7 @@ async fn main(spawner: Spawner) {
         }
     }
     
-    let _ = spawner.spawn(read_sensors_loop(lsm));
+    let _ = spawner.spawn(read_sensors_loop(lsm, 100));
     let mut counter = 0;
     loop {
         counter += 1;
@@ -90,8 +90,8 @@ async fn pos_handler() {
 }
 
 #[embassy_executor::task]
-async fn read_sensors_loop(lsm: &'static mut Lsm6dsox<I2c<'static, I2C0, Async>, Delay>) {
-    let mut ticker = Ticker::every(Duration::from_millis(100));
+async fn read_sensors_loop(lsm: &'static mut Lsm6dsox<I2c<'static, I2C0, Async>, Delay>, delay_ms: u64) {
+    let mut ticker = Ticker::every(Duration::from_millis(delay_ms));
     loop {
         match lsm.angular_rate() {
             Ok(AngularRate{x,y,z}) => {
@@ -103,7 +103,7 @@ async fn read_sensors_loop(lsm: &'static mut Lsm6dsox<I2c<'static, I2C0, Async>,
         }
         match lsm.accel_norm() {
             Ok(F32x3{x,y,z}) => {
-                log::info!("accel: x: {}, y: {}, z: {} (In G's)", x,y,z);
+                log::info!("accel: x: {}, y: {}, z: {} m/s normalized", x,y,z);
             }
             Err(e) => {
                 log::error!("failed to read accel: {:?}", e);
