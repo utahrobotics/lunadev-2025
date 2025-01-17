@@ -28,7 +28,8 @@ lumpur::define_configuration! {
             #[serde(default)]
             depth_cameras: FxHashMap<String, apps::DepthCameraInfo>,
             #[serde(default)]
-            apriltags: FxHashMap<String, apps::Apriltag>
+            apriltags: FxHashMap<String, apps::Apriltag>,
+            robot_layout: Option<String>
         },
         Sim {
             lunabase_address: SocketAddr,
@@ -51,23 +52,19 @@ fn main() {
     let cmd: Commands = LumpurBuilder::default()
         .symlink_path("godot")
         .symlink_path("target")
-        .symlink_path("urdf")
-        .set_total_ignores(
-            [
-                ("wgpu_core.*", Level::INFO),
-                ("wgpu_hal.*", Level::INFO),
-                ("yaserde.*", Level::INFO),
-                ("mio.*", Level::INFO),
-                ("naga.*", Level::INFO),
-            ]
-        )
-        .set_console_ignores(
-            [
-                ("k::urdf", Level::INFO),
-                ("wgpu_hal::gles::egl", Level::WARN),
-                ("wgpu_hal::vulkan::instance", Level::WARN)
-            ]
-        )
+        .symlink_path("robot-layout")
+        .set_total_ignores([
+            ("wgpu_core.*", Level::INFO),
+            ("wgpu_hal.*", Level::INFO),
+            ("yaserde.*", Level::INFO),
+            ("mio.*", Level::INFO),
+            ("naga.*", Level::INFO),
+        ])
+        .set_console_ignores([
+            ("k::urdf", Level::INFO),
+            ("wgpu_hal::gles::egl", Level::WARN),
+            ("wgpu_hal::vulkan::instance", Level::WARN),
+        ])
         .init();
 
     match cmd {
@@ -94,6 +91,7 @@ fn main() {
             cameras,
             depth_cameras,
             apriltags,
+            robot_layout
         } => {
             apps::LunabotApp {
                 lunabase_address,
@@ -104,6 +102,7 @@ fn main() {
                 cameras,
                 depth_cameras,
                 apriltags,
+                robot_layout: robot_layout.unwrap_or_else(|| "robot-layout/lunabot.json".to_string())
             }
             .run();
             #[cfg(not(feature = "experimental"))]

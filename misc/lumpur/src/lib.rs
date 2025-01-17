@@ -115,38 +115,46 @@ impl LumpurBuilder {
         self
     }
 
-    fn into_regex_set(regexes_levels: impl IntoIterator<Item = (impl Into<String>, Level)>) -> RegexSet {
-        RegexSet::new(
-            regexes_levels
-                .into_iter()
-                .map(|(regex, level)| {
-                    let mut regex = regex.into();
-                    const LEVELS: [Level; 5] = [
-                        Level::ERROR,
-                        Level::WARN,
-                        Level::INFO,
-                        Level::DEBUG,
-                        Level::TRACE,
-                    ];
-                    let index = LEVELS.iter().position(|&l| l == level).expect("Invalid level");
-                    regex.push_str("=(");
-                    regex.push_str(&level.to_string());
-                    for i in (index + 1)..LEVELS.len() {
-                        regex.push_str("|");
-                        regex.push_str(&LEVELS[i].to_string());
-                    }
-                    regex.push_str(")");
-                    regex
-                })
-        ).expect("Failed to create regex set")
+    fn into_regex_set(
+        regexes_levels: impl IntoIterator<Item = (impl Into<String>, Level)>,
+    ) -> RegexSet {
+        RegexSet::new(regexes_levels.into_iter().map(|(regex, level)| {
+            let mut regex = regex.into();
+            const LEVELS: [Level; 5] = [
+                Level::ERROR,
+                Level::WARN,
+                Level::INFO,
+                Level::DEBUG,
+                Level::TRACE,
+            ];
+            let index = LEVELS
+                .iter()
+                .position(|&l| l == level)
+                .expect("Invalid level");
+            regex.push_str("=(");
+            regex.push_str(&level.to_string());
+            for i in (index + 1)..LEVELS.len() {
+                regex.push_str("|");
+                regex.push_str(&LEVELS[i].to_string());
+            }
+            regex.push_str(")");
+            regex
+        }))
+        .expect("Failed to create regex set")
     }
 
-    pub fn set_console_ignores(mut self, regexes_levels: impl IntoIterator<Item = (impl Into<String>, Level)>) -> Self {
+    pub fn set_console_ignores(
+        mut self,
+        regexes_levels: impl IntoIterator<Item = (impl Into<String>, Level)>,
+    ) -> Self {
         self.console_ignores = Self::into_regex_set(regexes_levels);
         self
     }
 
-    pub fn set_total_ignores(mut self, regexes_levels: impl IntoIterator<Item = (impl Into<String>, Level)>) -> Self {
+    pub fn set_total_ignores(
+        mut self,
+        regexes_levels: impl IntoIterator<Item = (impl Into<String>, Level)>,
+    ) -> Self {
         self.total_ignores = Self::into_regex_set(regexes_levels);
         self
     }
@@ -358,7 +366,7 @@ impl LumpurBuilder {
             "stdout",
             current_dir,
             total_ignores,
-            console_ignores
+            console_ignores,
         );
         std::thread::spawn(move || {
             for line in stdout.lines() {
@@ -375,7 +383,7 @@ impl LumpurBuilder {
             "stderr",
             current_dir,
             total_ignores,
-            console_ignores
+            console_ignores,
         );
         std::thread::spawn(move || {
             for line in stderr.lines() {

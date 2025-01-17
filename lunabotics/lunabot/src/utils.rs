@@ -1,7 +1,6 @@
 use std::ops::{Add, Mul, Sub};
 
-use k::UnitQuaternion;
-use nalgebra::{Quaternion, SimdRealField, UnitVector3, Vector3};
+use nalgebra::{Quaternion, SimdRealField, UnitVector3, Vector3, UnitQuaternion};
 
 pub fn lerp_value(delta: f64, speed: f64) -> f64 {
     0.5f64.powf(speed * delta)

@@ -9,7 +9,7 @@ use ares_bt::{
 use common::{FromLunabase, Steering};
 use dig::dig;
 use dump::dump;
-use nalgebra::{distance, Const, Matrix2, OPoint, Point2, Point3, Vector2, Vector3};
+use nalgebra::{distance, Matrix2, Point2, Point3, Vector2, Vector3};
 use tracing::{error, warn};
 use traverse::traverse;
 
@@ -163,7 +163,7 @@ const AT_POINT_THRESHOLD: f64 = 0.05;
 ///
 /// returns `None` if robot is at the last point
 fn find_target_point_index(pos: Point2<f64>, path: &[Point3<f64>]) -> Option<usize> {
-    if distance(&pos, &path[path.len()-1].xz()) < AT_POINT_THRESHOLD {
+    if distance(&pos, &path[path.len() - 1].xz()) < AT_POINT_THRESHOLD {
         return None;
     }
 

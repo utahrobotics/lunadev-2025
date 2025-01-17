@@ -225,7 +225,7 @@ pub struct ThalassicBuilder {
     pub heightmap_dimensions: Vector2<NonZeroU32>,
     pub cell_size: f32,
     pub max_point_count: NonZeroU32,
-    pub max_triangle_count: NonZeroU32
+    pub max_triangle_count: NonZeroU32,
 }
 
 impl ThalassicBuilder {

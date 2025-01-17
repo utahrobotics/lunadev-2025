@@ -6,7 +6,6 @@ members = [
     "lunabotics/pathfinding",
     "lunabotics/lunabase-lib",
     "lunabotics/lunasim-lib",
-    "misc/k",
     "lunabotics/lunabot-ai",
     "misc/ares-bt",
     "misc/cakap2",
@@ -16,7 +15,11 @@ members = [
     "misc/thalassic",
     "lunaserver-web/lunaserver-web-host",
     "lunaserver-web/lunaserver-web-client",
-    "misc/lumpur", "embedded/imu_chip", "embedded_common", "rp2040",
+    "misc/lumpur",
+    "embedded/imu_chip",
+    "misc/simple-motion",
+    "rp2040",
+    "embedded_common"
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/","output/"]
@@ -60,7 +63,6 @@ godot = { git = "https://github.com/godot-rust/gdext", branch = "master", featur
 openh264 = "0.6.3"
 serde_json = "1.0.134"
 
-k = { path = "misc/k" }
 glidesort = "0.1.2"
 opus = "0.3.0"
 
@@ -71,6 +73,7 @@ lunabase-lib = { path = "lunabotics/lunabase-lib" }
 ares-bt = { path = "misc/ares-bt" }
 gputter = { path = "misc/gputter" }
 thalassic = { path = "misc/thalassic" }
+simple-motion = { path = "misc/simple-motion" }
 
 [profile.dev.package.lunabot]
 opt-level = 2

@@ -22,6 +22,7 @@ use nalgebra::{
     Isometry3, Scale3, Transform3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4,
 };
 use pathfinding::grid::Grid;
+use simple_motion::{ChainBuilder, NodeSerde};
 use tasker::shared::OwnedData;
 use tasker::tokio;
 use tasker::{
@@ -43,7 +44,7 @@ use crate::{
 };
 use crate::{pathfinding::DefaultPathfinder, pipelines::thalassic::ThalassicData};
 
-use super::{create_packet_builder, create_robot_chain, log_teleop_messages};
+use super::{create_packet_builder, log_teleop_messages};
 
 fn_alias! {
     pub type FromLunasimRef = CallbacksRef(FromLunasim) + Send
@@ -242,12 +243,17 @@ impl LunasimbotApp {
             lunasim_stdin2.write(&bitcode::encode(&FromLunasimbot::Quit));
             std::process::exit(0);
         });
-        let robot_chain = create_robot_chain();
-        let localizer = Localizer::new(robot_chain.clone(), Some(lunasim_stdin.clone()));
+        let robot_chain = NodeSerde::from_reader(
+            std::fs::File::open("robot-layout/sim.json").expect("Failed to read robot chain"),
+        )
+        .expect("Failed to parse robot chain");
+        let robot_chain = ChainBuilder::from(robot_chain).finish_static();
+
+        let localizer = Localizer::new(robot_chain, Some(lunasim_stdin.clone()));
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
 
-        let camera_link = robot_chain.find_link("depth_camera_link").unwrap().clone();
+        let camera_link = robot_chain.get_node_with_name("depth_camera").unwrap();
 
         let depth_projecter_builder = DepthProjectorBuilder {
             image_size: Vector2::new(NonZeroU32::new(36).unwrap(), NonZeroU32::new(24).unwrap()),
@@ -314,9 +320,7 @@ impl LunasimbotApp {
                 if !get_observe_depth() {
                     return;
                 }
-                let Some(camera_transform) = camera_link.world_transform() else {
-                    return;
-                };
+                let camera_transform = camera_link.get_global_isometry();
                 let camera_transform: AlignedMatrix4<f32> =
                     camera_transform.to_homogeneous().cast::<f32>().into();
                 let Some(mut pcl_storage) = pcl_storage_channel.get_finished() else {
@@ -380,7 +384,7 @@ impl LunasimbotApp {
         let mut bitcode_buffer = bitcode::Buffer::new();
 
         run_ai(
-            robot_chain,
+            robot_chain.into(),
             |action, inputs| match action {
                 Action::SetStage(stage) => {
                     lunabot_stage.store(stage);

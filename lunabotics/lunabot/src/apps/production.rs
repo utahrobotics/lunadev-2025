@@ -11,6 +11,7 @@ use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{Scale3, Transform3};
 use pathfinding::grid::Grid;
 use serde::Deserialize;
+use simple_motion::{ChainBuilder, NodeSerde};
 use streaming::camera_streaming;
 use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn};
 use tracing::error;
@@ -20,7 +21,7 @@ use crate::{
     pipelines::thalassic::ThalassicData,
 };
 
-use super::{create_packet_builder, create_robot_chain};
+use super::create_packet_builder;
 
 mod apriltag;
 mod camera;
@@ -55,6 +56,7 @@ pub struct LunabotApp {
     pub cameras: FxHashMap<String, CameraInfo>,
     pub depth_cameras: FxHashMap<String, DepthCameraInfo>,
     pub apriltags: FxHashMap<String, Apriltag>,
+    pub robot_layout: String,
 }
 
 impl LunabotApp {
@@ -78,7 +80,12 @@ impl LunabotApp {
 
         let _guard = get_tokio_handle().enter();
 
-        let robot_chain = create_robot_chain();
+        let robot_chain = NodeSerde::from_reader(
+            std::fs::File::open(self.robot_layout).expect("Failed to read robot chain"),
+        )
+        .expect("Failed to parse robot chain");
+        let robot_chain = ChainBuilder::from(robot_chain).finish_static();
+        
         let localizer = Localizer::new(robot_chain.clone(), None);
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
@@ -97,15 +104,17 @@ impl LunabotApp {
         }
 
         #[cfg(feature = "experimental")]
-        if let Err(e) = audio_streaming::audio_streaming(self.lunabase_audio_streaming_address.unwrap_or_else(|| {
-            let mut addr = camera_streaming_address;
-            if addr.port() == u16::MAX {
-                addr.set_port(65534);
-            } else {
-                addr.set_port(addr.port() + 1);
-            }
-            addr
-        })) {
+        if let Err(e) = audio_streaming::audio_streaming(
+            self.lunabase_audio_streaming_address.unwrap_or_else(|| {
+                let mut addr = camera_streaming_address;
+                if addr.port() == u16::MAX {
+                    addr.set_port(65534);
+                } else {
+                    addr.set_port(addr.port() + 1);
+                }
+                addr
+            }),
+        ) {
             error!("Failed to start audio streaming: {e}");
         }
 
@@ -125,10 +134,10 @@ impl LunabotApp {
                         port,
                         camera::CameraInfo {
                             k_node: robot_chain
-                                .find_link(&link_name)
+                                .get_node_with_name(&link_name)
                                 .context("Failed to find camera link")
                                 .unwrap()
-                                .clone(),
+                                .into(),
                             focal_length_x_px,
                             focal_length_y_px,
                             stream_index,
@@ -172,10 +181,10 @@ impl LunabotApp {
                         serial,
                         depth::DepthCameraInfo {
                             k_node: robot_chain
-                                .find_link(&link_name)
+                                .get_node_with_name(&link_name)
                                 .context("Failed to find camera link")
                                 .unwrap()
-                                .clone(),
+                                .into(),
                             ignore_apriltags: observe_apriltags,
                             stream_index,
                         },
@@ -208,7 +217,7 @@ impl LunabotApp {
         );
 
         run_ai(
-            robot_chain,
+            robot_chain.into(),
             |action, inputs| match action {
                 Action::SetStage(stage) => {
                     lunabot_stage.store(stage);
