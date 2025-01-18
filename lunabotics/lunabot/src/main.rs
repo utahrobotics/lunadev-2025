@@ -31,6 +31,14 @@ lumpur::define_configuration! {
             apriltags: FxHashMap<String, apps::Apriltag>,
             robot_layout: Option<String>
         },
+        Dataviz {
+            lunabase_address: SocketAddr,
+            max_pong_delay_ms: Option<u64>,
+            lunabase_data_address: Option<SocketAddr>,
+            #[serde(default)]
+            depth_cameras: FxHashMap<String, apps::DepthCameraInfo>,
+            robot_layout: Option<String>
+        },
         Sim {
             lunabase_address: SocketAddr,
             max_pong_delay_ms: Option<u64>
@@ -107,6 +115,17 @@ fn main() {
             .run();
             #[cfg(not(feature = "experimental"))]
             let _ = lunabase_audio_streaming_address;
+        }
+        #[cfg(feature = "production")]
+        Commands::Dataviz { lunabase_address, lunabase_data_address, max_pong_delay_ms, depth_cameras, robot_layout } => {
+            apps::dataviz::DatavizApp {
+                lunabase_address,
+                lunabase_data_address,
+                max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
+                depth_cameras,
+                robot_layout: robot_layout.unwrap_or_else(|| "robot-layout/lunabot.json".to_string())
+            }
+            .run();
         }
     }
 }

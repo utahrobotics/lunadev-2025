@@ -15,6 +15,7 @@ use gputter::is_gputter_initialized;
 use nalgebra::Vector2;
 use tasker::shared::OwnedData;
 use thalassic::{Occupancy, PointCloudStorage, ThalassicBuilder};
+use common::thalassic::CELL_COUNT;
 
 static OBSERVE_DEPTH: AtomicBool = AtomicBool::new(false);
 static DEPTH_UNPARKER: ArcSwapOption<Unparker> = ArcSwapOption::const_empty();
@@ -31,8 +32,6 @@ pub fn set_observe_depth(value: bool) {
 pub fn get_observe_depth() -> bool {
     OBSERVE_DEPTH.load(Ordering::Acquire)
 }
-
-const CELL_COUNT: u32 = 128 * 256;
 
 pub struct ThalassicData {
     pub heightmap: [f32; CELL_COUNT as usize],

@@ -27,6 +27,8 @@ mod apriltag;
 mod camera;
 mod depth;
 mod streaming;
+
+pub mod dataviz;
 // mod audio_streaming;
 
 pub use apriltag::Apriltag;

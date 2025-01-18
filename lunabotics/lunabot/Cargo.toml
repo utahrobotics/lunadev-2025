@@ -39,5 +39,5 @@ opus = { workspace = true, optional = true }
 rodio = { version = "0.20.1", optional = true }
 
 [features]
-production = ["realsense-rust", "udev", "v4l", "openh264", "vesc_translator", "apriltag", "apriltag-nalgebra", "apriltag-image"]
+production = ["realsense-rust", "udev", "v4l", "openh264", "vesc_translator", "apriltag", "apriltag-nalgebra", "apriltag-image", "common/thalassic"]
 experimental = ["opus", "production", "rodio"]

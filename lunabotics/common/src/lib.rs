@@ -8,6 +8,8 @@ pub const AUDIO_SAMPLE_RATE: u32 = 48000;
 #[cfg(feature = "godot_urdf")]
 pub mod godot_urdf;
 pub mod lunasim;
+#[cfg(feature = "thalassic")]
+pub mod thalassic;
 
 #[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]
 pub enum LunabotStage {
