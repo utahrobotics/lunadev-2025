@@ -13,8 +13,8 @@ use pathfinding::grid::Grid;
 use serde::Deserialize;
 use simple_motion::{ChainBuilder, NodeSerde};
 use streaming::camera_streaming;
-use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn};
-use tracing::error;
+use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn, tokio::runtime::Handle};
+use tracing::{error, warn};
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,
@@ -169,7 +169,7 @@ impl LunabotApp {
 
         if let Err(e) = enumerate_depth_cameras(
             buffer,
-            localizer_ref,
+            localizer_ref.clone(),
             self.depth_cameras.into_iter().map(
                 |(
                     serial,
@@ -217,6 +217,33 @@ impl LunabotApp {
             lunabot_stage.clone(),
             self.max_pong_delay_ms,
         );
+
+        // UNTESTED: 
+        let handle = Handle::current();
+        let localizer_ref = localizer_ref.clone();
+        handle.spawn(async move {
+            use rp2040::*;
+            use embedded_common::*;
+            use nalgebra::Vector3;
+            let mut pico_controler = PicoController::new("/dev/ttyACM0").await.unwrap();
+
+            loop {
+                match pico_controler.get_message_from_pico().await {
+                    Ok(FromIMU::AngularRateReading(AngularRate{x,y,z})) => {
+                        // TODO: set angular rate
+                    }
+
+                    Ok(FromIMU::AccellerationNormReading(AccelerationNorm{x,y,z})) => {
+                        // TODO: set accel
+                    }
+                    
+                    Err(e) => {
+                        error!("Error getting readings from pico: {}",e);
+                    }
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        });
 
         run_ai(
             robot_chain.into(),
