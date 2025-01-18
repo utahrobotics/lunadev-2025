@@ -6,6 +6,7 @@
 #![no_main]
 
 use accelerometer::vector::{F32x3, I16x3};
+use cortex_m::register::apsr::read;
 use defmt::info;
 use embassy_executor::Spawner;
 use embassy_rp::pwm::{self, Pwm};
@@ -25,6 +26,7 @@ use static_cell::StaticCell;
 use lsm6dsox::*;
 use lsm6dsox::accelerometer::Accelerometer;
 use lsm6dsox::accelerometer::RawAccelerometer;
+use lsm6dsox::types::Error;
 use {defmt_rtt as _, panic_probe as _}; // global logger
 
 bind_interrupts!(struct Irqs {
@@ -137,7 +139,6 @@ fn setup_lsm(lsm: &mut Lsm6dsox<I2c<'_, I2C0, Async>, Delay>) -> Result<u8, lsm6
     })
 }
 
-
 /// UNTESTED
 fn initialize_motors(p: Peripherals) {
     let m1_slp = Output::new(p.PIN_10, Level::Low);
@@ -170,7 +171,7 @@ async fn read_sensors_loop(lsm: &'static mut Lsm6dsox<I2c<'static, I2C0, Async>,
     let mut ticker = Ticker::every(Duration::from_millis(delay_ms));
     loop {
         let mut ack = [0u8];
-        class.read_packet(&mut ack).await;
+        let readcount = class.read_packet(&mut ack).await;
         match lsm.angular_rate() {
             Ok(lsm6dsox::AngularRate{x,y,z}) => {
                 log::info!("gyro: x: {}, y: {}, z: {} (radians per sec)", x.as_radians_per_second(),y.as_radians_per_second(),z.as_radians_per_second());
@@ -183,10 +184,19 @@ async fn read_sensors_loop(lsm: &'static mut Lsm6dsox<I2c<'static, I2C0, Async>,
                 ).await);
             }
             Err(e) => {
+                if Error::NoDataReady == e {
+                    unwrap!(class.write_packet(
+                        &FromIMU::NoDataReady.serialize()
+                    ).await);
+                } else {
+                    unwrap!(class.write_packet(
+                        &FromIMU::Error.serialize()
+                    ).await);
+                }
                 log::error!("failed to read gyro: {:?}", e);
             }
         }
-        class.read_packet(&mut ack).await;
+        let _ = class.read_packet(&mut ack).await;
         match lsm.accel_norm() {
             Ok(F32x3{x,y,z}) => {
                 log::info!("accel: x: {}, y: {}, z: {} m/s normalized", x,y,z);
@@ -199,6 +209,15 @@ async fn read_sensors_loop(lsm: &'static mut Lsm6dsox<I2c<'static, I2C0, Async>,
                 ).await);
             }
             Err(e) => {
+                if Some(&Error::NoDataReady) == e.cause() {
+                    unwrap!(class.write_packet(
+                        &FromIMU::NoDataReady.serialize()
+                    ).await);
+                } else {
+                    unwrap!(class.write_packet(
+                        &FromIMU::Error.serialize()
+                    ).await);
+                }
                 log::error!("failed to read accel: {:?}", e);
             }
         }

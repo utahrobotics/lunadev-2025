@@ -2,20 +2,22 @@
 
 use defmt::Format;
 
-#[derive(Clone, Copy, Debug, Format)]
+#[derive(Clone, Copy, Debug, Format, PartialEq)]
 pub enum FromIMU {
     AngularRateReading(AngularRate),
     AccellerationNormReading(AccelerationNorm),
+    NoDataReady,
+    Error,
 }
 
-#[derive(Clone, Copy, Debug, Format)]
+#[derive(Clone, Copy, Debug, Format, PartialEq)]
 pub struct AngularRate {
     pub x: f32,
     pub y: f32,
     pub z: f32,
 }
 
-#[derive(Clone, Copy, Debug, Format)]
+#[derive(Clone, Copy, Debug, Format, PartialEq)]
 pub struct AccelerationNorm {
     pub x: f32,
     pub y: f32,
@@ -68,6 +70,12 @@ impl FromIMU {
                 bytes[0] = 1;
                 bytes[1..].copy_from_slice(&accel.serialize());
             }
+            FromIMU::NoDataReady => {
+                bytes[0] = 2;
+            }
+            FromIMU::Error => {
+                bytes[0] = 3;
+            }
         }
         bytes
     }
@@ -80,6 +88,8 @@ impl FromIMU {
         match bytes[0] {
             0 => Ok(FromIMU::AngularRateReading(AngularRate::deserialize(variant_bytes)?)),
             1 => Ok(FromIMU::AccellerationNormReading(AccelerationNorm::deserialize(variant_bytes)?)),
+            2 => Ok(FromIMU::NoDataReady),
+            3 => Ok(FromIMU::Error),
             _ => Err("Invalid variant tag")
         }
     }
@@ -132,9 +142,25 @@ mod tests {
     }
 
     #[test]
+    fn test_no_data_ready() {
+        let original = FromIMU::NoDataReady;
+        let serialized = original.serialize();
+        let deserialized = FromIMU::deserialize(serialized).unwrap();
+        assert_eq!(original, deserialized);
+    }
+
+    #[test]
+    fn test_error() {
+        let original = FromIMU::Error;
+        let serialized = original.serialize();
+        let deserialized = FromIMU::deserialize(serialized).unwrap();
+        assert_eq!(original, deserialized);
+    }
+
+    #[test]
     fn test_invalid_variant() {
         let mut invalid_bytes = [0u8; 13];
-        invalid_bytes[0] = 2;
+        invalid_bytes[0] = 4;
         
         assert!(FromIMU::deserialize(invalid_bytes).is_err());
     }

@@ -14,7 +14,7 @@ use measurements::AngularVelocity;
 use num_enum::TryFromPrimitive;
 
 /// Lsm6dsox errors
-#[derive(Clone, Copy, Debug, Format)]
+#[derive(Clone, Copy, Debug, Format, PartialEq)]
 pub enum Error {
     I2cWriteError,
     I2cReadError,
