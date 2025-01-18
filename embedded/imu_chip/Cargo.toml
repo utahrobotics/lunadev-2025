@@ -30,7 +30,7 @@ portable-atomic = { version = "1.5", features = ["critical-section"] }
 embassy-net = { version = "0.6.0", features = ["medium-ip", "proto-ipv4", "tcp"] }
 embassy-time = "0.4.0"
 lsm6dsox = {path = "../../misc/lsm6dsox"}
-heapless.workspace = true
+#heapless.workspace = true
 embassy-usb-logger = "0.2.0"
 log = "0.4.22"
 defmt = "0.3.10"

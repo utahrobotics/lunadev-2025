@@ -23,6 +23,8 @@ thalassic.workspace = true
 gputter.workspace = true
 simple-motion.workspace = true
 lunabot-ai = { path = "../lunabot-ai" }
+rp2040 = {path = "../../rp2040"}
+embedded_common = {path = "../../embedded_common"}
 vesc_translator = { git = "https://github.com/Hydro111/vesc-translator.git", optional = true }
 realsense-rust = { version = "1.2", optional = true }
 udev = { version = "0.9.1", optional = true }

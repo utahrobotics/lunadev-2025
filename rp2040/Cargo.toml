@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 embedded_common = {path = "../embedded_common"}
+tokio.workspace = true
+tracing.workspace = true
