@@ -34,6 +34,7 @@ heapless.workspace = true
 embassy-usb-logger = "0.2.0"
 log = "0.4.22"
 defmt = "0.3.10"
+embedded_common = {path="../../embedded_common"}
 
 # cargo build/run
 [profile.dev]
