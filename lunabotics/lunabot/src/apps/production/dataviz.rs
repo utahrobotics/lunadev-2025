@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use super::depth::enumerate_depth_cameras;
+use super::{depth::enumerate_depth_cameras, subaddress_of};
 use anyhow::Context;
 use common::LunabotStage;
 use crossbeam::atomic::AtomicCell;
@@ -76,13 +76,7 @@ impl DatavizApp {
             error!("Failed to enumerate depth cameras: {e}");
         }
         let data_address = self.lunabase_data_address.unwrap_or_else(|| {
-            let mut addr = self.lunabase_address;
-            if addr.port() == u16::MAX {
-                addr.set_port(65534);
-            } else {
-                addr.set_port(addr.port() + 9400);
-            }
-            addr
+            subaddress_of(self.lunabase_address, 9400)
         });
         common::thalassic::lunabot_task(data_address, move |data| {
             set_observe_depth(true);
