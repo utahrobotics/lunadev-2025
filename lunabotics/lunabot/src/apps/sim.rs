@@ -302,7 +302,7 @@ impl LunasimbotApp {
 
         let lunasim_stdin2 = lunasim_stdin.clone();
         from_lunasim_ref.add_fn_mut(move |msg| match msg {
-            common::lunasim::FromLunasim::Accelerometer {
+            FromLunasim::Accelerometer {
                 id: _,
                 acceleration,
             } => {
@@ -313,10 +313,10 @@ impl LunasimbotApp {
                 );
                 localizer_ref.set_acceleration(acceleration);
             }
-            common::lunasim::FromLunasim::Gyroscope { id: _, axis, angle } => {
+            FromLunasim::Gyroscope { id: _, axis, angle } => {
                 localizer_ref.set_angular_velocity(axis_angle(axis, angle));
             }
-            common::lunasim::FromLunasim::DepthMap(depths) => {
+            FromLunasim::DepthMap(depths) => {
                 if !get_observe_depth() {
                     return;
                 }
@@ -343,7 +343,7 @@ impl LunasimbotApp {
                     lunasim_stdin2.write(&bytes);
                 });
             }
-            common::lunasim::FromLunasim::ExplicitApriltag {
+            FromLunasim::ExplicitApriltag {
                 robot_origin,
                 robot_axis,
                 robot_angle,
