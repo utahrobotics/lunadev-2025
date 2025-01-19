@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://dqavg7akwqn43"]
+
+[node name="PointCloudNode" type="Node3D"]
+
+[node name="CSGSphere3D" type="CSGSphere3D" parent="."]
+radius = 0.05

@@ -3,13 +3,16 @@ extends Node2D
 @onready var textbox=$CanvasLayer/VizHBox/DataVBox/Texbox/ScrollContainer/textVBox
 @onready var map_texture=$"CanvasLayer/VizHBox/ImagePanel/VBoxContainer/MapTexture"
 @onready var map_title= $CanvasLayer/VizHBox/ImagePanel/VBoxContainer/Title
+@onready var point_cloud_display = $CanvasLayer/VizHBox/ImagePanel/SubViewportContainer
+@onready var point_cloud_parent = $PointCloudParent
+var pointCloudNode = preload("res://pointCloudNode.tscn")
 var current_map := 0
 
-var maps:Array[Image] = [null,null,null,null,null]
+var maps:Array = [null,null,null,null,null]
 
-func set_image_maps(depth:Image,point:Image,height:Image,gradient:Image,obstacle:Image):
+func set_image_maps(depth:Image,point:Array[Vector3],height:Image,gradient:Image,obstacle:Image):
 	maps[0]=depth
-	maps[1]=$SubViewport.get_texture()
+	maps[1]=point
 	maps[2]=height
 	maps[3]=gradient
 	maps[4]=obstacle
@@ -22,6 +25,16 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	map_texture.texture=maps[current_map]
 	if map_texture.texture==null: generate_placeholder(20,10)
+	if current_map==1:
+		point_cloud_display.show()
+		for point in maps[1]:
+			var newPoint = pointCloudNode.instantiate()
+			newPoint.position = point
+			point_cloud_parent.add_child(newPoint)
+		for n in point_cloud_parent.get_children():
+			point_cloud_parent.remove_child(n)
+	else:
+		point_cloud_display.hide()
 
 func set_message(msg: String, color: Color):
 	var message:=Label.new()
