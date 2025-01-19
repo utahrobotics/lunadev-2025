@@ -19,7 +19,7 @@ pub struct GpuDevice {
 static GPU_DEVICE: OnceLock<GpuDevice> = OnceLock::new();
 
 pub async fn init_gputter() -> anyhow::Result<()> {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::all(),
         ..Default::default()
     });

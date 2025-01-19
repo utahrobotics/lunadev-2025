@@ -4,7 +4,7 @@ use bytemuck::{Pod, Zeroable};
 use crossbeam::sync::Parker;
 use tracing::error;
 
-pub const CELL_COUNT: u32 = 128 * 256;
+use super::THALASSIC_CELL_COUNT;
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -23,9 +23,9 @@ impl Occupancy {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct ThalassicData {
-    pub heightmap: [f32; CELL_COUNT as usize],
-    pub gradmap: [f32; CELL_COUNT as usize],
-    pub expanded_obstacle_map: [Occupancy; CELL_COUNT as usize],
+    pub heightmap: [f32; THALASSIC_CELL_COUNT as usize],
+    pub gradmap: [f32; THALASSIC_CELL_COUNT as usize],
+    pub expanded_obstacle_map: [Occupancy; THALASSIC_CELL_COUNT as usize],
     point_count: usize,
 }
 
@@ -99,9 +99,9 @@ pub fn lunabot_task(address: SocketAddr, mut gen_data: impl FnMut(&mut Thalassic
     std::thread::spawn(move || {
         let mut buffer = [0u8; 1];
         let mut data = ThalassicData {
-            heightmap: [0.0; CELL_COUNT as usize],
-            gradmap: [0.0; CELL_COUNT as usize],
-            expanded_obstacle_map: [Occupancy(0); CELL_COUNT as usize],
+            heightmap: [0.0; THALASSIC_CELL_COUNT as usize],
+            gradmap: [0.0; THALASSIC_CELL_COUNT as usize],
+            expanded_obstacle_map: [Occupancy(0); THALASSIC_CELL_COUNT as usize],
             point_count: 0,
         };
         let mut points = vec![];
