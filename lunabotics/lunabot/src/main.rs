@@ -1,6 +1,5 @@
 #![feature(result_flattening, array_chunks, iterator_try_collect)]
 
-use fxhash::FxHashMap;
 use std::net::SocketAddr;
 
 use apps::default_max_pong_delay_ms;
@@ -24,11 +23,11 @@ lumpur::define_configuration! {
             lunabase_streaming_address: Option<SocketAddr>,
             lunabase_audio_streaming_address: Option<SocketAddr>,
             #[serde(default)]
-            cameras: FxHashMap<String, apps::CameraInfo>,
+            cameras: fxhash::FxHashMap<String, apps::CameraInfo>,
             #[serde(default)]
-            depth_cameras: FxHashMap<String, apps::DepthCameraInfo>,
+            depth_cameras: fxhash::FxHashMap<String, apps::DepthCameraInfo>,
             #[serde(default)]
-            apriltags: FxHashMap<String, apps::Apriltag>,
+            apriltags: fxhash::FxHashMap<String, apps::Apriltag>,
             robot_layout: Option<String>
         },
         Dataviz {
@@ -36,7 +35,7 @@ lumpur::define_configuration! {
             max_pong_delay_ms: Option<u64>,
             lunabase_data_address: Option<SocketAddr>,
             #[serde(default)]
-            depth_cameras: FxHashMap<String, apps::DepthCameraInfo>,
+            depth_cameras: fxhash::FxHashMap<String, apps::DepthCameraInfo>,
             robot_layout: Option<String>
         },
         Sim {
