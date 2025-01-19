@@ -22,10 +22,10 @@ use godot::{
 };
 use tasker::shared::{OwnedData, SharedDataReceiver};
 
-#[cfg(feature = "production")]
-mod stream;
 #[cfg(feature = "audio_streaming")]
 mod audio;
+#[cfg(feature = "production")]
+mod stream;
 
 const STREAM_WIDTH: u32 = 1920;
 const STREAM_HEIGHT: u32 = 720;
@@ -98,7 +98,7 @@ struct LunabotConn {
     #[var]
     stream_image_updated: bool,
     #[cfg(feature = "audio_streaming")]
-    audio_streaming: Option<audio::AudioStreaming>
+    audio_streaming: Option<audio::AudioStreaming>,
 }
 
 thread_local! {
@@ -124,7 +124,7 @@ impl INode for LunabotConn {
                 stream_image,
                 stream_image_updated: false,
                 #[cfg(feature = "audio_streaming")]
-                audio_streaming: None
+                audio_streaming: None,
             };
         }
         init_panic_hook();
@@ -165,7 +165,7 @@ impl INode for LunabotConn {
             stream_image,
             stream_image_updated: false,
             #[cfg(feature = "audio_streaming")]
-            audio_streaming: Some(audio_streaming)
+            audio_streaming: Some(audio_streaming),
         }
     }
 

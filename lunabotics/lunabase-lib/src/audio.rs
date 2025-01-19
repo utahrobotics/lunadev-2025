@@ -27,7 +27,7 @@ impl AudioStreaming {
         let mut player = AudioStreamPlayer::new_alloc();
         player.set_autoplay(true);
         player.set_stream(&generator);
-        
+
         let udp = UdpSocket::bind("0.0.0.0:10602")
             .map(|udp| {
                 if let Err(e) = udp.set_nonblocking(true) {
@@ -50,7 +50,7 @@ impl AudioStreaming {
                 .expect("Failed to initialize decoder"),
             audio_buffer: [0.0; AUDIO_FRAME_SIZE as usize],
             udp_buffer: [0u8; 4096],
-            player: Some(player)
+            player: Some(player),
         }
     }
 

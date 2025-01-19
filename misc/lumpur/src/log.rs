@@ -164,7 +164,7 @@ pub(crate) fn make_line_f(
             line_number: log.line_number,
             fields: log.fields,
         });
-        
+
         if level <= Level::INFO {
             if !console_ignores.is_match(&statement) {
                 let _ = console_tx.send(log.clone());

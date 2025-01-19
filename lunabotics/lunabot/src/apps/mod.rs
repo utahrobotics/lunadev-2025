@@ -6,9 +6,8 @@ use std::{fs::File, net::SocketAddr, sync::Arc, time::Duration};
 
 use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
-use k::Chain;
 #[cfg(feature = "production")]
-pub use production::{Apriltag, CameraInfo, DepthCameraInfo, LunabotApp};
+pub use production::{Apriltag, CameraInfo, DepthCameraInfo, LunabotApp, dataviz};
 pub use sim::{LunasimStdin, LunasimbotApp};
 use tasker::tokio::sync::{mpsc, watch};
 use tracing::error;
@@ -32,12 +31,6 @@ fn log_teleop_messages() {
     {
         error!("Failed to write code sheet for FromLunabot: {e}");
     }
-}
-
-fn create_robot_chain() -> Arc<Chain<f64>> {
-    let chain = Chain::<f64>::from_urdf_file("urdf/lunabot.urdf").expect("Failed to load urdf");
-    chain.update_transforms();
-    Arc::new(chain)
 }
 
 #[derive(Clone)]

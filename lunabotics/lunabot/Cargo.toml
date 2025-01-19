@@ -17,12 +17,14 @@ common = { path = "../common" }
 pathfinding = "4.13.0"
 nalgebra = { workspace = true }
 rayon = { workspace = true }
-k = { workspace = true }
 fxhash = { workspace = true }
 bitcode = { workspace = true }
 thalassic.workspace = true
 gputter.workspace = true
+simple-motion.workspace = true
 lunabot-ai = { path = "../lunabot-ai" }
+rp2040 = {path = "../../rp2040"}
+embedded_common = {path = "../../embedded_common"}
 vesc_translator = { git = "https://github.com/Hydro111/vesc-translator.git", optional = true }
 realsense-rust = { version = "1.2", optional = true }
 udev = { version = "0.9.1", optional = true }
@@ -37,5 +39,5 @@ opus = { workspace = true, optional = true }
 rodio = { version = "0.20.1", optional = true }
 
 [features]
-production = ["realsense-rust", "udev", "v4l", "openh264", "vesc_translator", "apriltag", "apriltag-nalgebra", "apriltag-image"]
+production = ["realsense-rust", "udev", "v4l", "openh264", "vesc_translator", "apriltag", "apriltag-nalgebra", "apriltag-image", "common/thalassic"]
 experimental = ["opus", "production", "rodio"]

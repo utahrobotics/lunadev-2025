@@ -68,8 +68,8 @@ impl CameraStream {
         let individual_frame_row_length = CAMERA_RESOLUTION.x as usize * 3;
         let global_frame_row_length = individual_frame_row_length * CAMERA_COL_COUNT;
 
-        let start =
-            (cam_y * global_frame_row_length * CAMERA_RESOLUTION.y as usize + cam_x * individual_frame_row_length) as usize;
+        let start = (cam_y * global_frame_row_length * CAMERA_RESOLUTION.y as usize
+            + cam_x * individual_frame_row_length) as usize;
         for y in 0..CAMERA_RESOLUTION.y as usize {
             let start = start + y * global_frame_row_length;
             let row = unsafe {

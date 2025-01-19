@@ -38,6 +38,11 @@ workspace = false
 command = "cargo"
 args = ["run", "--features=production", "-p", "lunabot", "--profile", "optdebug", "--", "main"]
 
+[tasks.dataviz]
+workspace = false
+command = "cargo"
+args = ["run", "--features=production", "-p", "lunabot", "--profile", "optdebug", "--", "dataviz"]
+
 [tasks.clean]
 workspace = false
 command = "cargo"
@@ -68,7 +73,7 @@ dependencies = [
 
 [tasks.lunabase_prod]
 workspace = false
-run_task = { name = ["local_lunabase_prod", "lunaserver-web-client-controls", "lunaserver-web-client-streaming", "lunaserver-web-client-audio"], parallel = true }
+run_task = { name = ["local_lunabase_prod", "lunaserver-web-client-controls", "lunaserver-web-client-streaming"], parallel = true }
 
 [tasks.local_lunabase_prodx]
 workspace = false

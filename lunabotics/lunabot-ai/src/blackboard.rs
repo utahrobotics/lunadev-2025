@@ -1,8 +1,8 @@
-use std::{collections::VecDeque, sync::Arc, time::Instant};
+use std::{collections::VecDeque, time::Instant};
 
 use common::FromLunabase;
-use k::Chain;
 use nalgebra::{Isometry3, Point3};
+use simple_motion::StaticImmutableNode;
 
 use crate::{autonomy::Autonomy, Action, PollWhen};
 
@@ -12,12 +12,11 @@ pub enum Input {
     LunabaseDisconnected,
 }
 
-#[derive(Debug)]
 pub(crate) struct LunabotBlackboard {
     now: Instant,
     from_lunabase: VecDeque<FromLunabase>,
     autonomy: Autonomy,
-    chain: Arc<Chain<f64>>,
+    chain: StaticImmutableNode,
     path: Vec<Point3<f64>>,
     lunabase_disconnected: bool,
     actions: Vec<Action>,
@@ -25,7 +24,7 @@ pub(crate) struct LunabotBlackboard {
 }
 
 impl LunabotBlackboard {
-    pub fn new(chain: Arc<Chain<f64>>) -> Self {
+    pub fn new(chain: StaticImmutableNode) -> Self {
         Self {
             now: Instant::now(),
             from_lunabase: Default::default(),
@@ -57,7 +56,7 @@ impl LunabotBlackboard {
     }
 
     pub fn get_robot_isometry(&self) -> Isometry3<f64> {
-        self.chain.origin()
+        self.chain.get_global_isometry()
     }
 
     pub fn get_path(&self) -> Option<&[Point3<f64>]> {

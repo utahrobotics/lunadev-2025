@@ -17,12 +17,12 @@ use height2grad::Height2Grad;
 use nalgebra::{Vector2, Vector3, Vector4};
 use pcl2height::Pcl2HeightV2;
 
-mod clustering;
+// mod clustering;
 mod depth2pcl;
 mod grad2obstacle;
 mod height2grad;
 mod pcl2height;
-pub use clustering::Clusterer;
+// pub use clustering::Clusterer;
 
 mod expand_obstacles;
 use expand_obstacles::ExpandObstacles;
@@ -225,7 +225,7 @@ pub struct ThalassicBuilder {
     pub heightmap_dimensions: Vector2<NonZeroU32>,
     pub cell_size: f32,
     pub max_point_count: NonZeroU32,
-    pub max_triangle_count: NonZeroU32
+    pub max_triangle_count: NonZeroU32,
 }
 
 impl ThalassicBuilder {

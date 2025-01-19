@@ -4,10 +4,13 @@ use bitcode::{Decode, Encode};
 
 pub const AUDIO_FRAME_SIZE: u32 = 960;
 pub const AUDIO_SAMPLE_RATE: u32 = 48000;
+pub const THALASSIC_CELL_COUNT: u32 = 128 * 256;
 
 #[cfg(feature = "godot_urdf")]
 pub mod godot_urdf;
 pub mod lunasim;
+#[cfg(feature = "thalassic")]
+pub mod thalassic;
 
 #[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]
 pub enum LunabotStage {

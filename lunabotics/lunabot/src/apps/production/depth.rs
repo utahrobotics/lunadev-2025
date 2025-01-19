@@ -1,5 +1,9 @@
 use std::{num::NonZeroU32, sync::Arc};
 
+use super::apriltag::{
+    image::{ImageBuffer, Luma},
+    AprilTagDetector,
+};
 use anyhow::Context;
 use fxhash::FxHashMap;
 use gputter::types::{AlignedMatrix4, AlignedVec4};
@@ -11,24 +15,23 @@ use realsense_rust::{
     kind::{Rs2CameraInfo, Rs2Format, Rs2ProductLine, Rs2StreamKind},
     pipeline::InactivePipeline,
 };
+use simple_motion::StaticImmutableNode;
 use tasker::shared::OwnedData;
 use thalassic::DepthProjectorBuilder;
 use tracing::{error, warn};
-use super::apriltag::{
-    image::{ImageBuffer, Luma},
-    AprilTagDetector,
-};
 
 use crate::{
     apps::production::streaming::DownscaleRgbImageReader,
     localization::LocalizerRef,
-    pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline, PointsStorageChannel, ThalassicData},
+    pipelines::thalassic::{
+        get_observe_depth, spawn_thalassic_pipeline, PointsStorageChannel, ThalassicData,
+    },
 };
 
 use super::{apriltag::Apriltag, streaming::CameraStream};
 
 pub struct DepthCameraInfo {
-    pub k_node: k::Node<f64>,
+    pub k_node: StaticImmutableNode,
     pub ignore_apriltags: bool,
     pub stream_index: usize,
 }
@@ -233,7 +236,7 @@ pub fn enumerate_depth_cameras(
                     det.add_tag(tag.tag_position, tag.get_quat(), tag.tag_width, tag_id);
                 }
                 let localizer_ref = localizer_ref.clone();
-                let mut inverse_local = k_node.origin();
+                let mut inverse_local = k_node.get_local_isometry();
                 inverse_local.inverse_mut();
                 det.detection_callbacks_ref().add_fn(move |observation| {
                     localizer_ref.set_april_tag_isometry(
@@ -327,9 +330,7 @@ pub fn enumerate_depth_cameras(
                         frame.width() * frame.height(),
                     );
 
-                    let Some(camera_transform) = k_node.world_transform() else {
-                        continue;
-                    };
+                    let camera_transform = k_node.get_global_isometry();
                     let camera_transform: AlignedMatrix4<f32> =
                         camera_transform.to_homogeneous().cast::<f32>().into();
                     let Some(mut pcl_storage) = pcl_storage_channel.get_finished() else {
