@@ -3610,6 +3610,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lunaviz-lib"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "crossbeam",
+ "godot",
+ "parking_lot",
+]
+
+[[package]]
 name = "mach2"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

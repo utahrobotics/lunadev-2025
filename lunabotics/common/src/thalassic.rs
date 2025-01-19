@@ -23,13 +23,22 @@ impl Occupancy {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct ThalassicData {
+    pub point_count: usize,
     pub heightmap: [f32; CELL_COUNT as usize],
     pub gradmap: [f32; CELL_COUNT as usize],
     pub expanded_obstacle_map: [Occupancy; CELL_COUNT as usize],
 }
+
+impl Default for ThalassicData {
+    fn default() -> Self {
+        Self::zeroed()
+    }
+}
+
 const THALASSIC_BUFFER_SIZE: usize = size_of::<ThalassicData>();
 
-pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData) + Send + 'static) -> &'static (impl Fn() + Send + Sync) {
+#[cfg(feature = "godot")]
+pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData) + Send + 'static) -> (impl Fn() + Send + Sync) {
     let parker = Parker::new();
     let unparker = parker.unparker().clone();
 
@@ -37,7 +46,7 @@ pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData) + Send + 'static) -
         let listener = match TcpListener::bind("0.0.0.0:20000") {
             Ok(listener) => listener,
             Err(e) => {
-                error!("Failed to bind to port 20000: {}", e);
+                godot::global::godot_error!("Failed to bind to port 20000: {}", e);
                 return;
             }
         };
@@ -48,7 +57,7 @@ pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData) + Send + 'static) -
             let stream = match listener.accept() {
                 Ok((x, _)) => x,
                 Err(e) => {
-                    error!("Failed to accept connection: {}", e);
+                    godot::global::godot_error!("Failed to accept connection: {}", e);
                     continue;
                 }
             };
@@ -58,11 +67,11 @@ pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData) + Send + 'static) -
             loop {
                 parker.park();
                 if let Err(e) = reader.get_mut().write_all(&[0]) {
-                    error!("Failed to write to stream: {}", e);
+                    godot::global::godot_error!("Failed to write to stream: {}", e);
                     break;
                 }
                 if let Err(e) = reader.read_exact(&mut buffer) {
-                    error!("Failed to read from stream: {}", e);
+                    godot::global::godot_error!("Failed to read from stream: {}", e);
                     break;
                 }
                 on_data(bytemuck::cast_ref(&buffer));
@@ -70,9 +79,9 @@ pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData) + Send + 'static) -
         }
     });
 
-    Box::leak(Box::new(move || {
+    move || {
         unparker.unpark();
-    }))
+    }
 }
 
 pub fn lunabot_task(address: SocketAddr, mut gen_data: impl FnMut(&mut ThalassicData) + Send + 'static) {
@@ -82,6 +91,7 @@ pub fn lunabot_task(address: SocketAddr, mut gen_data: impl FnMut(&mut Thalassic
             heightmap: [0.0; CELL_COUNT as usize],
             gradmap: [0.0; CELL_COUNT as usize],
             expanded_obstacle_map: [Occupancy(0); CELL_COUNT as usize],
+            point_count: 0,
         };
     
         loop {

@@ -19,7 +19,8 @@ members = [
     "embedded/imu_chip",
     "misc/simple-motion",
     "rp2040",
-    "embedded_common"
+    "embedded_common",
+    "lunabotics/lunaviz-lib",
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/","output/"]
