@@ -46,7 +46,7 @@ impl<S: GpuBufferTupleList, const SIZE: usize> ComputePipeline<S, SIZE> {
                     label: Some(compute_fn.name),
                     layout: Some(&compute_pipeline_layout),
                     module: &compute_fn.shader,
-                    entry_point: compute_fn.name,
+                    entry_point: Some(compute_fn.name),
                     cache: None,
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 }),

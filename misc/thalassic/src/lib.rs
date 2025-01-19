@@ -17,12 +17,12 @@ use height2grad::Height2Grad;
 use nalgebra::{Vector2, Vector3, Vector4};
 use pcl2height::Pcl2HeightV2;
 
-mod clustering;
+// mod clustering;
 mod depth2pcl;
 mod grad2obstacle;
 mod height2grad;
 mod pcl2height;
-pub use clustering::Clusterer;
+// pub use clustering::Clusterer;
 
 mod expand_obstacles;
 use expand_obstacles::ExpandObstacles;
