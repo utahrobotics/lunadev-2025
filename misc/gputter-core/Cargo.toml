@@ -10,4 +10,4 @@ nalgebra.workspace = true
 anyhow.workspace = true
 # static_assertions.workspace = true
 # crossbeam.workspace = true
-pollster = "0.3.0"
+pollster = "0.4.0"
