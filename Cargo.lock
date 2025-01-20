@@ -3405,10 +3405,11 @@ dependencies = [
  "spin_sleep",
  "tasker",
  "thalassic",
+ "tokio-serial",
  "tracing",
  "udev",
  "v4l",
- "vesc_translator",
+ "vesc-translator",
 ]
 
 [[package]]
@@ -6421,9 +6422,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
-name = "vesc_translator"
-version = "0.1.0"
-source = "git+https://github.com/Hydro111/vesc-translator.git#e363b84215218c2273c6a78971c9352051e2506e"
+name = "vesc-translator"
+version = "1.0.0"
 dependencies = [
  "crc",
 ]

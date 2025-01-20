@@ -125,6 +125,7 @@ pub fn lunabot_task(address: SocketAddr, mut gen_data: impl FnMut(&mut Thalassic
                 match buffer[0] {
                     0 => {
                         gen_data(&mut data, &mut points);
+                        data.point_count = points.len();
                         if let Err(e) = writer.write_all(bytemuck::bytes_of(&data)) {
                             error!("Failed to write to stream: {}", e);
                             break;

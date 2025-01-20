@@ -8,7 +8,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::Context;
 use nalgebra::Vector2;
 use openh264::{
     encoder::{Encoder, EncoderConfig},
@@ -133,7 +132,7 @@ impl<'a> Read for DownscaleRgbImageReader<'a> {
     }
 }
 
-pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Result<()> {
+pub fn camera_streaming(lunabase_streaming_address: SocketAddr) {
     let camera_frame_buffer = vec![
         0u8;
         CAMERA_RESOLUTION.x as usize
@@ -148,7 +147,7 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
         camera_streams.1 = camera_frame_buffer.len();
         camera_streams.0 = Box::leak(camera_frame_buffer).as_mut_ptr();
     }
-    let mut h264_enc = Encoder::with_api_config(
+    let mut h264_enc = match Encoder::with_api_config(
         OpenH264API::from_source(),
         EncoderConfig::new()
             .set_bitrate_bps(1_000_000)
@@ -156,11 +155,27 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
             .max_frame_rate(24.0)
             // .rate_control_mode(RateControlMode::Timestamp)
             .set_multiple_thread_idc(4), // .sps_pps_strategy(SpsPpsStrategy::IncreasingId)
-    )
-    .context("Failed to create H264 encoder")?;
-    let udp = UdpSocket::bind("0.0.0.0:0").context("Binding streaming UDP socket")?;
-    udp.connect(lunabase_streaming_address)
-        .context("Connecting to lunabase streaming address")?;
+    ) {
+        Ok(x) => x,
+        Err(e) => {
+            error!("Failed to create H264 encoder: {e}");
+            return;
+        }
+    };
+    let udp = match UdpSocket::bind("0.0.0.0:0") {
+        Ok(x) => x,
+        Err(e) => {
+            error!("Failed to bind to UDP socket: {e}");
+            return;
+        }
+    };
+    match udp.connect(lunabase_streaming_address) {
+        Ok(_) => {}
+        Err(e) => {
+            error!("Failed to connect to lunabase streaming address: {e}");
+            return;
+        }
+    }
 
     std::thread::spawn(move || {
         let mut yuv_buffer = YUVBuffer::new(
@@ -232,6 +247,4 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
             sleeper.sleep(delta);
         }
     });
-
-    Ok(())
 }

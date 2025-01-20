@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{cell::RefCell, net::SocketAddr, sync::Arc};
 
 use anyhow::Context;
 use camera::enumerate_cameras;
@@ -8,13 +8,15 @@ use depth::enumerate_depth_cameras;
 use fxhash::FxHashMap;
 use gputter::init_gputter_blocking;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
+use motors::enumerate_motors;
 use nalgebra::{Scale3, Transform3};
 use pathfinding::grid::Grid;
 use serde::Deserialize;
 use simple_motion::{ChainBuilder, NodeSerde};
 use streaming::camera_streaming;
 use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn, tokio::runtime::Handle};
-use tracing::{error, warn};
+use tracing::error;
+use udev::Udev;
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,
@@ -27,6 +29,7 @@ mod apriltag;
 mod camera;
 mod depth;
 mod streaming;
+mod motors;
 
 pub mod dataviz;
 // mod audio_streaming;
@@ -101,9 +104,7 @@ impl LunabotApp {
             subaddress_of(self.lunabase_address, 1)
         });
 
-        if let Err(e) = camera_streaming(camera_streaming_address) {
-            error!("Failed to start camera streaming: {e}");
-        }
+        camera_streaming(camera_streaming_address);
 
         #[cfg(feature = "experimental")]
         if let Err(e) = audio_streaming::audio_streaming(
@@ -114,7 +115,7 @@ impl LunabotApp {
             error!("Failed to start audio streaming: {e}");
         }
 
-        if let Err(e) = enumerate_cameras(
+        enumerate_cameras(
             localizer_ref.clone(),
             self.cameras.into_iter().map(
                 |(
@@ -142,9 +143,7 @@ impl LunabotApp {
                 },
             ),
             &apriltags,
-        ) {
-            error!("Failed to enumerate cameras: {e}");
-        }
+        );
 
         let mut buffer = OwnedData::from(ThalassicData::default());
         let shared_thalassic_data = buffer.create_lendee();
@@ -227,6 +226,8 @@ impl LunabotApp {
             }
         });
 
+        let motor_ref = enumerate_motors();
+
         run_ai(
             robot_chain.into(),
             |action, inputs| match action {
@@ -235,7 +236,7 @@ impl LunabotApp {
                 }
                 Action::SetSteering(steering) => {
                     let (left, right) = steering.get_left_and_right();
-                    // TODO
+                    motor_ref.set_speed(left, right);
                 }
                 Action::CalculatePath { from, to, mut into } => {
                     pathfinder.pathfind(&shared_thalassic_data, from, to, &mut into);

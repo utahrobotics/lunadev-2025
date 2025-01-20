@@ -78,7 +78,7 @@ impl DatavizApp {
         let data_address = self.lunabase_data_address.unwrap_or_else(|| {
             subaddress_of(self.lunabase_address, 9400)
         });
-        common::thalassic::lunabot_task(data_address, move |data| {
+        common::thalassic::lunabot_task(data_address, move |data, _points| {
             set_observe_depth(true);
             let incoming_data = shared_thalassic_data.get();
             data.gradmap = incoming_data.gradmap;

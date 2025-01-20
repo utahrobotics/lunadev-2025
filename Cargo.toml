@@ -21,6 +21,7 @@ members = [
     "rp2040",
     "embedded_common",
     "lunabotics/lunaviz-lib",
+    "misc/vesc-translator"
 ]
 resolver = "2"
 exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/","output/"]
@@ -75,6 +76,7 @@ ares-bt = { path = "misc/ares-bt" }
 gputter = { path = "misc/gputter" }
 thalassic = { path = "misc/thalassic" }
 simple-motion = { path = "misc/simple-motion" }
+vesc-translator = { path = "misc/vesc-translator" }
 
 [profile.dev.package.lunabot]
 opt-level = 2
