@@ -4,7 +4,7 @@ use apriltag::{families::TagStandard41h12, DetectorBuilder, Image, TagParams};
 use apriltag_image::{image::ImageBuffer, ImageExt};
 use apriltag_nalgebra::PoseExt;
 use fxhash::FxHashMap;
-use nalgebra::{Point3, Isometry3, UnitQuaternion, Vector3};
+use nalgebra::{Isometry3, Point3, UnitQuaternion, Vector3};
 use serde::Deserialize;
 
 #[derive(Deserialize, Clone, Copy)]

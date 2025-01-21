@@ -98,7 +98,7 @@ fn main() {
             cameras,
             depth_cameras,
             apriltags,
-            robot_layout
+            robot_layout,
         } => {
             apps::LunabotApp {
                 lunabase_address,
@@ -109,20 +109,28 @@ fn main() {
                 cameras,
                 depth_cameras,
                 apriltags,
-                robot_layout: robot_layout.unwrap_or_else(|| "robot-layout/lunabot.json".to_string())
+                robot_layout: robot_layout
+                    .unwrap_or_else(|| "robot-layout/lunabot.json".to_string()),
             }
             .run();
             #[cfg(not(feature = "experimental"))]
             let _ = lunabase_audio_streaming_address;
         }
         #[cfg(feature = "production")]
-        Commands::Dataviz { lunabase_address, lunabase_data_address, max_pong_delay_ms, depth_cameras, robot_layout } => {
+        Commands::Dataviz {
+            lunabase_address,
+            lunabase_data_address,
+            max_pong_delay_ms,
+            depth_cameras,
+            robot_layout,
+        } => {
             apps::dataviz::DatavizApp {
                 lunabase_address,
                 lunabase_data_address,
                 max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
                 depth_cameras,
-                robot_layout: robot_layout.unwrap_or_else(|| "robot-layout/lunabot.json".to_string())
+                robot_layout: robot_layout
+                    .unwrap_or_else(|| "robot-layout/lunabot.json".to_string()),
             }
             .run();
         }

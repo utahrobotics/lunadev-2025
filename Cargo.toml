@@ -24,7 +24,7 @@ members = [
     "misc/vesc-translator"
 ]
 resolver = "2"
-exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/","output/"]
+exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/", "output/"]
 
 [workspace.dependencies]
 fxhash = "0.2"

@@ -1,4 +1,9 @@
-use std::{cell::OnceCell, io::Cursor, path::PathBuf, sync::mpsc::{Receiver, SyncSender}};
+use std::{
+    cell::OnceCell,
+    io::Cursor,
+    path::PathBuf,
+    sync::mpsc::{Receiver, SyncSender},
+};
 
 use super::apriltag::{
     image::{self, ImageBuffer, ImageDecoder, Luma},
@@ -28,38 +33,46 @@ pub struct CameraInfo {
 pub fn enumerate_cameras(
     localizer_ref: &LocalizerRef,
     port_to_chain: impl IntoIterator<Item = (String, CameraInfo)>,
-    apriltags: &'static [(usize, Apriltag)]
+    apriltags: &'static [(usize, Apriltag)],
 ) {
-    let mut threads: FxHashMap<String, SyncSender<PathBuf>> = port_to_chain.into_iter().filter_map(|(port, CameraInfo {
-        node: k_node,
-        focal_length_x_px,
-        focal_length_y_px,
-        stream_index,
-    })| {
-        let Some(camera_stream) = CameraStream::new(stream_index) else {
-            return None;
-        };
-        let port2 = port.clone();
-        let localizer_ref = localizer_ref.clone();
-        let (tx, rx) = std::sync::mpsc::sync_channel(1);
-        std::thread::spawn(move || {
-            let mut camera_task = CameraTask {
-                path: rx,
+    let mut threads: FxHashMap<String, SyncSender<PathBuf>> = port_to_chain
+        .into_iter()
+        .filter_map(
+            |(
                 port,
-                camera_stream,
-                image: OnceCell::new(),
-                focal_length_x_px,
-                focal_length_y_px,
-                apriltags,
-                localizer_ref,
-                node: k_node,
-            };
-            loop {
-                camera_task.camera_task();
-            }
-        });
-        Some((port2, tx))
-    }).collect();
+                CameraInfo {
+                    node,
+                    focal_length_x_px,
+                    focal_length_y_px,
+                    stream_index,
+                },
+            )| {
+                let Some(camera_stream) = CameraStream::new(stream_index) else {
+                    return None;
+                };
+                let port2 = port.clone();
+                let localizer_ref = localizer_ref.clone();
+                let (tx, rx) = std::sync::mpsc::sync_channel(1);
+                std::thread::spawn(move || {
+                    let mut camera_task = CameraTask {
+                        path: rx,
+                        port,
+                        camera_stream,
+                        image: OnceCell::new(),
+                        focal_length_x_px,
+                        focal_length_y_px,
+                        apriltags,
+                        localizer_ref,
+                        node,
+                    };
+                    loop {
+                        camera_task.camera_task();
+                    }
+                });
+                Some((port2, tx))
+            },
+        )
+        .collect();
 
     std::thread::spawn(move || {
         let mut monitor = match MonitorBuilder::new() {
@@ -83,7 +96,7 @@ pub fn enumerate_cameras(
                 return;
             }
         };
-        
+
         let mut enumerator = {
             let udev = match Udev::new() {
                 Ok(x) => x,
@@ -168,11 +181,9 @@ impl CameraTask {
     fn camera_task(&mut self) {
         let path = match self.path.recv() {
             Ok(x) => x,
-            Err(_) => {
-                loop {
-                    std::thread::park();
-                }
-            }
+            Err(_) => loop {
+                std::thread::park();
+            },
         };
         let mut camera = match v4l::Device::with_path(&path) {
             Ok(x) => x,
@@ -285,11 +296,14 @@ impl CameraTask {
 
             if image.try_recall() {
                 let owned_image: &mut ImageBuffer<Luma<u8>, Vec<u8>> = image.get_mut().unwrap();
-                owned_image.iter_mut().zip(rgb_img.array_chunks::<3>().map(|[r, g, b]| {
-                    (0.299 * *r as f64 + 0.587 * *g as f64 + 0.114 * *b as f64) as u8
-                })).for_each(|(dst, new)| {
-                    *dst = new;
-                });
+                owned_image
+                    .iter_mut()
+                    .zip(rgb_img.array_chunks::<3>().map(|[r, g, b]| {
+                        (0.299 * *r as f64 + 0.587 * *g as f64 + 0.114 * *b as f64) as u8
+                    }))
+                    .for_each(|(dst, new)| {
+                        *dst = new;
+                    });
                 image.share();
             }
         }

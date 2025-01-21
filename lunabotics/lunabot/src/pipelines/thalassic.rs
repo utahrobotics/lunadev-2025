@@ -7,6 +7,7 @@ use std::{
 };
 
 use arc_swap::ArcSwapOption;
+use common::THALASSIC_CELL_COUNT;
 use crossbeam::{
     atomic::AtomicCell,
     sync::{Parker, Unparker},
@@ -15,7 +16,6 @@ use gputter::is_gputter_initialized;
 use nalgebra::Vector2;
 use tasker::shared::OwnedData;
 use thalassic::{Occupancy, PointCloudStorage, ThalassicBuilder};
-use common::THALASSIC_CELL_COUNT;
 
 static OBSERVE_DEPTH: AtomicBool = AtomicBool::new(false);
 static DEPTH_UNPARKER: ArcSwapOption<Unparker> = ArcSwapOption::const_empty();

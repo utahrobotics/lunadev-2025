@@ -26,8 +26,8 @@ use super::create_packet_builder;
 mod apriltag;
 mod camera;
 mod depth;
-mod streaming;
 mod motors;
+mod streaming;
 
 pub mod dataviz;
 // mod audio_streaming;
@@ -51,7 +51,10 @@ pub struct DepthCameraInfo {
 }
 
 fn subaddress_of(mut addr: SocketAddr, port_offset: u16) -> SocketAddr {
-    let new_port = addr.port().checked_add(port_offset).unwrap_or_else(|| addr.port().wrapping_add(port_offset));
+    let new_port = addr
+        .port()
+        .checked_add(port_offset)
+        .unwrap_or_else(|| addr.port().wrapping_add(port_offset));
     addr.set_port(new_port);
     addr
 }
@@ -95,21 +98,20 @@ impl LunabotApp {
         )
         .expect("Failed to parse robot chain");
         let robot_chain = ChainBuilder::from(robot_chain).finish_static();
-        
+
         let localizer = Localizer::new(robot_chain.clone(), None);
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
-        let camera_streaming_address = self.lunabase_streaming_address.unwrap_or_else(|| {
-            subaddress_of(self.lunabase_address, 1)
-        });
+        let camera_streaming_address = self
+            .lunabase_streaming_address
+            .unwrap_or_else(|| subaddress_of(self.lunabase_address, 1));
 
         camera_streaming(camera_streaming_address);
 
         #[cfg(feature = "experimental")]
         if let Err(e) = audio_streaming::audio_streaming(
-            self.lunabase_audio_streaming_address.unwrap_or_else(|| {
-                subaddress_of(self.lunabase_address, 2)
-            }),
+            self.lunabase_audio_streaming_address
+                .unwrap_or_else(|| subaddress_of(self.lunabase_address, 2)),
         ) {
             error!("Failed to start audio streaming: {e}");
         }
@@ -149,7 +151,7 @@ impl LunabotApp {
 
         enumerate_depth_cameras(
             buffer,
-            localizer_ref.clone(),
+            &localizer_ref,
             self.depth_cameras.into_iter().map(
                 |(
                     serial,
@@ -162,7 +164,7 @@ impl LunabotApp {
                     (
                         serial,
                         depth::DepthCameraInfo {
-                            k_node: robot_chain
+                            node: robot_chain
                                 .get_node_with_name(&link_name)
                                 .context("Failed to find camera link")
                                 .unwrap()
@@ -196,7 +198,7 @@ impl LunabotApp {
             self.max_pong_delay_ms,
         );
 
-        // UNTESTED: 
+        // UNTESTED:
         // let localizer_ref = localizer_ref.clone();
         // handle.spawn(async move {
         //     use rp2040::*;
@@ -213,7 +215,7 @@ impl LunabotApp {
         //             Ok(FromIMU::AccellerationNormReading(AccelerationNorm{x,y,z})) => {
         //                 // TODO: set accel
         //             }
-                    
+
         //             Err(e) => {
         //                 error!("Error getting readings from pico: {}",e);
         //             }

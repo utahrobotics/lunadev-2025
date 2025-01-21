@@ -1,9 +1,12 @@
-use tasker::{parking_lot::{Condvar, Mutex}, tokio::io::{AsyncWriteExt, BufStream}, BlockOn};
+use tasker::{
+    parking_lot::{Condvar, Mutex},
+    tokio::io::{AsyncWriteExt, BufStream},
+    BlockOn,
+};
+use tokio_serial::SerialStream;
 use tracing::error;
 use udev::Udev;
 use vesc_translator::{CanForwarded, SetDutyCycle, VescPacker};
-use tokio_serial::SerialStream;
-
 
 pub struct MotorRef {
     mutex: Mutex<(f32, f32)>,
@@ -33,7 +36,7 @@ fn enumerate_motors_priv(motor_ref: &'static MotorRef) {
     loop {
         loop {
             let mut motor_port: Option<SerialStream> = None;
-            
+
             {
                 let udev = match Udev::new() {
                     Ok(x) => x,
@@ -42,14 +45,13 @@ fn enumerate_motors_priv(motor_ref: &'static MotorRef) {
                         break;
                     }
                 };
-                let mut enumerator = 
-                    match udev::Enumerator::with_udev(udev.clone()) {
-                        Ok(x) => x,
-                        Err(e) => {
-                            error!("Failed to create udev enumerator: {e}");
-                            return;
-                        }
-                    };
+                let mut enumerator = match udev::Enumerator::with_udev(udev.clone()) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        error!("Failed to create udev enumerator: {e}");
+                        return;
+                    }
+                };
                 let devices = match enumerator.scan_devices() {
                     Ok(x) => x,
                     Err(e) => {
@@ -70,8 +72,10 @@ fn enumerate_motors_priv(motor_ref: &'static MotorRef) {
                     });
                 }
             }
-            
-            let Some(motor_port) = motor_port else { break; };
+
+            let Some(motor_port) = motor_port else {
+                break;
+            };
             let mut motor_port = BufStream::new(motor_port);
 
             loop {
@@ -81,10 +85,18 @@ fn enumerate_motors_priv(motor_ref: &'static MotorRef) {
                     *guard
                 };
                 let result = async {
-                    motor_port.write_all(vesc_packer.pack(&SetDutyCycle(left))).await?;
-                    motor_port.write_all(vesc_packer.pack(&CanForwarded { can_id: 4, payload: SetDutyCycle(right) })).await?;
+                    motor_port
+                        .write_all(vesc_packer.pack(&SetDutyCycle(left)))
+                        .await?;
+                    motor_port
+                        .write_all(vesc_packer.pack(&CanForwarded {
+                            can_id: 4,
+                            payload: SetDutyCycle(right),
+                        }))
+                        .await?;
                     motor_port.flush().await
-                }.block_on();
+                }
+                .block_on();
                 if let Err(e) = result {
                     error!("Failed to write to motor port: {e}");
                     break;
