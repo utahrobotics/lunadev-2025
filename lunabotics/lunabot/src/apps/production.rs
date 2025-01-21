@@ -15,6 +15,7 @@ use simple_motion::{ChainBuilder, NodeSerde};
 use streaming::camera_streaming;
 use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn};
 use tracing::error;
+use rp2040::*;
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,
@@ -198,31 +199,61 @@ impl LunabotApp {
             self.max_pong_delay_ms,
         );
 
-        // UNTESTED:
-        // let localizer_ref = localizer_ref.clone();
-        // handle.spawn(async move {
-        //     use rp2040::*;
-        //     use embedded_common::*;
-        //     use nalgebra::Vector3;
-        //     let mut pico_controler = PicoController::new("/dev/ttyACM0").await.unwrap();
+        let localizer_ref = localizer_ref.clone();
+        let picos = PicoController::enumerate_picos();
+        handle.spawn(async move { 'controller: {
+            use tracing::{warn, info, error};
+            use embedded_common::*;
+            use nalgebra::Vector3;
+            let pico_paths = match picos  {
+                Ok(picos) => picos,
+                Err(e) => {
+                    error!("Couldn't enumerate connected picos. {}", e);
+                    break 'controller;
+                }
+            };
 
-        //     loop {
-        //         match pico_controler.get_message_from_pico().await {
-        //             Ok(FromIMU::AngularRateReading(AngularRate{x,y,z})) => {
-        //                 // TODO: set angular rate
-        //             }
+            let Some(path) = pico_paths.get(0) else {
+                error!("No Picos found");
+                break 'controller;
+            };
 
-        //             Ok(FromIMU::AccellerationNormReading(AccelerationNorm{x,y,z})) => {
-        //                 // TODO: set accel
-        //             }
+            
+            let mut pico_controler = match PicoController::new(path).await {
+                Ok(controller) => controller,
+                Err(e) => {
+                    error!("Couldn't find pico: {e}");
+                    break 'controller;
+                }
+            };
+            loop {
+                match pico_controler.get_message_from_pico().await {
+                    Ok(FromIMU::AngularRateReading(AngularRate{x,y,z})) => {
+                        // info!("Got angular rate reading: {x}, {y}, {z}");
+                        // TODO: set angular rate
+                    }
 
-        //             Err(e) => {
-        //                 error!("Error getting readings from pico: {}",e);
-        //             }
-        //         }
-        //         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        //     }
-        // });
+                    Ok(FromIMU::AccellerationNormReading(AccelerationNorm{x,y,z})) => {
+                        // info!("Got accel norm reading: {x}, {y}, {z}");
+
+                        // TODO: set accel
+                    }
+
+                    Ok(FromIMU::NoDataReady) => {
+                        warn!("No data ready");
+                    }
+
+                    Ok(FromIMU::Error) => {
+                        warn!("Received error from IMU");
+                    }
+
+                    Err(e) => {
+                        error!("Error getting readings from pico: {}",e);
+                    }
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        }});
 
         // let motor_ref = enumerate_motors();
 
