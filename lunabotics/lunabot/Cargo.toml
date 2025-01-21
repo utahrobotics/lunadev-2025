@@ -27,7 +27,7 @@ rp2040 = {path = "../../rp2040"}
 embedded_common = {path = "../../embedded_common"}
 vesc-translator = { workspace = true, optional = true }
 realsense-rust = { version = "1.2", optional = true }
-udev = { version = "0.9.1", optional = true }
+udev = { version = "0.9.1", optional = true, features = ["mio10"] }
 v4l = { version = "0.14.0", optional = true }
 openh264 = { workspace = true, optional = true }
 
@@ -38,7 +38,9 @@ arc-swap = "1.7.1"
 opus = { workspace = true, optional = true }
 rodio = { version = "0.20.1", optional = true }
 tokio-serial = { version = "5.4.5", optional = true }
+mio = { version = "1", optional = true }
 
 [features]
-production = ["realsense-rust", "udev", "v4l", "openh264", "vesc-translator", "apriltag", "apriltag-nalgebra", "apriltag-image", "common/thalassic", "tokio-serial"]
+production = ["realsense-rust", "udev", "v4l", "openh264", "vesc-translator", "apriltag", "apriltag-nalgebra", "apriltag-image", "common/thalassic", "tokio-serial", "mio"]
 experimental = ["opus", "production", "rodio"]
+mio = ["dep:mio"]

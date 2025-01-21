@@ -3392,6 +3392,7 @@ dependencies = [
  "gputter",
  "lumpur",
  "lunabot-ai",
+ "mio",
  "nalgebra",
  "openh264",
  "opus",
@@ -6209,6 +6210,7 @@ dependencies = [
  "io-lifetimes",
  "libc",
  "libudev-sys",
+ "mio",
  "pkg-config",
 ]
 

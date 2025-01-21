@@ -1,5 +1,5 @@
 use std::{
-    cell::OnceCell, num::NonZeroU32, sync::{mpsc::{Receiver, Sender, SyncSender}, Arc}
+    cell::OnceCell, num::NonZeroU32, sync::{mpsc::{Receiver, Sender, SyncSender}, Arc}, time::Duration
 };
 
 use super::apriltag::{
@@ -11,7 +11,7 @@ use gputter::types::{AlignedMatrix4, AlignedVec4};
 use nalgebra::{Vector2, Vector4};
 pub use realsense_rust;
 use realsense_rust::{
-    config::Config, frame::{ColorFrame, DepthFrame, PixelKind}, kind::{Rs2CameraInfo, Rs2Format, Rs2StreamKind}, pipeline::{ActivePipeline, InactivePipeline}
+    config::Config, device::Device, frame::{ColorFrame, DepthFrame, PixelKind}, kind::{Rs2CameraInfo, Rs2Format, Rs2StreamKind}, pipeline::{ActivePipeline, FrameWaitError, InactivePipeline}
 };
 use simple_motion::StaticImmutableNode;
 use tasker::shared::{MaybeOwned, OwnedData};
@@ -42,7 +42,7 @@ pub fn enumerate_depth_cameras(
 ) {
     let (init_tx, init_rx) = std::sync::mpsc::channel::<&'static str>();
     let (pcl_storage_channels_tx, pcl_storage_channels_rx) = std::sync::mpsc::channel();
-    let mut threads: FxHashMap<&str, SyncSender<ActivePipeline>> = serial_to_chain
+    let mut threads: FxHashMap<&str, SyncSender<(Device, ActivePipeline)>> = serial_to_chain
         .into_iter()
         .filter_map(
             |(
@@ -194,8 +194,9 @@ pub fn enumerate_depth_cameras(
                 }
             };
             
-            if pipeline_sender.send(pipeline).is_err() {
-                threads.remove(current_serial);
+            let current_serial = current_serial.to_string();
+            if pipeline_sender.send((device, pipeline)).is_err() {
+                threads.remove(current_serial.as_str());
             }
         }
     });
@@ -205,6 +206,7 @@ pub fn enumerate_depth_cameras(
             thalassic_buffer,
             pcl_storage_channels_rx.into_iter().collect(),
         );
+        info!("Thalassic pipeline spawned");
     });
 }
 
@@ -216,7 +218,7 @@ struct DepthCameraState {
 }
 
 struct DepthCameraTask {
-    pipeline: Receiver<ActivePipeline>,
+    pipeline: Receiver<(Device, ActivePipeline)>,
     serial: &'static str,
     camera_stream: CameraStream,
     state: OnceCell<DepthCameraState>,
@@ -231,7 +233,7 @@ struct DepthCameraTask {
 impl DepthCameraTask {
     fn depth_camera_task(&mut self) {
         let _ = self.init_tx.send(self.serial);
-        let mut pipeline = match self.pipeline.recv() {
+        let (device, mut pipeline) = match self.pipeline.recv() {
             Ok(x) => x,
             Err(_) => loop {
                 std::thread::park();
@@ -350,10 +352,13 @@ impl DepthCameraTask {
         info!("RealSense Camera {} opened", self.serial);
 
         loop {
-            let frames = match pipeline.wait(None) {
+            let frames = match pipeline.wait(Some(Duration::from_secs(1))) {
                 Ok(x) => x,
                 Err(e) => {
                     error!("Failed to get frame from RealSense Camera {}: {e}", self.serial);
+                    if matches!(e, FrameWaitError::DidTimeoutBeforeFrameArrival) {
+                        device.hardware_reset();
+                    }
                     break;
                 }
             };

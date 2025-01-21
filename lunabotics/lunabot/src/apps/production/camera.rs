@@ -13,8 +13,32 @@ use fxhash::FxHashMap;
 use simple_motion::StaticImmutableNode;
 use tasker::shared::{MaybeOwned, OwnedData};
 use tracing::{error, info, warn};
-use udev::{EventType, MonitorBuilder, Udev};
+use udev::{Event, EventType, MonitorBuilder, Udev};
 use v4l::{buffer::Type, io::traits::CaptureStream, prelude::MmapStream, video::Capture};
+use mio::{Events, Interest, Poll, Token};
+
+pub fn poll(mut socket: udev::MonitorSocket) -> impl Iterator<Item=Event> {
+    let mut poll = Poll::new().unwrap();
+    let mut events = Events::with_capacity(1024);
+
+    poll.registry().register(
+        &mut socket,
+        Token(0),
+        Interest::READABLE | Interest::WRITABLE,
+    ).unwrap();
+
+    std::iter::from_fn(move || {
+        loop {
+            poll.poll(&mut events, None).unwrap();
+    
+            for event in &events {
+                if event.token() == Token(0) && event.is_writable() {
+                    return Some(socket.iter().collect::<Vec<_>>());
+                }
+            }
+        }
+    }).flatten()
+}
 
 use crate::localization::LocalizerRef;
 
@@ -123,10 +147,11 @@ pub fn enumerate_cameras(
         devices
             .into_iter()
             .chain(
-                listener
-                    .iter()
+                poll(listener)
                     .filter(|event| event.event_type() == EventType::Add)
-                    .map(|event| event.device()),
+                    .map(|event| {
+                        event.device()
+                    }),
             )
             .for_each(|device| {
                 let Some(path) = device.devnode() else {
@@ -137,6 +162,13 @@ pub fn enumerate_cameras(
                     return;
                 };
                 if !path_str.starts_with("/dev/video") {
+                    return;
+                }
+                let Some(udev_index) = device.attribute_value("index") else {
+                    warn!("No udev_index for camera {path_str}");
+                    return;
+                };
+                if udev_index.to_str() != Some("0") {
                     return;
                 }
                 if let Some(name) = device.attribute_value("name") {
@@ -162,6 +194,7 @@ pub fn enumerate_cameras(
                     warn!("Unexpected camera with port {}", port);
                 }
             });
+            eprintln!("Terminated");
     });
 }
 
