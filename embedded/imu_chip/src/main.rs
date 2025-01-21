@@ -58,7 +58,7 @@ async fn main(spawner: Spawner) {
     let config = {
         let mut config = embassy_usb::Config::new(0xc0de, 0xcafe);
         config.manufacturer = Some("Embassy");
-        config.product = Some("USB-serial example");
+        config.product = Some("USB-serial");
         config.serial_number = Some("12345678");
         config.max_power = 100;
         config.max_packet_size_0 = 64;
@@ -82,6 +82,7 @@ async fn main(spawner: Spawner) {
         );
         builder
     };
+
 
     // ttyACM0 for writing sensor data over usb to lunabot
     let mut class = {

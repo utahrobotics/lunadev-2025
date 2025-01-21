@@ -2,6 +2,9 @@
 
 use defmt::Format;
 
+pub static PICO_SERIAL: &'static str = "12345678";
+pub static UDEVADM_ID: &'static str = "Embassy_USB-serial_12345678";
+
 #[derive(Clone, Copy, Debug, Format, PartialEq)]
 pub enum FromIMU {
     AngularRateReading(AngularRate),
