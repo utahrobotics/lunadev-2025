@@ -144,12 +144,12 @@ pub fn enumerate_motors(handle: Handle) -> &'static MotorRef {
                     };
                     let result = async {
                         motor_port
-                            .write_all(vesc_packer.pack(&SetDutyCycle(left)))
+                            .write_all(vesc_packer.pack(&SetDutyCycle(right)))
                             .await?;
                         motor_port
                             .write_all(vesc_packer.pack(&CanForwarded {
                                 can_id: 4,
-                                payload: SetDutyCycle(right),
+                                payload: SetDutyCycle(left),
                             }))
                             .await?;
                         motor_port.flush().await

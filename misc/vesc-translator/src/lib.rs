@@ -1,17 +1,17 @@
-use crc::Crc;
+// use crc::Crc;
 
-/// The CRC used by UART communication. 
-/// Reverse engineered using CRC RevEng https://sourceforge.net/projects/reveng/
-const CRC_GENERATOR: Crc<u16> = Crc::<u16>::new(&crc::Algorithm {
-    width: 16,
-    poly: 0x1021,
-    init: 0x0205,
-    refin: false,
-    refout: false,
-    xorout: 0x0000,
-    check: 0xbf1a,
-    residue: 0x0000
-});
+// /// The CRC used by UART communication. 
+// /// Reverse engineered using CRC RevEng https://sourceforge.net/projects/reveng/
+// const CRC_GENERATOR: Crc<u16> = Crc::<u16>::new(&crc::Algorithm {
+//     width: 16,
+//     poly: 0x1021,
+//     init: 0x0205,
+//     refin: false,
+//     refout: false,
+//     xorout: 0x0000,
+//     check: 0xbf1a,
+//     residue: 0x0000
+// });
 
 #[derive(Clone, Copy, Debug)]
 pub struct SetDutyCycle(pub f32);
@@ -77,10 +77,10 @@ impl VescPacker {
             self.buffer.push(2u8.to_be());
             self.buffer.push((payload.len() as u8).to_be());
         }
+        let payload_start_index = self.buffer.len();
         payload.append_to(&mut self.buffer);
-        self.buffer.extend_from_slice(&CRC_GENERATOR.checksum(&self.buffer).to_be_bytes());
+        self.buffer.extend_from_slice(&crc16::State::<crc16::XMODEM>::calculate(&self.buffer[payload_start_index..]).to_be_bytes());
         self.buffer.push(3u8.to_be());
-        println!("{:?}", self.buffer);
         &self.buffer
     }
 }
