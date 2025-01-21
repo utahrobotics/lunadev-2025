@@ -106,97 +106,101 @@ pub fn enumerate_depth_cameras(
     std::thread::spawn(move || {
         loop {
             let Ok(target_serial) = init_rx.recv() else { break; };
-            let device = match device_hub.wait_for_device() {
-                Ok(x) => x,
-                Err(e) => {
-                    error!("Failed to wait for RealSense device: {e}");
-                    break;
-                }
-            };
-            // let Some(product_line_cstr) = device.info(Rs2CameraInfo::ProductLine) else {
-            //     // Pseudo devices representing a RealSense Camera don't have a product line
-            //     continue;
-            // };
-            let Some(current_serial_cstr) = device.info(Rs2CameraInfo::SerialNumber) else {
-                error!("Failed to get serial number for RealSense Camera");
-                continue;
-            };
-            let Ok(current_serial) = current_serial_cstr.to_str() else {
-                error!("Failed to parse serial number {:?}", current_serial_cstr);
-                continue;
-            };
-            if target_serial != current_serial {
-                continue;
-            }
-            // let Ok(product_line) = product_line_cstr.to_str() else {
-            //     error!("Failed to parse product line {:?} for RealSense Camera {current_serial}", product_line_cstr);
-            //     continue;
-            // };
-            // if product_line != "D400" {
-            //     continue;
-            // }
-            let Some(pipeline_sender) = threads.get(current_serial) else {
-                warn!("Unexpected RealSense camera with serial {}", current_serial);
-                continue;
-            };
-        
-            let Some(usb_cstr) = device.info(Rs2CameraInfo::UsbTypeDescriptor) else {
-                error!("Failed to read USB type descriptor for RealSense Camera {}", current_serial);
-                continue;
-            };
-            let Ok(usb_str) = usb_cstr.to_str() else {
-                error!("USB type descriptor for RealSense Camera {} is not utf-8", current_serial);
-                continue;
-            };
-            let Ok(usb_val) = usb_str.parse::<f32>() else {
-                error!("USB type descriptor for RealSense Camera {} is not f32", current_serial);
-                continue;
-            };
-    
-            let mut config = Config::new();
-            if let Err(e) = config.enable_device_from_serial(current_serial_cstr) {
-                error!("Failed to enable RealSense Camera {}: {e}", current_serial);
-                continue;
-            }
-    
-            if let Err(e) = config.disable_all_streams() {
-                error!("Failed to disable all streams in RealSense Camera {}: {e}", current_serial);
-                continue;
-            }
-    
-            if let Err(e) = config.enable_stream(Rs2StreamKind::Depth, None, 0, 0, Rs2Format::Z16, 0) {
-                error!("Failed to enable depth stream in RealSense Camera {}: {e}", current_serial);
-                continue;
-            }
-
-            if let Err(e) = config.enable_stream(Rs2StreamKind::Color, None, 0, 0, Rs2Format::Rgb8, 0) {
-                error!("Failed to enable color stream in RealSense Camera {}: {e}", current_serial);
-                continue;
-            }
-    
-            if usb_val < 3.0 {
-                error!("Depth camera {} is connected to USB {usb_val}", current_serial);
-                continue;
-            }
-    
-            let pipeline = match InactivePipeline::try_from(&context) {
-                Ok(x) => x,
-                Err(e) => {
-                    warn!("Failed to open pipeline for RealSense Camera {}: {e}", current_serial);
+            loop {
+                let device = match device_hub.wait_for_device() {
+                    Ok(x) => x,
+                    Err(e) => {
+                        error!("Failed to wait for RealSense device: {e}");
+                        break;
+                    }
+                };
+                // let Some(product_line_cstr) = device.info(Rs2CameraInfo::ProductLine) else {
+                //     // Pseudo devices representing a RealSense Camera don't have a product line
+                //     continue;
+                // };
+                let Some(current_serial_cstr) = device.info(Rs2CameraInfo::SerialNumber) else {
+                    error!("Failed to get serial number for RealSense Camera");
+                    continue;
+                };
+                let Ok(current_serial) = current_serial_cstr.to_str() else {
+                    error!("Failed to parse serial number {:?}", current_serial_cstr);
+                    continue;
+                };
+                if target_serial != current_serial {
                     continue;
                 }
-            };
-            let pipeline = match pipeline.start(Some(config)) {
-                Ok(x) => x,
-                Err(e) => {
-                    error!("Failed to start pipeline for RealSense Camera {}: {e}", current_serial);
+                // let Ok(product_line) = product_line_cstr.to_str() else {
+                //     error!("Failed to parse product line {:?} for RealSense Camera {current_serial}", product_line_cstr);
+                //     continue;
+                // };
+                // if product_line != "D400" {
+                //     continue;
+                // }
+                let Some(pipeline_sender) = threads.get(current_serial) else {
+                    warn!("Unexpected RealSense camera with serial {}", current_serial);
                     continue;
-                }
-            };
+                };
             
-            let current_serial = current_serial.to_string();
-            if pipeline_sender.send((device, pipeline)).is_err() {
-                threads.remove(current_serial.as_str());
+                let Some(usb_cstr) = device.info(Rs2CameraInfo::UsbTypeDescriptor) else {
+                    error!("Failed to read USB type descriptor for RealSense Camera {}", current_serial);
+                    continue;
+                };
+                let Ok(usb_str) = usb_cstr.to_str() else {
+                    error!("USB type descriptor for RealSense Camera {} is not utf-8", current_serial);
+                    continue;
+                };
+                let Ok(usb_val) = usb_str.parse::<f32>() else {
+                    error!("USB type descriptor for RealSense Camera {} is not f32", current_serial);
+                    continue;
+                };
+        
+                let mut config = Config::new();
+                if let Err(e) = config.enable_device_from_serial(current_serial_cstr) {
+                    error!("Failed to enable RealSense Camera {}: {e}", current_serial);
+                    continue;
+                }
+        
+                if let Err(e) = config.disable_all_streams() {
+                    error!("Failed to disable all streams in RealSense Camera {}: {e}", current_serial);
+                    continue;
+                }
+        
+                if let Err(e) = config.enable_stream(Rs2StreamKind::Depth, None, 0, 0, Rs2Format::Z16, 0) {
+                    error!("Failed to enable depth stream in RealSense Camera {}: {e}", current_serial);
+                    continue;
+                }
+
+                if let Err(e) = config.enable_stream(Rs2StreamKind::Color, None, 0, 0, Rs2Format::Rgb8, 0) {
+                    error!("Failed to enable color stream in RealSense Camera {}: {e}", current_serial);
+                    continue;
+                }
+        
+                if usb_val < 3.0 {
+                    error!("Depth camera {} is connected to USB {usb_val}", current_serial);
+                    continue;
+                }
+        
+                let pipeline = match InactivePipeline::try_from(&context) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        warn!("Failed to open pipeline for RealSense Camera {}: {e}", current_serial);
+                        continue;
+                    }
+                };
+                let pipeline = match pipeline.start(Some(config)) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        error!("Failed to start pipeline for RealSense Camera {}: {e}", current_serial);
+                        continue;
+                    }
+                };
+                
+                let current_serial = current_serial.to_string();
+                if let Err(error) = pipeline_sender.send((device, pipeline)) {
+                    error.0.1.stop();
+                    threads.remove(current_serial.as_str());
+                }
+                break;
             }
         }
     });
@@ -352,7 +356,7 @@ impl DepthCameraTask {
         info!("RealSense Camera {} opened", self.serial);
 
         loop {
-            let frames = match pipeline.wait(Some(Duration::from_secs(1))) {
+            let frames = match pipeline.wait(Some(Duration::from_millis(1000))) {
                 Ok(x) => x,
                 Err(e) => {
                     error!("Failed to get frame from RealSense Camera {}: {e}", self.serial);
