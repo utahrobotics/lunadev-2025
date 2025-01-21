@@ -7,6 +7,7 @@ use std::{
 };
 
 use arc_swap::ArcSwapOption;
+use common::THALASSIC_CELL_COUNT;
 use crossbeam::{
     atomic::AtomicCell,
     sync::{Parker, Unparker},
@@ -15,7 +16,6 @@ use gputter::is_gputter_initialized;
 use nalgebra::Vector2;
 use tasker::shared::OwnedData;
 use thalassic::{Occupancy, PointCloudStorage, ThalassicBuilder};
-use common::thalassic::CELL_COUNT;
 
 static OBSERVE_DEPTH: AtomicBool = AtomicBool::new(false);
 static DEPTH_UNPARKER: ArcSwapOption<Unparker> = ArcSwapOption::const_empty();
@@ -34,9 +34,9 @@ pub fn get_observe_depth() -> bool {
 }
 
 pub struct ThalassicData {
-    pub heightmap: [f32; CELL_COUNT as usize],
-    pub gradmap: [f32; CELL_COUNT as usize],
-    pub expanded_obstacle_map: [Occupancy; CELL_COUNT as usize],
+    pub heightmap: [f32; THALASSIC_CELL_COUNT as usize],
+    pub gradmap: [f32; THALASSIC_CELL_COUNT as usize],
+    pub expanded_obstacle_map: [Occupancy; THALASSIC_CELL_COUNT as usize],
     pub current_robot_radius: f32,
     new_robot_radius: AtomicCell<Option<f32>>,
 }
@@ -44,9 +44,9 @@ pub struct ThalassicData {
 impl Default for ThalassicData {
     fn default() -> Self {
         Self {
-            heightmap: [0.0; CELL_COUNT as usize],
-            gradmap: [0.0; CELL_COUNT as usize],
-            expanded_obstacle_map: [Occupancy::FREE; CELL_COUNT as usize],
+            heightmap: [0.0; THALASSIC_CELL_COUNT as usize],
+            gradmap: [0.0; THALASSIC_CELL_COUNT as usize],
+            expanded_obstacle_map: [Occupancy::FREE; THALASSIC_CELL_COUNT as usize],
             new_robot_radius: AtomicCell::new(None),
             current_robot_radius: 0.25,
         }

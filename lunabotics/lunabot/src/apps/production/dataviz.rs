@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use super::depth::enumerate_depth_cameras;
+use super::{depth::enumerate_depth_cameras, subaddress_of};
 use anyhow::Context;
 use common::LunabotStage;
 use crossbeam::atomic::AtomicCell;
@@ -45,9 +45,9 @@ impl DatavizApp {
         let mut buffer = OwnedData::from(ThalassicData::default());
         let shared_thalassic_data = buffer.create_lendee();
 
-        if let Err(e) = enumerate_depth_cameras(
+        enumerate_depth_cameras(
             buffer,
-            localizer_ref,
+            &localizer_ref,
             self.depth_cameras.into_iter().map(
                 |(
                     serial,
@@ -60,7 +60,7 @@ impl DatavizApp {
                     (
                         serial,
                         super::depth::DepthCameraInfo {
-                            k_node: robot_chain
+                            node: robot_chain
                                 .get_node_with_name(&link_name)
                                 .context("Failed to find camera link")
                                 .unwrap()
@@ -71,20 +71,12 @@ impl DatavizApp {
                     )
                 },
             ),
-            &Default::default(),
-        ) {
-            error!("Failed to enumerate depth cameras: {e}");
-        }
-        let data_address = self.lunabase_data_address.unwrap_or_else(|| {
-            let mut addr = self.lunabase_address;
-            if addr.port() == u16::MAX {
-                addr.set_port(65534);
-            } else {
-                addr.set_port(addr.port() + 9400);
-            }
-            addr
-        });
-        common::thalassic::lunabot_task(data_address, move |data| {
+            &[],
+        );
+        let data_address = self
+            .lunabase_data_address
+            .unwrap_or_else(|| subaddress_of(self.lunabase_address, 9400));
+        common::thalassic::lunabot_task(data_address, move |data, _points| {
             set_observe_depth(true);
             let incoming_data = shared_thalassic_data.get();
             data.gradmap = incoming_data.gradmap;
@@ -97,11 +89,8 @@ impl DatavizApp {
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
-        let (_packet_builder, _from_lunabase_rx, _connected) = create_packet_builder(
-            self.lunabase_address,
-            lunabot_stage,
-            self.max_pong_delay_ms,
-        );
+        let (_packet_builder, _from_lunabase_rx, _connected) =
+            create_packet_builder(self.lunabase_address, lunabot_stage, self.max_pong_delay_ms);
 
         loop {
             std::thread::park();

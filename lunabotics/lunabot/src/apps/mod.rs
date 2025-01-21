@@ -7,7 +7,7 @@ use std::{fs::File, net::SocketAddr, sync::Arc, time::Duration};
 use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
 #[cfg(feature = "production")]
-pub use production::{Apriltag, CameraInfo, DepthCameraInfo, LunabotApp, dataviz};
+pub use production::{dataviz, Apriltag, CameraInfo, DepthCameraInfo, LunabotApp};
 pub use sim::{LunasimStdin, LunasimbotApp};
 use tasker::tokio::sync::{mpsc, watch};
 use tracing::error;

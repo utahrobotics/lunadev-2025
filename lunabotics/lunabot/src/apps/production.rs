@@ -13,8 +13,8 @@ use pathfinding::grid::Grid;
 use serde::Deserialize;
 use simple_motion::{ChainBuilder, NodeSerde};
 use streaming::camera_streaming;
-use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn, tokio::runtime::Handle};
-use tracing::{error, warn};
+use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn};
+use tracing::error;
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,
@@ -26,6 +26,7 @@ use super::create_packet_builder;
 mod apriltag;
 mod camera;
 mod depth;
+mod motors;
 mod streaming;
 
 pub mod dataviz;
@@ -47,6 +48,15 @@ pub struct DepthCameraInfo {
     #[serde(default)]
     ignore_apriltags: bool,
     stream_index: usize,
+}
+
+fn subaddress_of(mut addr: SocketAddr, port_offset: u16) -> SocketAddr {
+    let new_port = addr
+        .port()
+        .checked_add(port_offset)
+        .unwrap_or_else(|| addr.port().wrapping_add(port_offset));
+    addr.set_port(new_port);
+    addr
 }
 
 pub struct LunabotApp {
@@ -71,57 +81,43 @@ impl LunabotApp {
             .apriltags
             .into_iter()
             .map(|(id_str, apriltag)| id_str.parse().map(|id| (id, apriltag)))
-            .try_collect::<FxHashMap<_, _>>()
+            .try_collect::<Vec<_>>()
         {
-            Ok(apriltags) => apriltags,
+            Ok(apriltags) => Box::leak(apriltags.into_boxed_slice()),
             Err(e) => {
                 error!("Failed to parse apriltags: {e}");
                 return;
             }
         };
 
-        let _guard = get_tokio_handle().enter();
+        let handle = get_tokio_handle();
+        let _guard = handle.enter();
 
         let robot_chain = NodeSerde::from_reader(
             std::fs::File::open(self.robot_layout).expect("Failed to read robot chain"),
         )
         .expect("Failed to parse robot chain");
         let robot_chain = ChainBuilder::from(robot_chain).finish_static();
-        
+
         let localizer = Localizer::new(robot_chain.clone(), None);
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
-        let camera_streaming_address = self.lunabase_streaming_address.unwrap_or_else(|| {
-            let mut addr = self.lunabase_address;
-            if addr.port() == u16::MAX {
-                addr.set_port(65534);
-            } else {
-                addr.set_port(addr.port() + 1);
-            }
-            addr
-        });
+        let camera_streaming_address = self
+            .lunabase_streaming_address
+            .unwrap_or_else(|| subaddress_of(self.lunabase_address, 1));
 
-        if let Err(e) = camera_streaming(camera_streaming_address) {
-            error!("Failed to start camera streaming: {e}");
-        }
+        camera_streaming(camera_streaming_address);
 
         #[cfg(feature = "experimental")]
         if let Err(e) = audio_streaming::audio_streaming(
-            self.lunabase_audio_streaming_address.unwrap_or_else(|| {
-                let mut addr = camera_streaming_address;
-                if addr.port() == u16::MAX {
-                    addr.set_port(65534);
-                } else {
-                    addr.set_port(addr.port() + 1);
-                }
-                addr
-            }),
+            self.lunabase_audio_streaming_address
+                .unwrap_or_else(|| subaddress_of(self.lunabase_address, 2)),
         ) {
             error!("Failed to start audio streaming: {e}");
         }
 
-        if let Err(e) = enumerate_cameras(
-            localizer_ref.clone(),
+        enumerate_cameras(
+            &localizer_ref,
             self.cameras.into_iter().map(
                 |(
                     port,
@@ -135,7 +131,7 @@ impl LunabotApp {
                     (
                         port,
                         camera::CameraInfo {
-                            k_node: robot_chain
+                            node: robot_chain
                                 .get_node_with_name(&link_name)
                                 .context("Failed to find camera link")
                                 .unwrap()
@@ -147,29 +143,15 @@ impl LunabotApp {
                     )
                 },
             ),
-            &apriltags,
-        ) {
-            error!("Failed to enumerate cameras: {e}");
-        }
+            apriltags,
+        );
 
         let mut buffer = OwnedData::from(ThalassicData::default());
         let shared_thalassic_data = buffer.create_lendee();
-        // buffer.add_callback(|ThalassicData { heightmap, .. }| {
-        //     debug_assert_eq!(heightmap.len(), 128 * 64);
-        //     let max = heightmap.iter().copied().fold(f32::NEG_INFINITY, f32::max);
-        //     let min = heightmap.iter().copied().fold(f32::INFINITY, f32::min);
-        //     println!("min: {}, max: {}", min, max);
-        //     let rgb: Vec<_> = heightmap
-        //         .iter()
-        //         .map(|&h| ((h - min) / (max - min) * 255.0) as u8)
-        //         .collect();
-        //     let _ = DynamicImage::ImageLuma8(ImageBuffer::from_raw(64, 128, rgb).unwrap())
-        //         .save("heights.png");
-        // });
 
-        if let Err(e) = enumerate_depth_cameras(
+        enumerate_depth_cameras(
             buffer,
-            localizer_ref.clone(),
+            &localizer_ref,
             self.depth_cameras.into_iter().map(
                 |(
                     serial,
@@ -182,7 +164,7 @@ impl LunabotApp {
                     (
                         serial,
                         depth::DepthCameraInfo {
-                            k_node: robot_chain
+                            node: robot_chain
                                 .get_node_with_name(&link_name)
                                 .context("Failed to find camera link")
                                 .unwrap()
@@ -193,10 +175,8 @@ impl LunabotApp {
                     )
                 },
             ),
-            &apriltags,
-        ) {
-            error!("Failed to enumerate depth cameras: {e}");
-        }
+            apriltags,
+        );
 
         let grid_to_world = Transform3::from_matrix_unchecked(
             Scale3::new(-0.03125, 1.0, -0.03125).to_homogeneous(),
@@ -218,32 +198,33 @@ impl LunabotApp {
             self.max_pong_delay_ms,
         );
 
-        // UNTESTED: 
-        let handle = Handle::current();
-        let localizer_ref = localizer_ref.clone();
-        handle.spawn(async move {
-            use rp2040::*;
-            use embedded_common::*;
-            use nalgebra::Vector3;
-            let mut pico_controler = PicoController::new("/dev/ttyACM0").await.unwrap();
+        // UNTESTED:
+        // let localizer_ref = localizer_ref.clone();
+        // handle.spawn(async move {
+        //     use rp2040::*;
+        //     use embedded_common::*;
+        //     use nalgebra::Vector3;
+        //     let mut pico_controler = PicoController::new("/dev/ttyACM0").await.unwrap();
 
-            loop {
-                match pico_controler.get_message_from_pico().await {
-                    Ok(FromIMU::AngularRateReading(AngularRate{x,y,z})) => {
-                        // TODO: set angular rate
-                    }
+        //     loop {
+        //         match pico_controler.get_message_from_pico().await {
+        //             Ok(FromIMU::AngularRateReading(AngularRate{x,y,z})) => {
+        //                 // TODO: set angular rate
+        //             }
 
-                    Ok(FromIMU::AccellerationNormReading(AccelerationNorm{x,y,z})) => {
-                        // TODO: set accel
-                    }
-                    
-                    Err(e) => {
-                        error!("Error getting readings from pico: {}",e);
-                    }
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-            }
-        });
+        //             Ok(FromIMU::AccellerationNormReading(AccelerationNorm{x,y,z})) => {
+        //                 // TODO: set accel
+        //             }
+
+        //             Err(e) => {
+        //                 error!("Error getting readings from pico: {}",e);
+        //             }
+        //         }
+        //         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        //     }
+        // });
+
+        // let motor_ref = enumerate_motors();
 
         run_ai(
             robot_chain.into(),
@@ -253,7 +234,7 @@ impl LunabotApp {
                 }
                 Action::SetSteering(steering) => {
                     let (left, right) = steering.get_left_and_right();
-                    // TODO
+                    // motor_ref.set_speed(left as f32, right as f32);
                 }
                 Action::CalculatePath { from, to, mut into } => {
                     pathfinder.pathfind(&shared_thalassic_data, from, to, &mut into);

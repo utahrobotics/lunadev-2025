@@ -1,6 +1,5 @@
 #![feature(result_flattening, array_chunks, iterator_try_collect)]
 
-use fxhash::FxHashMap;
 use std::net::SocketAddr;
 
 use apps::default_max_pong_delay_ms;
@@ -24,11 +23,11 @@ lumpur::define_configuration! {
             lunabase_streaming_address: Option<SocketAddr>,
             lunabase_audio_streaming_address: Option<SocketAddr>,
             #[serde(default)]
-            cameras: FxHashMap<String, apps::CameraInfo>,
+            cameras: fxhash::FxHashMap<String, apps::CameraInfo>,
             #[serde(default)]
-            depth_cameras: FxHashMap<String, apps::DepthCameraInfo>,
+            depth_cameras: fxhash::FxHashMap<String, apps::DepthCameraInfo>,
             #[serde(default)]
-            apriltags: FxHashMap<String, apps::Apriltag>,
+            apriltags: fxhash::FxHashMap<String, apps::Apriltag>,
             robot_layout: Option<String>
         },
         Dataviz {
@@ -36,7 +35,7 @@ lumpur::define_configuration! {
             max_pong_delay_ms: Option<u64>,
             lunabase_data_address: Option<SocketAddr>,
             #[serde(default)]
-            depth_cameras: FxHashMap<String, apps::DepthCameraInfo>,
+            depth_cameras: fxhash::FxHashMap<String, apps::DepthCameraInfo>,
             robot_layout: Option<String>
         },
         Sim {
@@ -99,7 +98,7 @@ fn main() {
             cameras,
             depth_cameras,
             apriltags,
-            robot_layout
+            robot_layout,
         } => {
             apps::LunabotApp {
                 lunabase_address,
@@ -110,20 +109,28 @@ fn main() {
                 cameras,
                 depth_cameras,
                 apriltags,
-                robot_layout: robot_layout.unwrap_or_else(|| "robot-layout/lunabot.json".to_string())
+                robot_layout: robot_layout
+                    .unwrap_or_else(|| "robot-layout/lunabot.json".to_string()),
             }
             .run();
             #[cfg(not(feature = "experimental"))]
             let _ = lunabase_audio_streaming_address;
         }
         #[cfg(feature = "production")]
-        Commands::Dataviz { lunabase_address, lunabase_data_address, max_pong_delay_ms, depth_cameras, robot_layout } => {
+        Commands::Dataviz {
+            lunabase_address,
+            lunabase_data_address,
+            max_pong_delay_ms,
+            depth_cameras,
+            robot_layout,
+        } => {
             apps::dataviz::DatavizApp {
                 lunabase_address,
                 lunabase_data_address,
                 max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
                 depth_cameras,
-                robot_layout: robot_layout.unwrap_or_else(|| "robot-layout/lunabot.json".to_string())
+                robot_layout: robot_layout
+                    .unwrap_or_else(|| "robot-layout/lunabot.json".to_string()),
             }
             .run();
         }

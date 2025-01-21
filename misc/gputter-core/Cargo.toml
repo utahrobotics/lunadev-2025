@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wgpu = "22.1"
+wgpu = "24.0"
 bytemuck.workspace = true
 nalgebra.workspace = true
 anyhow.workspace = true
 # static_assertions.workspace = true
 # crossbeam.workspace = true
-pollster = "0.3.0"
+pollster = "0.4.0"

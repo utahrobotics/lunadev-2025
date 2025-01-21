@@ -4,7 +4,7 @@ use bytemuck::{Pod, Zeroable};
 use crossbeam::sync::Parker;
 use tracing::error;
 
-pub const CELL_COUNT: u32 = 128 * 256;
+use super::THALASSIC_CELL_COUNT;
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -23,13 +23,22 @@ impl Occupancy {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct ThalassicData {
-    pub heightmap: [f32; CELL_COUNT as usize],
-    pub gradmap: [f32; CELL_COUNT as usize],
-    pub expanded_obstacle_map: [Occupancy; CELL_COUNT as usize],
+    pub heightmap: [f32; THALASSIC_CELL_COUNT as usize],
+    pub gradmap: [f32; THALASSIC_CELL_COUNT as usize],
+    pub expanded_obstacle_map: [Occupancy; THALASSIC_CELL_COUNT as usize],
+    point_count: usize,
 }
+
+impl Default for ThalassicData {
+    fn default() -> Self {
+        Self::zeroed()
+    }
+}
+
 const THALASSIC_BUFFER_SIZE: usize = size_of::<ThalassicData>();
 
-pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData) + Send + 'static) -> &'static (impl Fn() + Send + Sync) {
+#[cfg(feature = "godot")]
+pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData, &[godot::builtin::Vector3]) + Send + 'static) -> (impl Fn() + Send + Sync) {
     let parker = Parker::new();
     let unparker = parker.unparker().clone();
 
@@ -37,18 +46,20 @@ pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData) + Send + 'static) -
         let listener = match TcpListener::bind("0.0.0.0:20000") {
             Ok(listener) => listener,
             Err(e) => {
-                error!("Failed to bind to port 20000: {}", e);
+                godot::global::godot_error!("Failed to bind to port 20000: {}", e);
                 return;
             }
         };
 
-        let mut buffer = [0u8; THALASSIC_BUFFER_SIZE];
+        let mut data = ThalassicData::default();
+        let mut points = vec![];
+        let mut points_bytes: Vec<[f32; 3]> = vec![];
     
         loop {
             let stream = match listener.accept() {
                 Ok((x, _)) => x,
                 Err(e) => {
-                    error!("Failed to accept connection: {}", e);
+                    godot::global::godot_error!("Failed to accept connection: {}", e);
                     continue;
                 }
             };
@@ -58,31 +69,42 @@ pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData) + Send + 'static) -
             loop {
                 parker.park();
                 if let Err(e) = reader.get_mut().write_all(&[0]) {
-                    error!("Failed to write to stream: {}", e);
+                    godot::global::godot_error!("Failed to write to stream: {}", e);
                     break;
                 }
-                if let Err(e) = reader.read_exact(&mut buffer) {
-                    error!("Failed to read from stream: {}", e);
+                if let Err(e) = reader.read_exact(bytemuck::bytes_of_mut(&mut data)) {
+                    godot::global::godot_error!("Failed to read from stream: {}", e);
                     break;
                 }
-                on_data(bytemuck::cast_ref(&buffer));
+                points_bytes.resize(data.point_count, [0.0; 3]);
+                if let Err(e) = reader.read_exact(bytemuck::cast_slice_mut(&mut points_bytes)) {
+                    godot::global::godot_error!("Failed to read from stream: {}", e);
+                    break;
+                }
+                points.clear();
+                for &[x, y, z] in points_bytes.iter() {
+                    points.push(godot::builtin::Vector3::new(x, y, z));
+                }
+                on_data(&data, &points);
             }
         }
     });
 
-    Box::leak(Box::new(move || {
+    move || {
         unparker.unpark();
-    }))
+    }
 }
 
-pub fn lunabot_task(address: SocketAddr, mut gen_data: impl FnMut(&mut ThalassicData) + Send + 'static) {
+pub fn lunabot_task(address: SocketAddr, mut gen_data: impl FnMut(&mut ThalassicData, &mut Vec<nalgebra::Vector3<f32>>) + Send + 'static) {
     std::thread::spawn(move || {
         let mut buffer = [0u8; 1];
         let mut data = ThalassicData {
-            heightmap: [0.0; CELL_COUNT as usize],
-            gradmap: [0.0; CELL_COUNT as usize],
-            expanded_obstacle_map: [Occupancy(0); CELL_COUNT as usize],
+            heightmap: [0.0; THALASSIC_CELL_COUNT as usize],
+            gradmap: [0.0; THALASSIC_CELL_COUNT as usize],
+            expanded_obstacle_map: [Occupancy(0); THALASSIC_CELL_COUNT as usize],
+            point_count: 0,
         };
+        let mut points = vec![];
     
         loop {
             let stream = match TcpStream::connect(address) {
@@ -102,8 +124,13 @@ pub fn lunabot_task(address: SocketAddr, mut gen_data: impl FnMut(&mut Thalassic
                 }
                 match buffer[0] {
                     0 => {
-                        gen_data(&mut data);
+                        gen_data(&mut data, &mut points);
+                        data.point_count = points.len();
                         if let Err(e) = writer.write_all(bytemuck::bytes_of(&data)) {
+                            error!("Failed to write to stream: {}", e);
+                            break;
+                        }
+                        if let Err(e) = writer.write_all(bytemuck::cast_slice(&points)) {
                             error!("Failed to write to stream: {}", e);
                             break;
                         }
