@@ -8,7 +8,6 @@ use tracing::Level;
 
 mod apps;
 mod localization;
-mod motors;
 mod pathfinding;
 mod pipelines;
 mod teleop;

@@ -21,7 +21,7 @@ impl Payload for SetDutyCycle {
         5
     }
     fn append_to(&self, buffer: &mut Vec<u8>) {
-        buffer.push(5);
+        buffer.push(5u8.to_be());
         buffer.extend_from_slice(&scale_and_pack(self.0, 100_000_f32).to_be_bytes());
     }
 }
@@ -34,7 +34,7 @@ impl Payload for Alive {
         1
     }
     fn append_to(&self, buffer: &mut Vec<u8>) {
-        buffer.push(30);
+        buffer.push(30u8.to_be());
     }
 }
 
@@ -49,8 +49,8 @@ impl<T: Payload> Payload for CanForwarded<T> {
         2 + self.payload.len()
     }
     fn append_to(&self, buffer: &mut Vec<u8>) {
-        buffer.push(34);
-        buffer.push(self.can_id);
+        buffer.push(34u8.to_be());
+        buffer.push(self.can_id.to_be());
         self.payload.append_to(buffer);
     }
 }
@@ -70,16 +70,17 @@ impl VescPacker {
         self.buffer.clear();
         if payload.len() > 255 {
             self.buffer.reserve(3 + payload.len() + 3);
-            self.buffer.push(3);
+            self.buffer.push(3u8.to_be());
             self.buffer.extend_from_slice(&(payload.len() as u16).to_be_bytes());
         } else {
             self.buffer.reserve(2 + payload.len() + 3);
-            self.buffer.push(2);
-            self.buffer.push(payload.len() as u8);
+            self.buffer.push(2u8.to_be());
+            self.buffer.push((payload.len() as u8).to_be());
         }
         payload.append_to(&mut self.buffer);
         self.buffer.extend_from_slice(&CRC_GENERATOR.checksum(&self.buffer).to_be_bytes());
-        self.buffer.push(3);
+        self.buffer.push(3u8.to_be());
+        println!("{:?}", self.buffer);
         &self.buffer
     }
 }

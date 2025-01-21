@@ -8,6 +8,8 @@ use depth::enumerate_depth_cameras;
 use fxhash::FxHashMap;
 use gputter::init_gputter_blocking;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
+use mio::{Events, Interest, Poll, Token};
+use motors::enumerate_motors;
 use nalgebra::{Scale3, Transform3};
 use pathfinding::grid::Grid;
 use serde::Deserialize;
@@ -16,6 +18,7 @@ use streaming::camera_streaming;
 use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn};
 use tracing::error;
 use rp2040::*;
+use udev::Event;
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,
@@ -255,7 +258,7 @@ impl LunabotApp {
             }
         }});
 
-        // let motor_ref = enumerate_motors();
+        let motor_ref = enumerate_motors(handle);
 
         run_ai(
             robot_chain.into(),
@@ -265,7 +268,7 @@ impl LunabotApp {
                 }
                 Action::SetSteering(steering) => {
                     let (left, right) = steering.get_left_and_right();
-                    // motor_ref.set_speed(left as f32, right as f32);
+                    motor_ref.set_speed(left as f32, right as f32);
                 }
                 Action::CalculatePath { from, to, mut into } => {
                     pathfinder.pathfind(&shared_thalassic_data, from, to, &mut into);
@@ -332,4 +335,27 @@ impl LunabotApp {
             },
         );
     }
+}
+
+pub fn udev_poll(mut socket: udev::MonitorSocket) -> impl Iterator<Item=Event> {
+    let mut poll = Poll::new().unwrap();
+    let mut events = Events::with_capacity(1024);
+
+    poll.registry().register(
+        &mut socket,
+        Token(0),
+        Interest::READABLE | Interest::WRITABLE,
+    ).unwrap();
+
+    std::iter::from_fn(move || {
+        loop {
+            poll.poll(&mut events, None).unwrap();
+    
+            for event in &events {
+                if event.token() == Token(0) && event.is_writable() {
+                    return Some(socket.iter().collect::<Vec<_>>());
+                }
+            }
+        }
+    }).flatten()
 }

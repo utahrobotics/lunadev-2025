@@ -13,34 +13,10 @@ use fxhash::FxHashMap;
 use simple_motion::StaticImmutableNode;
 use tasker::shared::{MaybeOwned, OwnedData};
 use tracing::{error, info, warn};
-use udev::{Event, EventType, MonitorBuilder, Udev};
+use udev::{EventType, MonitorBuilder, Udev};
 use v4l::{buffer::Type, io::traits::CaptureStream, prelude::MmapStream, video::Capture};
-use mio::{Events, Interest, Poll, Token};
 
-pub fn poll(mut socket: udev::MonitorSocket) -> impl Iterator<Item=Event> {
-    let mut poll = Poll::new().unwrap();
-    let mut events = Events::with_capacity(1024);
-
-    poll.registry().register(
-        &mut socket,
-        Token(0),
-        Interest::READABLE | Interest::WRITABLE,
-    ).unwrap();
-
-    std::iter::from_fn(move || {
-        loop {
-            poll.poll(&mut events, None).unwrap();
-    
-            for event in &events {
-                if event.token() == Token(0) && event.is_writable() {
-                    return Some(socket.iter().collect::<Vec<_>>());
-                }
-            }
-        }
-    }).flatten()
-}
-
-use crate::localization::LocalizerRef;
+use crate::{apps::production::udev_poll, localization::LocalizerRef};
 
 use super::{
     apriltag::Apriltag,
@@ -137,6 +113,9 @@ pub fn enumerate_cameras(
                 }
             }
         };
+        if let Err(e) = enumerator.match_subsystem("video4linux") {
+            error!("Failed to set match-subsystem filter: {e}");
+        }
         let devices = match enumerator.scan_devices() {
             Ok(x) => x,
             Err(e) => {
@@ -147,7 +126,7 @@ pub fn enumerate_cameras(
         devices
             .into_iter()
             .chain(
-                poll(listener)
+                udev_poll(listener)
                     .filter(|event| event.event_type() == EventType::Add)
                     .map(|event| {
                         event.device()
@@ -194,7 +173,6 @@ pub fn enumerate_cameras(
                     warn!("Unexpected camera with port {}", port);
                 }
             });
-            eprintln!("Terminated");
     });
 }
 

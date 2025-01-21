@@ -1,17 +1,23 @@
 use tasker::{
     parking_lot::{Condvar, Mutex},
-    tokio::io::{AsyncWriteExt, BufStream},
+    tokio::{
+        io::{AsyncWriteExt, BufStream},
+        runtime::Handle,
+    },
     BlockOn,
 };
-use tokio_serial::SerialStream;
-use tracing::error;
-use udev::Udev;
+use tokio_serial::SerialPortBuilderExt;
+use tracing::{error, info, warn};
+use udev::{EventType, MonitorBuilder, Udev};
 use vesc_translator::{CanForwarded, SetDutyCycle, VescPacker};
+
+use crate::apps::production::udev_poll;
 
 pub struct MotorRef {
     mutex: Mutex<(f32, f32)>,
     condvar: Condvar,
 }
+// STMicroelectronics_ChibiOS_RT_Virtual_COM_Port_304
 
 impl MotorRef {
     pub fn set_speed(&self, left: f32, right: f32) {
@@ -21,88 +27,141 @@ impl MotorRef {
     }
 }
 
-pub fn enumerate_motors() -> &'static MotorRef {
+pub fn enumerate_motors(handle: Handle) -> &'static MotorRef {
     let motor_ref: &_ = Box::leak(Box::new(MotorRef {
         mutex: Mutex::new((0.0, 0.0)),
         condvar: Condvar::new(),
     }));
-    std::thread::spawn(|| enumerate_motors_priv(motor_ref));
-    motor_ref
-}
+    std::thread::spawn(move || {
+        let _guard = handle.enter();
+        let mut vesc_packer = VescPacker::default();
+        let mut monitor = match MonitorBuilder::new() {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to create udev monitor: {e}");
+                return;
+            }
+        };
+        monitor = match monitor.match_subsystem("tty") {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to set match-subsystem filter: {e}");
+                return;
+            }
+        };
+        let listener = match monitor.listen() {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to listen for udev events: {e}");
+                return;
+            }
+        };
 
-fn enumerate_motors_priv(motor_ref: &'static MotorRef) {
-    let mut vesc_packer = VescPacker::default();
-
-    loop {
-        loop {
-            let mut motor_port: Option<SerialStream> = None;
-
-            {
-                let udev = match Udev::new() {
+        let mut enumerator = {
+            let udev = match Udev::new() {
+                Ok(x) => x,
+                Err(e) => {
+                    error!("Failed to create udev context: {e}");
+                    return;
+                }
+            };
+            match udev::Enumerator::with_udev(udev) {
+                Ok(x) => x,
+                Err(e) => {
+                    error!("Failed to create udev enumerator: {e}");
+                    return;
+                }
+            }
+        };
+        if let Err(e) = enumerator.match_subsystem("tty") {
+            error!("Failed to set match-subsystem filter: {e}");
+        }
+        let devices = match enumerator.scan_devices() {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to scan devices: {e}");
+                return;
+            }
+        };
+        devices
+            .into_iter()
+            .chain(
+                udev_poll(listener)
+                    .filter(|event| {
+                        matches!(event.event_type(), EventType::Add | EventType::Change)
+                    })
+                    .map(|event| event.device()),
+            )
+            .for_each(|device| {
+                let Some(path) = device.devnode() else {
+                    return;
+                };
+                let Some(path_str) = path.to_str() else {
+                    return;
+                };
+                let Some(vendor_cstr) = device.property_value("ID_VENDOR") else {
+                    return;
+                };
+                let Some(vendor) = vendor_cstr.to_str() else {
+                    warn!("Failed to parse vendor of device {path_str}");
+                    return;
+                };
+                if vendor != "STMicroelectronics" {
+                    return;
+                }
+                let Some(serial_cstr) = device.property_value("ID_SERIAL") else {
+                    return;
+                };
+                let Some(serial) = serial_cstr.to_str() else {
+                    warn!("Failed to parse serial of device {path_str}");
+                    return;
+                };
+                if serial != "STMicroelectronics_ChibiOS_RT_Virtual_COM_Port_304" {
+                    warn!("Ignoring device {path_str} with serial {serial}");
+                    return;
+                }
+                let mut motor_port = match tokio_serial::new(path_str, 115200)
+                    .timeout(std::time::Duration::from_millis(500))
+                    .open_native_async()
+                {
                     Ok(x) => x,
                     Err(e) => {
-                        error!("Failed to create udev context: {e}");
+                        error!("Failed to open motor port {path_str}: {e}");
+                        return;
+                    }
+                };
+                info!("Opened motor port {path_str}");
+                if let Err(e) = motor_port.set_exclusive(true) {
+                    warn!("Failed to set motor port {path_str} exclusive: {e}");
+                }
+                let mut motor_port = BufStream::new(motor_port);
+
+                loop {
+                    let (left, right) = {
+                        let mut guard = motor_ref.mutex.lock();
+                        motor_ref.condvar.wait(&mut guard);
+                        *guard
+                    };
+                    let result = async {
+                        motor_port
+                            .write_all(vesc_packer.pack(&SetDutyCycle(left)))
+                            .await?;
+                        motor_port
+                            .write_all(vesc_packer.pack(&CanForwarded {
+                                can_id: 4,
+                                payload: SetDutyCycle(right),
+                            }))
+                            .await?;
+                        motor_port.flush().await
+                    }
+                    .block_on();
+                    if let Err(e) = result {
+                        error!("Failed to write to motor port: {e}");
                         break;
                     }
-                };
-                let mut enumerator = match udev::Enumerator::with_udev(udev.clone()) {
-                    Ok(x) => x,
-                    Err(e) => {
-                        error!("Failed to create udev enumerator: {e}");
-                        return;
-                    }
-                };
-                let devices = match enumerator.scan_devices() {
-                    Ok(x) => x,
-                    Err(e) => {
-                        error!("Failed to scan devices: {e}");
-                        return;
-                    }
-                };
-                for udev_device in devices {
-                    let Some(path) = udev_device.devnode() else {
-                        continue;
-                    };
-                    println!("{:?}", path);
-                    udev_device.attributes().for_each(|entry| {
-                        println!("{:?}: {:?}", entry.name(), entry.value());
-                    });
-                    udev_device.properties().for_each(|entry| {
-                        println!("{:?}: {:?}", entry.name(), entry.value());
-                    });
                 }
-            }
-
-            let Some(motor_port) = motor_port else {
-                break;
-            };
-            let mut motor_port = BufStream::new(motor_port);
-
-            loop {
-                let (left, right) = {
-                    let mut guard = motor_ref.mutex.lock();
-                    motor_ref.condvar.wait(&mut guard);
-                    *guard
-                };
-                let result = async {
-                    motor_port
-                        .write_all(vesc_packer.pack(&SetDutyCycle(left)))
-                        .await?;
-                    motor_port
-                        .write_all(vesc_packer.pack(&CanForwarded {
-                            can_id: 4,
-                            payload: SetDutyCycle(right),
-                        }))
-                        .await?;
-                    motor_port.flush().await
-                }
-                .block_on();
-                if let Err(e) = result {
-                    error!("Failed to write to motor port: {e}");
-                    break;
-                }
-            }
-        }
-        std::thread::sleep(std::time::Duration::from_secs(1));
-    }
+                error!("Motor port {path_str} closed");
+            });
+    });
+    motor_ref
 }
