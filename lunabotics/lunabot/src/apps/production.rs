@@ -1,4 +1,4 @@
-use std::{cell::RefCell, net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Context;
 use camera::enumerate_cameras;
@@ -8,15 +8,13 @@ use depth::enumerate_depth_cameras;
 use fxhash::FxHashMap;
 use gputter::init_gputter_blocking;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
-use motors::enumerate_motors;
 use nalgebra::{Scale3, Transform3};
 use pathfinding::grid::Grid;
 use serde::Deserialize;
 use simple_motion::{ChainBuilder, NodeSerde};
 use streaming::camera_streaming;
-use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn, tokio::runtime::Handle};
+use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn};
 use tracing::error;
-use udev::Udev;
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,
@@ -80,16 +78,17 @@ impl LunabotApp {
             .apriltags
             .into_iter()
             .map(|(id_str, apriltag)| id_str.parse().map(|id| (id, apriltag)))
-            .try_collect::<FxHashMap<_, _>>()
+            .try_collect::<Vec<_>>()
         {
-            Ok(apriltags) => apriltags,
+            Ok(apriltags) => Box::leak(apriltags.into_boxed_slice()),
             Err(e) => {
                 error!("Failed to parse apriltags: {e}");
                 return;
             }
         };
 
-        let _guard = get_tokio_handle().enter();
+        let handle = get_tokio_handle();
+        let _guard = handle.enter();
 
         let robot_chain = NodeSerde::from_reader(
             std::fs::File::open(self.robot_layout).expect("Failed to read robot chain"),
@@ -116,7 +115,7 @@ impl LunabotApp {
         }
 
         enumerate_cameras(
-            localizer_ref.clone(),
+            &localizer_ref,
             self.cameras.into_iter().map(
                 |(
                     port,
@@ -130,7 +129,7 @@ impl LunabotApp {
                     (
                         port,
                         camera::CameraInfo {
-                            k_node: robot_chain
+                            node: robot_chain
                                 .get_node_with_name(&link_name)
                                 .context("Failed to find camera link")
                                 .unwrap()
@@ -142,13 +141,13 @@ impl LunabotApp {
                     )
                 },
             ),
-            &apriltags,
+            apriltags,
         );
 
         let mut buffer = OwnedData::from(ThalassicData::default());
         let shared_thalassic_data = buffer.create_lendee();
 
-        if let Err(e) = enumerate_depth_cameras(
+        enumerate_depth_cameras(
             buffer,
             localizer_ref.clone(),
             self.depth_cameras.into_iter().map(
@@ -174,10 +173,8 @@ impl LunabotApp {
                     )
                 },
             ),
-            &apriltags,
-        ) {
-            error!("Failed to enumerate depth cameras: {e}");
-        }
+            apriltags,
+        );
 
         let grid_to_world = Transform3::from_matrix_unchecked(
             Scale3::new(-0.03125, 1.0, -0.03125).to_homogeneous(),
@@ -200,33 +197,32 @@ impl LunabotApp {
         );
 
         // UNTESTED: 
-        let handle = Handle::current();
-        let localizer_ref = localizer_ref.clone();
-        handle.spawn(async move {
-            use rp2040::*;
-            use embedded_common::*;
-            use nalgebra::Vector3;
-            let mut pico_controler = PicoController::new("/dev/ttyACM0").await.unwrap();
+        // let localizer_ref = localizer_ref.clone();
+        // handle.spawn(async move {
+        //     use rp2040::*;
+        //     use embedded_common::*;
+        //     use nalgebra::Vector3;
+        //     let mut pico_controler = PicoController::new("/dev/ttyACM0").await.unwrap();
 
-            loop {
-                match pico_controler.get_message_from_pico().await {
-                    Ok(FromIMU::AngularRateReading(AngularRate{x,y,z})) => {
-                        // TODO: set angular rate
-                    }
+        //     loop {
+        //         match pico_controler.get_message_from_pico().await {
+        //             Ok(FromIMU::AngularRateReading(AngularRate{x,y,z})) => {
+        //                 // TODO: set angular rate
+        //             }
 
-                    Ok(FromIMU::AccellerationNormReading(AccelerationNorm{x,y,z})) => {
-                        // TODO: set accel
-                    }
+        //             Ok(FromIMU::AccellerationNormReading(AccelerationNorm{x,y,z})) => {
+        //                 // TODO: set accel
+        //             }
                     
-                    Err(e) => {
-                        error!("Error getting readings from pico: {}",e);
-                    }
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-            }
-        });
+        //             Err(e) => {
+        //                 error!("Error getting readings from pico: {}",e);
+        //             }
+        //         }
+        //         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        //     }
+        // });
 
-        let motor_ref = enumerate_motors();
+        // let motor_ref = enumerate_motors();
 
         run_ai(
             robot_chain.into(),
@@ -236,7 +232,7 @@ impl LunabotApp {
                 }
                 Action::SetSteering(steering) => {
                     let (left, right) = steering.get_left_and_right();
-                    motor_ref.set_speed(left, right);
+                    // motor_ref.set_speed(left as f32, right as f32);
                 }
                 Action::CalculatePath { from, to, mut into } => {
                     pathfinder.pathfind(&shared_thalassic_data, from, to, &mut into);

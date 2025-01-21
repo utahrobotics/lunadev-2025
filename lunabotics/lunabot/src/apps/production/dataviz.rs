@@ -45,7 +45,7 @@ impl DatavizApp {
         let mut buffer = OwnedData::from(ThalassicData::default());
         let shared_thalassic_data = buffer.create_lendee();
 
-        if let Err(e) = enumerate_depth_cameras(
+        enumerate_depth_cameras(
             buffer,
             localizer_ref,
             self.depth_cameras.into_iter().map(
@@ -71,10 +71,8 @@ impl DatavizApp {
                     )
                 },
             ),
-            &Default::default(),
-        ) {
-            error!("Failed to enumerate depth cameras: {e}");
-        }
+            &[],
+        );
         let data_address = self.lunabase_data_address.unwrap_or_else(|| {
             subaddress_of(self.lunabase_address, 9400)
         });

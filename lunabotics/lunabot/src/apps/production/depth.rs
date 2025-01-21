@@ -40,8 +40,8 @@ pub fn enumerate_depth_cameras(
     thalassic_buffer: OwnedData<ThalassicData>,
     localizer_ref: LocalizerRef,
     serial_to_chain: impl IntoIterator<Item = (String, DepthCameraInfo)>,
-    apriltags: &FxHashMap<usize, Apriltag>,
-) -> anyhow::Result<()> {
+    apriltags: &'static [(usize, Apriltag)]
+) {
     let context =
         match realsense_rust::context::Context::new().context("Failed to get RealSense Context") {
             Ok(x) => x,
@@ -49,7 +49,8 @@ pub fn enumerate_depth_cameras(
                 // It's debatable whether or not we should spawn the pipeline if no cameras are found.
                 // Spawning it can help expose some bugs though
                 spawn_thalassic_pipeline(thalassic_buffer, Box::new([]));
-                return Err(e);
+                error!("Failed to get RealSense Context: {e}");
+                return;
             }
         };
     let devices = context.query_devices(Some(Rs2ProductLine::Depth).into_iter().collect());
@@ -232,8 +233,8 @@ pub fn enumerate_depth_cameras(
                     intrinsics.height() as u32,
                     img_shared.create_lendee(),
                 );
-                for (&tag_id, tag) in apriltags {
-                    det.add_tag(tag.tag_position, tag.get_quat(), tag.tag_width, tag_id);
+                for (tag_id, tag) in apriltags {
+                    det.add_tag(tag.tag_position, tag.get_quat(), tag.tag_width, *tag_id);
                 }
                 let localizer_ref = localizer_ref.clone();
                 let mut inverse_local = k_node.get_local_isometry();
@@ -359,5 +360,4 @@ pub fn enumerate_depth_cameras(
     }
 
     spawn_thalassic_pipeline(thalassic_buffer, pcl_storage_channels.into_boxed_slice());
-    Ok(())
 }
