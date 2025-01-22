@@ -4,7 +4,9 @@ use bitcode::{Decode, Encode};
 
 pub const AUDIO_FRAME_SIZE: u32 = 960;
 pub const AUDIO_SAMPLE_RATE: u32 = 48000;
-pub const THALASSIC_CELL_COUNT: u32 = 128 * 256;
+pub const THALASSIC_WIDTH: u32 = 128;
+pub const THALASSIC_HEIGHT: u32 = 256;
+pub const THALASSIC_CELL_COUNT: u32 = THALASSIC_WIDTH * THALASSIC_HEIGHT;
 
 #[cfg(feature = "godot_urdf")]
 pub mod godot_urdf;

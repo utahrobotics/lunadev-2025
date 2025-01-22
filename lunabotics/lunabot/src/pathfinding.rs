@@ -1,7 +1,8 @@
-use nalgebra::{Point3, Transform3, Vector2};
+use nalgebra::{Point3, Transform3};
 use pathfinding::{grid::Grid, prelude::astar};
 use tasker::shared::SharedDataReceiver;
 use tracing::{error, warn};
+use crate::utils::distance_between_tuples;
 
 use crate::pipelines::thalassic::{set_observe_depth, ThalassicData};
 
@@ -13,7 +14,9 @@ pub struct DefaultPathfinder {
     pub grid: Grid,
 }
 
+
 impl DefaultPathfinder {
+
     pub fn pathfind(
         &self,
         shared_thalassic_data: &SharedDataReceiver<ThalassicData>,
@@ -23,36 +26,48 @@ impl DefaultPathfinder {
     ) {
         shared_thalassic_data.try_get();
         set_observe_depth(true);
-        let mut data = shared_thalassic_data.get();
+        let mut map_data = shared_thalassic_data.get();
         loop {
-            if data.current_robot_radius == 0.5 {
+            if map_data.current_robot_radius == 0.5 {
                 break;
             }
-            data.set_robot_radius(0.5);
-            drop(data);
-            data = shared_thalassic_data.get();
+            map_data.set_robot_radius(0.5);
+            drop(map_data);
+            map_data = shared_thalassic_data.get();
         }
         set_observe_depth(false);
+
+        /// allows checking if position is known inside `move || {}` closures without moving `map_data`
+        let is_known = |pos: (usize, usize)| {
+            map_data.is_known(pos)
+        };
 
         macro_rules! neighbours {
             ($p: ident) => {
                 self.grid
-                    .bfs_reachable($p, |(x, y)| {
-                        if x.abs_diff($p.0) <= REACH && y.abs_diff($p.1) <= REACH {
-                            let index = y * 128 + x;
-                            data.heightmap[y * 128 + x] != 0.0
-                                && !data.expanded_obstacle_map[index].occupied()
-                        } else {
-                            false
-                        }
+                    .bfs_reachable($p, |potential_neighbor| {
+
+                        let (x, y) = potential_neighbor;
+
+                        // neighbors are: within reach AND known AND unoccupied
+                        x.abs_diff($p.0) <= REACH && y.abs_diff($p.1) <= REACH &&
+                        map_data.is_known(potential_neighbor) && 
+                        !map_data.is_occupied(potential_neighbor)
                     })
                     .into_iter()
-                    .map(move |(x, y)| {
+                    .map(move |neighbor| {
+
+                        // unknown cells have 2x the cost
+                        let unknown_multiplier = match is_known(neighbor) {
+                            true => 2,
+                            false => 1,
+                        };
+
                         (
-                            (x, y),
-                            (Vector2::new(x.abs_diff($p.0) as f32, y.abs_diff($p.1) as f32)
-                                .magnitude()
-                                * 10000.0) as usize,
+                            neighbor,
+                            
+                            // the cost of moving from a to b is the distance between a to b
+                            (distance_between_tuples($p, neighbor) * 10000.0) as usize * unknown_multiplier
                         )
                     })
             };
@@ -62,15 +77,15 @@ impl DefaultPathfinder {
         let to_grid = self.world_to_grid * to;
         let mut start = (from_grid.x as usize, from_grid.z as usize);
         let end = (to_grid.x as usize, to_grid.z as usize);
+
         let heuristic = move |p: &(usize, usize)| {
-            (Vector2::new(p.0.abs_diff(end.0) as f32, p.1.abs_diff(end.1) as f32).magnitude()
-                * 10000.0) as usize
+            (distance_between_tuples(*p, end) * 10000.0) as usize
         };
         into.clear();
 
+        // if in red, prepend a path to safety
         {
-            let index = start.1 * 128 + start.0;
-            if data.heightmap[index] == 0.0 || data.expanded_obstacle_map[index].occupied() {
+            if !map_data.is_known(start) || map_data.is_occupied(start) {
                 warn!("Current cell is occupied, finding closest safe cell");
                 if let Some((path, _)) = astar(
                     &start,
@@ -80,27 +95,27 @@ impl DefaultPathfinder {
                                 x.abs_diff(p.0) <= REACH && y.abs_diff(p.1) <= REACH
                             })
                             .into_iter()
-                            .map(move |(x, y)| {
+                            .map(move |neighbor| {
                                 (
-                                    (x, y),
-                                    (Vector2::new(x.abs_diff(p.0) as f32, y.abs_diff(p.1) as f32)
-                                        .magnitude()
-                                        * 10000.0) as usize,
+                                    neighbor,
+                                    
+                                    // the cost of moving from a to b is the distance between a to b
+                                    (distance_between_tuples(p, neighbor) * 10000.0) as usize
                                 )
                             })
                     },
                     |_| 0,
                     |&(x, y)| {
                         let index = y * 128 + x;
-                        data.heightmap[index] != 0.0
-                            && !data.expanded_obstacle_map[index].occupied()
+                        map_data.heightmap[index] != 0.0
+                            && !map_data.expanded_obstacle_map[index].occupied()
                     },
                 ) {
                     start = *path.last().unwrap();
                     into.extend(path.into_iter().map(|(x, y)| {
                         let mut p = Point3::new(x as f64, 0.0, y as f64);
                         p = self.grid_to_world * p;
-                        p.y = data.heightmap[y * 128 + x] as f64;
+                        p.y = map_data.heightmap[y * 128 + x] as f64;
                         p
                     }));
                 } else {
@@ -114,7 +129,7 @@ impl DefaultPathfinder {
         let mut closest_distance = self.grid.distance(closest, end);
         let mut using_closest = false;
 
-        let path = astar(
+        let mut path = astar(
             &start,
             |&p| {
                 let d = self.grid.distance(p, end);
@@ -133,10 +148,22 @@ impl DefaultPathfinder {
             astar(&start, |&p| neighbours!(p), heuristic, |p| p == &closest).unwrap()
         })
         .0;
+
+        // truncate path so that it ends before entering explored region
+        for (index, pt) in path.iter().enumerate() {
+            
+            if !map_data.is_safe_for_robot(*pt) {
+                warn!("truncated path {:?}");
+                path.truncate(index-1);
+                break;
+            }
+        }
+
+        // add final path to `into`
         into.extend(path.into_iter().map(|(x, y)| {
             let mut p = Point3::new(x as f64, 0.0, y as f64);
             p = self.grid_to_world * p;
-            p.y = data.heightmap[y * 128 + x] as f64;
+            p.y = map_data.get_height((x, y)) as f64;
             p
         }));
         if using_closest {

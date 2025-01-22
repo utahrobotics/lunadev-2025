@@ -1,6 +1,11 @@
 use std::ops::{Add, Mul, Sub};
 
-use nalgebra::{Quaternion, SimdRealField, UnitQuaternion, UnitVector3, Vector3};
+use nalgebra::{Quaternion, SimdRealField, UnitQuaternion, UnitVector3, Vector2, Vector3};
+
+/// named as such to avoid confusion with `nalgebra::distance` and `pathfinding::distance`
+pub fn distance_between_tuples((x1, y1): (usize, usize), (x2, y2): (usize, usize)) -> f32 {
+    Vector2::new(x1.abs_diff(x2) as f32, y1.abs_diff(y2) as f32).magnitude()
+}
 
 pub fn lerp_value(delta: f64, speed: f64) -> f64 {
     0.5f64.powf(speed * delta)

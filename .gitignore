@@ -1,6 +1,7 @@
 /target
 logs*
 .vscode
+.idea
 rustc-ice-*.txt
 *.las
 *.sqlite*
