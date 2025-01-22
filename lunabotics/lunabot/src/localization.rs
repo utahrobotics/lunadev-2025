@@ -208,6 +208,17 @@ impl Localizer {
             }
 
             self.root_node.set_isometry(isometry);
+            // let axis = isometry.rotation.axis().map(|x| x.into_inner()).unwrap_or_default();
+            // println!(
+            //     "pos: [{:.2}, {:.2}, {:.2}] angle: {}deg axis: [{:.2}, {:.2}, {:.2}]",
+            //     isometry.translation.x,
+            //     isometry.translation.y,
+            //     isometry.translation.z,
+            //     (isometry.rotation.angle() / std::f64::consts::PI * 180.0).round() as i32,
+            //     axis.x,
+            //     axis.y,
+            //     axis.z,
+            // );
 
             #[cfg(not(feature = "production"))]
             if let Some(lunasim_stdin) = &self.lunasim_stdin {

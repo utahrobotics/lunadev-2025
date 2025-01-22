@@ -234,6 +234,16 @@ impl CameraTask {
             }
             let localizer_ref = self.localizer_ref.clone();
             let mut inverse_local = self.node.get_local_isometry();
+            // println!(
+            //     "pos: [{:.2}, {:.2}, {:.2}] angle: {}deg axis: [{:.2}, {:.2}, {:.2}]",
+            //     inverse_local.translation.x,
+            //     inverse_local.translation.y,
+            //     inverse_local.translation.z,
+            //     (inverse_local.rotation.angle() / std::f64::consts::PI * 180.0).round() as i32,
+            //     inverse_local.rotation.axis().unwrap().x,
+            //     inverse_local.rotation.axis().unwrap().y,
+            //     inverse_local.rotation.axis().unwrap().z,
+            // );
             inverse_local.inverse_mut();
             det.detection_callbacks_ref().add_fn(move |observation| {
                 // println!(
@@ -258,7 +268,7 @@ impl CameraTask {
                 //     pose.rotation.axis().unwrap().z,
                 // );
                 localizer_ref
-                    .set_april_tag_isometry(inverse_local * observation.get_isometry_of_observer());
+                    .set_april_tag_isometry(observation.get_isometry_of_observer() * inverse_local);
             });
             std::thread::spawn(move || det.run());
             let _ = self.image.set(image.into());
