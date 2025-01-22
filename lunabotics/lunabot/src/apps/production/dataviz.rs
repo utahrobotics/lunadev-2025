@@ -39,7 +39,7 @@ impl DatavizApp {
         .expect("Failed to parse robot chain");
         let robot_chain = ChainBuilder::from(robot_chain).finish_static();
 
-        let localizer = Localizer::new(robot_chain.clone(), None);
+        let localizer = Localizer::new(robot_chain.clone());
         let localizer_ref = localizer.get_ref();
 
         let mut buffer = OwnedData::from(ThalassicData::default());

@@ -43,4 +43,3 @@ mio = { version = "1", optional = true }
 [features]
 production = ["realsense-rust", "udev", "v4l", "openh264", "vesc-translator", "apriltag", "apriltag-nalgebra", "apriltag-image", "common/thalassic", "tokio-serial", "mio", "rp2040", "embedded_common"]
 experimental = ["opus", "production", "rodio"]
-mio = ["dep:mio"]
