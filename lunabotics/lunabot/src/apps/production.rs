@@ -259,6 +259,7 @@ impl LunabotApp {
         }});
 
         let motor_ref = enumerate_motors(handle);
+        localizer_ref.set_acceleration(nalgebra::Vector3::new(0.0, -9.81, 0.0));
 
         run_ai(
             robot_chain.into(),
