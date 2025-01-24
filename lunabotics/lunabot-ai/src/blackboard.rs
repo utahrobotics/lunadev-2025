@@ -67,7 +67,7 @@ impl LunabotBlackboard {
         }
     }
 
-    pub fn get_path_mut(&mut self) -> &mut Vec<Point3<f64>>{
+    pub fn get_path_mut(&mut self) -> &mut Vec<Point3<f64>> {
         &mut self.path
     }
 

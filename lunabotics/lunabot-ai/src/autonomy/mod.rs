@@ -93,6 +93,7 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
 
     match find_target_point_index(pos, path) {
         Some(i) => {
+
             let heading_angle = heading.angle(&Vector2::new(0.0, -1.0));
             let to_first_point = (path[i].xz() - pos).normalize();
 
@@ -105,6 +106,7 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
 
             *blackboard.get_poll_when() =
                 PollWhen::Instant(Instant::now() + Duration::from_millis(16));
+
             // We reborrow path so that we can mutably access get_poll_when
             let Some(tmp) = blackboard.get_path() else {
                 return InfallibleStatus::Success;
@@ -142,20 +144,6 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
     }
 }
 
-/// min distance for 2 path points to be considered part of an arc
-const ARC_THRESHOLD: f64 = 0.7;
-
-/// is this point considered part of an arc?
-fn within_arc(path: &[Point3<f64>], i: usize) -> bool {
-    return if path.len() == 1 {
-        false
-    } else if i == path.len() - 1 {
-        distance(&path[i].xz(), &path[i - 1].xz()) < ARC_THRESHOLD
-    } else {
-        distance(&path[i].xz(), &path[i + 1].xz()) < ARC_THRESHOLD
-    };
-}
-
 /// min distance for robot to be considered at a point
 const AT_POINT_THRESHOLD: f64 = 0.05;
 
@@ -164,7 +152,16 @@ const AT_POINT_THRESHOLD: f64 = 0.05;
 /// returns `None` if robot is at the last point
 fn find_target_point_index(pos: Point2<f64>, path: &[Point3<f64>]) -> Option<usize> {
     if distance(&pos, &path[path.len() - 1].xz()) < AT_POINT_THRESHOLD {
+        println!("path follower: done!", );
         return None;
+    }
+
+    // if the robot is near any point, the target point is the next one
+    for (i, point) in path.iter().enumerate().rev() {
+        if distance(&point.xz(), &pos) < AT_POINT_THRESHOLD {
+            println!("path follower: made it to point {}, going to {}", i, i+1);
+            return Some(i+1);
+        }
     }
 
     let mut min_dist = distance(&pos, &path[0].xz());
@@ -179,6 +176,7 @@ fn find_target_point_index(pos: Point2<f64>, path: &[Point3<f64>]) -> Option<usi
         }
     }
 
+    println!("path follower: traveling to {}", target_point_index);
     Some(target_point_index)
 }
 
@@ -209,6 +207,20 @@ fn rotate_v2_ccw(vector2: Vector2<f64>, theta: f64) -> Vector2<f64> {
         f64::cos(theta),
     );
     return rot * vector2;
+}
+
+/// min distance for 2 path points to be considered part of an arc
+const ARC_THRESHOLD: f64 = 0.3;
+
+/// is this point considered part of an arc?
+fn within_arc(path: &[Point3<f64>], i: usize) -> bool {
+    if path.len() == 1 {
+        false
+    } else if i == path.len() - 1 {
+        distance(&path[i].xz(), &path[i - 1].xz()) < ARC_THRESHOLD
+    } else {
+        distance(&path[i].xz(), &path[i + 1].xz()) < ARC_THRESHOLD
+    }
 }
 
 /// clamps `a` and `b` so that `a.abs().max(b.abs) <= bound.abs()`,

@@ -59,8 +59,8 @@ impl DefaultPathfinder {
 
                         // unknown cells have 2x the cost
                         let unknown_multiplier = match is_known(neighbor) {
-                            true => 2,
-                            false => 1,
+                            true => 1,
+                            false => 2,
                         };
 
                         (
@@ -105,17 +105,15 @@ impl DefaultPathfinder {
                             })
                     },
                     |_| 0,
-                    |&(x, y)| {
-                        let index = y * 128 + x;
-                        map_data.heightmap[index] != 0.0
-                            && !map_data.expanded_obstacle_map[index].occupied()
+                    |&pos| {
+                        map_data.get_height(pos) != 0.0 && !map_data.is_occupied(pos)
                     },
                 ) {
                     start = *path.last().unwrap();
                     into.extend(path.into_iter().map(|(x, y)| {
                         let mut p = Point3::new(x as f64, 0.0, y as f64);
                         p = self.grid_to_world * p;
-                        p.y = map_data.heightmap[y * 128 + x] as f64;
+                        p.y = map_data.get_height((x, y)) as f64;
                         p
                     }));
                 } else {
@@ -153,7 +151,7 @@ impl DefaultPathfinder {
         for (index, pt) in path.iter().enumerate() {
             
             if !map_data.is_safe_for_robot(*pt) {
-                warn!("truncated path {:?}");
+                warn!("truncated path");
                 path.truncate(index-1);
                 break;
             }
