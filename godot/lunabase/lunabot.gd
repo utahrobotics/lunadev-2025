@@ -17,7 +17,7 @@ func _ready() -> void:
 		await get_tree().create_timer(5).timeout
 
 
-func _process(_delta: float) -> void:
+func _physics_process(_delta: float) -> void:
 	if init_ws != null:
 		init_ws.poll()
 		if init_ws.get_ready_state() == WebSocketPeer.STATE_CLOSED:
