@@ -9,7 +9,7 @@ use ares_bt::{
 use common::{FromLunabase, Steering};
 use dig::dig;
 use dump::dump;
-use nalgebra::{distance, Matrix2, Point2, Point3, Vector2, Vector3};
+use nalgebra::{distance, Const, Matrix2, OPoint, Point2, Point3, Vector2, Vector3};
 use tracing::{error, warn};
 use traverse::traverse;
 
@@ -50,52 +50,63 @@ impl Autonomy {
 }
 
 pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
-    WhileLoop::new(
-        |blackboard: &mut LunabotBlackboard| (*blackboard.get_autonomy() != Autonomy::None).into(),
-        ParallelAny::new((
+    ParallelAny::new((
+        Sequence::new((
             AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-                if *blackboard.lunabase_disconnected() {
-                    error!("Lunabase disconnected");
-                    return Status::Failure;
-                }
-                while let Some(msg) = blackboard.peek_from_lunabase() {
-                    match msg {
-                        FromLunabase::Steering(_) => {
-                            *blackboard.get_autonomy() = Autonomy::None;
-                            warn!("Received steering message while in autonomy mode");
-                            return Status::Success;
-                        }
-                        FromLunabase::SoftStop => {
-                            blackboard.pop_from_lunabase();
-                            return Status::Failure;
-                        }
-                        _ => blackboard.pop_from_lunabase(),
-                    };
-                }
-                Status::Running
+                blackboard.get_path_mut().clear();
+                let pos = blackboard.get_robot_isometry().translation;
+                let pos = Point3::new(pos.x, pos.y, pos.z);
+                blackboard.get_path_mut().extend_from_slice(&[
+                    pos,
+                    // Point3::new(-0.9144, 0.0, -1.905),
+                    Point3::new(1.905, 0.0, -1.5),
+                    Point3::new(1.27, 0.0, -0.5),
+                ]);
+                println!("set path", );
+                Status::Success
             }),
-            Sequence::new((dig(), dump(), traverse())),
+            ares_bt::converters::InfallibleShim(AssertCancelSafe(follow_path))
         )),
-    )
+        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+            if *blackboard.lunabase_disconnected() {
+                error!("Lunabase disconnected");
+                return Status::Failure;
+            }
+            while let Some(msg) = blackboard.peek_from_lunabase() {
+                match msg {
+                    FromLunabase::Steering(_) => {
+                        *blackboard.get_autonomy() = Autonomy::None;
+                        warn!("Received steering message while in autonomy mode");
+                        return Status::Success;
+                    }
+                    FromLunabase::SoftStop => {
+                        blackboard.pop_from_lunabase();
+                        return Status::Failure;
+                    }
+                    _ => blackboard.pop_from_lunabase(),
+                };
+            }
+            Status::Running
+        }),
+    ))
 }
 
 fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
-    let Some(mut path) = blackboard.get_path() else {
-        return InfallibleStatus::Success;
-    };
-
     let robot = blackboard.get_robot_isometry();
+    
+    let path = blackboard.get_path_mut();
+
     let pos = Point2::new(robot.translation.x, robot.translation.z);
     let heading = robot
         .rotation
         .transform_vector(&Vector3::new(0.0, 0.0, -1.0))
         .xz();
 
-    match find_target_point_index(pos, path) {
-        Some(i) => {
-
+    match find_target_point(pos, path) {
+        Some(target) => {
+            println!("going to {} from {}", target, pos);
             let heading_angle = heading.angle(&Vector2::new(0.0, -1.0));
-            let to_first_point = (path[i].xz() - pos).normalize();
+            let to_first_point = (target - pos).normalize();
 
             // direction to first point of path, from robot's pov
             let to_first_point = if heading.x < 0.0 {
@@ -106,34 +117,40 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
 
             *blackboard.get_poll_when() =
                 PollWhen::Instant(Instant::now() + Duration::from_millis(16));
+                // PollWhen::Instant(Instant::now());
 
             // We reborrow path so that we can mutably access get_poll_when
-            let Some(tmp) = blackboard.get_path() else {
-                return InfallibleStatus::Success;
-            };
-            path = tmp;
+            // let path = blackboard.get_path_mut();
 
             // when approaching an arc turn gradually
-            if distance(&pos, &path[i].xz()) < ARC_THRESHOLD && within_arc(path, i) {
-                let (l, r) = scaled_clamp(
-                    -to_first_point.y + to_first_point.x,
-                    -to_first_point.y - to_first_point.x,
-                    0.8,
-                );
-                blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(l, r)));
-                return InfallibleStatus::Running;
-            }
-
-            if to_first_point.angle(&Vector2::new(0.0, -1.0)) > 0.1 {
+            // if distance(&pos, &target) < ARC_THRESHOLD { // && within_arc(path, target) {
+                // let (l, r) = scaled_clamp(
+                //     -to_first_point.y + to_first_point.x,
+                //     -to_first_point.y - to_first_point.x,
+                //     1,
+                // );
+                // blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(l, r)));
+                // return InfallibleStatus::Running;
+            // }
+            println!("angle {} to next pt {}", to_first_point.angle(&Vector2::new(0.0, -1.0)), to_first_point);
+            if to_first_point.angle(&Vector2::new(0.0, -1.0)).to_degrees() > 20.0 {
                 if to_first_point.x > 0.0 {
+                    println!("turning right", );
                     blackboard
-                        .enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, -1.0)))
+                    .enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, -1.0)))
                 } else {
+                    println!("turning left", );
                     blackboard
                         .enqueue_action(Action::SetSteering(Steering::new_left_right(-1.0, 1.0)))
                 }
             } else {
-                blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, 1.0)))
+                println!("straight ahead ", );
+                let (l, r) = scaled_clamp(
+                    -to_first_point.y + to_first_point.x * 1.2,
+                    -to_first_point.y - to_first_point.x * 1.2,
+                    1.0,
+                );
+                blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(l, r)))
             }
             InfallibleStatus::Running
         }
@@ -145,39 +162,45 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
 }
 
 /// min distance for robot to be considered at a point
-const AT_POINT_THRESHOLD: f64 = 0.05;
+const AT_POINT_THRESHOLD: f64 = 0.2;
 
 /// find index of the next point the robot should move towards, based on which path segment the robot is closest to
 ///
 /// returns `None` if robot is at the last point
-fn find_target_point_index(pos: Point2<f64>, path: &[Point3<f64>]) -> Option<usize> {
+fn find_target_point(pos: Point2<f64>, path: &mut Vec<OPoint<f64, Const<3>>>) -> Option<Point2<f64>> {
+    
     if distance(&pos, &path[path.len() - 1].xz()) < AT_POINT_THRESHOLD {
         println!("path follower: done!", );
         return None;
     }
 
-    // if the robot is near any point, the target point is the next one
+    // if the robot is near any point, delete all previous points
     for (i, point) in path.iter().enumerate().rev() {
         if distance(&point.xz(), &pos) < AT_POINT_THRESHOLD {
-            println!("path follower: made it to point {}, going to {}", i, i+1);
-            return Some(i+1);
+            println!("path follower: made it to point {}", point);
+
+            // let res = Some(path[i+1].xz());
+            path.drain(0..=i);
+
+            println!("drained path to {:?}", path);
+            return Some(path[0].xz());
         }
     }
+    //TODO: repeat for line segments
 
-    let mut min_dist = distance(&pos, &path[0].xz());
-    let mut target_point_index = 0;
+    Some(path[0].xz())
 
-    for i in 1..path.len() {
-        let dist = dist_to_segment(pos, path[i - 1].xz(), path[i].xz());
+    // let mut min_dist = distance(&pos, &path[0].xz());
+    // let mut res = path[0].xz();
 
-        if dist < min_dist {
-            min_dist = dist;
-            target_point_index = i;
-        }
-    }
+    // for i in 1..path.len() {
+    //     let dist = dist_to_segment(pos, path[i - 1].xz(), path[i].xz());
 
-    println!("path follower: traveling to {}", target_point_index);
-    Some(target_point_index)
+    //     if dist < min_dist {
+    //         min_dist = dist;
+    //         res = path[i].xz();
+    //     }
+    // }
 }
 
 fn dist_to_segment(point: Point2<f64>, a: Point2<f64>, b: Point2<f64>) -> f64 {
