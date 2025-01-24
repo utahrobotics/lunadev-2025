@@ -36,3 +36,5 @@ output/
 flamegraph.svg
 perf.data**
 perf.data
+
+.allow-ws
