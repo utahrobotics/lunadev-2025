@@ -190,8 +190,7 @@ where
     }
 }
 
-
-/// added for usb testing purposes so MAtthew doesnt need access to the robot to test protocols built on CDC-ACM
+/// added for usb testing purposes so Matthew doesnt need access to the robot to test protocols built on CDC-ACM
 pub fn dummy_angular_rate() -> Result<AngularRate, Error> {
     Ok(AngularRate {
         x: measurements::AngularVelocity::from_rpm(1.1).into(),
@@ -200,9 +199,9 @@ pub fn dummy_angular_rate() -> Result<AngularRate, Error> {
     })
 }
 
-/// added for usb testing purposes so MAtthew doesnt need access to the robot to test protocols built on CDC-ACM
+/// added for usb testing purposes so Matthew doesnt need access to the robot to test protocols built on CDC-ACM
 pub fn dummy_accel_norm() -> Result<F32x3, Error> {
-    Ok(F32x3{
+    Ok(F32x3 {
         x: 1.5,
         y: 2.5,
         z: 3.5,

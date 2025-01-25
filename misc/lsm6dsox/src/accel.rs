@@ -168,6 +168,41 @@ where
         Ok(())
     }
 
+    /// Sets up Significant Motion Detection, routs interrupts to INT1 pin
+    pub fn setup_smd(&mut self) -> Result<(), Error> {
+        // first enable significant motion detection
+        self.registers.update_reg(
+            EmbeddedFunctionsRegister::EMB_FUNC_EN_A,
+            0b00100000,
+            0b00100000,
+        )?;
+
+        // significant motion detection routed to INT1 pin
+        self.registers
+            .update_reg(EmbeddedFunctionsRegister::EMB_FUNC_INT1, 1, 0b00100000)?;
+
+        // enable latched interrupt mode
+        self.registers
+            .update_reg(EmbeddedFunctionsRegister::PAGE_RW, 0b10000000, 0b10000000)?;
+
+        // enable embedded functions interrupt router
+        self.registers
+            .update_reg(PrimaryRegister::MD1_CFG, 1, 0b00000010)?;
+
+        self.set_accel_scale(AccelerometerScale::Accel2g)?;
+        self.set_accel_sample_rate(DataRate::Freq26Hz)?;
+        Ok(())
+    }
+
+    pub fn check_smd(&mut self) -> Result<bool, Error> {
+        let status = self
+            .registers
+            .read_reg(EmbeddedFunctionsRegister::EMB_FUNC_STATUS)?;
+
+        // check if there is an interrupt status bit set
+        return Ok((status & 0b00100000) > 0);
+    }
+
     /// Checks the tap source register.
     ///
     /// - The Register will be cleared according to the LIR setting.
