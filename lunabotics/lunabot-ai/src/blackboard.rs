@@ -67,6 +67,10 @@ impl LunabotBlackboard {
         }
     }
 
+    pub fn get_path_mut(&mut self) -> &mut Vec<Point3<f64>> {
+        &mut self.path
+    }
+
     pub fn lunabase_disconnected(&mut self) -> &mut bool {
         &mut self.lunabase_disconnected
     }

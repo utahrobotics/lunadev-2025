@@ -6,17 +6,17 @@ use std::{
     time::Duration,
 };
 
-use common::lunasim::FromLunasimbot;
 use crossbeam::atomic::AtomicCell;
 use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector3};
 use simple_motion::StaticNode;
 use spin_sleep::SpinSleeper;
 use tracing::error;
 
-use crate::{
-    apps::LunasimStdin,
-    utils::{lerp_value, swing_twist_decomposition},
-};
+#[cfg(not(feature = "production"))]
+use crate::apps::LunasimStdin;
+use crate::
+    utils::{lerp_value, swing_twist_decomposition}
+;
 
 const ACCELEROMETER_LERP_SPEED: f64 = 150.0;
 const LOCALIZATION_DELTA: f64 = 1.0 / 60.0;
@@ -69,15 +69,26 @@ impl LocalizerRef {
 
 pub struct Localizer {
     root_node: StaticNode,
+    #[cfg(not(feature = "production"))]
     lunasim_stdin: Option<LunasimStdin>,
     localizer_ref: LocalizerRef,
 }
 
 impl Localizer {
+    #[cfg(not(feature = "production"))]
     pub fn new(root_node: StaticNode, lunasim_stdin: Option<LunasimStdin>) -> Self {
         Self {
             root_node,
             lunasim_stdin,
+            localizer_ref: LocalizerRef {
+                inner: Default::default(),
+            },
+        }
+    }
+    #[cfg(feature = "production")]
+    pub fn new(root_node: StaticNode) -> Self {
+        Self {
+            root_node,
             localizer_ref: LocalizerRef {
                 inner: Default::default(),
             },
@@ -90,6 +101,7 @@ impl Localizer {
 
     pub fn run(self) {
         let spin_sleeper = SpinSleeper::default();
+        #[cfg(not(feature = "production"))]
         let mut bitcode_buffer = bitcode::Buffer::new();
         let mut is_in_motion = false;
         let mut is_in_motion_timer = 0.0;
@@ -196,7 +208,19 @@ impl Localizer {
             }
 
             self.root_node.set_isometry(isometry);
+            // let axis = isometry.rotation.axis().map(|x| x.into_inner()).unwrap_or_default();
+            // println!(
+            //     "pos: [{:.2}, {:.2}, {:.2}] angle: {}deg axis: [{:.2}, {:.2}, {:.2}]",
+            //     isometry.translation.x,
+            //     isometry.translation.y,
+            //     isometry.translation.z,
+            //     (isometry.rotation.angle() / std::f64::consts::PI * 180.0).round() as i32,
+            //     axis.x,
+            //     axis.y,
+            //     axis.z,
+            // );
 
+            #[cfg(not(feature = "production"))]
             if let Some(lunasim_stdin) = &self.lunasim_stdin {
                 let (axis, angle) = isometry
                     .rotation
@@ -210,7 +234,7 @@ impl Localizer {
                     isometry.translation.z as f32,
                 ];
 
-                let bytes = bitcode_buffer.encode(&FromLunasimbot::Isometry {
+                let bytes = bitcode_buffer.encode(&common::lunasim::FromLunasimbot::Isometry {
                     axis,
                     angle: angle as f32,
                     origin,

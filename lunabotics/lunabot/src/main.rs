@@ -36,10 +36,6 @@ lumpur::define_configuration! {
             #[serde(default)]
             depth_cameras: fxhash::FxHashMap<String, apps::DepthCameraInfo>,
             robot_layout: Option<String>
-        },
-        Sim {
-            lunabase_address: SocketAddr,
-            max_pong_delay_ms: Option<u64>
         }
     }
 }
@@ -74,6 +70,7 @@ fn main() {
         .init();
 
     match cmd {
+        #[cfg(not(feature = "production"))]
         Commands::Sim {
             lunabase_address,
             max_pong_delay_ms,

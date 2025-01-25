@@ -5,8 +5,10 @@ use camera::enumerate_cameras;
 use common::LunabotStage;
 use crossbeam::atomic::AtomicCell;
 use depth::enumerate_depth_cameras;
+use file_lock::FileLock;
 use fxhash::FxHashMap;
 use gputter::init_gputter_blocking;
+use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use mio::{Events, Interest, Poll, Token};
 use motors::enumerate_motors;
@@ -77,6 +79,18 @@ pub struct LunabotApp {
 
 impl LunabotApp {
     pub fn run(self) {
+        let filelock = match FileLock::lock("/home/lock/lunabot.lock", false, file_lock::FileOptions::new().write(true)) {
+            Ok(x) => x,
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::WouldBlock {
+                    error!("Another instance of lunabot is already running");
+                    return;
+                } else {
+                    error!("Failed to lock file: {e}");
+                    return;
+                }
+            }
+        };
         log_teleop_messages();
         if let Err(e) = init_gputter_blocking() {
             error!("Failed to initialize gputter: {e}");
@@ -93,6 +107,10 @@ impl LunabotApp {
                 return;
             }
         };
+        set_on_exit(move || {
+            drop(filelock);
+            std::process::exit(0);
+        });
 
         let handle = get_tokio_handle();
         let _guard = handle.enter();
@@ -103,7 +121,7 @@ impl LunabotApp {
         .expect("Failed to parse robot chain");
         let robot_chain = ChainBuilder::from(robot_chain).finish_static();
 
-        let localizer = Localizer::new(robot_chain.clone(), None);
+        let localizer = Localizer::new(robot_chain.clone());
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
         let camera_streaming_address = self
@@ -259,6 +277,7 @@ impl LunabotApp {
         }});
 
         let motor_ref = enumerate_motors(handle);
+        localizer_ref.set_acceleration(nalgebra::Vector3::new(0.0, -9.81, 0.0));
 
         run_ai(
             robot_chain.into(),

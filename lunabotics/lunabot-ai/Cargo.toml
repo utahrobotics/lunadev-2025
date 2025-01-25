@@ -9,3 +9,7 @@ nalgebra = { workspace = true }
 common = { path = "../common" }
 tracing = { workspace = true }
 simple-motion.workspace = true
+
+[features]
+# This is so that rust analyzer doesn't complain when enabling the "production" feature across all crates
+production = []

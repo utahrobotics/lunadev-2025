@@ -7,7 +7,7 @@ use std::{
 };
 
 use arc_swap::ArcSwapOption;
-use common::THALASSIC_CELL_COUNT;
+use common::{THALASSIC_CELL_COUNT, THALASSIC_WIDTH, THALASSIC_HEIGHT};
 use crossbeam::{
     atomic::AtomicCell,
     sync::{Parker, Unparker},
@@ -16,6 +16,8 @@ use gputter::is_gputter_initialized;
 use nalgebra::Vector2;
 use tasker::shared::OwnedData;
 use thalassic::{Occupancy, PointCloudStorage, ThalassicBuilder};
+
+use crate::utils::distance_between_tuples;
 
 static OBSERVE_DEPTH: AtomicBool = AtomicBool::new(false);
 static DEPTH_UNPARKER: ArcSwapOption<Unparker> = ArcSwapOption::const_empty();
@@ -54,8 +56,68 @@ impl Default for ThalassicData {
 }
 
 impl ThalassicData {
+
+    const MAP_WIDTH: usize = THALASSIC_WIDTH as usize;
+    const MAP_HEIGHT: usize = THALASSIC_HEIGHT as usize;
+
+    fn index_to_xy(index: usize) -> (usize, usize) {
+        (index % Self::MAP_WIDTH, index / Self::MAP_WIDTH)
+    }
+
+    fn xy_to_index((x, y): (usize, usize)) -> usize {
+        y * Self::MAP_WIDTH + x
+    }
+    
+    fn in_bounds(&self, (x, y): (i32, i32)) -> bool {
+        x >= 0 && x < Self::MAP_WIDTH as i32 && y >= 0 && y < Self::MAP_HEIGHT as i32
+    }
+
     pub fn set_robot_radius(&self, radius: f32) {
         self.new_robot_radius.store(Some(radius));
+    }
+
+
+    /// whether this position is safe for the robot to be
+    /// - this position must be green
+    /// - every single cell within `robot radius` of this position must be known
+    pub fn is_safe_for_robot(&self, pos: (usize, usize)) -> bool {
+
+        if self.is_occupied(pos) {
+            return false;
+        }
+
+        let radius = self.current_robot_radius.ceil() as i32;
+        let (pos_x, pos_y) = (pos.0 as i32, pos.1 as i32);
+
+        for x in (pos_x - radius)..(pos_x + radius) {
+            for y in (pos_y - radius)..(pos_y + radius) {
+
+                if !self.in_bounds((x, y)) { continue; }
+
+                let nearby_cell = (x as usize, y as usize);
+
+                if 
+                    distance_between_tuples(nearby_cell, pos) <= self.current_robot_radius &&
+                    !self.is_known(nearby_cell) 
+                {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+
+    pub fn is_known(&self, pos: (usize, usize)) -> bool {
+        self.get_height(pos) != 0.0
+    }
+
+    pub fn is_occupied(&self, pos: (usize, usize)) -> bool {
+        self.expanded_obstacle_map[Self::xy_to_index(pos)].occupied()
+    }
+    
+    pub fn get_height(&self, pos: (usize, usize)) -> f32 {
+        self.heightmap[Self::xy_to_index(pos)]
     }
 }
 

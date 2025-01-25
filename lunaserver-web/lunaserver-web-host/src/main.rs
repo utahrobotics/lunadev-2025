@@ -1,17 +1,30 @@
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::{net::{Ipv4Addr, SocketAddr, SocketAddrV4}, path::Path};
 
 use axum::{
-    extract::{ws::Message, ConnectInfo, WebSocketUpgrade},
-    routing::get,
-    Router,
+    extract::{ws::Message, ConnectInfo, WebSocketUpgrade}, http::StatusCode, response::IntoResponse, routing::get, Router
 };
-use tokio::net::UdpSocket;
+use tokio::{net::UdpSocket, process::Command};
 
 #[tokio::main]
 async fn main() {
     let app = Router::new()
         .route("/", get(|| async {
             "Hello, world!"
+        }))
+        .route("/init-lunabot", get(|ws: WebSocketUpgrade| async {
+            if !Path::new("/home/manglemix/lunadev-2025/.allow-ws").exists() {
+                return (StatusCode::FORBIDDEN, "").into_response();
+            }
+            ws.on_upgrade(|mut ws| async move {
+                tokio::select! {
+                    _ = ws.recv() => {}
+                    _ = Command::new("/home/manglemix/.cargo/bin/lunabot")
+                        .arg("main")
+                        .current_dir("/home/manglemix/lunadev-2025")
+                        .kill_on_drop(true)
+                        .output() => {}
+                }
+            })
         }))
         .route("/ip", get(|ConnectInfo(addr): ConnectInfo<SocketAddr>| async move {
             format!("Your IP is {}", addr.ip())
