@@ -117,10 +117,15 @@ pub fn enumerate_imus(
                 let Some(serial_cstr) = device.property_value("ID_SERIAL") else {
                     return;
                 };
-                let Some(serial) = serial_cstr.to_str() else {
+                let Some(mut serial) = serial_cstr.to_str() else {
                     warn!("Failed to parse serial of device {path_str}");
                     return;
                 };
+                let Some(tmp) = serial.strip_prefix("USR_IMU_") else {
+                    return;
+                };
+                serial = tmp;
+                
                 if let Some(path_sender) = threads.get(serial) {
                     if path_sender.send(path_str.into()).is_err() {
                         threads.remove(serial);
@@ -189,6 +194,7 @@ impl<'a> IMUTask<'a> {
                 FromIMU::AccelerationNormReading(AccelerationNorm { x, y, z }) => {
                     let accel: Vector3<f64> = Vector3::new(x, y, z).cast();
                     self.localizer.set_acceleration(self.node.get_local_isometry() * accel);
+                    println!("{accel:?}");
                 }
                 FromIMU::NoDataReady => {
                     continue;

@@ -11,7 +11,28 @@ exclude = []
 lsm6dsox = { path = "lsm6dsox" }
 defmt = "0.3.10"
 embedded_common = { path = "embedded_common", features = ["defmt"] }
-log = "0.4.22"
+cyw43 = { version = "0.3.0", features = ["defmt", "firmware-logs"] }
+cyw43-pio = { version = "0.3.0", features = ["defmt"] }
+embassy-net = { version = "0.6.0", features = ["defmt", "tcp", "udp", "raw", "dhcpv4", "medium-ethernet", "dns", "proto-ipv4", "proto-ipv6", "multicast"] }
+rand = { version = "0.8.5", default-features = false }
+embassy-rp = { version = "0.3.0", features = [
+    "defmt",
+    "unstable-pac",
+    "time-driver",
+    "critical-section-impl",
+    "rp2040",
+] }
+embassy-executor = { version = "0.7.0", features = [
+    "task-arena-size-98304",
+    "arch-cortex-m",
+    "executor-thread",
+    "executor-interrupt",
+    "defmt",
+] }
+embassy-usb = { version = "0.4.0", features = ["defmt"] }
+embassy-futures = { version = "0.1.0" }
+embassy-time = "0.4.0"
+embassy-sync = "0.6.2"
 
 # cargo build/run
 [profile.dev]

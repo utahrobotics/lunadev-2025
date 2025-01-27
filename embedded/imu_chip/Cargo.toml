@@ -21,29 +21,21 @@ rp-pico = "0.9"
 # rp2040-boot2 = "0.3"
 
 panic-semihosting = "0.6.0"
-embassy-executor = { version = "0.7.0", features = [
-    "task-arena-size-98304",
-    "arch-cortex-m",
-    "executor-thread",
-    "executor-interrupt",
-    "defmt",
-] }
-embassy-rp = { version = "0.3.0", features = [
-    "defmt",
-    "unstable-pac",
-    "time-driver",
-    "critical-section-impl",
-    "rp2040",
-] }
-embassy-usb = { version = "0.2.0", features = ["defmt"] }
-embassy-futures = { version = "0.1.0" }
+embassy-executor.workspace = true
+embassy-rp.workspace = true
+embassy-usb.workspace = true
+embassy-futures.workspace = true
 static_cell = "2.1.0"
 portable-atomic = { version = "1.5", features = ["critical-section"] }
-embassy-time = "0.4.0"
+embassy-time.workspace = true
 lsm6dsox.workspace = true
 #heapless.workspace = true
-embassy-usb-logger = "0.2.0"
-log.workspace = true
+# embassy-usb-logger = "0.4.0"
 defmt.workspace = true
 embedded_common.workspace = true
 
+cyw43.workspace = true
+cyw43-pio.workspace = true
+embassy-net.workspace = true
+rand.workspace = true
+embassy-sync.workspace = true

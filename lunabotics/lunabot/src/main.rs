@@ -27,6 +27,8 @@ lumpur::define_configuration! {
             depth_cameras: fxhash::FxHashMap<String, apps::DepthCameraInfo>,
             #[serde(default)]
             apriltags: fxhash::FxHashMap<String, apps::Apriltag>,
+            #[serde(default)]
+            imus: fxhash::FxHashMap<String, apps::IMUInfo>,
             robot_layout: Option<String>
         },
         Dataviz {
@@ -94,6 +96,7 @@ fn main() {
             cameras,
             depth_cameras,
             apriltags,
+            imus,
             robot_layout,
         } => {
             apps::LunabotApp {
@@ -105,6 +108,7 @@ fn main() {
                 cameras,
                 depth_cameras,
                 apriltags,
+                imus,
                 robot_layout: robot_layout
                     .unwrap_or_else(|| "robot-layout/lunabot.json".to_string()),
             }

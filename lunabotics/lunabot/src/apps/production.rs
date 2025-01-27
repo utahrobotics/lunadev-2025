@@ -57,6 +57,11 @@ pub struct DepthCameraInfo {
     stream_index: usize,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct IMUInfo {
+    link_name: String,
+}
+
 fn subaddress_of(mut addr: SocketAddr, port_offset: u16) -> SocketAddr {
     let new_port = addr
         .port()
@@ -75,6 +80,7 @@ pub struct LunabotApp {
     pub cameras: FxHashMap<String, CameraInfo>,
     pub depth_cameras: FxHashMap<String, DepthCameraInfo>,
     pub apriltags: FxHashMap<String, Apriltag>,
+    pub imus: FxHashMap<String, IMUInfo>,
     pub robot_layout: String,
 }
 
@@ -221,7 +227,25 @@ impl LunabotApp {
             self.max_pong_delay_ms,
         );
 
-        enumerate_imus(&localizer_ref, []);
+        enumerate_imus(&localizer_ref, self.imus.into_iter().map(
+            |(
+                port,
+                IMUInfo {
+                    link_name,
+                },
+            )| {
+                (
+                    port,
+                    rp2040::IMUInfo {
+                        node: robot_chain
+                            .get_node_with_name(&link_name)
+                            .context("Failed to find IMU link")
+                            .unwrap()
+                            .into(),
+                    },
+                )
+            },
+        ));
 
         let motor_ref = enumerate_motors(handle);
         localizer_ref.set_acceleration(nalgebra::Vector3::new(0.0, -9.81, 0.0));
