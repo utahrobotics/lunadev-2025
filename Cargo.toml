@@ -18,13 +18,10 @@ members = [
     "misc/lumpur",
     "misc/simple-motion",
     "lunabotics/lunaviz-lib",
-    "misc/vesc-translator"
+    "misc/vesc-translator",
 ]
 resolver = "2"
-exclude = [
-    "output/",
-    "embedded/"
-]
+exclude = ["output/", "embedded/"]
 
 [workspace.dependencies]
 fxhash = "0.2"
