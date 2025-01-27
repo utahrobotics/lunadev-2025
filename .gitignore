@@ -38,3 +38,5 @@ perf.data**
 perf.data
 
 .allow-ws
+
+embedded/target/

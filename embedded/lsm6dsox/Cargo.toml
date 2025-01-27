@@ -35,7 +35,7 @@ enumflags2 = "0.7.3"
 measurements = "0.11"
 num_enum = { version = "0.5", default-features = false }
 defmt.workspace = true
-log = "0.4.25"
+log.workspace = true
 
 [dev-dependencies]
 embedded-hal-mock = "0.11.1"

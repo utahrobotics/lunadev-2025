@@ -1,17 +1,9 @@
-//! This example shows how to use USB (Universal Serial Bus) in the RP2040 chip.
-//!
-//! This creates a USB serial port that echos.
-
 #![no_std]
 #![no_main]
 
-use accelerometer::vector::{F32x3, I16x3};
-use cortex_m::register::apsr::read;
-use defmt::info;
+use accelerometer::vector::F32x3;
 use embassy_executor::Spawner;
-use embassy_rp::pwm::{self, Pwm};
-use embassy_rp::{bind_interrupts, gpio, i2c, Peripherals};
-use embassy_rp::gpio::{Level, Output};
+use embassy_rp::{bind_interrupts, i2c, Peripherals};
 use embassy_rp::i2c::{Async, I2c};
 use embassy_rp::peripherals::{I2C0, USB};
 use embassy_rp::usb::{Driver, InterruptHandler};
@@ -25,7 +17,6 @@ use embedded_common::FromIMU;
 use static_cell::StaticCell;
 use lsm6dsox::*;
 use lsm6dsox::accelerometer::Accelerometer;
-use lsm6dsox::accelerometer::RawAccelerometer;
 use lsm6dsox::types::Error;
 use {defmt_rtt as _, panic_probe as _}; // global logger
 
@@ -47,7 +38,6 @@ macro_rules! unwrap {
     };
 }
 
-
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p: Peripherals = embassy_rp::init(Default::default());
@@ -57,9 +47,9 @@ async fn main(spawner: Spawner) {
     // Create embassy-usb Config
     let config = {
         let mut config = embassy_usb::Config::new(0xc0de, 0xcafe);
-        config.manufacturer = Some("Embassy");
-        config.product = Some("USB-serial");
-        config.serial_number = Some("12345678");
+        config.manufacturer = Some("USR");
+        config.product = Some("IMU");
+        config.serial_number = option_env!("IMU_SERIAL");
         config.max_power = 100;
         config.max_packet_size_0 = 64;
         config
@@ -92,20 +82,20 @@ async fn main(spawner: Spawner) {
     };
 
     // ttyACM1 for logging
-    let mut logger_class = {
+    let logger_class = {
         static STATE: StaticCell<State> = StaticCell::new();
         let state = STATE.init(State::new());
         CdcAcmClass::new(&mut builder, state, 64)
     };
 
     // Build the builder.
-    let mut usb = builder.build();
+    let usb = builder.build();
 
     // task for writing logs to ttyACM1
-    spawner.spawn(logger_task(logger_class));
+    spawner.spawn(logger_task(logger_class)).unwrap();
 
     // calls usb.run()
-    spawner.spawn(usb_task(usb));
+    spawner.spawn(usb_task(usb)).unwrap();
 
     class.wait_connection().await;
     let i2c = I2c::new_async(p.I2C0, p.PIN_1, p.PIN_0, Irqs, i2c::Config::default());
@@ -141,11 +131,11 @@ fn setup_lsm(lsm: &mut Lsm6dsox<I2c<'_, I2C0, Async>, Delay>) -> Result<u8, lsm6
 }
 
 /// UNTESTED
-fn initialize_motors(p: Peripherals) {
-    let m1_slp = Output::new(p.PIN_10, Level::Low);
-    let m1_dir = Output::new(p.PIN_15, Level::Low);
-    let m1_pwm = Pwm::new_output_b(p.PWM_SLICE4, p.PIN_9, pwm::Config::default());
-}
+// fn initialize_motors(p: Peripherals) {
+//     let m1_slp = Output::new(p.PIN_10, Level::Low);
+//     let m1_dir = Output::new(p.PIN_15, Level::Low);
+//     let m1_pwm = Pwm::new_output_b(p.PWM_SLICE4, p.PIN_9, pwm::Config::default());
+// }
 
 #[embassy_executor::task]
 async fn usb_task(mut usb: UsbDevice<'static, Driver<'static, USB>>) -> ! {
@@ -153,7 +143,7 @@ async fn usb_task(mut usb: UsbDevice<'static, Driver<'static, USB>>) -> ! {
 }
 
 #[embassy_executor::task]
-async fn logger_task(mut class: CdcAcmClass<'static, Driver<'static, USB>>) {
+async fn logger_task(class: CdcAcmClass<'static, Driver<'static, USB>>) {
     embassy_usb_logger::with_class!(1024, log::LevelFilter::Info, class).await;
 }
 
@@ -172,7 +162,10 @@ async fn read_sensors_loop(lsm: &'static mut Lsm6dsox<I2c<'static, I2C0, Async>,
     let mut ticker = Ticker::every(Duration::from_millis(delay_ms));
     loop {
         let mut ack = [0u8];
-        let readcount = class.read_packet(&mut ack).await;
+        if let Err(e) = class.read_packet(&mut ack).await {
+            log::error!("failed to read packet: {e:?}");
+            continue;
+        }
         match lsm.angular_rate() {
             Ok(lsm6dsox::AngularRate{x,y,z}) => {
                 log::info!("gyro: x: {}, y: {}, z: {} (radians per sec)", x.as_radians_per_second(),y.as_radians_per_second(),z.as_radians_per_second());
@@ -226,12 +219,12 @@ async fn read_sensors_loop(lsm: &'static mut Lsm6dsox<I2c<'static, I2C0, Async>,
     }
 }
 
-async fn blink_twice<'a>(p1: &mut gpio::Output<'a>, p2: &mut gpio::Output<'a>) {
-    for _ in 0..2 {
-        p1.set_high();
-        p2.set_high();
-        Timer::after_millis(200).await;
-        p1.set_low();
-        p2.set_low();
-    }
-}
+// async fn blink_twice<'a>(p1: &mut gpio::Output<'a>, p2: &mut gpio::Output<'a>) {
+//     for _ in 0..2 {
+//         p1.set_high();
+//         p2.set_high();
+//         Timer::after_millis(200).await;
+//         p1.set_low();
+//         p2.set_low();
+//     }
+// }

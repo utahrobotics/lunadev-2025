@@ -17,7 +17,6 @@ pub struct MotorRef {
     mutex: Mutex<(f32, f32)>,
     condvar: Condvar,
 }
-// STMicroelectronics_ChibiOS_RT_Virtual_COM_Port_304
 
 impl MotorRef {
     pub fn set_speed(&self, left: f32, right: f32) {

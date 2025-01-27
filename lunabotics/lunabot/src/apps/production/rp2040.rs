@@ -1,12 +1,20 @@
 
+use std::{path::PathBuf, sync::mpsc::SyncSender};
+
 use embedded_common::*;
+use fxhash::FxHashMap;
+use simple_motion::StaticImmutableNode;
 use tasker::tokio::{
     self,
     io::{AsyncReadExt, AsyncWriteExt},
 };
 use tokio_serial::SerialStream;
-use tracing::error;
-use udev::{Device, Enumerator, Udev};
+use tracing::{error, warn};
+use udev::{Device, Enumerator, EventType, MonitorBuilder, Udev};
+
+use crate::localization::LocalizerRef;
+
+use super::udev_poll;
 
 pub struct PicoController {
     serial_port: SerialStream,
@@ -76,4 +84,121 @@ impl PicoController {
             )
         })?);
     }
+}
+
+pub struct IMUInfo {
+    pub node: StaticImmutableNode,
+}
+
+pub fn enumerate_imus(
+    localizer_ref: &LocalizerRef,
+    port_to_chain: impl IntoIterator<Item = (String, IMUInfo)>,
+) {
+    let mut threads: FxHashMap<String, SyncSender<PathBuf>> = port_to_chain
+        .into_iter()
+        .filter_map(
+            |(
+                port,
+                IMUInfo {
+                    node
+                },
+            )| {
+                let port2 = port.clone();
+                let localizer_ref = localizer_ref.clone();
+                let (tx, rx) = std::sync::mpsc::sync_channel(1);
+                std::thread::spawn(move || {
+                    let mut camera_task = CameraTask {
+                        path: rx,
+                        port,
+                        camera_stream,
+                        image: OnceCell::new(),
+                        focal_length_x_px,
+                        focal_length_y_px,
+                        apriltags,
+                        localizer_ref,
+                        node,
+                    };
+                    loop {
+                        camera_task.camera_task();
+                    }
+                });
+                Some((port2, tx))
+            },
+        )
+        .collect();
+
+    std::thread::spawn(move || {
+        let mut monitor = match MonitorBuilder::new() {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to create udev monitor: {e}");
+                return;
+            }
+        };
+        monitor = match monitor.match_subsystem("tty") {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to set match-subsystem filter: {e}");
+                return;
+            }
+        };
+        let listener = match monitor.listen() {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to listen for udev events: {e}");
+                return;
+            }
+        };
+
+        let mut enumerator = {
+            let udev = match Udev::new() {
+                Ok(x) => x,
+                Err(e) => {
+                    error!("Failed to create udev context: {e}");
+                    return;
+                }
+            };
+            match udev::Enumerator::with_udev(udev) {
+                Ok(x) => x,
+                Err(e) => {
+                    error!("Failed to create udev enumerator: {e}");
+                    return;
+                }
+            }
+        };
+        if let Err(e) = enumerator.match_subsystem("tty") {
+            error!("Failed to set match-subsystem filter: {e}");
+        }
+        let devices = match enumerator.scan_devices() {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to scan devices: {e}");
+                return;
+            }
+        };
+        devices
+            .into_iter()
+            .chain(
+                udev_poll(listener)
+                    .filter(|event| event.event_type() == EventType::Add)
+                    .map(|event| {
+                        event.device()
+                    }),
+            )
+            .for_each(|device| {
+                let Some(path) = device.devnode() else {
+                    return;
+                };
+                let Some(path_str) = path.to_str() else {
+                    return;
+                };
+                let Some(serial_cstr) = device.property_value("ID_SERIAL") else {
+                    return;
+                };
+                let Some(serial) = serial_cstr.to_str() else {
+                    warn!("Failed to parse serial of device {path_str}");
+                    return;
+                };
+            })
+    });
 }

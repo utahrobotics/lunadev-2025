@@ -8,7 +8,7 @@
 
 use crate::types::*;
 
-use embedded_hal::i2c;
+// use embedded_hal::i2c;
 use embedded_hal::i2c::I2c;
 
 pub struct RegisterAccess<I2C> {

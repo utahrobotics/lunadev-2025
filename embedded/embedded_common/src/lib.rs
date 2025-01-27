@@ -1,8 +1,5 @@
 #![no_std]
 
-pub static PICO_SERIAL: &'static str = "12345678";
-pub static UDEVADM_ID: &'static str = "Embassy_USB-serial_12345678";
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum FromIMU {
