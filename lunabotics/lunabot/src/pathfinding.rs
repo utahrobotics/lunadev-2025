@@ -37,7 +37,7 @@ impl DefaultPathfinder {
         }
         set_observe_depth(false);
 
-        /// allows checking if position is known inside `move || {}` closures without moving `map_data`
+        // allows checking if position is known inside `move || {}` closures without moving `map_data`
         let is_known = |pos: (usize, usize)| {
             map_data.is_known(pos)
         };

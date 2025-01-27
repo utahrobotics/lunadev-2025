@@ -224,9 +224,9 @@ impl LunabotApp {
         let localizer_ref = localizer_ref.clone();
         let picos = PicoController::enumerate_picos();
         handle.spawn(async move { 'controller: {
-            use tracing::{warn, info, error};
+            use tracing::{warn, error};
             use embedded_common::*;
-            use nalgebra::Vector3;
+
             let pico_paths = match picos  {
                 Ok(picos) => picos,
                 Err(e) => {

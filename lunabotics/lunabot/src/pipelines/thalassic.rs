@@ -60,9 +60,9 @@ impl ThalassicData {
     const MAP_WIDTH: usize = THALASSIC_WIDTH as usize;
     const MAP_HEIGHT: usize = THALASSIC_HEIGHT as usize;
 
-    fn index_to_xy(index: usize) -> (usize, usize) {
-        (index % Self::MAP_WIDTH, index / Self::MAP_WIDTH)
-    }
+    // fn index_to_xy(index: usize) -> (usize, usize) {
+    //     (index % Self::MAP_WIDTH, index / Self::MAP_WIDTH)
+    // }
 
     fn xy_to_index((x, y): (usize, usize)) -> usize {
         y * Self::MAP_WIDTH + x
