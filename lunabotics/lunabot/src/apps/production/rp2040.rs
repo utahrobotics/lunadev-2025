@@ -1,90 +1,18 @@
 
-use std::{path::PathBuf, sync::mpsc::SyncSender};
+use std::sync::mpsc::{Receiver, SyncSender};
 
 use embedded_common::*;
 use fxhash::FxHashMap;
+use nalgebra::Vector3;
 use simple_motion::StaticImmutableNode;
-use tasker::tokio::{
-    self,
-    io::{AsyncReadExt, AsyncWriteExt},
-};
-use tokio_serial::SerialStream;
-use tracing::{error, warn};
-use udev::{Device, Enumerator, EventType, MonitorBuilder, Udev};
+use tasker::{tokio::{self, io::{AsyncReadExt, AsyncWriteExt, BufStream}}, BlockOn};
+use tokio_serial::SerialPortBuilderExt;
+use tracing::{error, info, warn};
+use udev::{EventType, MonitorBuilder, Udev};
 
 use crate::localization::LocalizerRef;
 
 use super::udev_poll;
-
-pub struct PicoController {
-    serial_port: SerialStream,
-}
-
-impl PicoController {
-    /// returns a sorted Vec of /dev/ttyACM* that have the serial number specified in embedded_common::ID_SERIAL
-    pub fn enumerate_picos() -> Result<Vec<String>, std::io::Error> {
-        let udev = Udev::new()?;
-        let mut enumerator = Enumerator::with_udev(udev)?;
-        let devices = enumerator.scan_devices()?;
-
-        let mut candidates = Vec::new();
-        for device in devices.collect::<Vec<Device>>() {
-            if let Some(path) = device.devnode() {
-                device.properties().for_each(|property| {
-                    if property.value().to_string_lossy().to_string() == UDEVADM_ID
-                        && !path.starts_with("/dev/bus/")
-                    {
-                        let path = path.to_owned();
-                        candidates.push(path.to_string_lossy().to_string());
-                    }
-                });
-            }
-        }
-        candidates.sort();
-        return Ok(candidates);
-    }
-
-    pub async fn new(serial_port: &str) -> Result<Self, std::io::Error> {
-        let builder = tokio_serial::new(serial_port, 9600);
-        let file = SerialStream::open(&builder)?;
-        // let file = tokio::fs::OpenOptions::new().read(true).write(true).open(serial_port).await?;
-        Ok(PicoController { serial_port: file })
-    }
-
-    // /// makes sure the serial number is Embassy_USB-serial_12345678
-    // async fn check_udevadm_info(path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    //     let udevadm = Command::new("udevadm").arg("info").arg(path).output().await?;
-    //     if String::from_utf8_lossy(&udevadm.stdout).contains(UDEVADM_ID) {
-    //         return Ok(());
-    //     } else {
-    //         return Err(Box::new(std::io::Error::new(
-    //             std::io::ErrorKind::NotFound,
-    //             format!("{path} has the wrong serial number")
-    //         )))
-    //     }
-    // }
-
-    async fn send_ack(&mut self) -> Result<(), std::io::Error> {
-        let ack = [1];
-        self.serial_port.write(&ack).await?;
-        self.serial_port.flush().await?;
-        tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
-        Ok(())
-    }
-
-    pub async fn get_message_from_pico(&mut self) -> Result<FromIMU, std::io::Error> {
-        self.send_ack().await?;
-        let mut data: [u8; 13] = [0; 13];
-        self.serial_port.read_exact(&mut data).await?;
-        return Ok(FromIMU::deserialize(data).map_err(|e| {
-            error!("Error deserializing message FromIMU: {e}");
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "failed to deserialize FromIMU from the serial port",
-            )
-        })?);
-    }
-}
 
 pub struct IMUInfo {
     pub node: StaticImmutableNode,
@@ -92,9 +20,9 @@ pub struct IMUInfo {
 
 pub fn enumerate_imus(
     localizer_ref: &LocalizerRef,
-    port_to_chain: impl IntoIterator<Item = (String, IMUInfo)>,
+    serial_to_chain: impl IntoIterator<Item = (String, IMUInfo)>,
 ) {
-    let mut threads: FxHashMap<String, SyncSender<PathBuf>> = port_to_chain
+    let mut threads: FxHashMap<String, SyncSender<String>> = serial_to_chain
         .into_iter()
         .filter_map(
             |(
@@ -107,19 +35,13 @@ pub fn enumerate_imus(
                 let localizer_ref = localizer_ref.clone();
                 let (tx, rx) = std::sync::mpsc::sync_channel(1);
                 std::thread::spawn(move || {
-                    let mut camera_task = CameraTask {
+                    let mut imu_task = IMUTask {
                         path: rx,
-                        port,
-                        camera_stream,
-                        image: OnceCell::new(),
-                        focal_length_x_px,
-                        focal_length_y_px,
-                        apriltags,
-                        localizer_ref,
+                        localizer: &localizer_ref,
                         node,
                     };
                     loop {
-                        camera_task.camera_task();
+                        imu_task.imu_task().block_on();
                     }
                 });
                 Some((port2, tx))
@@ -199,6 +121,83 @@ pub fn enumerate_imus(
                     warn!("Failed to parse serial of device {path_str}");
                     return;
                 };
+                if let Some(path_sender) = threads.get(serial) {
+                    if path_sender.send(path_str.into()).is_err() {
+                        threads.remove(serial);
+                    }
+                } else {
+                    warn!("Unexpected IMU with serial {}", serial);
+                }
             })
     });
+}
+
+struct IMUTask<'a> {
+    path: Receiver<String>,
+    localizer: &'a LocalizerRef,
+    node: StaticImmutableNode,
+}
+
+impl<'a> IMUTask<'a> {
+    async fn imu_task(&mut self) {
+        let path_str = match self.path.recv() {
+            Ok(x) => x,
+            Err(_) => loop {
+                std::thread::park();
+            },
+        };
+        let mut imu_port = match tokio_serial::new(&path_str, 9600)
+            .timeout(std::time::Duration::from_millis(500))
+            .open_native_async()
+        {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to open motor port {path_str}: {e}");
+                return;
+            }
+        };
+        info!("Opened IMU port {path_str}");
+        if let Err(e) = imu_port.set_exclusive(true) {
+            warn!("Failed to set motor port {path_str} exclusive: {e}");
+        }
+        let mut imu_port = BufStream::new(imu_port);
+        let mut data: [u8; 13] = [0; 13];
+
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            const ACK: [u8; 1] = [1];
+            let result = async {
+                imu_port.write(&ACK).await?;
+                imu_port.flush().await?;
+                imu_port.read_exact(&mut data).await
+            }.await;
+            if let Err(e) = result {
+                error!("Failed to read/write to IMU: {e}");
+                break;
+            }
+            let msg = match FromIMU::deserialize(data) {
+                Ok(x) => x,
+                Err(e) => {
+                    error!("Failed to deserialize IMU message: {e}");
+                    break;
+                }
+            };
+            match msg {
+                FromIMU::AngularRateReading(AngularRate { .. }) => {
+                    
+                }
+                FromIMU::AccelerationNormReading(AccelerationNorm { x, y, z }) => {
+                    let accel: Vector3<f64> = Vector3::new(x, y, z).cast();
+                    self.localizer.set_acceleration(self.node.get_local_isometry() * accel);
+                }
+                FromIMU::NoDataReady => {
+                    continue;
+                }
+                FromIMU::Error => {
+                    error!("IMU reported error");
+                    break;
+                }
+            }
+        }
+    }
 }

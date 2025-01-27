@@ -168,7 +168,7 @@ async fn read_sensors_loop(lsm: &'static mut Lsm6dsox<I2c<'static, I2C0, Async>,
         }
         match lsm.angular_rate() {
             Ok(lsm6dsox::AngularRate{x,y,z}) => {
-                log::info!("gyro: x: {}, y: {}, z: {} (radians per sec)", x.as_radians_per_second(),y.as_radians_per_second(),z.as_radians_per_second());
+                // log::info!("gyro: x: {}, y: {}, z: {} (radians per sec)", x.as_radians_per_second(),y.as_radians_per_second(),z.as_radians_per_second());
                 unwrap!(class.write_packet(
                     &FromIMU::AngularRateReading(AngularRate{
                         x: x.as_radians_per_second() as f32,
@@ -193,7 +193,7 @@ async fn read_sensors_loop(lsm: &'static mut Lsm6dsox<I2c<'static, I2C0, Async>,
         let _ = class.read_packet(&mut ack).await;
         match lsm.accel_norm() {
             Ok(F32x3{x,y,z}) => {
-                log::info!("accel: x: {}, y: {}, z: {} m/s normalized", x,y,z);
+                // log::info!("accel: x: {}, y: {}, z: {} m/s normalized", x,y,z);
                 unwrap!(class.write_packet(
                     &FromIMU::AccellerationNormReading(AccelerationNorm{
                         x,

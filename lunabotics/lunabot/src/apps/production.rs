@@ -221,61 +221,7 @@ impl LunabotApp {
             self.max_pong_delay_ms,
         );
 
-        let localizer_ref = localizer_ref.clone();
-        let picos = PicoController::enumerate_picos();
-        handle.spawn(async move { 'controller: {
-            use tracing::{warn, error};
-            use embedded_common::*;
-
-            let pico_paths = match picos  {
-                Ok(picos) => picos,
-                Err(e) => {
-                    error!("Couldn't enumerate connected picos. {}", e);
-                    break 'controller;
-                }
-            };
-
-            let Some(path) = pico_paths.get(0) else {
-                error!("No Picos found");
-                break 'controller;
-            };
-
-            
-            let mut pico_controler = match PicoController::new(path).await {
-                Ok(controller) => controller,
-                Err(e) => {
-                    error!("Couldn't find pico: {e}");
-                    break 'controller;
-                }
-            };
-            loop {
-                match pico_controler.get_message_from_pico().await {
-                    Ok(FromIMU::AngularRateReading(AngularRate{x,y,z})) => {
-                        // info!("Got angular rate reading: {x}, {y}, {z}");
-                        // TODO: set angular rate
-                    }
-
-                    Ok(FromIMU::AccellerationNormReading(AccelerationNorm{x,y,z})) => {
-                        // info!("Got accel norm reading: {x}, {y}, {z}");
-
-                        // TODO: set accel
-                    }
-
-                    Ok(FromIMU::NoDataReady) => {
-                        warn!("No data ready");
-                    }
-
-                    Ok(FromIMU::Error) => {
-                        warn!("Received error from IMU");
-                    }
-
-                    Err(e) => {
-                        error!("Error getting readings from pico: {}",e);
-                    }
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-            }
-        }});
+        enumerate_imus(&localizer_ref, []);
 
         let motor_ref = enumerate_motors(handle);
         localizer_ref.set_acceleration(nalgebra::Vector3::new(0.0, -9.81, 0.0));

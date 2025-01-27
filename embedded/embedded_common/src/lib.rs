@@ -4,7 +4,7 @@
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum FromIMU {
     AngularRateReading(AngularRate),
-    AccellerationNormReading(AccelerationNorm),
+    AccelerationNormReading(AccelerationNorm),
     NoDataReady,
     Error,
 }
@@ -67,7 +67,7 @@ impl FromIMU {
                 bytes[0] = 0;
                 bytes[1..].copy_from_slice(&rate.serialize());
             }
-            FromIMU::AccellerationNormReading(accel) => {
+            FromIMU::AccelerationNormReading(accel) => {
                 bytes[0] = 1;
                 bytes[1..].copy_from_slice(&accel.serialize());
             }
@@ -88,7 +88,7 @@ impl FromIMU {
         
         match bytes[0] {
             0 => Ok(FromIMU::AngularRateReading(AngularRate::deserialize(variant_bytes)?)),
-            1 => Ok(FromIMU::AccellerationNormReading(AccelerationNorm::deserialize(variant_bytes)?)),
+            1 => Ok(FromIMU::AccelerationNormReading(AccelerationNorm::deserialize(variant_bytes)?)),
             2 => Ok(FromIMU::NoDataReady),
             3 => Ok(FromIMU::Error),
             _ => Err("Invalid variant tag")
@@ -123,7 +123,7 @@ mod tests {
 
     #[test]
     fn test_from_imu_acceleration() {
-        let original = FromIMU::AccellerationNormReading(AccelerationNorm {
+        let original = FromIMU::AccelerationNormReading(AccelerationNorm {
             x: 1.0,
             y: -2.5,
             z: 0.5,
@@ -133,7 +133,7 @@ mod tests {
         let deserialized = FromIMU::deserialize(serialized).unwrap();
         
         match (original, deserialized) {
-            (FromIMU::AccellerationNormReading(orig), FromIMU::AccellerationNormReading(des)) => {
+            (FromIMU::AccelerationNormReading(orig), FromIMU::AccelerationNormReading(des)) => {
                 assert_eq!(orig.x, des.x);
                 assert_eq!(orig.y, des.y);
                 assert_eq!(orig.z, des.z);
