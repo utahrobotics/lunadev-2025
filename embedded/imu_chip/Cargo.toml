@@ -40,7 +40,7 @@ embassy-futures = { version = "0.1.0" }
 static_cell = "2.1.0"
 portable-atomic = { version = "1.5", features = ["critical-section"] }
 embassy-time = "0.4.0"
-lsm6dsox = { path = "../../misc/lsm6dsox" }
+lsm6dsox.workspace = true
 #heapless.workspace = true
 embassy-usb-logger = "0.2.0"
 log = "0.4.22"

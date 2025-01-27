@@ -16,15 +16,15 @@ members = [
     "lunaserver-web/lunaserver-web-host",
     "lunaserver-web/lunaserver-web-client",
     "misc/lumpur",
-    "embedded/imu_chip",
     "misc/simple-motion",
-    "rp2040",
-    "embedded_common",
     "lunabotics/lunaviz-lib",
     "misc/vesc-translator"
 ]
 resolver = "2"
-exclude = ["publishing/", "dump/", "lunabotics/lunabase/", "camera-db/", "output/"]
+exclude = [
+    "output/",
+    "embedded/"
+]
 
 [workspace.dependencies]
 fxhash = "0.2"
@@ -77,6 +77,7 @@ gputter = { path = "misc/gputter" }
 thalassic = { path = "misc/thalassic" }
 simple-motion = { path = "misc/simple-motion" }
 vesc-translator = { path = "misc/vesc-translator" }
+embedded_common = { path = "embedded/embedded_common" }
 
 [profile.dev.package.lunabot]
 opt-level = 2

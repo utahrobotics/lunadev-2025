@@ -1,0 +1,13 @@
+[workspace]
+members = [
+    "imu_chip",
+    "lsm6dsox",
+    "embedded_common"
+]
+resolver = "2"
+exclude = []
+
+[workspace.dependencies]
+lsm6dsox = { path = "lsm6dsox" }
+defmt = "0.3.10"
+embedded_common = { path = "embedded_common", features = ["defmt"] }

@@ -34,6 +34,7 @@ mod camera;
 mod depth;
 mod motors;
 mod streaming;
+mod rp2040;
 
 pub mod dataviz;
 // mod audio_streaming;

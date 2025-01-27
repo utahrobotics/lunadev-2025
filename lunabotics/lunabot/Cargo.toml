@@ -23,8 +23,7 @@ thalassic.workspace = true
 gputter.workspace = true
 simple-motion.workspace = true
 lunabot-ai = { path = "../lunabot-ai" }
-rp2040 = {path = "../../rp2040", optional = true}
-embedded_common = {path = "../../embedded_common", optional=true}
+embedded_common = { workspace = true, optional=true }
 vesc-translator = { workspace = true, optional = true }
 realsense-rust = { version = "1.2", optional = true }
 udev = { version = "0.9.1", optional = true, features = ["mio10"] }
@@ -42,5 +41,5 @@ mio = { version = "1", optional = true }
 file-lock = { version = "2.1.11", optional = true }
 
 [features]
-production = ["realsense-rust", "udev", "v4l", "openh264", "vesc-translator", "apriltag", "apriltag-nalgebra", "apriltag-image", "common/thalassic", "tokio-serial", "mio", "rp2040", "embedded_common", "file-lock"]
+production = ["realsense-rust", "udev", "v4l", "openh264", "vesc-translator", "apriltag", "apriltag-nalgebra", "apriltag-image", "common/thalassic", "tokio-serial", "mio", "embedded_common", "file-lock"]
 experimental = ["opus", "production", "rodio"]

@@ -10,7 +10,7 @@ rustflags = [
   # Code-size optimizations.
   #   trap unreachable can save a lot of space, but requires nightly compiler.
   #   uncomment the next line if you wish to enable it
-  # "-Z", "trap-unreachable=no",
+  "-Z", "trap-unreachable=no",
   "-C", "no-vectorize-loops",
 ]
 

@@ -1,11 +1,10 @@
 #![no_std]
 
-use defmt::Format;
-
 pub static PICO_SERIAL: &'static str = "12345678";
 pub static UDEVADM_ID: &'static str = "Embassy_USB-serial_12345678";
 
-#[derive(Clone, Copy, Debug, Format, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum FromIMU {
     AngularRateReading(AngularRate),
     AccellerationNormReading(AccelerationNorm),
@@ -13,14 +12,16 @@ pub enum FromIMU {
     Error,
 }
 
-#[derive(Clone, Copy, Debug, Format, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AngularRate {
     pub x: f32,
     pub y: f32,
     pub z: f32,
 }
 
-#[derive(Clone, Copy, Debug, Format, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AccelerationNorm {
     pub x: f32,
     pub y: f32,

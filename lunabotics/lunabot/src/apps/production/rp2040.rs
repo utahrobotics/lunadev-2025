@@ -1,14 +1,12 @@
-use std::path::PathBuf;
 
 use embedded_common::*;
-use tokio::{
-    self, fs,
+use tasker::tokio::{
+    self,
     io::{AsyncReadExt, AsyncWriteExt},
-    process::Command,
 };
 use tokio_serial::SerialStream;
-use tracing::{error, info};
-use udev::{Device, Entry, Enumerator, Udev};
+use tracing::error;
+use udev::{Device, Enumerator, Udev};
 
 pub struct PicoController {
     serial_port: SerialStream,
@@ -69,7 +67,7 @@ impl PicoController {
     pub async fn get_message_from_pico(&mut self) -> Result<FromIMU, std::io::Error> {
         self.send_ack().await?;
         let mut data: [u8; 13] = [0; 13];
-        let readcount = self.serial_port.read(&mut data).await?;
+        self.serial_port.read_exact(&mut data).await?;
         return Ok(FromIMU::deserialize(data).map_err(|e| {
             error!("Error deserializing message FromIMU: {e}");
             std::io::Error::new(
