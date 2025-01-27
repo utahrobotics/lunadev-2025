@@ -20,7 +20,8 @@ use embassy_rp::pio::{self, Pio};
 use embassy_rp::usb::Driver;
 use embassy_rp::{bind_interrupts, i2c, usb, Peripherals};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::pipe::Pipe;
+use embassy_sync::mutex::Mutex;
+use embassy_sync::signal::Signal;
 use embassy_time::{Delay, Duration, Ticker, Timer};
 use embassy_usb::class::cdc_acm::CdcAcmClass;
 use embassy_usb::class::cdc_acm::State;
@@ -39,7 +40,7 @@ use static_cell::StaticCell;
 fn panic(info: &PanicInfo) -> ! {
     error!("{}", info);
     loop {
-        core::hint::spin_loop();
+        // core::hint::spin_loop();
     }
 }
 
@@ -49,7 +50,8 @@ bind_interrupts!(struct Irqs {
     PIO0_IRQ_0 => pio::InterruptHandler<PIO0>;
 });
 
-static LOGGING_BYTES: Pipe<CriticalSectionRawMutex, 256> = Pipe::<CriticalSectionRawMutex, 256>::new();
+static LOGGING_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
+static LOGGING_MUTEX: Mutex<CriticalSectionRawMutex, [u8; 256]> = Mutex::new([0; 256]);
 
 #[defmt::global_logger]
 struct Logger;
@@ -66,17 +68,21 @@ unsafe impl defmt::Logger for Logger {
     }
 
     unsafe fn write(mut bytes: &[u8]) {
-        // while !bytes.is_empty() {
-        //     match LOGGING_BYTES.try_write(bytes) {
-        //         Ok(n) => {
-        //             bytes = &bytes[n..];
-        //         }
-        //         Err(_) => {
-        //             // Wait for the buffer to be available
-        //             core::hint::spin_loop();
-        //         }
-        //     }
-        // }
+        loop {
+            if LOGGING_SIGNAL.signaled() {
+                // Do nothing
+            } else if let Ok(mut guard) = LOGGING_MUTEX.try_lock() {
+                let buffer_len = guard.len();
+                if buffer_len >= bytes.len() {
+                    guard[..bytes.len()].copy_from_slice(bytes);
+                    break;
+                } else {
+                    guard.copy_from_slice(&bytes[..buffer_len]);
+                    bytes = &bytes[buffer_len..];
+                }
+            }
+            core::hint::spin_loop();
+        }
     }
 }
 
@@ -152,7 +158,7 @@ async fn main(spawner: Spawner) {
             let _ = spawner.spawn(read_sensors_loop(lsm, 100, class));
         }
         Err(e) => {
-            // error!("lsm failed to setup: {:?}", e);
+            error!("lsm failed to setup: {:?}", e);
         }
     }
 
@@ -258,10 +264,10 @@ async fn main(spawner: Spawner) {
                 Timer::after(Duration::from_secs(1)).await;
                 continue;
             }
-            let mut to_send = [0; 256];
             'logging: loop {
-                LOGGING_BYTES.read(&mut to_send).await;
-                let mut to_send: &[u8] = &to_send;
+                LOGGING_SIGNAL.wait().await;
+                let guard = LOGGING_MUTEX.lock().await;
+                let mut to_send: &[u8] = &*guard;
                 while !to_send.is_empty() {
                     match socket.write(to_send).await {
                         Ok(n) => {
@@ -288,7 +294,7 @@ fn setup_lsm(lsm: &mut Lsm6dsox<I2c<'_, I2C0, Async>, Delay>) -> Result<u8, lsm6
     lsm.set_accel_sample_rate(DataRate::Freq52Hz)?;
     lsm.set_accel_scale(AccelerometerScale::Accel4g)?;
     lsm.check_id().map_err(|e| {
-        // error!("error checking id of lsm6dsox: {:?}", e);
+        error!("error checking id of lsm6dsox: {:?}", e);
         lsm6dsox::Error::NotSupported
     })
 }
