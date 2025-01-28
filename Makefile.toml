@@ -38,6 +38,11 @@ workspace = false
 command = "cargo"
 args = ["run", "--features=production", "-p", "lunabot", "--profile", "optdebug", "--", "main"]
 
+[tasks.checkmain]
+workspace=false
+command = "cargo"
+args = ["check", "--features=production", "-p", "lunabot", "--profile", "optdebug"]
+
 [tasks.dataviz]
 workspace = false
 command = "cargo"
