@@ -1,11 +1,18 @@
-
 use std::sync::mpsc::{Receiver, SyncSender};
 
 use embedded_common::*;
 use fxhash::FxHashMap;
 use nalgebra::Vector3;
 use simple_motion::StaticImmutableNode;
-use tasker::{get_tokio_handle, tokio::{self, io::{AsyncReadExt, AsyncWriteExt, BufStream}, net::TcpListener}, BlockOn};
+use tasker::{
+    get_tokio_handle,
+    tokio::{
+        self,
+        io::{AsyncReadExt, AsyncWriteExt, BufStream},
+        net::TcpListener,
+    },
+    BlockOn,
+};
 use tokio_serial::SerialPortBuilderExt;
 use tracing::{debug, error, info, warn};
 use udev::{EventType, MonitorBuilder, Udev};
@@ -25,29 +32,22 @@ pub fn enumerate_imus(
     get_tokio_handle().spawn(imu_wifi_listener());
     let mut threads: FxHashMap<String, SyncSender<String>> = serial_to_chain
         .into_iter()
-        .filter_map(
-            |(
-                port,
-                IMUInfo {
-                    node
-                },
-            )| {
-                let port2 = port.clone();
-                let localizer_ref = localizer_ref.clone();
-                let (tx, rx) = std::sync::mpsc::sync_channel(1);
-                std::thread::spawn(move || {
-                    let mut imu_task = IMUTask {
-                        path: rx,
-                        localizer: &localizer_ref,
-                        node,
-                    };
-                    loop {
-                        imu_task.imu_task().block_on();
-                    }
-                });
-                Some((port2, tx))
-            },
-        )
+        .filter_map(|(port, IMUInfo { node })| {
+            let port2 = port.clone();
+            let localizer_ref = localizer_ref.clone();
+            let (tx, rx) = std::sync::mpsc::sync_channel(1);
+            std::thread::spawn(move || {
+                let mut imu_task = IMUTask {
+                    path: rx,
+                    localizer: &localizer_ref,
+                    node,
+                };
+                loop {
+                    imu_task.imu_task().block_on();
+                }
+            });
+            Some((port2, tx))
+        })
         .collect();
 
     std::thread::spawn(move || {
@@ -104,9 +104,7 @@ pub fn enumerate_imus(
             .chain(
                 udev_poll(listener)
                     .filter(|event| event.event_type() == EventType::Add)
-                    .map(|event| {
-                        event.device()
-                    }),
+                    .map(|event| event.device()),
             )
             .for_each(|device| {
                 let Some(path) = device.devnode() else {
@@ -130,7 +128,7 @@ pub fn enumerate_imus(
                     return;
                 };
                 serial = tmp;
-                
+
                 if let Some(path_sender) = threads.get(serial) {
                     if path_sender.send(path_str.into()).is_err() {
                         threads.remove(serial);
@@ -180,7 +178,8 @@ impl<'a> IMUTask<'a> {
                 imu_port.write(&ACK).await?;
                 imu_port.flush().await?;
                 imu_port.read_exact(&mut data).await
-            }.await;
+            }
+            .await;
             if let Err(e) = result {
                 error!("Failed to read/write to IMU: {e}");
                 break;
@@ -194,15 +193,17 @@ impl<'a> IMUTask<'a> {
             };
             match msg {
                 FromIMU::AngularRateReading(AngularRate { x, y, z }) => {
-                    let _angular_velocity: Vector3<f64> = Vector3::new(x, -z, -y).cast();
+                    let angular_velocity: Vector3<f64> = Vector3::new(-x, z, y).cast();
+                    let transformed = (self.node.get_local_isometry() * angular_velocity);
+                    // tracing::info!("{:?}", transformed);
                     // Currently, angular velocity is still expressed as a quaternion
                     // self.localizer.set_angular_velocity(self.node.get_local_isometry() * angular_velocity);
-
                 }
                 FromIMU::AccelerationNormReading(AccelerationNorm { x, y, z }) => {
                     let accel: Vector3<f64> = Vector3::new(x, -z, -y).cast();
-                    self.localizer.set_acceleration(self.node.get_local_isometry() * accel);
-                    //tracing::info!("{:?}", self.node.get_local_isometry() * accel);
+                    self.localizer
+                        .set_acceleration(self.node.get_local_isometry() * accel);
+                    // tracing::info!("{:?}", self.node.get_local_isometry() * accel);
                 }
                 FromIMU::NoDataReady => {
                     continue;
@@ -243,8 +244,10 @@ async fn imu_wifi_listener() {
                         let Ok(line_str) = std::str::from_utf8(&line) else {
                             continue;
                         };
-                        let Some(i) = line_str.find('\n') else { continue; };
-                        error!(target=addr.to_string(), "{}", line_str.split_at(i).0);
+                        let Some(i) = line_str.find('\n') else {
+                            continue;
+                        };
+                        error!(target = addr.to_string(), "{}", line_str.split_at(i).0);
                         line.drain(0..=i);
                     }
                     Err(e) => {
