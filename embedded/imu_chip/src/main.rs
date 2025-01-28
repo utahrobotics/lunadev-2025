@@ -155,12 +155,14 @@ async fn main(spawner: Spawner) {
     match setup_lsm(lsm) {
         Ok(_id) => {
             // info!("lsm setup sucessfully, id: {}", id);
-            let _ = spawner.spawn(read_sensors_loop(lsm, 100, class));
+            let _ = spawner.spawn(read_sensors_loop(lsm, 10, class));
         }
         Err(e) => {
             error!("lsm failed to setup: {:?}", e);
         }
     }
+    
+    return;
 
     let fw = include_bytes!("../../cyw43-firmware/43439A0.bin");
     let clm = include_bytes!("../../cyw43-firmware/43439A0_clm.bin");

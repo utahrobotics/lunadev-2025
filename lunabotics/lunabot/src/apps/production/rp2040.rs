@@ -189,13 +189,19 @@ impl<'a> IMUTask<'a> {
                 }
             };
             match msg {
-                FromIMU::AngularRateReading(AngularRate { .. }) => {
+                FromIMU::AngularRateReading(AngularRate { x, y, z }) => {
+                    // euler angle to axis angle
+                    // transform
+                    // axis angle to euler angle
+                    // let accel: Vector3<f64> = Vector3::new(x, -z, -y).cast();
                     
+                    tracing::info!("{x:1},{y:1},{z:1}");
+
                 }
                 FromIMU::AccelerationNormReading(AccelerationNorm { x, y, z }) => {
-                    let accel: Vector3<f64> = Vector3::new(x, y, z).cast();
+                    let accel: Vector3<f64> = Vector3::new(x, -z, -y).cast();
                     self.localizer.set_acceleration(self.node.get_local_isometry() * accel);
-                    // tracing::info!("{accel:?}");
+                    //tracing::info!("{:?}", self.node.get_local_isometry() * accel);
                 }
                 FromIMU::NoDataReady => {
                     continue;

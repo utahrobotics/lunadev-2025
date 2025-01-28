@@ -9,6 +9,7 @@ pub enum FromIMU {
     Error,
 }
 
+/// Radians per second
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AngularRate {
@@ -17,6 +18,9 @@ pub struct AngularRate {
     pub z: f32,
 }
 
+/// Negative z = robot accelerating forward
+/// 
+/// In the default orientation, should be [0.0, -9.81, 0.0]
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AccelerationNorm {
