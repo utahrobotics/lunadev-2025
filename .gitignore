@@ -38,5 +38,6 @@ perf.data**
 perf.data
 
 .allow-ws
+.idea
 
 embedded/target/
