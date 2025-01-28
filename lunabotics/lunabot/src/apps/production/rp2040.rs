@@ -123,6 +123,10 @@ pub fn enumerate_imus(
                     return;
                 };
                 let Some(tmp) = serial.strip_prefix("USR_IMU_") else {
+                    if serial == "USR_IMU" {
+                        warn!("IMU at path {path_str} has no serial number");
+                        return;
+                    }
                     return;
                 };
                 serial = tmp;
@@ -190,12 +194,9 @@ impl<'a> IMUTask<'a> {
             };
             match msg {
                 FromIMU::AngularRateReading(AngularRate { x, y, z }) => {
-                    // euler angle to axis angle
-                    // transform
-                    // axis angle to euler angle
-                    // let accel: Vector3<f64> = Vector3::new(x, -z, -y).cast();
-                    
-                    tracing::info!("{x:1},{y:1},{z:1}");
+                    let _angular_velocity: Vector3<f64> = Vector3::new(x, -z, -y).cast();
+                    // Currently, angular velocity is still expressed as a quaternion
+                    // self.localizer.set_angular_velocity(self.node.get_local_isometry() * angular_velocity);
 
                 }
                 FromIMU::AccelerationNormReading(AccelerationNorm { x, y, z }) => {
