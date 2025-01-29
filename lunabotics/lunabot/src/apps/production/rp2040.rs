@@ -16,9 +16,8 @@ use tasker::{
 use tokio_serial::SerialPortBuilderExt;
 use tracing::{debug, error, info, warn};
 use udev::{EventType, MonitorBuilder, Udev};
-use imu_fusion::{FusionAhrsSettings, FusionGyrOffset, Fusion};
+use imu_fusion::{FusionAhrsSettings, Fusion};
 use crossbeam::queue::ArrayQueue;
-use std::sync::Arc;
 use std::time::Instant;
 use crate::localization::LocalizerRef;
 
@@ -44,7 +43,7 @@ pub fn enumerate_imus(
 
     std::thread::spawn(move || {
         const SAMPLE_RATE_HZ: u32 = 100;
-        let mut settings = FusionAhrsSettings::new();
+        let settings = FusionAhrsSettings::new();
         let mut fusion = Fusion::new(SAMPLE_RATE_HZ, settings);
 
         let mut reading: Option<IMUReading> = None;
@@ -83,12 +82,10 @@ pub fn enumerate_imus(
         .into_iter()
         .filter_map(|(port, IMUInfo { node })| {
             let port2 = port.clone();
-            let localizer_ref = localizer_ref.clone();
             let (tx, rx) = std::sync::mpsc::sync_channel(1);
             std::thread::spawn(move || {
                 let mut imu_task = IMUTask {
                     path: rx,
-                    localizer: &localizer_ref,
                     node,
                     queue: data_queue_ref
                 };
@@ -190,14 +187,13 @@ pub fn enumerate_imus(
     });
 }
 
-struct IMUTask<'a> {
+struct IMUTask{
     path: Receiver<String>,
-    localizer: &'a LocalizerRef,
     node: StaticImmutableNode,
     queue: &'static ArrayQueue<IMUReading>,
 }
 
-impl<'a> IMUTask<'a> {
+impl IMUTask {
     async fn imu_task(&mut self) {
         let path_str = match self.path.recv() {
             Ok(x) => x,
@@ -245,22 +241,15 @@ impl<'a> IMUTask<'a> {
             };
             match msg {
                 FromIMU::AngularRateReading(AngularRate { x, y, z }) => {
-                    let angular_velocity: Vector3<f64> = Vector3::new(-x, z, y).cast();
-                    let transformed = (self.node.get_local_isometry() * angular_velocity);
-                    let transformed: Vector3<f32> = transformed.cast();
+                    let angular_velocity = Vector3::new(-x, z, y);
+                    let transformed = self.node.get_local_isometry().cast() * angular_velocity;
                     if let Err(e) = self.queue.push(IMUReading::AngularRate((transformed, start.elapsed().as_secs_f32()))) {
                         tracing::warn!("couldn't push gyro reading to crossbeam queue");
                     }
-                    // tracing::info!("{:?}", transformed);
-                    // Currently, angular velocity is still expressed as a quaternion
-                    // self.localizer.set_angular_velocity(self.node.get_local_isometry() * angular_velocity);
                 }
                 FromIMU::AccelerationNormReading(AccelerationNorm { x, y, z }) => {
-                    let accel: Vector3<f64> = Vector3::new(x, -z, -y).cast();
-                    self.localizer
-                        .set_acceleration(self.node.get_local_isometry() * accel);
-
-                    let transformed: Vector3<f32> = (self.node.get_local_isometry() * accel).cast();
+                    let accel = Vector3::new(x, -z, -y);
+                    let transformed = self.node.get_local_isometry().cast() * accel;
 
                     if let Err(e) = self.queue.push(IMUReading::Acceleration((transformed, start.elapsed().as_secs_f32()))) {
                         tracing::warn!("couldn't push accel reading to crossbeam queue");
