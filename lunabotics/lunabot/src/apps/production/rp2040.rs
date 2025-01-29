@@ -66,7 +66,7 @@ pub fn enumerate_imus(
                 };
                 
                 if (timestamp_accel-timestamp_gyro).abs() > 1. {
-                    tracing::warn!("acceleration and gyro timestamps were more than 0.01 seconds apart");
+                    tracing::warn!("acceleration and gyro timestamps were more than 1 seconds apart");
                 }
 
                 let avg = (timestamp_accel+timestamp_gyro)/2.0;
