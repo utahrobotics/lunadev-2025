@@ -27,7 +27,7 @@ const IN_MOTION_DURATION: f64 = 0.5;
 #[derive(Default)]
 struct LocalizerRefInner {
     acceleration: AtomicCell<Vector3<f64>>,
-    angular_velocity: AtomicCell<UnitQuaternion<f64>>,
+    angular_velocity: AtomicCell<Vector3<f64>>,
     april_tag_isometry: AtomicCell<Option<Isometry3<f64>>>,
     in_motion: AtomicBool,
 }
@@ -46,7 +46,7 @@ impl LocalizerRef {
         self.inner.april_tag_isometry.store(Some(isometry));
     }
 
-    pub fn set_angular_velocity(&self, angular_velocity: UnitQuaternion<f64>) {
+    pub fn set_angular_velocity(&self, angular_velocity: Vector3<f64>) {
         self.inner.angular_velocity.store(angular_velocity);
     }
 
@@ -55,10 +55,10 @@ impl LocalizerRef {
     }
 
     fn april_tag_isometry(&self) -> Option<Isometry3<f64>> {
-        self.inner.april_tag_isometry.take()
+        self.inner.april_tag_isometry.load()
     }
 
-    fn angular_velocity(&self) -> UnitQuaternion<f64> {
+    fn angular_velocity(&self) -> Vector3<f64> {
         self.inner.angular_velocity.load()
     }
 
@@ -171,13 +171,16 @@ impl Localizer {
                 let (old_swing, _) = swing_twist_decomposition(&isometry.rotation, &down_axis);
                 isometry.rotation = old_swing * new_twist;
             } else {
-                let (_, twist) =
-                    swing_twist_decomposition(&self.localizer_ref.angular_velocity(), &down_axis);
                 isometry.append_rotation_wrt_center_mut(
-                    &UnitQuaternion::default()
-                        .try_slerp(&twist, LOCALIZATION_DELTA, 0.001)
-                        .unwrap_or_default(),
+                    &UnitQuaternion::from_axis_angle(&down_axis, - self.localizer_ref.angular_velocity().y * LOCALIZATION_DELTA),
                 );
+                // let (_, twist) =
+                //     swing_twist_decomposition(&self.localizer_ref.angular_velocity(), &down_axis);
+                // isometry.append_rotation_wrt_center_mut(
+                //     &UnitQuaternion::default()
+                //         .try_slerp(&twist, LOCALIZATION_DELTA, 0.001)
+                //         .unwrap_or_default(),
+                // );
             }
 
             let currently_in_motion = (isometry.translation.vector

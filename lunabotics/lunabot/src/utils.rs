@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::ops::{Add, Mul, Sub};
 
 use nalgebra::{Quaternion, RealField, SimdRealField, UnitQuaternion, UnitVector3, Vector2, Vector3};

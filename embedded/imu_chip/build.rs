@@ -8,12 +8,20 @@
 //! updating `memory.x` ensures a rebuild of the application with the
 //! new memory settings.
 
-use std::env;
+use std::env::{self, VarError};
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
 fn main() {
+    if let Err(e) = std::env::var("IMU_SERIAL") {
+        if e == VarError::NotPresent {
+            println!("cargo:warning=IMU_SERIAL environment variable not set");
+        } else {
+            println!("cargo:warning=IMU_SERIAL environment variable not set to a valid value");
+        }
+    }
+
     // Put `memory.x` in our output directory and ensure it's
     // on the linker search path.
     let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());
