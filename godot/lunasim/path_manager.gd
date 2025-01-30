@@ -28,7 +28,7 @@ func create_path(path:Array[Vector3]):
 func place_marker(pos:Vector3,num:String):
 	var marker = CSGCylinder3D.new()
 	marker.position=Vector3(pos.x,(pos.y/2)+0.05,pos.z)
-	marker.height=pos.y
+	marker.height=3
 	marker.radius=0.05
 	marker.name = str("marker",num)
 	marker.material=path_mat

@@ -8,8 +8,7 @@ use std::{
 };
 
 use common::{
-    lunasim::{FromLunasim, FromLunasimbot},
-    LunabotStage,
+    lunasim::{FromLunasim, FromLunasimbot}, LunabotStage, THALASSIC_HEIGHT, THALASSIC_WIDTH
 };
 use crossbeam::atomic::AtomicCell;
 use gputter::{
@@ -368,7 +367,7 @@ impl LunasimbotApp {
         let mut pathfinder = DefaultPathfinder {
             world_to_grid,
             grid_to_world,
-            grid: Grid::new(128, 256),
+            grid: Grid::new(THALASSIC_WIDTH as usize, THALASSIC_HEIGHT as usize),
         };
         pathfinder.grid.enable_diagonal_mode();
         pathfinder.grid.fill();

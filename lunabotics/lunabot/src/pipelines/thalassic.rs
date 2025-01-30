@@ -7,7 +7,7 @@ use std::{
 };
 
 use arc_swap::ArcSwapOption;
-use common::{THALASSIC_CELL_COUNT, THALASSIC_WIDTH, THALASSIC_HEIGHT};
+use common::{THALASSIC_CELL_COUNT, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
 use crossbeam::{
     atomic::AtomicCell,
     sync::{Parker, Unparker},
@@ -43,6 +43,9 @@ pub struct ThalassicData {
     new_robot_radius: AtomicCell<Option<f32>>,
 }
 
+#[derive(PartialEq, Debug)]
+pub enum CellState { RED, GREEN, UNKNOWN }
+
 impl Default for ThalassicData {
     fn default() -> Self {
         Self {
@@ -77,43 +80,65 @@ impl ThalassicData {
     }
 
 
-    /// whether this position is safe for the robot to be
-    /// - this position must be green
-    /// - every single cell within `robot radius` of this position must be known
-    pub fn is_safe_for_robot(&self, pos: (usize, usize)) -> bool {
+    /// whether a target position is safe for the robot to be
+    /// - the target position must be green
+    /// - every single cell within `robot radius` of the target must be known
+    /// 
+    /// if unsafe, returns `Err(one of the unknown cells that makes the target unsafe)`
+    pub fn is_safe_for_robot(&self, robot_cell_pos: (usize, usize), target_cell_pos: (usize, usize)) -> Result<(), (usize, usize)> {
+        
+        if robot_cell_pos == target_cell_pos {
+            return Ok(());
+        }
+        
+        let robot_cell_radius = (self.current_robot_radius / THALASSIC_CELL_SIZE).ceil();
 
-        if self.is_occupied(pos) {
-            return false;
+        // if the target cell is near the robot, its okay if its not green
+        if 
+            self.get_cell_state(target_cell_pos) != CellState::GREEN && 
+            distance_between_tuples(target_cell_pos, robot_cell_pos) > robot_cell_radius 
+        {
+            return Err(target_cell_pos);
         }
 
-        let radius = self.current_robot_radius.ceil() as i32;
-        let (pos_x, pos_y) = (pos.0 as i32, pos.1 as i32);
+        let (pos_x, pos_y) = (target_cell_pos.0 as i32, target_cell_pos.1 as i32);
 
-        for x in (pos_x - radius)..(pos_x + radius) {
-            for y in (pos_y - radius)..(pos_y + radius) {
+        for x in (pos_x - robot_cell_radius as i32)..(pos_x + robot_cell_radius as i32) {
+            for y in (pos_y - robot_cell_radius as i32)..(pos_y + robot_cell_radius as i32) {
 
                 if !self.in_bounds((x, y)) { continue; }
 
                 let nearby_cell = (x as usize, y as usize);
 
+                // if a cell is near the target AND not inside the robot AND and unknown then target cell is dangerous                
                 if 
-                    distance_between_tuples(nearby_cell, pos) <= self.current_robot_radius &&
+                    distance_between_tuples(nearby_cell, target_cell_pos) <= robot_cell_radius &&
+                    distance_between_tuples(nearby_cell, robot_cell_pos) > robot_cell_radius &&
                     !self.is_known(nearby_cell) 
                 {
-                    return false;
+                    return Err(nearby_cell);
                 }
             }
         }
 
-        true
+        Ok(())
+    }
+
+    pub fn get_cell_state(&self, pos: (usize, usize)) -> CellState {
+        
+        match self.expanded_obstacle_map[Self::xy_to_index(pos)].occupied() {
+            true => CellState::RED,
+            false => {
+                match self.get_height(pos) == 0.0 {
+                    true => CellState::UNKNOWN,
+                    false => CellState::GREEN,
+                }
+            },
+        }
     }
 
     pub fn is_known(&self, pos: (usize, usize)) -> bool {
-        self.get_height(pos) != 0.0
-    }
-
-    pub fn is_occupied(&self, pos: (usize, usize)) -> bool {
-        self.expanded_obstacle_map[Self::xy_to_index(pos)].occupied()
+        self.get_cell_state(pos) != CellState::UNKNOWN
     }
     
     pub fn get_height(&self, pos: (usize, usize)) -> f32 {
@@ -145,6 +170,7 @@ impl PointsStorageChannel {
     }
 }
 
+
 pub fn spawn_thalassic_pipeline(
     buffer: OwnedData<ThalassicData>,
     point_cloud_channels: Box<[Arc<PointsStorageChannel>]>,
@@ -170,7 +196,7 @@ pub fn spawn_thalassic_pipeline(
                 NonZeroU32::new(128).unwrap(),
                 NonZeroU32::new(256).unwrap(),
             ),
-            cell_size: 0.03125,
+            cell_size: THALASSIC_CELL_SIZE,
             max_point_count: NonZeroU32::new(max_point_count).unwrap(),
             max_triangle_count: NonZeroU32::new(max_triangle_count).unwrap(),
         }

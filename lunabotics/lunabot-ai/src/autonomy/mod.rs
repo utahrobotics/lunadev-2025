@@ -50,45 +50,33 @@ impl Autonomy {
 }
 
 pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
-    ParallelAny::new((
-        Sequence::new((
+    WhileLoop::new(
+        |blackboard: &mut LunabotBlackboard| (*blackboard.get_autonomy() != Autonomy::None).into(),
+        ParallelAny::new((
             AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-                blackboard.get_path_mut().clear();
-                let pos = blackboard.get_robot_isometry().translation;
-                let pos = Point3::new(pos.x, pos.y, pos.z);
-                blackboard.get_path_mut().extend_from_slice(&[
-                    pos,
-                    // Point3::new(-0.9144, 0.0, -1.905),
-                    Point3::new(1.905, 0.0, -1.5),
-                    Point3::new(1.27, 0.0, -0.5),
-                ]);
-                println!("set path", );
-                Status::Success
+                if *blackboard.lunabase_disconnected() {
+                    error!("Lunabase disconnected");
+                    return Status::Failure;
+                }
+                while let Some(msg) = blackboard.peek_from_lunabase() {
+                    match msg {
+                        FromLunabase::Steering(_) => {
+                            *blackboard.get_autonomy() = Autonomy::None;
+                            warn!("Received steering message while in autonomy mode");
+                            return Status::Success;
+                        }
+                        FromLunabase::SoftStop => {
+                            blackboard.pop_from_lunabase();
+                            return Status::Failure;
+                        }
+                        _ => blackboard.pop_from_lunabase(),
+                    };
+                }
+                Status::Running
             }),
-            ares_bt::converters::InfallibleShim(AssertCancelSafe(follow_path))
+            Sequence::new((dig(), dump(), traverse())),
         )),
-        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-            if *blackboard.lunabase_disconnected() {
-                error!("Lunabase disconnected");
-                return Status::Failure;
-            }
-            while let Some(msg) = blackboard.peek_from_lunabase() {
-                match msg {
-                    FromLunabase::Steering(_) => {
-                        *blackboard.get_autonomy() = Autonomy::None;
-                        warn!("Received steering message while in autonomy mode");
-                        return Status::Success;
-                    }
-                    FromLunabase::SoftStop => {
-                        blackboard.pop_from_lunabase();
-                        return Status::Failure;
-                    }
-                    _ => blackboard.pop_from_lunabase(),
-                };
-            }
-            Status::Running
-        }),
-    ))
+    )
 }
 
 fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
@@ -104,7 +92,6 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
 
     match find_target_point(pos, path) {
         Some(target) => {
-            println!("going to {} from {}", target, pos);
             let heading_angle = heading.angle(&Vector2::new(0.0, -1.0));
             let to_first_point = (target - pos).normalize();
 
@@ -117,34 +104,16 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
 
             *blackboard.get_poll_when() =
                 PollWhen::Instant(Instant::now() + Duration::from_millis(16));
-                // PollWhen::Instant(Instant::now());
 
-            // We reborrow path so that we can mutably access get_poll_when
-            // let path = blackboard.get_path_mut();
-
-            // when approaching an arc turn gradually
-            // if distance(&pos, &target) < ARC_THRESHOLD { // && within_arc(path, target) {
-                // let (l, r) = scaled_clamp(
-                //     -to_first_point.y + to_first_point.x,
-                //     -to_first_point.y - to_first_point.x,
-                //     1,
-                // );
-                // blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(l, r)));
-                // return InfallibleStatus::Running;
-            // }
-            println!("angle {} to next pt {}", to_first_point.angle(&Vector2::new(0.0, -1.0)), to_first_point);
             if to_first_point.angle(&Vector2::new(0.0, -1.0)).to_degrees() > 20.0 {
                 if to_first_point.x > 0.0 {
-                    println!("turning right", );
                     blackboard
                     .enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, -1.0)))
                 } else {
-                    println!("turning left", );
                     blackboard
                         .enqueue_action(Action::SetSteering(Steering::new_left_right(-1.0, 1.0)))
                 }
             } else {
-                println!("straight ahead ", );
                 let (l, r) = scaled_clamp(
                     -to_first_point.y + to_first_point.x * 1.2,
                     -to_first_point.y - to_first_point.x * 1.2,
@@ -174,52 +143,15 @@ fn find_target_point(pos: Point2<f64>, path: &mut Vec<OPoint<f64, Const<3>>>) ->
         return None;
     }
 
-    // if the robot is near any point, delete all previous points
-    for (i, point) in path.iter().enumerate().rev() {
-        if distance(&point.xz(), &pos) < AT_POINT_THRESHOLD {
-            println!("path follower: made it to point {}", point);
+    let first_point = path[0].xz();
 
-            // let res = Some(path[i+1].xz());
-            path.drain(0..=i);
-
-            println!("drained path to {:?}", path);
-            return Some(path[0].xz());
-        }
+    // if the robot is near the first point, delete it
+    if distance(&first_point, &pos) < AT_POINT_THRESHOLD {
+        path.remove(0);
+        return Some(path[0].xz());
     }
-    //TODO: repeat for line segments
 
-    Some(path[0].xz())
-
-    // let mut min_dist = distance(&pos, &path[0].xz());
-    // let mut res = path[0].xz();
-
-    // for i in 1..path.len() {
-    //     let dist = dist_to_segment(pos, path[i - 1].xz(), path[i].xz());
-
-    //     if dist < min_dist {
-    //         min_dist = dist;
-    //         res = path[i].xz();
-    //     }
-    // }
-}
-
-fn dist_to_segment(point: Point2<f64>, a: Point2<f64>, b: Point2<f64>) -> f64 {
-    let mut line_from_origin = b - a; // move line segment to origin
-    let mut point = point - a; // move point the same amount
-
-    let angle = -line_from_origin.y.signum() * line_from_origin.angle(&Vector2::new(1.0, 0.0));
-
-    // rotate both until segment lines up with the x axis
-    line_from_origin = rotate_v2_ccw(line_from_origin, angle);
-    point = rotate_v2_ccw(point, angle);
-
-    return if point.x <= 0.0 {
-        point.magnitude()
-    } else if point.x >= line_from_origin.x {
-        (point - Vector2::new(line_from_origin.x, 0.0)).magnitude()
-    } else {
-        point.y.abs()
-    };
+    Some(first_point)
 }
 
 fn rotate_v2_ccw(vector2: Vector2<f64>, theta: f64) -> Vector2<f64> {
@@ -230,20 +162,6 @@ fn rotate_v2_ccw(vector2: Vector2<f64>, theta: f64) -> Vector2<f64> {
         f64::cos(theta),
     );
     return rot * vector2;
-}
-
-/// min distance for 2 path points to be considered part of an arc
-const ARC_THRESHOLD: f64 = 0.3;
-
-/// is this point considered part of an arc?
-fn within_arc(path: &[Point3<f64>], i: usize) -> bool {
-    if path.len() == 1 {
-        false
-    } else if i == path.len() - 1 {
-        distance(&path[i].xz(), &path[i - 1].xz()) < ARC_THRESHOLD
-    } else {
-        distance(&path[i].xz(), &path[i + 1].xz()) < ARC_THRESHOLD
-    }
 }
 
 /// clamps `a` and `b` so that `a.abs().max(b.abs) <= bound.abs()`,
