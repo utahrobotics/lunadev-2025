@@ -313,8 +313,8 @@ impl LunasimbotApp {
                 );
                 localizer_ref.set_acceleration(acceleration);
             }
-            FromLunasim::Gyroscope { id: _, axis, angle } => {
-                localizer_ref.set_angular_velocity(axis_angle(axis, angle));
+            FromLunasim::Gyroscope { id: _, .. } => {
+                localizer_ref.set_angular_velocity(Vector3::zeros());
             }
             FromLunasim::DepthMap(depths) => {
                 if !get_observe_depth() {
