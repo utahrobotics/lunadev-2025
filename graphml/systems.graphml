@@ -116,12 +116,11 @@ zone<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:ModelParamet
       <data key="d6">
         <y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
           <y:Geometry height="90.0" width="160.2807011532908" x="173.94174715274525" y="630.2911846828441"/>
-          <y:Fill color="#E8EEF7" color2="#FF6600" transparent="false"/>
+          <y:Fill color="#E8EEF7" color2="#339966" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
-          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#FF6600" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="76.685546875" x="41.7975771391454" xml:space="preserve" y="4.0">VESC Motors</y:NodeLabel>
-          <y:NodeLabel alignment="left" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.attributes" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="48.103515625" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="top" visible="true" width="137.400390625" x="2.0" xml:space="preserve" y="30.701171875">Manages communication
-with drive motors
-@HaleBarber<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:ModelParameter><y:ErdAttributesNodeLabelModelParameter/></y:ModelParameter></y:NodeLabel>
+          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#339966" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="76.685546875" x="41.7975771391454" xml:space="preserve" y="4.0">VESC Motors</y:NodeLabel>
+          <y:NodeLabel alignment="left" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.attributes" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="33.40234375" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="top" visible="true" width="137.400390625" x="2.0" xml:space="preserve" y="30.701171875">Manages communication
+with drive motors<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:ModelParameter><y:ErdAttributesNodeLabelModelParameter/></y:ModelParameter></y:NodeLabel>
           <y:StyleProperties>
             <y:Property class="java.lang.Boolean" name="y.view.ShadowNodePainter.SHADOW_PAINTING" value="true"/>
           </y:StyleProperties>
@@ -213,9 +212,9 @@ on obstacle data<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:
       <data key="d6">
         <y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
           <y:Geometry height="96.85323058625647" width="160.2807011532908" x="173.94174715274525" y="495.794394101393"/>
-          <y:Fill color="#E8EEF7" color2="#FF6600" transparent="false"/>
+          <y:Fill color="#E8EEF7" color2="#00CCFF" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
-          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#FF6600" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="96.689453125" x="31.795624014145403" xml:space="preserve" y="4.0">Differential Driver</y:NodeLabel>
+          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#00CCFF" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="96.689453125" x="31.795624014145403" xml:space="preserve" y="4.0">Differential Driver</y:NodeLabel>
           <y:NodeLabel alignment="left" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.attributes" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="62.8046875" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="top" visible="true" width="140.060546875" x="2.0" xml:space="preserve" y="30.701171875">Determines how to power
 motors on either side of
 a theoretical robot to
@@ -229,7 +228,7 @@ follow a path or direction<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:Labe
     <node id="n13">
       <data key="d6">
         <y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
-          <y:Geometry height="90.0" width="118.18228469485814" x="812.3244086337387" y="657.3114023065818"/>
+          <y:Geometry height="90.0" width="118.18228469485814" x="624.4758863367675" y="663.7114023065818"/>
           <y:Fill color="#E8EEF7" color2="#339966" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
           <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#339966" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="46.6796875" x="35.75129859742913" xml:space="preserve" y="4.0">Camera</y:NodeLabel>
@@ -289,11 +288,11 @@ the robot's manipulator<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelMo
     <node id="n17">
       <data key="d6">
         <y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
-          <y:Geometry height="90.0" width="160.2807011532908" x="383.7890479256793" y="630.291184682844"/>
+          <y:Geometry height="90.0" width="124.05648234022078" x="401.90115733221427" y="630.291184682844"/>
           <y:Fill color="#E8EEF7" color2="#808080" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
-          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#808080" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="54.689453125" x="52.7956240141454" xml:space="preserve" y="4.0">Actuators</y:NodeLabel>
-          <y:NodeLabel alignment="left" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.attributes" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="33.40234375" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="top" visible="true" width="113.388671875" x="2.0" xml:space="preserve" y="30.701171875">Awaiting Mechanical
+          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#808080" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="54.689453125" x="34.68351460761039" xml:space="preserve" y="4.0">Actuators</y:NodeLabel>
+          <y:NodeLabel alignment="left" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.attributes" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="33.40234375" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="top" visible="true" width="101.37109375" x="2.0" xml:space="preserve" y="30.701171875">Awaiting Electrical
 Team decision<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:ModelParameter><y:ErdAttributesNodeLabelModelParameter/></y:ModelParameter></y:NodeLabel>
           <y:StyleProperties>
             <y:Property class="java.lang.Boolean" name="y.view.ShadowNodePainter.SHADOW_PAINTING" value="true"/>
@@ -336,41 +335,10 @@ high-level behavior<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel>
     <node id="n20">
       <data key="d6">
         <y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
-          <y:Geometry height="90.0" width="166.6124271182482" x="812.3244086337387" y="537.3114023065818"/>
-          <y:Fill color="#E8EEF7" color2="#800080" transparent="false"/>
-          <y:BorderStyle color="#000000" type="line" width="1.0"/>
-          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#800080" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="144.75390625" x="10.929260434124103" xml:space="preserve" y="4.0">Ground Penetrating Radar</y:NodeLabel>
-          <y:NodeLabel alignment="left" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.attributes" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="33.40234375" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="top" visible="true" width="144.748046875" x="2.0" xml:space="preserve" y="30.701171875">Estimates the position and
-velocity of the robot<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:ModelParameter><y:ErdAttributesNodeLabelModelParameter/></y:ModelParameter></y:NodeLabel>
-          <y:StyleProperties>
-            <y:Property class="java.lang.Boolean" name="y.view.ShadowNodePainter.SHADOW_PAINTING" value="true"/>
-          </y:StyleProperties>
-        </y:GenericNode>
-      </data>
-    </node>
-    <node id="n21">
-      <data key="d6">
-        <y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
-          <y:Geometry height="90.0" width="169.02824117011028" x="599.0529080991415" y="657.3114023065818"/>
-          <y:Fill color="#E8EEF7" color2="#FF6600" transparent="false"/>
-          <y:BorderStyle color="#000000" type="line" width="1.0"/>
-          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#FF6600" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="112.708984375" x="28.15962839755514" xml:space="preserve" y="4.0">Camera Enumerator</y:NodeLabel>
-          <y:NodeLabel alignment="left" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.attributes" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="48.103515625" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="top" visible="true" width="152.060546875" x="2.0" xml:space="preserve" y="30.701171875">Differentiates which camera
-stream is coming from
-which physical device<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:ModelParameter><y:ErdAttributesNodeLabelModelParameter/></y:ModelParameter></y:NodeLabel>
-          <y:StyleProperties>
-            <y:Property class="java.lang.Boolean" name="y.view.ShadowNodePainter.SHADOW_PAINTING" value="true"/>
-          </y:StyleProperties>
-        </y:GenericNode>
-      </data>
-    </node>
-    <node id="n22">
-      <data key="d6">
-        <y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
           <y:Geometry height="90.0" width="166.6124271182482" x="812.3244086337387" y="264.2773858962041"/>
-          <y:Fill color="#E8EEF7" color2="#FF6600" transparent="false"/>
+          <y:Fill color="#E8EEF7" color2="#339966" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
-          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#FF6600" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="94.046875" x="36.2827760591241" xml:space="preserve" y="4.0">Gradient Mapper</y:NodeLabel>
+          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#339966" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="94.046875" x="36.2827760591241" xml:space="preserve" y="4.0">Gradient Mapper</y:NodeLabel>
           <y:NodeLabel alignment="left" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.attributes" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="48.103515625" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="top" visible="true" width="144.091796875" x="2.0" xml:space="preserve" y="30.701171875">Determines the average 
 gradient of each cell in the
 heightmap<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:ModelParameter><y:ErdAttributesNodeLabelModelParameter/></y:ModelParameter></y:NodeLabel>
@@ -380,24 +348,7 @@ heightmap<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:ModelPa
         </y:GenericNode>
       </data>
     </node>
-    <node id="n23">
-      <data key="d6">
-        <y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
-          <y:Geometry height="96.85323058625647" width="189.02824117011022" x="927.4858794149449" y="127.39741301057393"/>
-          <y:Fill color="#E8EEF7" color2="#00CCFF" transparent="false"/>
-          <y:BorderStyle color="#000000" type="line" width="1.0"/>
-          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#00CCFF" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="50.6875" x="69.17037058505514" xml:space="preserve" y="4.0">thalassic</y:NodeLabel>
-          <y:NodeLabel alignment="left" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.attributes" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="62.8046875" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="top" visible="true" width="158.763671875" x="2.0" xml:space="preserve" y="30.701171875">A depth map to gradient map
-compute shader pipeline that
-uses tesellation on the depth
-map<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:ModelParameter><y:ErdAttributesNodeLabelModelParameter/></y:ModelParameter></y:NodeLabel>
-          <y:StyleProperties>
-            <y:Property class="java.lang.Boolean" name="y.view.ShadowNodePainter.SHADOW_PAINTING" value="true"/>
-          </y:StyleProperties>
-        </y:GenericNode>
-      </data>
-    </node>
-    <node id="n24">
+    <node id="n21">
       <data key="d6">
         <y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
           <y:Geometry height="82.0" width="131.88874586737097" x="202.33370243866506" y="-45.393665833732314"/>
@@ -412,13 +363,13 @@ UDP protocol<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:Mode
         </y:GenericNode>
       </data>
     </node>
-    <node id="n25">
+    <node id="n22">
       <data key="d6">
         <y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
           <y:Geometry height="71.0" width="160.28070115329086" x="-21.54150029684193" y="639.7911846828441"/>
-          <y:Fill color="#E8EEF7" color2="#00CCFF" transparent="false"/>
+          <y:Fill color="#E8EEF7" color2="#339966" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
-          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#00CCFF" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="82.69140625" x="38.79464745164543" xml:space="preserve" y="4.0">vesc-translator</y:NodeLabel>
+          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#339966" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="82.69140625" x="38.79464745164543" xml:space="preserve" y="4.0">vesc-translator</y:NodeLabel>
           <y:NodeLabel alignment="left" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.attributes" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="top" visible="true" width="148.732421875" x="2.0" xml:space="preserve" y="30.701171875">Produces VESC messages<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:ModelParameter><y:ErdAttributesNodeLabelModelParameter/></y:ModelParameter></y:NodeLabel>
           <y:StyleProperties>
             <y:Property class="java.lang.Boolean" name="y.view.ShadowNodePainter.SHADOW_PAINTING" value="true"/>
@@ -426,13 +377,13 @@ UDP protocol<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:Mode
         </y:GenericNode>
       </data>
     </node>
-    <node id="n26">
+    <node id="n23">
       <data key="d6">
         <y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
           <y:Geometry height="96.85323058625647" width="136.78391057184" x="616.340681063814" y="-1.9282559103145616"/>
-          <y:Fill color="#E8EEF7" color2="#FF6600" transparent="false"/>
+          <y:Fill color="#E8EEF7" color2="#00CCFF" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
-          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#FF6600" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="95.376953125" x="20.703478723420062" xml:space="preserve" y="4.0">Obstacle Mapper</y:NodeLabel>
+          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#00CCFF" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="95.376953125" x="20.703478723420062" xml:space="preserve" y="4.0">Obstacle Mapper</y:NodeLabel>
           <y:NodeLabel alignment="left" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.attributes" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="62.8046875" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="top" visible="true" width="123.40234375" x="2.0" xml:space="preserve" y="30.701171875">Creates an occupancy
 map for pixels of the
 gradient map that are
@@ -443,13 +394,13 @@ too steep<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:ModelPa
         </y:GenericNode>
       </data>
     </node>
-    <node id="n27">
+    <node id="n24">
       <data key="d6">
         <y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
           <y:Geometry height="102.43607584939991" width="160.2807011532908" x="604.5922857730885" y="118.38795245430225"/>
-          <y:Fill color="#E8EEF7" color2="#FF6600" transparent="false"/>
+          <y:Fill color="#E8EEF7" color2="#00CCFF" transparent="false"/>
           <y:BorderStyle color="#000000" type="line" width="1.0"/>
-          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#FF6600" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="110.728515625" x="24.776092764145346" xml:space="preserve" y="4.0">Obstacle Expansion</y:NodeLabel>
+          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#00CCFF" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="110.728515625" x="24.776092764145346" xml:space="preserve" y="4.0">Obstacle Expansion</y:NodeLabel>
           <y:NodeLabel alignment="left" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.attributes" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="62.8046875" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="top" visible="true" width="131.423828125" x="2.0" xml:space="preserve" y="30.701171875">Expands each occupied
 pixel to the radius of the
 robot, and some safe
@@ -460,7 +411,7 @@ margin<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:ModelParam
         </y:GenericNode>
       </data>
     </node>
-    <node id="n28">
+    <node id="n25">
       <data key="d6">
         <y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
           <y:Geometry height="96.85323058625647" width="231.6124271182482" x="1221.6488172674776" y="264.2773858962041"/>
@@ -471,6 +422,37 @@ margin<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:ModelParam
 point cloud, heightmap, gradient map,
 obstacle map, apriltag positions,
 and robot isometry<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:ModelParameter><y:ErdAttributesNodeLabelModelParameter/></y:ModelParameter></y:NodeLabel>
+          <y:StyleProperties>
+            <y:Property class="java.lang.Boolean" name="y.view.ShadowNodePainter.SHADOW_PAINTING" value="true"/>
+          </y:StyleProperties>
+        </y:GenericNode>
+      </data>
+    </node>
+    <node id="n26">
+      <data key="d6">
+        <y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
+          <y:Geometry height="90.0" width="136.78391057184" x="827.2386669069427" y="663.7114023065818"/>
+          <y:Fill color="#E8EEF7" color2="#00CCFF" transparent="false"/>
+          <y:BorderStyle color="#000000" type="line" width="1.0"/>
+          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#00CCFF" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="25.99609375" x="55.39390841092006" xml:space="preserve" y="4.0">IMU</y:NodeLabel>
+          <y:NodeLabel alignment="left" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.attributes" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="33.40234375" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="top" visible="true" width="124.7265625" x="2.0" xml:space="preserve" y="30.701171875">Measures acceleration
+and angular velocity<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:ModelParameter><y:ErdAttributesNodeLabelModelParameter/></y:ModelParameter></y:NodeLabel>
+          <y:StyleProperties>
+            <y:Property class="java.lang.Boolean" name="y.view.ShadowNodePainter.SHADOW_PAINTING" value="true"/>
+          </y:StyleProperties>
+        </y:GenericNode>
+      </data>
+    </node>
+    <node id="n27">
+      <data key="d6">
+        <y:GenericNode configuration="com.yworks.entityRelationship.big_entity">
+          <y:Geometry height="96.85323058625647" width="118.18228469485814" x="837.763271021551" y="530.3581082172027"/>
+          <y:Fill color="#E8EEF7" color2="#FF0000" transparent="false"/>
+          <y:BorderStyle color="#000000" type="line" width="1.0"/>
+          <y:NodeLabel alignment="center" autoSizePolicy="content" backgroundColor="#FF0000" configuration="com.yworks.entityRelationship.label.name" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasLineColor="false" height="18.701171875" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true" width="65.34765625" x="26.417314222429127" xml:space="preserve" y="4.0">IMU Fusion</y:NodeLabel>
+          <y:NodeLabel alignment="left" autoSizePolicy="content" configuration="com.yworks.entityRelationship.label.attributes" fontFamily="Dialog" fontSize="12" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" height="48.103515625" horizontalTextPosition="center" iconTextGap="4" modelName="custom" textColor="#000000" verticalTextPosition="top" visible="true" width="108.701171875" x="2.0" xml:space="preserve" y="30.701171875">Optimally combines
+readings from
+different IMUs<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><y:ModelParameter><y:ErdAttributesNodeLabelModelParameter/></y:ModelParameter></y:NodeLabel>
           <y:StyleProperties>
             <y:Property class="java.lang.Boolean" name="y.view.ShadowNodePainter.SHADOW_PAINTING" value="true"/>
           </y:StyleProperties>
@@ -708,7 +690,7 @@ and robot isometry<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><
         </y:PolyLineEdge>
       </data>
     </edge>
-    <edge id="e22" source="n13" target="n21">
+    <edge id="e22" source="n9" target="n20">
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
@@ -718,7 +700,7 @@ and robot isometry<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><
         </y:PolyLineEdge>
       </data>
     </edge>
-    <edge id="e23" source="n21" target="n14">
+    <edge id="e23" source="n21" target="n2">
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
@@ -728,20 +710,7 @@ and robot isometry<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><
         </y:PolyLineEdge>
       </data>
     </edge>
-    <edge id="e24" source="n21" target="n2">
-      <data key="d10">
-        <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0">
-            <y:Point x="579.0" y="614.2430555555555"/>
-            <y:Point x="579.0" y="254.36458333333337"/>
-          </y:Path>
-          <y:LineStyle color="#000000" type="line" width="1.0"/>
-          <y:Arrows source="none" target="standard"/>
-          <y:BendStyle smoothed="false"/>
-        </y:PolyLineEdge>
-      </data>
-    </edge>
-    <edge id="e25" source="n9" target="n22">
+    <edge id="e24" source="n21" target="n0">
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
@@ -751,40 +720,7 @@ and robot isometry<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><
         </y:PolyLineEdge>
       </data>
     </edge>
-    <edge id="e26" source="n23" target="n22">
-      <data key="d10">
-        <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
-          <y:LineStyle color="#000000" type="line" width="1.0"/>
-          <y:Arrows source="none" target="standard"/>
-          <y:BendStyle smoothed="false"/>
-        </y:PolyLineEdge>
-      </data>
-    </edge>
-    <edge id="e27" source="n23" target="n9">
-      <data key="d10">
-        <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
-          <y:LineStyle color="#000000" type="line" width="1.0"/>
-          <y:Arrows source="none" target="standard"/>
-          <y:BendStyle smoothed="false"/>
-        </y:PolyLineEdge>
-      </data>
-    </edge>
-    <edge id="e28" source="n23" target="n7">
-      <data key="d10">
-        <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0">
-            <y:Point x="1022.0" y="257.15329408937924"/>
-            <y:Point x="1022.0" y="369.15329408937924"/>
-          </y:Path>
-          <y:LineStyle color="#000000" type="line" width="1.0"/>
-          <y:Arrows source="none" target="standard"/>
-          <y:BendStyle smoothed="false"/>
-        </y:PolyLineEdge>
-      </data>
-    </edge>
-    <edge id="e29" source="n20" target="n10">
+    <edge id="e25" source="n6" target="n22">
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
@@ -794,37 +730,7 @@ and robot isometry<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><
         </y:PolyLineEdge>
       </data>
     </edge>
-    <edge id="e30" source="n24" target="n2">
-      <data key="d10">
-        <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
-          <y:LineStyle color="#000000" type="line" width="1.0"/>
-          <y:Arrows source="none" target="standard"/>
-          <y:BendStyle smoothed="false"/>
-        </y:PolyLineEdge>
-      </data>
-    </edge>
-    <edge id="e31" source="n24" target="n0">
-      <data key="d10">
-        <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
-          <y:LineStyle color="#000000" type="line" width="1.0"/>
-          <y:Arrows source="none" target="standard"/>
-          <y:BendStyle smoothed="false"/>
-        </y:PolyLineEdge>
-      </data>
-    </edge>
-    <edge id="e32" source="n6" target="n25">
-      <data key="d10">
-        <y:PolyLineEdge>
-          <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
-          <y:LineStyle color="#000000" type="line" width="1.0"/>
-          <y:Arrows source="standard" target="standard"/>
-          <y:BendStyle smoothed="false"/>
-        </y:PolyLineEdge>
-      </data>
-    </edge>
-    <edge id="e33" source="n22" target="n26">
+    <edge id="e26" source="n20" target="n23">
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0">
@@ -837,7 +743,7 @@ and robot isometry<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><
         </y:PolyLineEdge>
       </data>
     </edge>
-    <edge id="e34" source="n26" target="n27">
+    <edge id="e27" source="n23" target="n24">
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
@@ -847,7 +753,7 @@ and robot isometry<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><
         </y:PolyLineEdge>
       </data>
     </edge>
-    <edge id="e35" source="n27" target="n11">
+    <edge id="e28" source="n24" target="n11">
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
@@ -857,7 +763,7 @@ and robot isometry<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><
         </y:PolyLineEdge>
       </data>
     </edge>
-    <edge id="e36" source="n8" target="n28">
+    <edge id="e29" source="n8" target="n25">
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
@@ -867,7 +773,7 @@ and robot isometry<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><
         </y:PolyLineEdge>
       </data>
     </edge>
-    <edge id="e37" source="n7" target="n28">
+    <edge id="e30" source="n7" target="n25">
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
@@ -877,7 +783,7 @@ and robot isometry<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><
         </y:PolyLineEdge>
       </data>
     </edge>
-    <edge id="e38" source="n9" target="n28">
+    <edge id="e31" source="n9" target="n25">
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
@@ -887,7 +793,7 @@ and robot isometry<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><
         </y:PolyLineEdge>
       </data>
     </edge>
-    <edge id="e39" source="n22" target="n28">
+    <edge id="e32" source="n20" target="n25">
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0">
@@ -900,7 +806,7 @@ and robot isometry<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><
         </y:PolyLineEdge>
       </data>
     </edge>
-    <edge id="e40" source="n27" target="n28">
+    <edge id="e33" source="n24" target="n25">
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0">
@@ -913,13 +819,60 @@ and robot isometry<y:LabelModel><y:ErdAttributesNodeLabelModel/></y:LabelModel><
         </y:PolyLineEdge>
       </data>
     </edge>
-    <edge id="e41" source="n26" target="n28">
+    <edge id="e34" source="n23" target="n25">
       <data key="d10">
         <y:PolyLineEdge>
           <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0">
             <y:Point x="836.5" y="117.5"/>
             <y:Point x="1207.5" y="117.5"/>
           </y:Path>
+          <y:LineStyle color="#000000" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e35" source="n13" target="n14">
+      <data key="d9"/>
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
+          <y:LineStyle color="#000000" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e36" source="n13" target="n2">
+      <data key="d9"/>
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0">
+            <y:Point x="578.3200000000002" y="659.5400000000001"/>
+            <y:Point x="578.3200000000002" y="249.1400000000001"/>
+          </y:Path>
+          <y:LineStyle color="#000000" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e37" source="n27" target="n10">
+      <data key="d9"/>
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
+          <y:LineStyle color="#000000" type="line" width="1.0"/>
+          <y:Arrows source="none" target="standard"/>
+          <y:BendStyle smoothed="false"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+    <edge id="e38" source="n26" target="n27">
+      <data key="d9"/>
+      <data key="d10">
+        <y:PolyLineEdge>
+          <y:Path sx="0.0" sy="0.0" tx="0.0" ty="0.0"/>
           <y:LineStyle color="#000000" type="line" width="1.0"/>
           <y:Arrows source="none" target="standard"/>
           <y:BendStyle smoothed="false"/>
