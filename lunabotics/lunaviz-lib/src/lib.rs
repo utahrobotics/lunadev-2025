@@ -42,14 +42,37 @@ impl INode for Lunasim {
         {
             let thalassic_data = &guard.0;
             let point_cloud = guard.1.as_slice();
-            // TODO: Emit signals
+
+            self.base_mut().emit_signal("send_map_data",
+            &[Variant::from("depth image"),
+            Variant::from("point cloud vector3 points"),
+            Variant::from("height image"),
+            Variant::from("gradient image"),
+            Variant::from("obstacle image")
+            ]);
+            self.base_mut().emit_signal("recieve_depth_map", &[Variant::from("map")]);
+            self.base_mut().emit_signal("recieve_point_cloud", &[Variant::from("map")]);
+            self.base_mut().emit_signal("recieve_height_map", &[Variant::from("map")]);
+            self.base_mut().emit_signal("recieve_gradient_map", &[Variant::from("map")]);
+            self.base_mut().emit_signal("recieve_obstacle_map", &[Variant::from("map")]);
         }
     }
 }
 
 #[godot_api]
 impl Lunasim {
-    // TODO: Create signals
+    #[signal]
+    fn recieve_depth_map(&self);
+    #[signal]
+    fn recieve_point_cloud(&self);
+    #[signal]
+    fn recieve_height_map(&self);
+    #[signal]
+    fn recieve_gradient_map(&self);
+    #[signal]
+    fn recieve_obstacle_map(&self);
+    #[signal]
+    fn send_map_data(&self);
 
     #[func]
     pub fn request_thalassic_data(&self) {
