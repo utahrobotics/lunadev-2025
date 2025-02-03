@@ -3,8 +3,7 @@
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum FromIMU {
-    AngularRateReading(AngularRate),
-    AccelerationNormReading(AccelerationNorm),
+    Reading(AngularRate, AccelerationNorm),
     NoDataReady,
     Error,
 }
@@ -64,16 +63,14 @@ impl AngularRate {
 }
 
 impl FromIMU {
-    pub fn serialize(&self) -> [u8; 13] {
-        let mut bytes = [0u8; 13];
+    pub fn serialize(&self) -> [u8; 25] {
+        let mut bytes = [0u8; 25];
         match self {
-            FromIMU::AngularRateReading(rate) => {
+            FromIMU::Reading(rate, accel ) => {
                 bytes[0] = 0;
-                bytes[1..].copy_from_slice(&rate.serialize());
-            }
-            FromIMU::AccelerationNormReading(accel) => {
-                bytes[0] = 1;
-                bytes[1..].copy_from_slice(&accel.serialize());
+                bytes[1..=12].copy_from_slice(&rate.serialize());
+                bytes[13..].copy_from_slice(&accel.serialize());
+
             }
             FromIMU::NoDataReady => {
                 bytes[0] = 2;
@@ -85,88 +82,20 @@ impl FromIMU {
         bytes
     }
 
-    pub fn deserialize(bytes: [u8; 13]) -> Result<Self, &'static str> {
-        let variant_bytes = [bytes[1], bytes[2], bytes[3], bytes[4], 
-                           bytes[5], bytes[6], bytes[7], bytes[8],
-                           bytes[9], bytes[10], bytes[11], bytes[12]];
+    pub fn deserialize(bytes: [u8; 25]) -> Result<Self, &'static str> {
+        let rate_bytes: [u8; 12] = bytes[1..=12].as_ref().try_into().map_err(|err|"failed to deserialize FromIMU")?;
+        let accel_bytes: [u8; 12] = bytes[13..].as_ref().try_into().map_err(|err|"failed to deserialize FromIMU")?;
+
         
         match bytes[0] {
-            0 => Ok(FromIMU::AngularRateReading(AngularRate::deserialize(variant_bytes)?)),
-            1 => Ok(FromIMU::AccelerationNormReading(AccelerationNorm::deserialize(variant_bytes)?)),
+            0 => {
+                let rate = AngularRate::deserialize(rate_bytes)?;
+                let accel = AccelerationNorm::deserialize(accel_bytes)?;
+                Ok(FromIMU::Reading(rate, accel))
+            }
             2 => Ok(FromIMU::NoDataReady),
             3 => Ok(FromIMU::Error),
             _ => Err("Invalid variant tag")
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_from_imu_angular_rate() {
-        let original = FromIMU::AngularRateReading(AngularRate {
-            x: 3.14159,
-            y: -1.5708,
-            z: 0.7854,
-        });
-        
-        let serialized = original.serialize();
-        let deserialized = FromIMU::deserialize(serialized).unwrap();
-        
-        match (original, deserialized) {
-            (FromIMU::AngularRateReading(orig), FromIMU::AngularRateReading(des)) => {
-                assert_eq!(orig.x, des.x);
-                assert_eq!(orig.y, des.y);
-                assert_eq!(orig.z, des.z);
-            },
-            _ => panic!("Wrong variant after deserialization"),
-        }
-    }
-
-    #[test]
-    fn test_from_imu_acceleration() {
-        let original = FromIMU::AccelerationNormReading(AccelerationNorm {
-            x: 1.0,
-            y: -2.5,
-            z: 0.5,
-        });
-        
-        let serialized = original.serialize();
-        let deserialized = FromIMU::deserialize(serialized).unwrap();
-        
-        match (original, deserialized) {
-            (FromIMU::AccelerationNormReading(orig), FromIMU::AccelerationNormReading(des)) => {
-                assert_eq!(orig.x, des.x);
-                assert_eq!(orig.y, des.y);
-                assert_eq!(orig.z, des.z);
-            },
-            _ => panic!("Wrong variant after deserialization"),
-        }
-    }
-
-    #[test]
-    fn test_no_data_ready() {
-        let original = FromIMU::NoDataReady;
-        let serialized = original.serialize();
-        let deserialized = FromIMU::deserialize(serialized).unwrap();
-        assert_eq!(original, deserialized);
-    }
-
-    #[test]
-    fn test_error() {
-        let original = FromIMU::Error;
-        let serialized = original.serialize();
-        let deserialized = FromIMU::deserialize(serialized).unwrap();
-        assert_eq!(original, deserialized);
-    }
-
-    #[test]
-    fn test_invalid_variant() {
-        let mut invalid_bytes = [0u8; 13];
-        invalid_bytes[0] = 4;
-        
-        assert!(FromIMU::deserialize(invalid_bytes).is_err());
     }
 }

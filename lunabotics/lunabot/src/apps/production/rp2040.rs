@@ -24,10 +24,10 @@ use crate::localization::LocalizerRef;
 use super::udev_poll;
 
 type TIMESTAMP = f32;
-pub enum IMUReading {
-    Acceleration((Vector3<f32>, TIMESTAMP)),
-    AngularRate((Vector3<f32>, TIMESTAMP))
-}
+
+/// (AngularRate, AccelerationNorm, TIMESTAMP)
+pub struct IMUReading(Vector3<f32>, Vector3<f32>, TIMESTAMP);
+
 
 pub struct IMUInfo {
     pub node: StaticImmutableNode,
@@ -47,32 +47,12 @@ pub fn enumerate_imus(
         let mut fusion = Fusion::new(SAMPLE_RATE_HZ, settings);
 
         let mut reading: Option<IMUReading> = None;
-        let mut reading_accel: Option<(Vector3<f32>, TIMESTAMP)> = None;
-        let mut reading_gyro: Option<(Vector3<f32>, TIMESTAMP)> = None;
         loop {
             reading = data_queue_ref.pop();
-            if let Some(IMUReading::Acceleration(reading)) = reading {
-                reading_accel = Some(reading);
-            }
-            if let Some(IMUReading::AngularRate(reading)) = reading {
-                reading_gyro = Some(reading);
-            }
-
-            // not using take up here because we dont want to consume more accel readings than gyro readings or vice versa
-            if reading_accel.is_some() && reading_gyro.is_some() {
-                let (Some((accel, timestamp_accel)), Some((gyro, timestamp_gyro))) = (reading_accel.take(),reading_gyro.take()) else {
-                    continue;
-                };
-                
-                if (timestamp_accel-timestamp_gyro).abs() > 1. {
-                    tracing::warn!("acceleration and gyro timestamps were more than 1 seconds apart");
-                }
-
-                let avg = (timestamp_accel+timestamp_gyro)/2.0;
-
-                fusion.update_no_mag(gyro.into(), accel.into(), avg);
+            if let Some(IMUReading(gyro, accel, time)) = reading {
+                fusion.update_no_mag(gyro.into(), accel.into(), time);
                 let acc = fusion.ahrs.linear_acc();
-                tracing::info!("x: {}, y: {}, z: {}", acc.x, acc.y, acc.z);
+                // tracing::info!("x: {}, y: {}, z: {}", acc.x, acc.y, acc.z);
             }
         }        
     });
@@ -216,7 +196,7 @@ impl IMUTask {
             warn!("Failed to set motor port {path_str} exclusive: {e}");
         }
         let mut imu_port = BufStream::new(imu_port);
-        let mut data: [u8; 13] = [0; 13];
+        let mut data: [u8; 25] = [0; 25];
 
         let start = Instant::now();
         loop {
@@ -240,21 +220,18 @@ impl IMUTask {
                 }
             };
             match msg {
-                FromIMU::AngularRateReading(AngularRate { x, y, z }) => {
-                    let angular_velocity = Vector3::new(-x, z, y);
-                    let transformed = self.node.get_local_isometry().cast() * angular_velocity;
-                    if let Err(e) = self.queue.push(IMUReading::AngularRate((transformed, start.elapsed().as_secs_f32()))) {
+                FromIMU::Reading(rate, accel) => {
+                    let angular_velocity = Vector3::new(-rate.x, rate.z, rate.y);
+                    let transformed_rate = self.node.get_local_isometry().cast() * angular_velocity;
+
+                    let accel = Vector3::new(accel.x, -accel.z, -accel.y);
+                    let transformed_accel = self.node.get_local_isometry().cast() * accel;
+
+                    if let Err(e) = self.queue.push(IMUReading(transformed_rate, transformed_accel, start.elapsed().as_secs_f32())) {
                         tracing::warn!("couldn't push gyro reading to crossbeam queue");
                     }
                 }
-                FromIMU::AccelerationNormReading(AccelerationNorm { x, y, z }) => {
-                    let accel = Vector3::new(x, -z, -y);
-                    let transformed = self.node.get_local_isometry().cast() * accel;
-
-                    if let Err(e) = self.queue.push(IMUReading::Acceleration((transformed, start.elapsed().as_secs_f32()))) {
-                        tracing::warn!("couldn't push accel reading to crossbeam queue");
-                    }
-                }
+                
                 FromIMU::NoDataReady => {
                     continue;
                 }

@@ -359,20 +359,14 @@ async fn read_sensors_loop(
             error!("failed to read packet: {}", e);
             continue;
         }
-        match lsm.angular_rate() {
+        let rate = match lsm.angular_rate() {
             Ok(lsm6dsox::AngularRate { x, y, z }) => {
                 // info!("gyro: x: {}, y: {}, z: {} (radians per sec)", x.as_radians_per_second(),y.as_radians_per_second(),z.as_radians_per_second());
-                class
-                    .write_packet(
-                        &FromIMU::AngularRateReading(AngularRate {
-                            x: x.as_radians_per_second() as f32,
-                            y: y.as_radians_per_second() as f32,
-                            z: z.as_radians_per_second() as f32
-                        })
-                        .serialize()
-                    )
-                    .await
-                    .unwrap()
+                AngularRate {
+                    x: x.as_radians_per_second() as f32,
+                    y: y.as_radians_per_second() as f32,
+                    z: z.as_radians_per_second() as f32
+                }
             }
             Err(e) => {
                 if Error::NoDataReady == e {
@@ -381,19 +375,13 @@ async fn read_sensors_loop(
                     class.write_packet(&FromIMU::Error.serialize()).await.unwrap();
                 }
                 error!("failed to read gyro: {:?}", e);
+                continue;
             }
-        }
-        let _ = class.read_packet(&mut ack).await;
-        match lsm.accel_norm() {
+        };
+        let accel = match lsm.accel_norm() {
             Ok(F32x3 { x, y, z }) => {
                 // info!("accel: x: {}, y: {}, z: {} m/s normalized", x,y,z);
-                class
-                    .write_packet(
-                        &FromIMU::AccelerationNormReading(AccelerationNorm { x, y, z })
-                            .serialize()
-                    )
-                    .await
-                    .unwrap();
+                AccelerationNorm { x, y, z }
             }
             Err(e) => {
                 if Some(&Error::NoDataReady) == e.cause() {
@@ -402,8 +390,10 @@ async fn read_sensors_loop(
                     class.write_packet(&FromIMU::Error.serialize()).await.unwrap();
                     error!("failed to read accel: {:?}", e.cause());
                 }
+                continue;
             }
-        }
+        };
+        class.write_packet(&FromIMU::Reading(rate, accel).serialize()).await.unwrap();
         ticker.next().await;
     }
 }
