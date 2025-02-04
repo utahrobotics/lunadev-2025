@@ -14,6 +14,7 @@ pub mod godot_urdf;
 pub mod lunasim;
 #[cfg(feature = "thalassic")]
 pub mod thalassic;
+pub mod ports;
 
 #[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]
 pub enum LunabotStage {
