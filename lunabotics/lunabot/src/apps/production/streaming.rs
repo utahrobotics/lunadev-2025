@@ -16,7 +16,7 @@ use openh264::{
 };
 use spin_sleep::SpinSleeper;
 use tasker::parking_lot::RwLock;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 const CAMERA_COL_COUNT: usize = 3;
 const CAMERA_ROW_COUNT: usize = 2;
