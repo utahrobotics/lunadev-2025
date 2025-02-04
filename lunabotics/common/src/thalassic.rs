@@ -1,4 +1,4 @@
-use std::{io::{Read, Write}, net::{SocketAddr, TcpListener, TcpStream}};
+use std::{io::{Read, Write}, net::{SocketAddr, TcpStream}};
 
 use bytemuck::{Pod, Zeroable};
 use tracing::error;
@@ -42,7 +42,7 @@ pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData, &[godot::builtin::V
     let unparker = parker.unparker().clone();
 
     std::thread::spawn(move || {
-        let listener = match TcpListener::bind("0.0.0.0:20000") {
+        let listener = match std::net::TcpListener::bind("0.0.0.0:20000") {
             Ok(listener) => listener,
             Err(e) => {
                 godot::global::godot_error!("Failed to bind to port 20000: {}", e);

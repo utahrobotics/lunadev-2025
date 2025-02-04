@@ -1,4 +1,4 @@
-use std::{net::{IpAddr, SocketAddr}, sync::Arc};
+use std::{net::IpAddr, sync::Arc};
 
 use anyhow::Context;
 use camera::enumerate_cameras;
@@ -36,7 +36,7 @@ mod motors;
 mod streaming;
 mod rp2040;
 
-// pub mod dataviz;
+pub mod dataviz;
 // mod audio_streaming;
 
 pub use apriltag::Apriltag;
@@ -60,15 +60,6 @@ pub struct DepthCameraInfo {
 #[derive(Deserialize, Debug)]
 pub struct IMUInfo {
     link_name: String,
-}
-
-fn subaddress_of(mut addr: SocketAddr, port_offset: u16) -> SocketAddr {
-    let new_port = addr
-        .port()
-        .checked_add(port_offset)
-        .unwrap_or_else(|| addr.port().wrapping_add(port_offset));
-    addr.set_port(new_port);
-    addr
 }
 
 pub struct LunabotApp {

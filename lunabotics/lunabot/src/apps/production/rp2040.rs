@@ -34,7 +34,7 @@ pub struct IMUInfo {
 }
 
 pub fn enumerate_imus(
-    localizer_ref: &LocalizerRef,
+    _localizer_ref: &LocalizerRef,
     serial_to_chain: impl IntoIterator<Item = (String, IMUInfo)>,
 ) {
     get_tokio_handle().spawn(imu_wifi_listener());
@@ -227,7 +227,7 @@ impl IMUTask {
                     let accel = Vector3::new(accel.x, -accel.z, -accel.y);
                     let transformed_accel = self.node.get_local_isometry().cast() * accel;
 
-                    if let Err(e) = self.queue.push(IMUReading(transformed_rate, transformed_accel, start.elapsed().as_secs_f32())) {
+                    if let Err(_) = self.queue.push(IMUReading(transformed_rate, transformed_accel, start.elapsed().as_secs_f32())) {
                         tracing::warn!("couldn't push gyro reading to crossbeam queue");
                     }
                 }

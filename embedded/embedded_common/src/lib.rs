@@ -83,8 +83,8 @@ impl FromIMU {
     }
 
     pub fn deserialize(bytes: [u8; 25]) -> Result<Self, &'static str> {
-        let rate_bytes: [u8; 12] = bytes[1..=12].as_ref().try_into().map_err(|err|"failed to deserialize FromIMU")?;
-        let accel_bytes: [u8; 12] = bytes[13..].as_ref().try_into().map_err(|err|"failed to deserialize FromIMU")?;
+        let rate_bytes: [u8; 12] = bytes[1..=12].as_ref().try_into().map_err(|_|"failed to deserialize FromIMU")?;
+        let accel_bytes: [u8; 12] = bytes[13..].as_ref().try_into().map_err(|_|"failed to deserialize FromIMU")?;
 
         
         match bytes[0] {
