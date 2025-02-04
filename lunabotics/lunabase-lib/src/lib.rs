@@ -130,17 +130,15 @@ impl INode for LunabotConn {
             };
         }
 
-        let lunabot_address_str = Os::singleton().get_cmdline_user_args().get(0).map(|x| x.to_string());
-        let lunabot_address = if let Some(lunabase_address_str) = lunabot_address_str {
-            if let Ok(addr) = lunabase_address_str.parse::<IpAddr>() {
-                godot_warn!("Connecting to: {lunabase_address_str}");
+        let lunabot_address_str = Os::singleton().get_cmdline_user_args().get(0).map(|x| x.to_string()).unwrap_or_else(|| "192.168.0.102".into());
+        let lunabot_address = {
+            if let Ok(addr) = lunabot_address_str.parse::<IpAddr>() {
+                godot_warn!("Connecting to: {lunabot_address_str}");
                 Some(addr)
             } else {
-                godot_error!("Failed to parse address: {lunabase_address_str}");
+                godot_error!("Failed to parse address: {lunabot_address_str}");
                 None
             }
-        } else {
-            None
         };
 
         init_panic_hook();
