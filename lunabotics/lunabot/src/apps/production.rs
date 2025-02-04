@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::{IpAddr, SocketAddr}, sync::Arc};
 
 use anyhow::Context;
 use camera::enumerate_cameras;
@@ -36,7 +36,7 @@ mod motors;
 mod streaming;
 mod rp2040;
 
-pub mod dataviz;
+// pub mod dataviz;
 // mod audio_streaming;
 
 pub use apriltag::Apriltag;
@@ -72,10 +72,7 @@ fn subaddress_of(mut addr: SocketAddr, port_offset: u16) -> SocketAddr {
 }
 
 pub struct LunabotApp {
-    pub lunabase_address: SocketAddr,
-    pub lunabase_streaming_address: Option<SocketAddr>,
-    #[cfg(feature = "experimental")]
-    pub lunabase_audio_streaming_address: Option<SocketAddr>,
+    pub lunabase_address: Option<IpAddr>,
     pub max_pong_delay_ms: u64,
     pub cameras: FxHashMap<String, CameraInfo>,
     pub depth_cameras: FxHashMap<String, DepthCameraInfo>,
@@ -131,11 +128,8 @@ impl LunabotApp {
         let localizer = Localizer::new(robot_chain.clone());
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
-        let camera_streaming_address = self
-            .lunabase_streaming_address
-            .unwrap_or_else(|| subaddress_of(self.lunabase_address, 1));
 
-        camera_streaming(camera_streaming_address);
+        camera_streaming(self.lunabase_address);
 
         #[cfg(feature = "experimental")]
         if let Err(e) = audio_streaming::audio_streaming(

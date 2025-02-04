@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::{IpAddr, SocketAddr}, sync::Arc};
 
 use super::{depth::enumerate_depth_cameras, subaddress_of};
 use anyhow::Context;
@@ -19,7 +19,7 @@ use crate::{
 use super::{create_packet_builder, DepthCameraInfo};
 
 pub struct DatavizApp {
-    pub lunabase_address: SocketAddr,
+    pub lunabase_address: Option<IpAddr>,
     pub lunabase_data_address: Option<SocketAddr>,
     pub max_pong_delay_ms: u64,
     pub depth_cameras: FxHashMap<String, DepthCameraInfo>,
