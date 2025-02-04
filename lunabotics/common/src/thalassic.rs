@@ -38,14 +38,16 @@ const THALASSIC_BUFFER_SIZE: usize = size_of::<ThalassicData>();
 
 #[cfg(feature = "godot")]
 pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData, &[godot::builtin::Vector3]) + Send + 'static) -> (impl Fn() + Send + Sync) {
+    use std::net::Ipv4Addr;
+
     let parker = crossbeam::sync::Parker::new();
     let unparker = parker.unparker().clone();
 
     std::thread::spawn(move || {
-        let listener = match std::net::TcpListener::bind("0.0.0.0:20000") {
+        let listener = match std::net::TcpListener::bind(SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), crate::ports::DATAVIZ)) {
             Ok(listener) => listener,
             Err(e) => {
-                godot::global::godot_error!("Failed to bind to port 20000: {}", e);
+                godot::global::godot_error!("Failed to bind to dataviz port: {}", e);
                 return;
             }
         };

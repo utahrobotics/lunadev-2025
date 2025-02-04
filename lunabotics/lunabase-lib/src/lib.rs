@@ -155,7 +155,7 @@ impl INode for LunabotConn {
         #[cfg(feature = "production")]
         stream::camera_streaming(lunabot_address, shared_rgb_img.pessimistic_share(), stream_corrupted);
 
-        let udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, common::ports::TELEOP))
+        let udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, common::ports::LUNABASE_SIM_TELEOP))
             .expect("Failed to bind to teleop port");
 
         udp.set_nonblocking(true)
@@ -294,10 +294,10 @@ impl INode for LunabotConn {
             loop {
                 match inner.udp.recv_from(&mut buf) {
                     Ok((n, addr)) => {
-                        if addr.port() != common::ports::TELEOP {
-                            godot_warn!("Received data from unknown client: {addr}");
-                            continue;
-                        }
+                        // if addr.port() != common::ports::TELEOP {
+                        //     godot_warn!("Received data from unknown client: {addr}");
+                        //     continue;
+                        // }
                         inner.send_to = Some(addr.ip());
                         if !inner.did_reconnection {
                             let tmp_action = inner.cakap_sm.send_reconnection_msg(now).0;

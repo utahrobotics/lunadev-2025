@@ -171,10 +171,10 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
                                 continue;
                             }
                         };
-                        if addr.port() != common::ports::TELEOP {
-                            error!("Received data from unexpected address on teleop: {addr}");
-                            continue;
-                        }
+                        // if addr.port() != common::ports::TELEOP {
+                        //     error!("Received data from unexpected address on teleop: {addr}");
+                        //     continue;
+                        // }
                         self.lunabase_address = Some(addr.ip());
                         action = cakap_sm.poll(Event::IncomingData(&buf[..n]), Instant::now());
                     }

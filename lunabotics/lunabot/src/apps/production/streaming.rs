@@ -201,8 +201,8 @@ pub fn camera_streaming(mut lunabase_address: Option<IpAddr>) {
                 if let Ok((_, addr)) = udp.recv_from(&mut [0u8; 1]) {
                     if addr.port() == common::ports::CAMERAS {
                         lunabase_address = Some(addr.ip());
-                    } else {
-                        warn!("Received data from unknown address: {addr}");
+                    // } else {
+                    //     warn!("Received data from unknown address: {addr}");
                     }
                 }
                 continue;

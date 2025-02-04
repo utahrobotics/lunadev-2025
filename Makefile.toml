@@ -61,7 +61,7 @@ args = ["--path", "godot/lunabase", "--import"]
 [tasks.lunabase]
 workspace = false
 command = "godot"
-args = ["--path", "godot/lunabase", "-d"]
+args = ["--path", "godot/lunabase", "-d", "--", "127.0.0.1"]
 dependencies = [
     "build_lunabase",
     "import_lunabase",

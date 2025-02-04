@@ -43,7 +43,7 @@ lumpur::define_configuration! {
     pub enum Commands {
         Main {},
         Sim {
-            lunabase_address: IpAddr,
+            lunabase_address: Option<IpAddr>,
             max_pong_delay_ms: Option<u64>
         }
     }

@@ -1,7 +1,7 @@
 use std::{
     cmp::Ordering,
     collections::VecDeque,
-    net::SocketAddr,
+    net::IpAddr,
     num::NonZeroU32,
     process::Stdio,
     sync::{Arc, Mutex},
@@ -81,7 +81,7 @@ const DELIMIT: &[u8] = b"READY\r\n";
 const DELIMIT: &[u8] = b"READY\n";
 
 pub struct LunasimbotApp {
-    pub lunabase_address: SocketAddr,
+    pub lunabase_address: Option<IpAddr>,
     pub max_pong_delay_ms: u64,
 }
 
