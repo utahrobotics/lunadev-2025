@@ -13,15 +13,13 @@ members = [
     "misc/gputter-macros",
     "misc/gputter",
     "misc/thalassic",
-    "lunaserver-web/lunaserver-web-host",
-    "lunaserver-web/lunaserver-web-client",
     "misc/lumpur",
     "misc/simple-motion",
     "lunabotics/lunaviz-lib",
     "misc/vesc-translator",
 ]
 resolver = "2"
-exclude = ["output/", "embedded/"]
+exclude = ["output/", "embedded/", "lunaserver-web/"]
 
 [workspace.dependencies]
 fxhash = "0.2"
