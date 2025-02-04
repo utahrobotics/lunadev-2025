@@ -1,5 +1,5 @@
 use std::{
-    net::{Ipv4Addr, SocketAddrV4, UdpSocket},
+    net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
     sync::atomic::{AtomicBool, Ordering},
     time::Duration,
 };
@@ -12,6 +12,7 @@ use tasker::shared::LoanedData;
 mod webrtc;
 
 pub fn camera_streaming(
+    lunabot_address: Option<IpAddr>,
     mut shared_rgb_img: LoanedData<Vec<u8>>,
     stream_corrupted: &'static AtomicBool,
 ) {
@@ -19,8 +20,8 @@ pub fn camera_streaming(
     let (mut broadcasting_buffer, lendee_storage2) = webrtc::stream_webrtc();
 
     std::thread::spawn(move || {
-        let stream_udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10601))
-            .expect("Failed to bind to 10601");
+        let stream_udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, common::ports::CAMERAS))
+            .expect("Failed to bind to camera streaming port");
 
         if let Err(e) = stream_udp.set_read_timeout(Some(Duration::from_secs(1))) {
             godot_error!("Failed to set read timeout, continuing: {e}");
@@ -49,9 +50,13 @@ pub fn camera_streaming(
                     stream.extend_from_slice(&buf[..n]);
                 }
                 Err(e) => {
-                    if e.kind() == std::io::ErrorKind::WouldBlock
-                        || e.kind() == std::io::ErrorKind::TimedOut
-                    {
+                    if e.kind() == std::io::ErrorKind::TimedOut {
+                        if let Some(ip) = lunabot_address {
+                            let _ = stream_udp.send_to(&[0u8; 1], SocketAddr::new(ip, common::ports::CAMERAS));
+                        }
+                        continue;
+                    }
+                    if e.kind() == std::io::ErrorKind::WouldBlock {
                         continue;
                     }
                     godot_error!("Failed to receive stream data: {e}");

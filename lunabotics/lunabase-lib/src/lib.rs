@@ -2,7 +2,7 @@
 
 use std::{
     collections::VecDeque,
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
+    net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
     sync::{
         atomic::{AtomicBool, Ordering},
         Once,
@@ -17,7 +17,7 @@ use cakap2::{
 };
 use common::{FromLunabase, FromLunabot, LunabotStage, Steering};
 use godot::{
-    classes::{image::Format, Engine, Image},
+    classes::{image::Format, Engine, Image, Os},
     prelude::*,
 };
 use tasker::shared::{OwnedData, SharedDataReceiver};
@@ -83,7 +83,7 @@ struct LunabotConnInner {
     bitcode_buffer: bitcode::Buffer,
     did_reconnection: bool,
     last_steering: Option<(Steering, ReliableIndex)>,
-    send_to: Option<SocketAddr>,
+    send_to: Option<IpAddr>,
     stream_lendee: SharedDataReceiver<Vec<u8>>,
     stream_corrupted: &'static AtomicBool,
 }
@@ -97,6 +97,7 @@ struct LunabotConn {
     stream_image: Gd<Image>,
     #[var]
     stream_image_updated: bool,
+    last_received_duration: f64,
     #[cfg(feature = "audio_streaming")]
     audio_streaming: Option<audio::AudioStreaming>,
 }
@@ -125,8 +126,23 @@ impl INode for LunabotConn {
                 stream_image_updated: false,
                 #[cfg(feature = "audio_streaming")]
                 audio_streaming: None,
+                last_received_duration: 0.0,
             };
         }
+
+        let lunabot_address_str = Os::singleton().get_cmdline_user_args().get(0).map(|x| x.to_string());
+        let lunabot_address = if let Some(lunabase_address_str) = lunabot_address_str {
+            if let Ok(addr) = lunabase_address_str.parse::<IpAddr>() {
+                godot_warn!("Connecting to: {lunabase_address_str}");
+                Some(addr)
+            } else {
+                godot_error!("Failed to parse address: {lunabase_address_str}");
+                None
+            }
+        } else {
+            None
+        };
+
         init_panic_hook();
 
         let stream_corrupted: &_ = Box::leak(Box::new(AtomicBool::new(false)));
@@ -137,10 +153,10 @@ impl INode for LunabotConn {
             ]);
         let stream_lendee = shared_rgb_img.create_lendee();
         #[cfg(feature = "production")]
-        stream::camera_streaming(shared_rgb_img.pessimistic_share(), stream_corrupted);
+        stream::camera_streaming(lunabot_address, shared_rgb_img.pessimistic_share(), stream_corrupted);
 
-        let udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 10600))
-            .expect("Failed to bind to 10600");
+        let udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, common::ports::TELEOP))
+            .expect("Failed to bind to teleop port");
 
         udp.set_nonblocking(true)
             .expect("Failed to set non-blocking");
@@ -157,7 +173,7 @@ impl INode for LunabotConn {
                 bitcode_buffer: bitcode::Buffer::new(),
                 did_reconnection: false,
                 last_steering: None,
-                send_to: None,
+                send_to: lunabot_address,
                 stream_lendee,
                 stream_corrupted,
             }),
@@ -166,10 +182,11 @@ impl INode for LunabotConn {
             stream_image_updated: false,
             #[cfg(feature = "audio_streaming")]
             audio_streaming: Some(audio_streaming),
+            last_received_duration: 0.0,
         }
     }
 
-    fn process(&mut self, _delta: f64) {
+    fn process(&mut self, delta: f64) {
         if let Some(mut inner) = self.inner.as_mut() {
             let mut received = false;
 
@@ -242,8 +259,8 @@ impl INode for LunabotConn {
                         RecommendedAction::HandleDataAndSend { received, to_send } => {
                             match inner.bitcode_buffer.decode::<FromLunabot>(received) {
                                 Ok(x) => {
-                                    if let Some(addr) = inner.send_to {
-                                        if let Err(e) = inner.udp.send_to(&to_send, addr) {
+                                    if let Some(ip) = inner.send_to {
+                                        if let Err(e) = inner.udp.send_to(&to_send, SocketAddr::new(ip, common::ports::TELEOP)) {
                                             godot_error!("Failed to send ack: {e}");
                                         }
                                         on_msg!(x);
@@ -255,8 +272,8 @@ impl INode for LunabotConn {
                             }
                         }
                         RecommendedAction::SendData(hot_packet) => {
-                            if let Some(addr) = inner.send_to {
-                                if let Err(e) = inner.udp.send_to(&hot_packet, addr) {
+                            if let Some(ip) = inner.send_to {
+                                if let Err(e) = inner.udp.send_to(&hot_packet, SocketAddr::new(ip, common::ports::TELEOP)) {
                                     godot_error!("Failed to send hot packet: {e}");
                                 }
                             }
@@ -277,8 +294,11 @@ impl INode for LunabotConn {
             loop {
                 match inner.udp.recv_from(&mut buf) {
                     Ok((n, addr)) => {
-                        // godot_warn!("{:?}", &buf[..n]);
-                        inner.send_to = Some(addr);
+                        if addr.port() != common::ports::TELEOP {
+                            godot_warn!("Received data from unknown client: {addr}");
+                            continue;
+                        }
+                        inner.send_to = Some(addr.ip());
                         if !inner.did_reconnection {
                             let tmp_action = inner.cakap_sm.send_reconnection_msg(now).0;
                             handle!(tmp_action);
@@ -299,8 +319,8 @@ impl INode for LunabotConn {
                 match action {
                     RecommendedAction::HandleError(cakap_error) => godot_error!("{cakap_error}"),
                     RecommendedAction::SendData(hot_packet) => {
-                        if let Some(addr) = inner.send_to {
-                            if let Err(e) = inner.udp.send_to(&hot_packet, addr) {
+                        if let Some(ip) = inner.send_to {
+                            if let Err(e) = inner.udp.send_to(&hot_packet, SocketAddr::new(ip, common::ports::TELEOP)) {
                                 godot_error!("Failed to send hot packet: {e}");
                             }
                         }
@@ -311,7 +331,19 @@ impl INode for LunabotConn {
             }
 
             if received {
+                self.last_received_duration = 0.0;
                 self.base_mut().emit_signal("something_received", &[]);
+            } else {
+                self.last_received_duration += delta;
+
+                if self.last_received_duration >= 1.0 {
+                    self.last_received_duration = 0.0;
+                    if let Some(ip) = inner.send_to {
+                        PONG_MESSAGE.with(|pong| {
+                            let _ = inner.udp.send_to(pong, SocketAddr::new(ip, common::ports::TELEOP));
+                        });
+                    }
+                }
             }
         }
         #[cfg(feature = "audio_streaming")]

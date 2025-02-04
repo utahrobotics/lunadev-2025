@@ -78,7 +78,12 @@ dependencies = [
 
 [tasks.lunabase_prod]
 workspace = false
-run_task = { name = ["local_lunabase_prod", "lunaserver-web-client-controls", "lunaserver-web-client-streaming"], parallel = true }
+command = "godot"
+args = ["--path", "godot/lunabase", "-d", "--", "155.98.6.16"]
+dependencies = [
+    "build_lunabase_prod",
+    "import_lunabase",
+]
 
 [tasks.local_lunabase_prodx]
 workspace = false
