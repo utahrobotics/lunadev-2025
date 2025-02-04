@@ -1,7 +1,7 @@
 use std::{net::{Ipv4Addr, SocketAddr, SocketAddrV4}, path::Path};
 
 use axum::{
-    extract::{ws::Message, ConnectInfo, WebSocketUpgrade}, http::StatusCode, response::IntoResponse, routing::get, Router
+    extract::{ws::Message, ConnectInfo, WebSocketUpgrade}, http::StatusCode, response::IntoResponse, routing::{get, any}, Router
 };
 use tokio::{net::UdpSocket, process::Command};
 
@@ -11,7 +11,7 @@ async fn main() {
         .route("/", get(|| async {
             "Hello, world!"
         }))
-        .route("/init-lunabot", get(|ws: WebSocketUpgrade| async {
+        .route("/init-lunabot", any(|ws: WebSocketUpgrade| async {
             if !Path::new("/home/manglemix/lunadev-2025/.allow-ws").exists() {
                 return (StatusCode::FORBIDDEN, "").into_response();
             }
@@ -29,7 +29,7 @@ async fn main() {
         .route("/ip", get(|ConnectInfo(addr): ConnectInfo<SocketAddr>| async move {
             format!("Your IP is {}", addr.ip())
         }))
-        .route("/udp-ws", get(|ws: WebSocketUpgrade| async {
+        .route("/udp-ws", any(|ws: WebSocketUpgrade| async {
             ws.on_upgrade(|mut socket| async move {
                 let mut send_to = None;
                 let mut udp = None;
