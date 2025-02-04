@@ -338,9 +338,15 @@ impl INode for LunabotConn {
 
                 if self.last_received_duration >= 1.0 {
                     self.last_received_duration = 0.0;
-                    if let Some(ip) = inner.send_to {
+                    if inner.send_to.is_some() {
                         PONG_MESSAGE.with(|pong| {
-                            let _ = inner.udp.send_to(pong, SocketAddr::new(ip, common::ports::TELEOP));
+                            inner.to_lunabot.push_back(Action::SendUnreliable(
+                                inner
+                                    .cakap_sm
+                                    .get_packet_builder()
+                                    .new_unreliable(pong.to_vec().into())
+                                    .unwrap(),
+                            ));
                         });
                     }
                 }

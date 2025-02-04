@@ -24,7 +24,8 @@ pub fn camera_streaming(
             .expect("Failed to bind to camera streaming port");
 
         if let Err(e) = stream_udp.set_read_timeout(Some(Duration::from_secs(1))) {
-            godot_error!("Failed to set read timeout, continuing: {e}");
+            godot_error!("Failed to set read timeout: {e}");
+            return;
         }
 
         if let Err(e) = Decoder::new() {
@@ -50,13 +51,11 @@ pub fn camera_streaming(
                     stream.extend_from_slice(&buf[..n]);
                 }
                 Err(e) => {
-                    if e.kind() == std::io::ErrorKind::TimedOut {
+                    if e.kind() == std::io::ErrorKind::WouldBlock {
                         if let Some(ip) = lunabot_address {
+                            godot_print!("Sent to {ip}");
                             let _ = stream_udp.send_to(&[0u8; 1], SocketAddr::new(ip, common::ports::CAMERAS));
                         }
-                        continue;
-                    }
-                    if e.kind() == std::io::ErrorKind::WouldBlock {
                         continue;
                     }
                     godot_error!("Failed to receive stream data: {e}");
