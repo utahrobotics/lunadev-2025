@@ -53,7 +53,6 @@ pub fn camera_streaming(
                 Err(e) => {
                     if e.kind() == std::io::ErrorKind::WouldBlock {
                         if let Some(ip) = lunabot_address {
-                            godot_print!("Sent to {ip}");
                             let _ = stream_udp.send_to(&[0u8; 1], SocketAddr::new(ip, common::ports::CAMERAS));
                         }
                         continue;
