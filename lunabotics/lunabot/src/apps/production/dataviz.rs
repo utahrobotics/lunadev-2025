@@ -86,7 +86,7 @@ impl DatavizApp {
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
         let (_packet_builder, _from_lunabase_rx, _connected) =
-            create_packet_builder(Some(self.lunabase_address), lunabot_stage, self.max_pong_delay_ms);
+            create_packet_builder(Some(SocketAddr::new(self.lunabase_address, common::ports::TELEOP)), lunabot_stage, self.max_pong_delay_ms);
 
         loop {
             std::thread::park();

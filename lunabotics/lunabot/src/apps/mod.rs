@@ -3,7 +3,7 @@ mod production;
 #[cfg(not(feature = "production"))]
 mod sim;
 
-use std::{fs::File, net::IpAddr, sync::Arc, time::Duration};
+use std::{fs::File, net::{IpAddr, SocketAddr}, sync::Arc, time::Duration};
 
 use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
@@ -51,7 +51,7 @@ impl LunabotConnected {
 }
 
 fn create_packet_builder(
-    lunabase_address: Option<IpAddr>,
+    lunabase_address: Option<SocketAddr>,
     lunabot_stage: Arc<AtomicCell<LunabotStage>>,
     max_pong_delay_ms: u64,
 ) -> (

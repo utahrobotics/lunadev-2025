@@ -1,4 +1,4 @@
-use std::{net::IpAddr, sync::Arc};
+use std::{net::{IpAddr, SocketAddr}, sync::Arc};
 
 use anyhow::Context;
 use camera::enumerate_cameras;
@@ -207,7 +207,7 @@ impl LunabotApp {
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
         let (packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
-            self.lunabase_address,
+            self.lunabase_address.map(|ip| SocketAddr::new(ip, common::ports::TELEOP)),
             lunabot_stage.clone(),
             self.max_pong_delay_ms,
         );

@@ -1,7 +1,7 @@
 use std::{
     cmp::Ordering,
     collections::VecDeque,
-    net::IpAddr,
+    net::{IpAddr, SocketAddr},
     num::NonZeroU32,
     process::Stdio,
     sync::{Arc, Mutex},
@@ -375,7 +375,7 @@ impl LunasimbotApp {
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
         let (packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
-            self.lunabase_address,
+            self.lunabase_address.map(|ip| SocketAddr::new(ip, common::ports::LUNABASE_SIM_TELEOP)),
             lunabot_stage.clone(),
             self.max_pong_delay_ms,
         );
