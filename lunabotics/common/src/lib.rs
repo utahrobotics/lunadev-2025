@@ -1,6 +1,7 @@
-use std::io::Write;
+use std::{io::Write, path::Path};
 
 use bitcode::{Decode, Encode};
+use nalgebra::{distance, Point2, Point3};
 
 pub const AUDIO_FRAME_SIZE: u32 = 960;
 pub const AUDIO_SAMPLE_RATE: u32 = 48000;
@@ -131,6 +132,34 @@ impl Steering {
 impl Default for Steering {
     fn default() -> Self {
         Self::new(0.0, 0.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum PathInstruction { MoveTo, FaceTowards }
+
+#[derive(Debug, Clone, Copy)]
+pub struct PathPoint {
+    pub point: Point3<f64>,
+    pub instruction: PathInstruction,
+}
+impl PathPoint {
+    /// min distance for robot to be considered at a point
+    const AT_POINT_THRESHOLD: f64 = 0.2;
+    
+    
+    /// min radians gap between robot  for robot to be considered facing towards a point
+    const FACING_TOWARDS_THRESHOLD: f64 = 0.2;
+
+    pub fn is_finished(&self, robot_pos: &Point2<f64>, robot_heading: &Point2<f64>) -> bool {
+        
+        match self.instruction {
+            PathInstruction::MoveTo => 
+                distance(&self.point.xz(), robot_pos) < Self::AT_POINT_THRESHOLD,
+
+            PathInstruction::FaceTowards => 
+                (self.point.xz() - robot_pos).angle(&robot_heading.coords) < Self::FACING_TOWARDS_THRESHOLD
+        }
     }
 }
 

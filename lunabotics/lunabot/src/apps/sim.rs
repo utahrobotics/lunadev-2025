@@ -400,7 +400,7 @@ impl LunasimbotApp {
                     pathfinder.pathfind(&shared_thalassic_data, from, to, &mut into);
                     let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
                         into.iter()
-                            .map(|p| p.coords.cast::<f32>().data.0[0])
+                            .map(|p| p.point.coords.cast::<f32>().data.0[0])
                             .collect(),
                     ));
                     lunasim_stdin.write(bytes);

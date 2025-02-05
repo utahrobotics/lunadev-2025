@@ -10,7 +10,7 @@ use ares_bt::{
 };
 use autonomy::autonomy;
 use blackboard::LunabotBlackboard;
-use common::{FromLunabase, LunabotStage, Steering};
+use common::{FromLunabase, LunabotStage, PathPoint, Steering};
 use nalgebra::Point3;
 use simple_motion::StaticImmutableNode;
 use teleop::teleop;
@@ -30,7 +30,7 @@ pub enum Action {
     CalculatePath {
         from: Point3<f64>,
         to: Point3<f64>,
-        into: Vec<Point3<f64>>,
+        into: Vec<PathPoint>,
     },
 }
 

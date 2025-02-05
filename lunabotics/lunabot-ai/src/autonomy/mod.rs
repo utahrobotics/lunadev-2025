@@ -6,7 +6,7 @@ use ares_bt::{
     sequence::{ParallelAny, Sequence},
     Behavior, InfallibleStatus, Status,
 };
-use common::{FromLunabase, Steering};
+use common::{FromLunabase, PathInstruction, PathPoint, Steering};
 use dig::dig;
 use dump::dump;
 use nalgebra::{distance, Const, Matrix2, OPoint, Point2, Point3, Vector2, Vector3};
@@ -81,30 +81,44 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
 
 fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
     let robot = blackboard.get_robot_isometry();
-    
     let path = blackboard.get_path_mut();
-
+    
+    if path.is_empty() {
+        blackboard.enqueue_action(Action::SetSteering(Steering::default()));
+        return InfallibleStatus::Success;
+    }
+        
+    let first_instr = path[0];
     let pos = Point2::new(robot.translation.x, robot.translation.z);
     let heading = robot
         .rotation
         .transform_vector(&Vector3::new(0.0, 0.0, -1.0))
         .xz();
 
-    match find_target_point(pos, path) {
-        Some(target) => {
-            let heading_angle = heading.angle(&Vector2::new(0.0, -1.0));
-            let to_first_point = (target - pos).normalize();
+    if first_instr.is_finished(&pos, &heading.into()) {
+        println!("path follower: finished {:?}", first_instr);
+        path.remove(0);
+        if path.is_empty() { 
+            println!("path follower: done!"); 
+            // return InfallibleStatus::Success;
+        }
+        return InfallibleStatus::Running;
+    }
 
-            // direction to first point of path, from robot's pov
-            let to_first_point = if heading.x < 0.0 {
-                rotate_v2_ccw(to_first_point, heading_angle)
-            } else {
-                rotate_v2_ccw(to_first_point, -heading_angle)
-            };
+    println!("path follower: doing {:?}", &first_instr);
 
-            *blackboard.get_poll_when() =
-                PollWhen::Instant(Instant::now() + Duration::from_millis(16));
+    let heading_angle = heading.angle(&Vector2::new(0.0, -1.0));
+    let to_first_point = (first_instr.point.xz() - pos).normalize();
 
+    // direction to first point of path, from robot's pov
+    let to_first_point = if heading.x < 0.0 {
+        rotate_v2_ccw(to_first_point, heading_angle)
+    } else {
+        rotate_v2_ccw(to_first_point, -heading_angle)
+    };
+
+    match first_instr.instruction {
+        PathInstruction::MoveTo => {
             if to_first_point.angle(&Vector2::new(0.0, -1.0)).to_degrees() > 20.0 {
                 if to_first_point.x > 0.0 {
                     blackboard
@@ -121,38 +135,27 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
                 );
                 blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(l, r)))
             }
-            InfallibleStatus::Running
-        }
-        None => {
-            blackboard.enqueue_action(Action::SetSteering(Steering::default()));
-            InfallibleStatus::Success
-        }
-    }
+        },
+        PathInstruction::FaceTowards => {
+            if to_first_point.x > 0.0 {
+                blackboard
+                    .enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, -1.0)))
+            } else {
+                blackboard
+                    .enqueue_action(Action::SetSteering(Steering::new_left_right(-1.0, 1.0)))
+            }
+        },
+    };
+
+    *blackboard.get_poll_when() =
+        PollWhen::Instant(Instant::now() + Duration::from_millis(16));
+
+    InfallibleStatus::Running
 }
 
-/// min distance for robot to be considered at a point
-const AT_POINT_THRESHOLD: f64 = 0.2;
 
-/// find index of the next point the robot should move towards, based on which path segment the robot is closest to
-///
-/// returns `None` if robot is at the last point
-fn find_target_point(pos: Point2<f64>, path: &mut Vec<OPoint<f64, Const<3>>>) -> Option<Point2<f64>> {
-    
-    if distance(&pos, &path[path.len() - 1].xz()) < AT_POINT_THRESHOLD {
-        println!("path follower: done!", );
-        return None;
-    }
 
-    let first_point = path[0].xz();
 
-    // if the robot is near the first point, delete it
-    if distance(&first_point, &pos) < AT_POINT_THRESHOLD {
-        path.remove(0);
-        return Some(path[0].xz());
-    }
-
-    Some(first_point)
-}
 
 fn rotate_v2_ccw(vector2: Vector2<f64>, theta: f64) -> Vector2<f64> {
     let rot = Matrix2::new(

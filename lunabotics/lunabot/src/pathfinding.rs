@@ -1,8 +1,8 @@
-use common::THALASSIC_CELL_SIZE;
+use common::{PathPoint, PathInstruction};
 use nalgebra::{Point3, Transform3};
 use pathfinding::{grid::Grid, prelude::astar};
 use tasker::shared::SharedDataReceiver;
-use tracing::{error, warn};
+use tracing::error;
 use crate::utils::distance_between_tuples;
 
 use crate::pipelines::thalassic::{set_observe_depth, ThalassicData, CellState};
@@ -24,34 +24,23 @@ impl DefaultPathfinder {
         shared_thalassic_data: &SharedDataReceiver<ThalassicData>,
         from: Point3<f64>,
         to: Point3<f64>,
-        into: &mut Vec<Point3<f64>>,
+        into: &mut Vec<PathPoint>,
     ) {
         shared_thalassic_data.try_get();
         set_observe_depth(true);
         let mut map_data = shared_thalassic_data.get();
-        
-        let RADIUS = 0.5; //TODO: original value was 0.5
-        
+                
         loop {
-            if map_data.current_robot_radius == RADIUS {
+            if map_data.current_robot_radius == 0.5 {
                 break;
             }
-            map_data.set_robot_radius(RADIUS);
+            map_data.set_robot_radius(0.5);
             drop(map_data);
             map_data = shared_thalassic_data.get();
         }
         set_observe_depth(false);
 
         into.clear();
-
-        let mut append_path = |path: Vec<(usize, usize)>| {
-            into.extend(path.into_iter().map(|(x, y)| {
-                let mut p = Point3::new(x as f64, 0.0, y as f64);
-                p = self.grid_to_world * p;
-                p.y = map_data.get_height((x, y)) as f64;
-                p
-            }));
-        };
 
 
         // allows checking if position is known inside `move || {}` closures without moving `map_data`
@@ -89,7 +78,7 @@ impl DefaultPathfinder {
             };
         }
 
-        let from_grid = self.world_to_grid * from;
+        let from_grid: nalgebra::OPoint<f64, nalgebra::Const<3>> = self.world_to_grid * from;
         let to_grid = self.world_to_grid * to;
 
         let robot_cell_pos = (from_grid.x as usize, from_grid.z as usize);
@@ -97,9 +86,15 @@ impl DefaultPathfinder {
         let mut start = robot_cell_pos;
         let end = (to_grid.x as usize, to_grid.z as usize);
 
-        
         let heuristic = move |p: &(usize, usize)| {
             (distance_between_tuples(*p, end) * 10000.0) as usize
+        };
+
+        let cell_pos_to_path_point = |(x, z): (usize, usize), instruction: PathInstruction| {
+            let mut world_point = self.grid_to_world * Point3::new(x as f64, 0.0, z as f64);
+            world_point.y = map_data.get_height((x, z)) as f64;
+        
+            PathPoint { point: world_point, instruction }
         };
         
 
@@ -128,7 +123,9 @@ impl DefaultPathfinder {
                     |&pos| map_data.get_cell_state(pos) == CellState::GREEN,
                 ) {
                     start = *path.last().unwrap();
-                    append_path(path);
+                    into.extend(
+                        path.iter().map(|pos| cell_pos_to_path_point(*pos, PathInstruction::MoveTo))
+                    );
                 } else {
                     error!("Failed to find path to safety");
                     return;
@@ -136,7 +133,7 @@ impl DefaultPathfinder {
             }
         }
 
-        let mut path = astar(&start, |&p| neighbours!(p), heuristic, |p| p == &end)
+        let path = astar(&start, |&p| neighbours!(p), heuristic, |p| p == &end)
             .expect("there should always be a possible path to the goal")
             .0;
 
@@ -145,18 +142,20 @@ impl DefaultPathfinder {
             println!("color at {:?}: {:?}", pt, map_data.get_cell_state(*pt));
         }
 
-        // truncate path so that it ends before entering explored region
-        // for (index, pt) in path.iter().enumerate() {
-            
-        //     if let Err(unknown_cell) = map_data.is_safe_for_robot(robot_cell_pos, *pt) {
-        //         println!("truncate: keeping only up to before {}, unknown cell: {:?}", index, unknown_cell);
-        //         path.truncate(index);
-        //         break;
-        //     }
-        // }
-
-        // add final path to `into`
-        append_path(path);
+        
+        
+        // add points in final path to `into`, stopping upon seeing an unsafe point
+        for pt in path {
+            if let Err(unknown_cell) = map_data.is_safe_for_robot(robot_cell_pos, pt) {
+                println!("truncated, unknown cell: {:?}", unknown_cell);
+                into.push(cell_pos_to_path_point(unknown_cell, PathInstruction::FaceTowards));
+                break;
+            }
+            else {
+                into.push(cell_pos_to_path_point(pt, PathInstruction::MoveTo));
+            }
+        }
         
     }
 }
+
