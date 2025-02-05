@@ -95,6 +95,7 @@ impl Getter for GetValues {
             fault_code: u8::from_be(payload[52]),
             pid_pos_now: unscale_and_unpack([payload[53], payload[54], payload[55], payload[56]], 1000000.0),
             vesc_id: u8::from_be(payload[57]),
+            // I'm not sure what the rest of the bytes mean
         })
     }
 }
