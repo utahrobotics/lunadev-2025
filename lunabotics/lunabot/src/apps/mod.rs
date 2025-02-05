@@ -3,7 +3,7 @@ mod production;
 #[cfg(not(feature = "production"))]
 mod sim;
 
-use std::{fs::File, net::{IpAddr, SocketAddr}, sync::Arc, time::Duration};
+use std::{fs::File, net::SocketAddr, sync::Arc, time::Duration};
 
 use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;

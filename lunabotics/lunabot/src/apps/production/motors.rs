@@ -1,7 +1,7 @@
 use tasker::{
     parking_lot::{Condvar, Mutex},
     tokio::{
-        io::{AsyncWriteExt, BufStream},
+        io::{AsyncReadExt, AsyncWriteExt, BufStream},
         runtime::Handle,
     },
     BlockOn,
@@ -9,7 +9,7 @@ use tasker::{
 use tokio_serial::SerialPortBuilderExt;
 use tracing::{error, info, warn};
 use udev::{EventType, MonitorBuilder, Udev};
-use vesc_translator::{CanForwarded, SetDutyCycle, VescPacker};
+use vesc_translator::{CanForwarded, GetValues, Getter, SetDutyCycle, VescPacker};
 
 use crate::apps::production::udev_poll;
 
@@ -134,6 +134,28 @@ pub fn enumerate_motors(handle: Handle) -> &'static MotorRef {
                     warn!("Failed to set motor port {path_str} exclusive: {e}");
                 }
                 let mut motor_port = BufStream::new(motor_port);
+
+                loop {
+                    if let Err(e) = motor_port
+                        .write_all(vesc_packer.pack(&GetValues))
+                        .block_on()
+                    {
+                        error!("Failed to write to motor port {path_str}: {e}");
+                        return;
+                    }
+                    let mut response = [0u8; 68];
+                    if let Err(e) = motor_port.read_exact(&mut response).block_on() {
+                        error!("Failed to read from motor port {path_str}: {e}");
+                        return;
+                    }
+
+                    let Ok(values) = GetValues::parse_response(&response) else {
+                        error!("Received corrupt response from motor port {path_str}");
+                        continue;
+                    };
+                    info!("Received values from motor port {path_str}: {values:?}");
+                    break;
+                }
 
                 loop {
                     let (left, right) = {
