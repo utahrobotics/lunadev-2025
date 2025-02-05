@@ -3,7 +3,6 @@ members = [
     "misc/tasker",
     "lunabotics/lunabot",
     "lunabotics/common",
-    "lunabotics/pathfinding",
     "lunabotics/lunabase-lib",
     "lunabotics/lunasim-lib",
     "lunabotics/lunabot-ai",
