@@ -1,113 +1,76 @@
-use std::{net::{Ipv4Addr, SocketAddr, SocketAddrV4}, path::Path};
+use std::{net::SocketAddr, path::Path, process::Stdio};
 
 use axum::{
-    extract::{ws::Message, ConnectInfo, WebSocketUpgrade}, http::StatusCode, response::IntoResponse, routing::get, Router
+    extract::{ConnectInfo, WebSocketUpgrade},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{any, get},
+    Router,
 };
-use tokio::{net::UdpSocket, process::Command};
+use tokio::process::Command;
 
 #[tokio::main]
 async fn main() {
     let app = Router::new()
-        .route("/", get(|| async {
-            "Hello, world!"
-        }))
-        .route("/init-lunabot", get(|ws: WebSocketUpgrade| async {
-            if !Path::new("/home/manglemix/lunadev-2025/.allow-ws").exists() {
-                return (StatusCode::FORBIDDEN, "").into_response();
-            }
-            ws.on_upgrade(|mut ws| async move {
-                tokio::select! {
-                    _ = ws.recv() => {}
-                    _ = Command::new("/home/manglemix/.cargo/bin/lunabot")
+        .route("/", get(|| async { "Hello, world!" }))
+        .route(
+            "/init-lunabot",
+            any(|ws: WebSocketUpgrade| async {
+                if !Path::new("/home/manglemix/lunadev-2025/.allow-ws").exists() {
+                    return (StatusCode::FORBIDDEN, "").into_response();
+                }
+                ws.on_upgrade(|mut ws| async move {
+                    let mut child = Command::new("/home/manglemix/.cargo/bin/lunabot")
                         .arg("main")
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .env("HEADLESS", "1")
                         .current_dir("/home/manglemix/lunadev-2025")
-                        .kill_on_drop(true)
-                        .output() => {}
-                }
-            })
-        }))
-        .route("/ip", get(|ConnectInfo(addr): ConnectInfo<SocketAddr>| async move {
-            format!("Your IP is {}", addr.ip())
-        }))
-        .route("/udp-ws", get(|ws: WebSocketUpgrade| async {
-            ws.on_upgrade(|mut socket| async move {
-                let mut send_to = None;
-                let mut udp = None;
-
-                for port in 30000..=30100 {
-                    let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
-                    match UdpSocket::bind(addr).await {
-                        Ok(x) => {
-                            udp = Some(x);
-                            break;
-                        }
-                        Err(e) => {
-                            if port == 30100 {
-                                eprintln!("Failed to bind UDP socket: {e}");
-                                return;
-                            }
-                        },
-                    };
-                }
-
-                let udp = udp.unwrap();
-
-                let addr = match udp.local_addr() {
-                    Ok(x) => x,
-                    Err(e) => {
-                        eprintln!("Failed to get local UDP address: {e}");
-                        return;
-                    },
-                };
-                if let Err(e) = socket.send(format!("Set lunabase_address in lunaserver app-config.toml to {}", addr).into()).await {
-                    eprintln!("Failed to send lunabase_address to client: {e}");
-                    return;
-                }
-                let mut buf = [0u8; 2048];
-                loop {
+                        .spawn()
+                        .unwrap();
+                    let pid = child.id().unwrap();
                     tokio::select! {
-                        option = socket.recv() => {
-                            let Some(result) = option else {
-                                break;
-                            };
-                            let msg = match result {
-                                Ok(msg) => msg,
-                                Err(e) => {
-                                    eprintln!("Received error from peer: {e}");
-                                    break;
-                                },
-                            };
-                            let Message::Binary(data) = msg else {
-                                continue;
-                            };
-                            if let Some(addr) = send_to {
-                                // Peer could be down for many trivial reasons
-                                let _ = udp.send_to(&data, &addr).await;
-                            }
+                        _ = ws.recv() => {
+                            let _ = Command::new("kill")
+                                .args(["-s", "INT", pid.to_string().as_str()])
+                                .status()
+                                .await;
                         }
-                        result = udp.recv_from(&mut buf) => {
-                            let Ok((n, from)) = result else {
-                                // Also could be down for many trivial reasons
-                                continue;
-                            };
-                            send_to = Some(from);
-                            if let Err(e) = socket.send(Message::Binary(buf[..n].to_vec())).await {
-                                eprintln!("Failed to send UDP packet to client: {e}");
-                                break;
-                            }
-                        }
+                        _ = child.wait() => {}
                     }
-                }
-            })
-        }));
+                })
+            }),
+        )
+        .route(
+            "/ip",
+            get(|ConnectInfo(addr): ConnectInfo<SocketAddr>| async move {
+                format!("Your IP is {}", addr.ip())
+            }),
+        );
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:80")
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        let listener = match tokio::net::TcpListener::bind((
+            option_env!("SERVER_IP").unwrap_or("0.0.0.0"),
+            80,
+        ))
         .await
-        .expect("Failed to bind TCP listener");
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await
-    .unwrap();
+        {
+            Ok(x) => x,
+            Err(e) => {
+                eprintln!("{e}");
+                continue;
+            }
+        };
+        if let Err(e) = axum::serve(
+            listener,
+            app.clone()
+                .into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        {
+            eprintln!("{e}");
+        }
+    }
 }

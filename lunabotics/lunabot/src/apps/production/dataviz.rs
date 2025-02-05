@@ -1,6 +1,6 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::{IpAddr, SocketAddr}, sync::Arc};
 
-use super::{depth::enumerate_depth_cameras, subaddress_of};
+use super::depth::enumerate_depth_cameras;
 use anyhow::Context;
 use common::LunabotStage;
 use crossbeam::atomic::AtomicCell;
@@ -19,8 +19,7 @@ use crate::{
 use super::{create_packet_builder, DepthCameraInfo};
 
 pub struct DatavizApp {
-    pub lunabase_address: SocketAddr,
-    pub lunabase_data_address: Option<SocketAddr>,
+    pub lunabase_address: IpAddr,
     pub max_pong_delay_ms: u64,
     pub depth_cameras: FxHashMap<String, DepthCameraInfo>,
     pub robot_layout: String,
@@ -73,10 +72,7 @@ impl DatavizApp {
             ),
             &[],
         );
-        let data_address = self
-            .lunabase_data_address
-            .unwrap_or_else(|| subaddress_of(self.lunabase_address, 9400));
-        common::thalassic::lunabot_task(data_address, move |data, _points| {
+        common::thalassic::lunabot_task(SocketAddr::new(self.lunabase_address, common::ports::DATAVIZ), move |data, _points| {
             set_observe_depth(true);
             let incoming_data = shared_thalassic_data.get();
             data.gradmap = incoming_data.gradmap;
@@ -90,7 +86,7 @@ impl DatavizApp {
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
         let (_packet_builder, _from_lunabase_rx, _connected) =
-            create_packet_builder(self.lunabase_address, lunabot_stage, self.max_pong_delay_ms);
+            create_packet_builder(Some(SocketAddr::new(self.lunabase_address, common::ports::TELEOP)), lunabot_stage, self.max_pong_delay_ms);
 
         loop {
             std::thread::park();

@@ -12,16 +12,16 @@ common = { path = "../common", features = ["godot_urdf"] }
 cakap2 = { workspace = true }
 bitcode = { workspace = true }
 tasker.workspace = true
+crossbeam.workspace = true
 
 openh264 = { workspace = true, optional = true }
 webrtc = { version = "0.12.0", optional = true}
 axum = { workspace = true, optional = true}
-crossbeam = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 opus = { workspace = true, optional = true }
 
 [features]
 extended = ["streaming_server", "audio_streaming"]
-streaming_server = ["webrtc", "axum", "production", "serde_json", "crossbeam"]
+streaming_server = ["webrtc", "axum", "production", "serde_json"]
 production = ["openh264"]
 audio_streaming = ["opus"]

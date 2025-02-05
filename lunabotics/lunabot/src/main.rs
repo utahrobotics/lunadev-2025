@@ -1,6 +1,6 @@
 #![feature(result_flattening, array_chunks, iterator_try_collect)]
 
-use std::net::SocketAddr;
+use std::net::IpAddr;
 
 use apps::default_max_pong_delay_ms;
 use lumpur::LumpurBuilder;
@@ -17,10 +17,8 @@ mod utils;
 lumpur::define_configuration! {
     pub enum Commands {
         Main {
-            lunabase_address: SocketAddr,
+            lunabase_address: Option<IpAddr>,
             max_pong_delay_ms: Option<u64>,
-            lunabase_streaming_address: Option<SocketAddr>,
-            lunabase_audio_streaming_address: Option<SocketAddr>,
             #[serde(default)]
             cameras: fxhash::FxHashMap<String, apps::CameraInfo>,
             #[serde(default)]
@@ -32,9 +30,8 @@ lumpur::define_configuration! {
             robot_layout: Option<String>
         },
         Dataviz {
-            lunabase_address: SocketAddr,
+            lunabase_address: IpAddr,
             max_pong_delay_ms: Option<u64>,
-            lunabase_data_address: Option<SocketAddr>,
             #[serde(default)]
             depth_cameras: fxhash::FxHashMap<String, apps::DepthCameraInfo>,
             robot_layout: Option<String>
@@ -46,7 +43,7 @@ lumpur::define_configuration! {
     pub enum Commands {
         Main {},
         Sim {
-            lunabase_address: SocketAddr,
+            lunabase_address: Option<IpAddr>,
             max_pong_delay_ms: Option<u64>
         }
     }
@@ -91,8 +88,6 @@ fn main() {
         Commands::Main {
             lunabase_address,
             max_pong_delay_ms,
-            lunabase_streaming_address,
-            lunabase_audio_streaming_address,
             cameras,
             depth_cameras,
             apriltags,
@@ -101,7 +96,6 @@ fn main() {
         } => {
             apps::LunabotApp {
                 lunabase_address,
-                lunabase_streaming_address,
                 max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
                 #[cfg(feature = "experimental")]
                 lunabase_audio_streaming_address,
@@ -113,20 +107,16 @@ fn main() {
                     .unwrap_or_else(|| "robot-layout/lunabot.json".to_string()),
             }
             .run();
-            #[cfg(not(feature = "experimental"))]
-            let _ = lunabase_audio_streaming_address;
         }
         #[cfg(feature = "production")]
         Commands::Dataviz {
             lunabase_address,
-            lunabase_data_address,
             max_pong_delay_ms,
             depth_cameras,
             robot_layout,
         } => {
             apps::dataviz::DatavizApp {
                 lunabase_address,
-                lunabase_data_address,
                 max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
                 depth_cameras,
                 robot_layout: robot_layout

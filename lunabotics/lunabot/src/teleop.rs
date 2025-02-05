@@ -1,5 +1,5 @@
 use std::{
-    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4},
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     ops::Deref,
     sync::Arc,
     time::{Duration, Instant},
@@ -33,7 +33,7 @@ impl PacketBuilder {
 }
 
 pub struct LunabaseConn<F> {
-    pub lunabase_address: SocketAddr,
+    pub lunabase_address: Option<SocketAddr>,
     pub on_msg: F,
     pub lunabot_stage: Arc<AtomicCell<LunabotStage>>,
 }
@@ -50,7 +50,7 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
 
         get_tokio_handle().spawn(async move {
             let udp = loop {
-                let udp = match UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).await {
+                let udp = match UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, common::ports::TELEOP)).await {
                     Ok(x) => x,
                     Err(e) => {
                         error!("Failed to bind to lunabase address: {e}");
@@ -58,11 +58,11 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
                         continue;
                     }
                 };
-                if let Err(e) = udp.connect(self.lunabase_address).await {
-                    error!("Failed to connect to lunabase: {e}");
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    continue;
-                }
+                // if let Err(e) = udp.connect(self.lunabase_address).await {
+                //     error!("Failed to connect to lunabase: {e}");
+                //     tokio::time::sleep(Duration::from_secs(1)).await;
+                //     continue;
+                // }
                 break udp;
             };
 
@@ -72,14 +72,16 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
             macro_rules! send {
                 ($data: expr) => {{
                     loop {
-                        if let Err(e) = udp.send($data).await {
-                            if e.kind() == std::io::ErrorKind::ConnectionRefused {
-                                if self.lunabase_address.ip().is_loopback() {
-                                    continue;
+                        if let Some(addr) = self.lunabase_address {
+                            if let Err(e) = udp.send_to($data, addr).await {
+                                if e.kind() == std::io::ErrorKind::ConnectionRefused {
+                                    if addr.ip().is_loopback() {
+                                        continue;
+                                    }
                                 }
+                                error!("Failed to send data to lunabase: {e}");
+                                continue;
                             }
-                            error!("Failed to send data to lunabase: {e}");
-                            continue;
                         }
                         action = cakap_sm.poll(Event::NoEvent, Instant::now());
                         break;
@@ -151,21 +153,26 @@ impl<F: FnMut(&[u8]) -> bool + Send + 'static> LunabaseConn<F> {
                     } => {
                         action = cakap_sm.poll(Event::Action(packet), Instant::now());
                     }
-                    result = udp.recv(&mut buf) => {
-                        let n = match result {
-                            Ok(n) => n,
+                    result = udp.recv_from(&mut buf) => {
+                        let (n, addr) = match result {
+                            Ok(x) => x,
                             Err(e) => {
                                 if e.kind() == std::io::ErrorKind::ConnectionRefused {
-                                    match self.lunabase_address.ip() {
-                                        IpAddr::V4(Ipv4Addr::LOCALHOST) | IpAddr::V6(Ipv6Addr::LOCALHOST) => continue,
-                                        _ => {}
+                                    if let Some(addr) = self.lunabase_address {
+                                        if addr.ip().is_loopback() {
+                                            continue;
+                                        }
                                     }
                                 }
                                 error!("Failed to receive data from lunabase: {e}");
                                 continue;
                             }
                         };
-                        // println!("{:?}", &buf[..n]);
+                        // if addr.port() != common::ports::TELEOP {
+                        //     error!("Received data from unexpected address on teleop: {addr}");
+                        //     continue;
+                        // }
+                        self.lunabase_address = Some(addr);
                         action = cakap_sm.poll(Event::IncomingData(&buf[..n]), Instant::now());
                     }
                 }

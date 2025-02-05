@@ -9,7 +9,7 @@ use ares_bt::{
 use common::{FromLunabase, PathInstruction, PathPoint, Steering};
 use dig::dig;
 use dump::dump;
-use nalgebra::{distance, Const, Matrix2, OPoint, Point2, Point3, Vector2, Vector3};
+use nalgebra::{distance, Const, Matrix2, OPoint, Point2, Vector2, Vector3};
 use tracing::{error, warn};
 use traverse::traverse;
 

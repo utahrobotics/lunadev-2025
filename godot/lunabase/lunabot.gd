@@ -12,7 +12,7 @@ var init_ws: WebSocketPeer
 func _ready() -> void:
 	while true:
 		init_ws = WebSocketPeer.new()
-		if init_ws.connect_to_url("ws://192.168.0.100/init-lunabot") == OK:
+		if init_ws.connect_to_url("ws://192.168.0.102/init-lunabot") == OK:
 			await _disconnected
 		await get_tree().create_timer(5).timeout
 
