@@ -137,13 +137,20 @@ pub fn enumerate_motors(handle: Handle) -> &'static MotorRef {
 
                 loop {
                     if let Err(e) = motor_port
-                        .write_all(vesc_packer.pack(&GetValues))
+                        .write_all(vesc_packer.pack(&CanForwarded {
+                            can_id: 4,
+                            payload: GetValues
+                        }))
                         .block_on()
                     {
                         error!("Failed to write to motor port {path_str}: {e}");
                         return;
                     }
-                    let mut response = [0u8; 68];
+                    if let Err(e) = motor_port.flush().block_on() {
+                        error!("Failed to flush motor port {path_str}: {e}");
+                        return;
+                    }
+                    let mut response = [0u8; 79];
                     if let Err(e) = motor_port.read_exact(&mut response).block_on() {
                         error!("Failed to read from motor port {path_str}: {e}");
                         return;
@@ -151,9 +158,10 @@ pub fn enumerate_motors(handle: Handle) -> &'static MotorRef {
 
                     let Ok(values) = GetValues::parse_response(&response) else {
                         error!("Received corrupt response from motor port {path_str}");
+                        std::thread::sleep(std::time::Duration::from_secs(1));
                         continue;
                     };
-                    info!("Received values from motor port {path_str}: {values:?}");
+                    info!("Received values from motor port {path_str}: {values:#?}");
                     break;
                 }
 
