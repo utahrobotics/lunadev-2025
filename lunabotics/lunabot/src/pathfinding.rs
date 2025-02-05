@@ -3,7 +3,6 @@ use nalgebra::{Point3, Transform3};
 use pathfinding::{grid::Grid, prelude::astar};
 use tasker::shared::SharedDataReceiver;
 use tracing::error;
-use tracing::error;
 use crate::utils::distance_between_tuples;
 
 use crate::pipelines::thalassic::{set_observe_depth, ThalassicData, CellState};
