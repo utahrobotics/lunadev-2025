@@ -136,13 +136,6 @@ impl DefaultPathfinder {
         let path = astar(&start, |&p| neighbours!(p), heuristic, |p| p == &end)
             .expect("there should always be a possible path to the goal")
             .0;
-
-        println!("path colors ===", );
-        for pt in &path {
-            println!("color at {:?}: {:?}", pt, map_data.get_cell_state(*pt));
-        }
-
-        
         
         // add points in final path to `into`, stopping upon seeing an unsafe point
         for pt in path {

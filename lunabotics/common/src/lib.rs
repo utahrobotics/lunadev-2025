@@ -136,7 +136,7 @@ impl Default for Steering {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PathInstruction { MoveTo, FaceTowards }
 
 #[derive(Debug, Clone, Copy)]

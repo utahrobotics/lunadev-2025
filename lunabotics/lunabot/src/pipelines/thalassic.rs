@@ -103,6 +103,11 @@ impl ThalassicData {
 
         let (pos_x, pos_y) = (target_cell_pos.0 as i32, target_cell_pos.1 as i32);
 
+        let mut unsafe_cells = 0;
+
+        // an arbitrary unknown cell causing this position to be unsafe
+        let mut unknown_cell = (0, 0);
+
         for x in (pos_x - robot_cell_radius as i32)..(pos_x + robot_cell_radius as i32) {
             for y in (pos_y - robot_cell_radius as i32)..(pos_y + robot_cell_radius as i32) {
 
@@ -116,9 +121,15 @@ impl ThalassicData {
                     distance_between_tuples(nearby_cell, robot_cell_pos) > robot_cell_radius &&
                     !self.is_known(nearby_cell) 
                 {
-                    return Err(nearby_cell);
+                    unsafe_cells += 1;
+                    unknown_cell = nearby_cell;
                 }
             }
+        }
+        let total_nearby_cells = (robot_cell_radius * 2.0).powf(2.0);
+        println!("unsafe amount: {}", unsafe_cells as f32 / total_nearby_cells);
+        if unsafe_cells as f32 / total_nearby_cells > 0.0 {
+            return Err(unknown_cell);
         }
 
         Ok(())

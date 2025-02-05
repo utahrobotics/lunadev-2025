@@ -80,12 +80,13 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
 }
 
 fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
+
     let robot = blackboard.get_robot_isometry();
     let path = blackboard.get_path_mut();
-    
+
     if path.is_empty() {
         blackboard.enqueue_action(Action::SetSteering(Steering::default()));
-        return InfallibleStatus::Success;
+        return InfallibleStatus::Running;
     }
         
     let first_instr = path[0];
@@ -97,15 +98,15 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
 
     if first_instr.is_finished(&pos, &heading.into()) {
         println!("path follower: finished {:?}", first_instr);
-        path.remove(0);
-        if path.is_empty() { 
+
+        if path.len() == 1 && first_instr.instruction == PathInstruction::MoveTo {
             println!("path follower: done!"); 
-            // return InfallibleStatus::Success;
+            return InfallibleStatus::Success;
         }
+
+        path.remove(0);
         return InfallibleStatus::Running;
     }
-
-    println!("path follower: doing {:?}", &first_instr);
 
     let heading_angle = heading.angle(&Vector2::new(0.0, -1.0));
     let to_first_point = (first_instr.point.xz() - pos).normalize();
