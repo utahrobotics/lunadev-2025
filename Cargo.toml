@@ -52,7 +52,7 @@ axum = { version = "0.7.7", features = ["ws", "macros"] }
 unfmt = "0.2.2"
 heapless = "0.8.0"
 tracing = "0.1.41"
-indexmap = "2.3.0"
+indexmap = "2.7.1"
 godot = { git = "https://github.com/godot-rust/gdext", branch = "master", features = [
     "experimental-threads",
 ] }
