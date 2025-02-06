@@ -370,9 +370,9 @@ async fn read_sensors_loop(
             }
             Err(e) => {
                 if Error::NoDataReady == e {
-                    class.write_packet(&FromIMU::NoDataReady.serialize()).await.unwrap();
+                    let _ = class.write_packet(&FromIMU::NoDataReady.serialize()).await;
                 } else {
-                    class.write_packet(&FromIMU::Error.serialize()).await.unwrap();
+                    let _ = class.write_packet(&FromIMU::Error.serialize()).await;
                 }
                 error!("failed to read gyro: {:?}", e);
                 continue;
@@ -385,15 +385,15 @@ async fn read_sensors_loop(
             }
             Err(e) => {
                 if Some(&Error::NoDataReady) == e.cause() {
-                    class.write_packet(&FromIMU::NoDataReady.serialize()).await.unwrap();
+                    let _ = class.write_packet(&FromIMU::NoDataReady.serialize()).await;
                 } else {
-                    class.write_packet(&FromIMU::Error.serialize()).await.unwrap();
+                    let _ = class.write_packet(&FromIMU::Error.serialize()).await;
                     error!("failed to read accel: {:?}", e.cause());
                 }
                 continue;
             }
         };
-        class.write_packet(&FromIMU::Reading(rate, accel).serialize()).await.unwrap();
+        let _ = class.write_packet(&FromIMU::Reading(rate, accel).serialize()).await;
         ticker.next().await;
     }
 }
