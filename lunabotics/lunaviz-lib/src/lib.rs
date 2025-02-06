@@ -11,14 +11,14 @@ unsafe impl ExtensionLibrary for LunavizLib {}
 
 #[derive(GodotClass)]
 #[class(base=Node)]
-struct Lunasim {
+struct Lunaviz {
     thalassic_data: &'static Mutex<(ThalassicData, Vec<Vector3>, bool)>,
     request_thalassic: Box<dyn Fn() + Send + Sync>,
     base: Base<Node>,
 }
 
 #[godot_api]
-impl INode for Lunasim {
+impl INode for Lunaviz {
     fn init(base: Base<Node>) -> Self {
         let thalassic_data: &_ = Box::leak(Box::new(Mutex::new((ThalassicData::default(), vec![], false))));
         let request_thalassic = lunabase_task(|data, points| {
@@ -55,7 +55,7 @@ impl INode for Lunasim {
 }
 
 #[godot_api]
-impl Lunasim {
+impl Lunaviz {
     #[signal]
     fn send_map_data(&self);
 

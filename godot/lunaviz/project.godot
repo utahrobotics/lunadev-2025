@@ -15,6 +15,10 @@ run/main_scene="res://visualizer.tscn"
 config/features=PackedStringArray("4.3", "Forward Plus")
 config/icon="res://lunavizicon.png"
 
+[autoload]
+
+LunavizNode="*res://lunaviz_node.gd"
+
 [gui]
 
 theme/custom_font="res://kenvector_future.ttf"

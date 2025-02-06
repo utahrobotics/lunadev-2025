@@ -16,13 +16,12 @@ func set_image_maps(depth:Image,point:Array[Vector3],height:Image,gradient:Image
 	maps[2]=height
 	maps[3]=gradient
 	maps[4]=obstacle
-	
-# Called when the node enters the scene tree for the first time.
-func _ready() -> void:
-	Linaviz.set_image_maps.connect()
 
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float) -> void:
+
+func _ready() -> void:
+	LunavizNode.send_map_data.connect(set_image_maps)
+
+func _process(_delta: float) -> void:
 	map_texture.texture=maps[current_map]
 	if map_texture.texture==null: generate_placeholder(20,10)
 	if current_map==1:
