@@ -21,6 +21,13 @@ struct Lunasim {
 impl INode for Lunasim {
     fn init(base: Base<Node>) -> Self {
         let thalassic_data: &_ = Box::leak(Box::new(Mutex::new((ThalassicData::default(), vec![], false))));
+        if godot::classes::Engine::singleton().is_editor_hint() {
+            return Self {
+                thalassic_data,
+                request_thalassic: Box::new(|| {}),
+                base,
+            };
+        }
         let request_thalassic = lunabase_task(|data, points| {
             let mut guard = thalassic_data.lock();
             guard.0 = *data;
