@@ -19,7 +19,7 @@ func set_image_maps(depth:Image,point:Array[Vector3],height:Image,gradient:Image
 	
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
-	pass
+	Linaviz.set_image_maps.connect()
 
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta: float) -> void:
