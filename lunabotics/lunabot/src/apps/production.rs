@@ -78,8 +78,11 @@ pub struct SingleVesc {
 
 #[derive(Deserialize, Debug, Default)]
 pub struct Vesc {
+    #[serde(default)]
     singles: Vec<SingleVesc>,
+    #[serde(default)]
     pairs: Vec<VescPair>,
+    speed_multiplier: Option<f32>
 }
 
 pub struct LunabotApp {
@@ -256,13 +259,19 @@ impl LunabotApp {
         let mut vesc_ids = VescIDs::default();
 
         for SingleVesc { id, mask } in self.vesc.singles {
-            vesc_ids.add_single_vesc(id, mask);
+            if vesc_ids.add_single_vesc(id, mask) {
+                error!("Motor {id} has already been added");
+                return;
+            }
         }
         for VescPair { id1, id2, mask1, mask2 } in self.vesc.pairs {
-            vesc_ids.add_dual_vesc(id1, id2, mask1, mask2);
+            if vesc_ids.add_dual_vesc(id1, id2, mask1, mask2) {
+                error!("Motors {id1} or {id2} have already been added");
+                return;
+            }
         }
 
-        let motor_ref = enumerate_motors(vesc_ids);
+        let motor_ref = enumerate_motors(vesc_ids, self.vesc.speed_multiplier.unwrap_or(1.0));
 
         run_ai(
             robot_chain.into(),

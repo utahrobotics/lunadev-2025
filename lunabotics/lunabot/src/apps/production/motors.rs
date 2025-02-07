@@ -1,10 +1,12 @@
+use core::f32;
 use crossbeam::{atomic::AtomicCell, utils::Backoff};
 use fxhash::FxHashMap;
 use serde::Deserialize;
-use core::f32;
 use std::sync::mpmc::Receiver;
 use tasker::{
-    get_tokio_handle, tokio::io::{AsyncReadExt, AsyncWriteExt, BufStream}, BlockOn
+    get_tokio_handle,
+    tokio::io::{AsyncReadExt, AsyncWriteExt, BufStream},
+    BlockOn,
 };
 use tokio_serial::SerialPortBuilderExt;
 use tracing::{error, info, warn};
@@ -16,7 +18,7 @@ use crate::apps::production::udev_poll;
 #[derive(Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum MotorMask {
     Left,
-    Right
+    Right,
 }
 
 impl MotorMask {
@@ -33,7 +35,7 @@ pub struct VescIDs {
     /// Map from Can ID to sibling Can ID
     can_ids: FxHashMap<u8, Option<u8>>,
     motor_masks: FxHashMap<u8, MotorMask>,
-    device_count: usize
+    device_count: usize,
 }
 
 impl VescIDs {
@@ -70,7 +72,7 @@ impl MotorRef {
     }
 }
 
-pub fn enumerate_motors(vesc_ids: VescIDs) -> &'static MotorRef {
+pub fn enumerate_motors(vesc_ids: VescIDs, speed_multiplier: f32) -> &'static MotorRef {
     let motor_ref: &_ = Box::leak(Box::new(MotorRef {
         speeds: AtomicCell::new((0.0, 0.0)),
     }));
@@ -84,11 +86,10 @@ pub fn enumerate_motors(vesc_ids: VescIDs) -> &'static MotorRef {
             vesc_packer: VescPacker::default(),
             motor_ref,
             vesc_ids,
+            speed_multiplier,
         };
-        std::thread::spawn(move || {
-            loop {
-                task.motor_task();
-            }
+        std::thread::spawn(move || loop {
+            task.motor_task();
         });
     }
 
@@ -178,7 +179,7 @@ pub fn enumerate_motors(vesc_ids: VescIDs) -> &'static MotorRef {
                     warn!("Ignoring device {path_str} with serial {serial}");
                     return;
                 }
-                let _ = tx.send(serial.into());
+                let _ = tx.send(path_str.into());
             });
     });
     motor_ref
@@ -189,6 +190,7 @@ struct MotorTask {
     vesc_packer: VescPacker,
     motor_ref: &'static MotorRef,
     vesc_ids: &'static VescIDs,
+    speed_multiplier: f32,
 }
 
 impl MotorTask {
@@ -253,7 +255,10 @@ impl MotorTask {
                 let mut response = [0u8; 79];
                 let task = async {
                     motor_port
-                        .write_all(self.vesc_packer.pack(&GetValues))
+                        .write_all(self.vesc_packer.pack(&CanForwarded {
+                            can_id,
+                            payload: GetValues,
+                        }))
                         .await?;
                     motor_port.flush().await?;
                     motor_port.read_exact(&mut response).await
@@ -262,14 +267,17 @@ impl MotorTask {
                     error!("Failed to read/write to motor port {path_str}: {e}");
                     return;
                 }
-    
+
                 let Ok(values) = GetValues::parse_response(&response) else {
                     error!("Received corrupt response from motor port {path_str}");
                     std::thread::sleep(std::time::Duration::from_secs(1));
                     continue;
                 };
                 if can_id != values.vesc_id {
-                    error!("Received can id {} instead of {} from sibling", values.vesc_id, can_id);
+                    error!(
+                        "Received can id {} instead of {} from sibling",
+                        values.vesc_id, can_id
+                    );
                     return;
                 }
                 break;
@@ -280,7 +288,8 @@ impl MotorTask {
         }
 
         let master_mask = *self.vesc_ids.motor_masks.get(&master_can_id).unwrap();
-        let slave_mask = slave_can_id.map(|can_id| *self.vesc_ids.motor_masks.get(&can_id).unwrap());
+        let slave_mask =
+            slave_can_id.map(|can_id| *self.vesc_ids.motor_masks.get(&can_id).unwrap());
 
         let mut last_values = (f32::NAN, f32::NAN);
         let backoff = Backoff::new();
@@ -300,16 +309,18 @@ impl MotorTask {
                     motor_port
                         .write_all(self.vesc_packer.pack(&CanForwarded {
                             can_id,
-                            payload: SetDutyCycle(slave_mask.unwrap().mask(values)),
+                            payload: SetDutyCycle(
+                                slave_mask.unwrap().mask(values) * self.speed_multiplier,
+                            ),
                         }))
                         .await?;
                 }
                 motor_port
-                    .write_all(self.vesc_packer.pack(&CanForwarded {
-                        can_id: master_can_id,
-                        payload: SetDutyCycle(master_mask.mask(values)),
-                    }))
-                    .await
+                    .write_all(self.vesc_packer.pack(&SetDutyCycle(
+                        master_mask.mask(values) * self.speed_multiplier,
+                    )))
+                    .await?;
+                motor_port.flush().await
             };
 
             if let Err(e) = task.block_on() {
