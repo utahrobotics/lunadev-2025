@@ -1,8 +1,8 @@
-#![feature(result_flattening, array_chunks, iterator_try_collect)]
+#![feature(result_flattening, array_chunks, iterator_try_collect, mpmc_channel)]
 
 use std::net::IpAddr;
 
-use apps::default_max_pong_delay_ms;
+use apps::{default_max_pong_delay_ms, Vesc};
 use lumpur::LumpurBuilder;
 use tracing::Level;
 
@@ -27,7 +27,9 @@ lumpur::define_configuration! {
             apriltags: fxhash::FxHashMap<String, apps::Apriltag>,
             #[serde(default)]
             imus: fxhash::FxHashMap<String, apps::IMUInfo>,
-            robot_layout: Option<String>
+            robot_layout: Option<String>,
+            #[serde(default)]
+            vesc: Vesc,
         },
         Dataviz {
             lunabase_address: IpAddr,
@@ -93,6 +95,7 @@ fn main() {
             apriltags,
             imus,
             robot_layout,
+            vesc,
         } => {
             apps::LunabotApp {
                 lunabase_address,
@@ -103,6 +106,7 @@ fn main() {
                 depth_cameras,
                 apriltags,
                 imus,
+                vesc,
                 robot_layout: robot_layout
                     .unwrap_or_else(|| "robot-layout/lunabot.json".to_string()),
             }

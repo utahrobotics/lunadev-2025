@@ -11,7 +11,7 @@ use gputter::init_gputter_blocking;
 use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use mio::{Events, Interest, Poll, Token};
-use motors::enumerate_motors;
+use motors::{enumerate_motors, MotorMask, VescIDs};
 use nalgebra::{Scale3, Transform3};
 use pathfinding::grid::Grid;
 use serde::Deserialize;
@@ -62,6 +62,26 @@ pub struct IMUInfo {
     link_name: String,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct VescPair {
+    id1: u8,
+    id2: u8,
+    mask1: MotorMask,
+    mask2: MotorMask,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct SingleVesc {
+    id: u8,
+    mask: MotorMask,
+}
+
+#[derive(Deserialize, Debug, Default)]
+pub struct Vesc {
+    singles: Vec<SingleVesc>,
+    pairs: Vec<VescPair>,
+}
+
 pub struct LunabotApp {
     pub lunabase_address: Option<IpAddr>,
     pub max_pong_delay_ms: u64,
@@ -70,6 +90,7 @@ pub struct LunabotApp {
     pub apriltags: FxHashMap<String, Apriltag>,
     pub imus: FxHashMap<String, IMUInfo>,
     pub robot_layout: String,
+    pub vesc: Vesc,
 }
 
 impl LunabotApp {
@@ -232,7 +253,16 @@ impl LunabotApp {
             },
         ));
 
-        let motor_ref = enumerate_motors(handle);
+        let mut vesc_ids = VescIDs::default();
+
+        for SingleVesc { id, mask } in self.vesc.singles {
+            vesc_ids.add_single_vesc(id, mask);
+        }
+        for VescPair { id1, id2, mask1, mask2 } in self.vesc.pairs {
+            vesc_ids.add_dual_vesc(id1, id2, mask1, mask2);
+        }
+
+        let motor_ref = enumerate_motors(vesc_ids);
 
         run_ai(
             robot_chain.into(),
