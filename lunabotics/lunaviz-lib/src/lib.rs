@@ -44,11 +44,11 @@ impl INode for Lunaviz {
             let point_cloud = guard.1.as_slice();
 
             self.base_mut().emit_signal("send_map_data",
-            &[Variant::from("depth image"),
-            Variant::from("point cloud vector3 points"),
-            Variant::from("height image"),
-            Variant::from("gradient image"),
-            Variant::from("obstacle image")
+            &[Variant::from("depth map"),
+            Variant::from(point_cloud),
+            Variant::from(thalassic_data.heightmap),
+            Variant::from(thalassic_data.gradmap),
+            Variant::from(thalassic_data.expanded_obstacle_map)
             ]);
         }
     }
