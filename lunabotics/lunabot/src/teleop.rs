@@ -15,6 +15,7 @@ use tracing::{error, warn};
 #[derive(Clone)]
 pub struct PacketBuilder {
     builder: cakap2::packet::PacketBuilder,
+    #[allow(dead_code)]
     packet_tx: mpsc::UnboundedSender<Action>,
 }
 
@@ -27,6 +28,7 @@ impl Deref for PacketBuilder {
 }
 
 impl PacketBuilder {
+    #[allow(dead_code)]
     pub fn send_packet(&self, packet: Action) {
         let _ = self.packet_tx.send(packet);
     }

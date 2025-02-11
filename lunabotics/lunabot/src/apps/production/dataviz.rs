@@ -38,7 +38,7 @@ impl DatavizApp {
         .expect("Failed to parse robot chain");
         let robot_chain = ChainBuilder::from(robot_chain).finish_static();
 
-        let localizer = Localizer::new(robot_chain.clone());
+        let localizer = Localizer::new(robot_chain.clone(), 0);
         let localizer_ref = localizer.get_ref();
 
         let mut buffer = OwnedData::from(ThalassicData::default());
@@ -72,6 +72,7 @@ impl DatavizApp {
             ),
             &[],
         );
+        
         common::thalassic::lunabot_task(SocketAddr::new(self.lunabase_address, common::ports::DATAVIZ), move |data, _points| {
             set_observe_depth(true);
             let incoming_data = shared_thalassic_data.get();
