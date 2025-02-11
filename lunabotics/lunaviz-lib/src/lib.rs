@@ -1,7 +1,7 @@
 #![feature(let_chains)]
 
 use common::thalassic::{lunabase_task, ThalassicData};
-use godot::prelude::*;
+use godot::{classes::{Image, ImageTexture}, prelude::*};
 use parking_lot::Mutex;
 
 struct LunavizLib;
@@ -44,7 +44,7 @@ impl INode for Lunaviz {
             let point_cloud = guard.1.as_slice();
 
             self.base_mut().emit_signal("send_map_data",
-            &[Variant::from("depth map"),
+            &[Variant::from(Image::new_gd()),
             Variant::from(point_cloud),
             Variant::from(thalassic_data.heightmap),
             Variant::from(thalassic_data.gradmap),
