@@ -1,9 +1,11 @@
+use core::f32;
+use crossbeam::{atomic::AtomicCell, utils::Backoff};
+use fxhash::FxHashMap;
+use serde::Deserialize;
+use std::sync::mpmc::Receiver;
 use tasker::{
-    parking_lot::{Condvar, Mutex},
-    tokio::{
-        io::{AsyncReadExt, AsyncWriteExt, BufStream},
-        runtime::Handle,
-    },
+    get_tokio_handle,
+    tokio::io::{AsyncReadExt, AsyncWriteExt, BufStream},
     BlockOn,
 };
 use tokio_serial::SerialPortBuilderExt;
@@ -13,27 +15,85 @@ use vesc_translator::{CanForwarded, GetValues, Getter, SetDutyCycle, VescPacker}
 
 use crate::apps::production::udev_poll;
 
+#[derive(Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum MotorMask {
+    Left,
+    Right,
+}
+
+impl MotorMask {
+    fn mask(self, (left, right): (f32, f32)) -> f32 {
+        match self {
+            MotorMask::Left => left,
+            MotorMask::Right => right,
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct VescIDs {
+    /// Map from Can ID to sibling Can ID
+    can_ids: FxHashMap<u8, Option<u8>>,
+    motor_masks: FxHashMap<u8, MotorMask>,
+    device_count: usize,
+}
+
+impl VescIDs {
+    pub fn add_dual_vesc(&mut self, id1: u8, id2: u8, mask1: MotorMask, mask2: MotorMask) -> bool {
+        if self.motor_masks.contains_key(&id1) || self.motor_masks.contains_key(&id2) {
+            return true;
+        }
+        self.can_ids.insert(id1, Some(id2));
+        self.can_ids.insert(id2, Some(id1));
+        self.motor_masks.insert(id1, mask1);
+        self.motor_masks.insert(id2, mask2);
+        self.device_count += 1;
+        false
+    }
+
+    pub fn add_single_vesc(&mut self, id: u8, mask: MotorMask) -> bool {
+        if self.motor_masks.contains_key(&id) {
+            return true;
+        }
+        self.can_ids.insert(id, None);
+        self.motor_masks.insert(id, mask);
+        self.device_count += 1;
+        false
+    }
+}
+
 pub struct MotorRef {
-    mutex: Mutex<(f32, f32)>,
-    condvar: Condvar,
+    speeds: AtomicCell<(f32, f32)>,
 }
 
 impl MotorRef {
     pub fn set_speed(&self, left: f32, right: f32) {
-        let mut guard = self.mutex.lock();
-        *guard = (left, right);
-        self.condvar.notify_all();
+        self.speeds.store((left, right));
     }
 }
 
-pub fn enumerate_motors(handle: Handle) -> &'static MotorRef {
+pub fn enumerate_motors(vesc_ids: VescIDs, speed_multiplier: f32) -> &'static MotorRef {
     let motor_ref: &_ = Box::leak(Box::new(MotorRef {
-        mutex: Mutex::new((0.0, 0.0)),
-        condvar: Condvar::new(),
+        speeds: AtomicCell::new((0.0, 0.0)),
     }));
+
+    let (tx, rx) = std::sync::mpmc::sync_channel::<String>(1);
+    let vesc_ids = Box::leak(Box::new(vesc_ids));
+
+    for _ in 0..vesc_ids.device_count {
+        let mut task = MotorTask {
+            path: rx.clone(),
+            vesc_packer: VescPacker::default(),
+            motor_ref,
+            vesc_ids,
+            speed_multiplier,
+        };
+        std::thread::spawn(move || loop {
+            task.motor_task();
+        });
+    }
+
     std::thread::spawn(move || {
-        let _guard = handle.enter();
-        let mut vesc_packer = VescPacker::default();
         let mut monitor = match MonitorBuilder::new() {
             Ok(x) => x,
             Err(e) => {
@@ -119,84 +179,160 @@ pub fn enumerate_motors(handle: Handle) -> &'static MotorRef {
                     warn!("Ignoring device {path_str} with serial {serial}");
                     return;
                 }
-                let mut motor_port = match tokio_serial::new(path_str, 115200)
-                    .timeout(std::time::Duration::from_millis(500))
-                    .open_native_async()
-                {
-                    Ok(x) => x,
-                    Err(e) => {
-                        error!("Failed to open motor port {path_str}: {e}");
-                        return;
-                    }
-                };
-                info!("Opened motor port {path_str}");
-                if let Err(e) = motor_port.set_exclusive(true) {
-                    warn!("Failed to set motor port {path_str} exclusive: {e}");
-                }
-                let mut motor_port = BufStream::new(motor_port);
-
-                loop {
-                    if let Err(e) = motor_port
-                        .write_all(vesc_packer.pack(&CanForwarded {
-                            can_id: 4,
-                            payload: GetValues
-                        }))
-                        .block_on()
-                    {
-                        error!("Failed to write to motor port {path_str}: {e}");
-                        return;
-                    }
-                    if let Err(e) = motor_port.flush().block_on() {
-                        error!("Failed to flush motor port {path_str}: {e}");
-                        return;
-                    }
-                    let mut response = [0u8; 79];
-                    if let Err(e) = motor_port.read_exact(&mut response).block_on() {
-                        error!("Failed to read from motor port {path_str}: {e}");
-                        return;
-                    }
-
-                    let Ok(values) = GetValues::parse_response(&response) else {
-                        error!("Received corrupt response from motor port {path_str}");
-                        std::thread::sleep(std::time::Duration::from_secs(1));
-                        continue;
-                    };
-                    info!("Received values from motor port {path_str}: {values:#?}");
-                    break;
-                }
-
-                loop {
-                    let (left, right) = {
-                        let mut guard = motor_ref.mutex.lock();
-                        motor_ref.condvar.wait(&mut guard);
-                        *guard
-                    };
-                    let result = async {
-                        motor_port
-                            .write_all(vesc_packer.pack(&SetDutyCycle(right * 0.1)))
-                            .await?;
-                        // motor_port
-                        //     .write_all(vesc_packer.pack(&CanForwarded {
-                        //         can_id: 87,
-                        //         payload: SetDutyCycle(right * 0.2),
-                        //     }))
-                        //     .await?;
-                        motor_port
-                            .write_all(vesc_packer.pack(&CanForwarded {
-                                can_id: 4,
-                                payload: SetDutyCycle(left * 0.1),
-                            }))
-                            .await?;
-                        motor_port.flush().await
-                    }
-                    .block_on();
-                    if let Err(e) = result {
-                        error!("Failed to write to motor port: {e}");
-                        break;
-                    }
-                }
-                error!("Motor port {path_str} closed");
+                let _ = tx.send(path_str.into());
             });
     });
     motor_ref
+}
+
+struct MotorTask {
+    path: Receiver<String>,
+    vesc_packer: VescPacker,
+    motor_ref: &'static MotorRef,
+    vesc_ids: &'static VescIDs,
+    speed_multiplier: f32,
+}
+
+impl MotorTask {
+    fn motor_task(&mut self) {
+        let path_str = match self.path.recv() {
+            Ok(x) => x,
+            Err(_) => loop {
+                std::thread::park();
+            },
+        };
+        let mut motor_port;
+        {
+            let _guard = get_tokio_handle().enter();
+            motor_port = match tokio_serial::new(&path_str, 115200)
+                .timeout(std::time::Duration::from_millis(500))
+                .open_native_async()
+            {
+                Ok(x) => x,
+                Err(e) => {
+                    error!("Failed to open motor port {path_str}: {e}");
+                    return;
+                }
+            };
+        }
+        if let Err(e) = motor_port.set_exclusive(true) {
+            warn!("Failed to set motor port {path_str} exclusive: {e}");
+        }
+        let mut motor_port = BufStream::new(motor_port);
+
+        let master_can_id;
+
+        loop {
+            let mut response = [0u8; 79];
+            let task = async {
+                motor_port
+                    .write_all(self.vesc_packer.pack(&GetValues))
+                    .await?;
+                motor_port.flush().await?;
+                motor_port.read_exact(&mut response).await
+            };
+            if let Err(e) = task.block_on() {
+                error!("Failed to read/write to motor port {path_str}: {e}");
+                return;
+            }
+
+            let Ok(values) = GetValues::parse_response(&response) else {
+                error!("Received corrupt response from motor port {path_str}");
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                continue;
+            };
+            master_can_id = values.vesc_id;
+            break;
+        }
+
+        let Some(&slave_can_id) = self.vesc_ids.can_ids.get(&master_can_id) else {
+            error!("Found unknown master Can ID {master_can_id}");
+            return;
+        };
+
+        if let Some(can_id) = slave_can_id {
+            loop {
+                let mut response = [0u8; 79];
+                let task = async {
+                    motor_port
+                        .write_all(self.vesc_packer.pack(&CanForwarded {
+                            can_id,
+                            payload: GetValues,
+                        }))
+                        .await?;
+                    motor_port.flush().await?;
+                    motor_port.read_exact(&mut response).await
+                };
+                if let Err(e) = task.block_on() {
+                    error!("Failed to read/write to motor port {path_str}: {e}");
+                    return;
+                }
+
+                let Ok(values) = GetValues::parse_response(&response) else {
+                    error!("Received corrupt response from motor port {path_str}");
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    continue;
+                };
+                if can_id != values.vesc_id {
+                    error!(
+                        "Received can id {} instead of {} from sibling",
+                        values.vesc_id, can_id
+                    );
+                    return;
+                }
+                break;
+            }
+            info!("Opened motor {} and {}", master_can_id, can_id);
+        } else {
+            info!("Opened motor {}", master_can_id);
+        }
+
+        let master_mask = *self.vesc_ids.motor_masks.get(&master_can_id).unwrap();
+        let slave_mask =
+            slave_can_id.map(|can_id| *self.vesc_ids.motor_masks.get(&can_id).unwrap());
+
+        let mut last_values = (f32::NAN, f32::NAN);
+        let backoff = Backoff::new();
+
+        loop {
+            let values = loop {
+                let values = self.motor_ref.speeds.load();
+                if values != last_values {
+                    break values;
+                }
+                backoff.snooze();
+            };
+            last_values = values;
+
+            let task = async {
+                if let Some(can_id) = slave_can_id {
+                    motor_port
+                        .write_all(self.vesc_packer.pack(&CanForwarded {
+                            can_id,
+                            payload: SetDutyCycle(
+                                slave_mask.unwrap().mask(values) * self.speed_multiplier,
+                            ),
+                        }))
+                        .await?;
+                }
+                motor_port
+                    .write_all(self.vesc_packer.pack(&SetDutyCycle(
+                        master_mask.mask(values) * self.speed_multiplier,
+                    )))
+                    .await?;
+                motor_port.flush().await
+            };
+
+            if let Err(e) = task.block_on() {
+                error!("Failed to write to motor port: {e}");
+                break;
+            }
+        }
+
+        if let Some(slave_can_id) = slave_can_id {
+            error!("Motors {} and {} closed", master_can_id, slave_can_id);
+        } else {
+            error!("Motor {} closed", master_can_id);
+        }
+    }
 }
