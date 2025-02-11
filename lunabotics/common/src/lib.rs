@@ -1,4 +1,4 @@
-use std::{io::Write, path::Path};
+use std::io::Write;
 
 use bitcode::{Decode, Encode};
 use nalgebra::{distance, Point2, Point3};

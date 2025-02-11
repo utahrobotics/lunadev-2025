@@ -2,7 +2,7 @@
 
 use std::net::IpAddr;
 
-use apps::{default_max_pong_delay_ms, Vesc};
+use apps::default_max_pong_delay_ms;
 use lumpur::LumpurBuilder;
 use tracing::Level;
 
@@ -29,7 +29,7 @@ lumpur::define_configuration! {
             imus: fxhash::FxHashMap<String, apps::IMUInfo>,
             robot_layout: Option<String>,
             #[serde(default)]
-            vesc: Vesc,
+            vesc: apps::Vesc,
         },
         Dataviz {
             lunabase_address: IpAddr,
@@ -64,7 +64,6 @@ fn main() {
             ("naga.*", Level::INFO),
         ])
         .set_console_ignores([
-            ("k::urdf", Level::INFO),
             ("wgpu_hal::gles::egl", Level::WARN),
             ("wgpu_hal::vulkan::instance", Level::WARN),
         ])

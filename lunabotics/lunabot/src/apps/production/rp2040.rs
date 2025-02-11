@@ -23,11 +23,6 @@ use crate::localization::LocalizerRef;
 
 use super::udev_poll;
 
-type TIMESTAMP = f32;
-
-/// (AngularRate, AccelerationNorm, TIMESTAMP)
-pub struct IMUReading(Vector3<f32>, Vector3<f32>, TIMESTAMP);
-
 
 pub struct IMUInfo {
     pub node: StaticImmutableNode,
