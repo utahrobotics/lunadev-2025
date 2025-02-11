@@ -46,28 +46,9 @@ impl INode for Lunaviz {
             let thalassic_data = &guard.0;
             let point_cloud = guard.1.as_slice();
 
-            let mut y_count:i32 = 0;
-            let mut x_count = 0;
             let mut obstacle_img = Image::new_gd();
             let mut grad_img = Image::new_gd();
             let mut height_img = Image::new_gd();
-            /*
-            loop {
-                loop{
-                    x_count-=1;
-                    if thalassic_data.expanded_obstacle_map[(y_count as usize*256)+x_count as usize].occupied(){
-                        obstacle_img.set_pixel(x_count, y_count, Color { r: (1f32), g: (1f32), b: (1f32), a: (1f32) });
-                    }
-                    if x_count>=128{
-                        break;
-                    }
-                }
-                y_count+=1;
-                if y_count>=128{
-                    break
-                }
-            }
-            */
 
             let mut y_count:i32 = 0;
             let mut x_count = 0;
