@@ -44,10 +44,10 @@ impl<T: Payload> Payload for CanForwarded<T> {
 }
 
 impl<T: Getter> Getter for CanForwarded<T> {
-    type Input = T::Input;
+    type Input<'a> = T::Input<'a>;
     type Response = T::Response;
 
-    fn parse_response(buffer: &Self::Input) -> Result<Self::Response, CorruptedResponse> {
+    fn parse_response<'a>(buffer: &'a Self::Input<'a>) -> Result<Self::Response, CorruptedResponse> {
         T::parse_response(buffer)
     }
 }
@@ -63,13 +63,29 @@ impl Payload for GetValues {
     }
 }
 
+pub struct MinLength<'a, const N: usize> {
+    data: &'a [u8]
+}
+
+impl<'a, const N: usize> TryFrom<&'a [u8]> for MinLength<'a, N> {
+    type Error = ();
+
+    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+        if data.len() >= N {
+            Ok(Self { data })
+        } else {
+            Err(())
+        }
+    }
+}
+
 /// The response size is 62 bytes + 2 bytes for packet type and len + 1 byte for packet type + 3 bytes for crc and end byte.
 impl Getter for GetValues {
-    type Input = [u8; 79];
+    type Input<'a> = MinLength<'a, 63>;
     type Response = GetValuesResponse;
 
-    fn parse_response(buffer: &Self::Input) -> Result<Self::Response, CorruptedResponse> {
-        let mut payload = extract_payload(buffer, 74)?;
+    fn parse_response<'a>(buffer: &'a Self::Input<'a>) -> Result<Self::Response, CorruptedResponse> {
+        let mut payload = extract_payload(buffer.data, buffer.data.len() - 5)?;
 
         if payload[0] != 4 {
             return Err(CorruptedResponse);
@@ -170,10 +186,10 @@ pub trait Payload {
 pub struct CorruptedResponse;
 
 pub trait Getter {
-    type Input;
+    type Input<'a>;
     type Response;
 
-    fn parse_response(buffer: &Self::Input) -> Result<Self::Response, CorruptedResponse>;
+    fn parse_response<'a>(buffer: &'a Self::Input<'a>) -> Result<Self::Response, CorruptedResponse>;
 }
 
 #[derive(Default)]

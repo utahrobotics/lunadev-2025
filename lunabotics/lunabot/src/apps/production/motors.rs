@@ -5,13 +5,13 @@ use serde::Deserialize;
 use std::sync::mpmc::Receiver;
 use tasker::{
     get_tokio_handle,
-    tokio::io::{AsyncReadExt, AsyncWriteExt, BufStream},
+    tokio::{self, io::{AsyncReadExt, AsyncWriteExt, BufStream}},
     BlockOn,
 };
 use tokio_serial::SerialPortBuilderExt;
 use tracing::{error, info, warn};
 use udev::{EventType, MonitorBuilder, Udev};
-use vesc_translator::{CanForwarded, GetValues, Getter, SetDutyCycle, VescPacker};
+use vesc_translator::{CanForwarded, GetValues, Getter, MinLength, SetDutyCycle, VescPacker};
 
 use crate::apps::production::udev_poll;
 
@@ -223,20 +223,47 @@ impl MotorTask {
         let master_can_id;
 
         loop {
-            let mut response = [0u8; 79];
+            let mut response = vec![];
+            let mut tmp_buf = [0u8; 128];
             let task = async {
                 motor_port
                     .write_all(self.vesc_packer.pack(&GetValues))
                     .await?;
                 motor_port.flush().await?;
-                motor_port.read_exact(&mut response).await
+                // let mut count = 0usize;
+                // let mut buf = vec![];
+                // loop {
+                //     let n = motor_port.read(&mut response).await.unwrap();
+                //     count += n;
+                //     buf.extend_from_slice(&response[..n]);
+                //     println!("{path_str} {count} {buf:?}");
+                // }
+                while response.len() < 63 || response.last() != Some(&3) {
+                    let n = motor_port.read(&mut tmp_buf).await?;
+                    response.extend_from_slice(&tmp_buf[..n]);
+                }
+                std::io::Result::Ok(())
+            };
+            let task = async {
+                tokio::select! {
+                    res = task => res,
+                    _ = tokio::time::sleep(std::time::Duration::from_secs(2)) => {
+                        Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "Timed out waiting for response"))
+                    }
+                }
             };
             if let Err(e) = task.block_on() {
                 error!("Failed to read/write to motor port {path_str}: {e}");
                 return;
             }
 
-            let Ok(values) = GetValues::parse_response(&response) else {
+            let Ok(buf) = MinLength::try_from(response.as_slice()) else {
+                error!("Received too short of a message from motor port {path_str}");
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                continue;
+            };
+
+            let Ok(values) = GetValues::parse_response(&buf) else {
                 error!("Received corrupt response from motor port {path_str}");
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 continue;
@@ -252,7 +279,8 @@ impl MotorTask {
 
         if let Some(can_id) = slave_can_id {
             loop {
-                let mut response = [0u8; 79];
+                let mut response = vec![];
+                let mut tmp_buf = [0u8; 128];
                 let task = async {
                     motor_port
                         .write_all(self.vesc_packer.pack(&CanForwarded {
@@ -261,14 +289,33 @@ impl MotorTask {
                         }))
                         .await?;
                     motor_port.flush().await?;
-                    motor_port.read_exact(&mut response).await
+                    while response.len() < 63 || response.last() != Some(&3) {
+                        let n = motor_port.read(&mut tmp_buf).await?;
+                        response.extend_from_slice(&tmp_buf[..n]);
+                        println!("{} {:?}", response.len(), response);
+                    }
+                    std::io::Result::Ok(())
+                };
+                let task = async {
+                    tokio::select! {
+                        res = task => res,
+                        _ = tokio::time::sleep(std::time::Duration::from_secs(2)) => {
+                            Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "Timed out waiting for response"))
+                        }
+                    }
                 };
                 if let Err(e) = task.block_on() {
                     error!("Failed to read/write to motor port {path_str}: {e}");
                     return;
                 }
+		
+                let Ok(buf) = MinLength::try_from(response.as_slice()) else {
+                    error!("Received too short of a message from motor port {path_str}");
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    continue;
+                };
 
-                let Ok(values) = GetValues::parse_response(&response) else {
+                let Ok(values) = GetValues::parse_response(&buf) else {
                     error!("Received corrupt response from motor port {path_str}");
                     std::thread::sleep(std::time::Duration::from_secs(1));
                     continue;
