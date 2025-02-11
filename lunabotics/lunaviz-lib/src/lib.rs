@@ -1,7 +1,5 @@
 #![feature(let_chains)]
 
-use std::f128::consts::PI;
-
 use common::thalassic::{lunabase_task, ThalassicData};
 use godot::{classes::{Image, ImageTexture}, prelude::*};
 use parking_lot::Mutex;
