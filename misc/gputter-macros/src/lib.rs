@@ -331,7 +331,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
     init_gputter_blocking().expect("Failed to initialize gputter");
     let GpuDevice { device, .. } = get_device();
     if let Err(panic) = catch_unwind(AssertUnwindSafe(|| {
-        device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        let _ = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl((&tmp_shader).into()),
         });

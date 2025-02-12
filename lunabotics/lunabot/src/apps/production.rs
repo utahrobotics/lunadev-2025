@@ -1,20 +1,26 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::{IpAddr, SocketAddr}, sync::Arc};
 
 use anyhow::Context;
 use camera::enumerate_cameras;
 use common::LunabotStage;
 use crossbeam::atomic::AtomicCell;
 use depth::enumerate_depth_cameras;
+use file_lock::FileLock;
 use fxhash::FxHashMap;
 use gputter::init_gputter_blocking;
+use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
+use mio::{Events, Interest, Poll, Token};
+use motors::{enumerate_motors, MotorMask, VescIDs};
 use nalgebra::{Scale3, Transform3};
 use pathfinding::grid::Grid;
 use serde::Deserialize;
 use simple_motion::{ChainBuilder, NodeSerde};
 use streaming::camera_streaming;
-use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn, tokio::runtime::Handle};
-use tracing::{error, warn};
+use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn};
+use tracing::error;
+use rp2040::*;
+use udev::Event;
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,
@@ -26,7 +32,9 @@ use super::create_packet_builder;
 mod apriltag;
 mod camera;
 mod depth;
+mod motors;
 mod streaming;
+mod rp2040;
 
 pub mod dataviz;
 // mod audio_streaming;
@@ -49,26 +57,59 @@ pub struct DepthCameraInfo {
     stream_index: usize,
 }
 
-fn subaddress_of(mut addr: SocketAddr, port_offset: u16) -> SocketAddr {
-    let new_port = addr.port().checked_add(port_offset).unwrap_or_else(|| addr.port().wrapping_add(port_offset));
-    addr.set_port(new_port);
-    addr
+#[derive(Deserialize, Debug)]
+pub struct IMUInfo {
+    link_name: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct VescPair {
+    id1: u8,
+    id2: u8,
+    mask1: MotorMask,
+    mask2: MotorMask,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct SingleVesc {
+    id: u8,
+    mask: MotorMask,
+}
+
+#[derive(Deserialize, Debug, Default)]
+pub struct Vesc {
+    #[serde(default)]
+    singles: Vec<SingleVesc>,
+    #[serde(default)]
+    pairs: Vec<VescPair>,
+    speed_multiplier: Option<f32>
 }
 
 pub struct LunabotApp {
-    pub lunabase_address: SocketAddr,
-    pub lunabase_streaming_address: Option<SocketAddr>,
-    #[cfg(feature = "experimental")]
-    pub lunabase_audio_streaming_address: Option<SocketAddr>,
+    pub lunabase_address: Option<IpAddr>,
     pub max_pong_delay_ms: u64,
     pub cameras: FxHashMap<String, CameraInfo>,
     pub depth_cameras: FxHashMap<String, DepthCameraInfo>,
     pub apriltags: FxHashMap<String, Apriltag>,
+    pub imus: FxHashMap<String, IMUInfo>,
     pub robot_layout: String,
+    pub vesc: Vesc,
 }
 
 impl LunabotApp {
     pub fn run(self) {
+        let filelock = match FileLock::lock("/home/lock/lunabot.lock", false, file_lock::FileOptions::new().write(true)) {
+            Ok(x) => x,
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::WouldBlock {
+                    error!("Another instance of lunabot is already running");
+                    return;
+                } else {
+                    error!("Failed to lock file: {e}");
+                    return;
+                }
+            }
+        };
         log_teleop_messages();
         if let Err(e) = init_gputter_blocking() {
             error!("Failed to initialize gputter: {e}");
@@ -77,45 +118,44 @@ impl LunabotApp {
             .apriltags
             .into_iter()
             .map(|(id_str, apriltag)| id_str.parse().map(|id| (id, apriltag)))
-            .try_collect::<FxHashMap<_, _>>()
+            .try_collect::<Vec<_>>()
         {
-            Ok(apriltags) => apriltags,
+            Ok(apriltags) => Box::leak(apriltags.into_boxed_slice()),
             Err(e) => {
                 error!("Failed to parse apriltags: {e}");
                 return;
             }
         };
+        set_on_exit(move || {
+            drop(filelock);
+            std::process::exit(0);
+        });
 
-        let _guard = get_tokio_handle().enter();
+        let handle = get_tokio_handle();
+        let _guard = handle.enter();
 
         let robot_chain = NodeSerde::from_reader(
             std::fs::File::open(self.robot_layout).expect("Failed to read robot chain"),
         )
         .expect("Failed to parse robot chain");
         let robot_chain = ChainBuilder::from(robot_chain).finish_static();
-        
-        let localizer = Localizer::new(robot_chain.clone(), None);
+
+        let localizer = Localizer::new(robot_chain.clone(), self.imus.len());
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
-        let camera_streaming_address = self.lunabase_streaming_address.unwrap_or_else(|| {
-            subaddress_of(self.lunabase_address, 1)
-        });
 
-        if let Err(e) = camera_streaming(camera_streaming_address) {
-            error!("Failed to start camera streaming: {e}");
-        }
+        camera_streaming(self.lunabase_address);
 
         #[cfg(feature = "experimental")]
         if let Err(e) = audio_streaming::audio_streaming(
-            self.lunabase_audio_streaming_address.unwrap_or_else(|| {
-                subaddress_of(self.lunabase_address, 2)
-            }),
+            self.lunabase_audio_streaming_address
+                .unwrap_or_else(|| subaddress_of(self.lunabase_address, 2)),
         ) {
             error!("Failed to start audio streaming: {e}");
         }
 
-        if let Err(e) = enumerate_cameras(
-            localizer_ref.clone(),
+        enumerate_cameras(
+            &localizer_ref,
             self.cameras.into_iter().map(
                 |(
                     port,
@@ -129,7 +169,7 @@ impl LunabotApp {
                     (
                         port,
                         camera::CameraInfo {
-                            k_node: robot_chain
+                            node: robot_chain
                                 .get_node_with_name(&link_name)
                                 .context("Failed to find camera link")
                                 .unwrap()
@@ -141,17 +181,15 @@ impl LunabotApp {
                     )
                 },
             ),
-            &apriltags,
-        ) {
-            error!("Failed to enumerate cameras: {e}");
-        }
+            apriltags,
+        );
 
         let mut buffer = OwnedData::from(ThalassicData::default());
         let shared_thalassic_data = buffer.create_lendee();
 
-        if let Err(e) = enumerate_depth_cameras(
+        enumerate_depth_cameras(
             buffer,
-            localizer_ref.clone(),
+            &localizer_ref,
             self.depth_cameras.into_iter().map(
                 |(
                     serial,
@@ -164,7 +202,7 @@ impl LunabotApp {
                     (
                         serial,
                         depth::DepthCameraInfo {
-                            k_node: robot_chain
+                            node: robot_chain
                                 .get_node_with_name(&link_name)
                                 .context("Failed to find camera link")
                                 .unwrap()
@@ -175,10 +213,8 @@ impl LunabotApp {
                     )
                 },
             ),
-            &apriltags,
-        ) {
-            error!("Failed to enumerate depth cameras: {e}");
-        }
+            apriltags,
+        );
 
         let grid_to_world = Transform3::from_matrix_unchecked(
             Scale3::new(-0.03125, 1.0, -0.03125).to_homogeneous(),
@@ -194,38 +230,48 @@ impl LunabotApp {
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
-        let (packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
-            self.lunabase_address,
+        let (_packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
+            self.lunabase_address.map(|ip| SocketAddr::new(ip, common::ports::TELEOP)),
             lunabot_stage.clone(),
             self.max_pong_delay_ms,
         );
 
-        // UNTESTED: 
-        let handle = Handle::current();
-        let localizer_ref = localizer_ref.clone();
-        handle.spawn(async move {
-            use rp2040::*;
-            use embedded_common::*;
-            use nalgebra::Vector3;
-            let mut pico_controler = PicoController::new("/dev/ttyACM0").await.unwrap();
+        enumerate_imus(&localizer_ref, self.imus.into_iter().map(
+            |(
+                port,
+                IMUInfo {
+                    link_name,
+                },
+            )| {
+                (
+                    port,
+                    rp2040::IMUInfo {
+                        node: robot_chain
+                            .get_node_with_name(&link_name)
+                            .context("Failed to find IMU link")
+                            .unwrap()
+                            .into(),
+                    },
+                )
+            },
+        ));
 
-            loop {
-                match pico_controler.get_message_from_pico().await {
-                    Ok(FromIMU::AngularRateReading(AngularRate{x,y,z})) => {
-                        // TODO: set angular rate
-                    }
+        let mut vesc_ids = VescIDs::default();
 
-                    Ok(FromIMU::AccellerationNormReading(AccelerationNorm{x,y,z})) => {
-                        // TODO: set accel
-                    }
-                    
-                    Err(e) => {
-                        error!("Error getting readings from pico: {}",e);
-                    }
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        for SingleVesc { id, mask } in self.vesc.singles {
+            if vesc_ids.add_single_vesc(id, mask) {
+                error!("Motor {id} has already been added");
+                return;
             }
-        });
+        }
+        for VescPair { id1, id2, mask1, mask2 } in self.vesc.pairs {
+            if vesc_ids.add_dual_vesc(id1, id2, mask1, mask2) {
+                error!("Motors {id1} or {id2} have already been added");
+                return;
+            }
+        }
+
+        let motor_ref = enumerate_motors(vesc_ids, self.vesc.speed_multiplier.unwrap_or(1.0));
 
         run_ai(
             robot_chain.into(),
@@ -235,7 +281,7 @@ impl LunabotApp {
                 }
                 Action::SetSteering(steering) => {
                     let (left, right) = steering.get_left_and_right();
-                    // TODO
+                    motor_ref.set_speed(left as f32, right as f32);
                 }
                 Action::CalculatePath { from, to, mut into } => {
                     pathfinder.pathfind(&shared_thalassic_data, from, to, &mut into);
@@ -302,4 +348,27 @@ impl LunabotApp {
             },
         );
     }
+}
+
+pub fn udev_poll(mut socket: udev::MonitorSocket) -> impl Iterator<Item=Event> {
+    let mut poll = Poll::new().unwrap();
+    let mut events = Events::with_capacity(1024);
+
+    poll.registry().register(
+        &mut socket,
+        Token(0),
+        Interest::READABLE | Interest::WRITABLE,
+    ).unwrap();
+
+    std::iter::from_fn(move || {
+        loop {
+            poll.poll(&mut events, None).unwrap();
+    
+            for event in &events {
+                if event.token() == Token(0) && event.is_writable() {
+                    return Some(socket.iter().collect::<Vec<_>>());
+                }
+            }
+        }
+    }).flatten()
 }

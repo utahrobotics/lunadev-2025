@@ -1,15 +1,14 @@
 use std::{
     cmp::Ordering,
     collections::VecDeque,
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     num::NonZeroU32,
     process::Stdio,
     sync::{Arc, Mutex},
 };
 
 use common::{
-    lunasim::{FromLunasim, FromLunasimbot},
-    LunabotStage,
+    lunasim::{FromLunasim, FromLunasimbot}, LunabotStage, THALASSIC_HEIGHT, THALASSIC_WIDTH
 };
 use crossbeam::atomic::AtomicCell;
 use gputter::{
@@ -39,7 +38,7 @@ use thalassic::DepthProjectorBuilder;
 use tracing::{error, info, warn};
 
 use crate::{
-    localization::Localizer,
+    localization::{IMUReading, Localizer},
     pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline, PointsStorageChannel},
 };
 use crate::{pathfinding::DefaultPathfinder, pipelines::thalassic::ThalassicData};
@@ -82,7 +81,7 @@ const DELIMIT: &[u8] = b"READY\r\n";
 const DELIMIT: &[u8] = b"READY\n";
 
 pub struct LunasimbotApp {
-    pub lunabase_address: SocketAddr,
+    pub lunabase_address: Option<IpAddr>,
     pub max_pong_delay_ms: u64,
 }
 
@@ -249,7 +248,7 @@ impl LunasimbotApp {
         .expect("Failed to parse robot chain");
         let robot_chain = ChainBuilder::from(robot_chain).finish_static();
 
-        let localizer = Localizer::new(robot_chain, Some(lunasim_stdin.clone()));
+        let localizer = Localizer::new(robot_chain, Some(lunasim_stdin.clone()), 1);
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
 
@@ -311,11 +310,9 @@ impl LunasimbotApp {
                     acceleration[1] as f64,
                     acceleration[2] as f64,
                 );
-                localizer_ref.set_acceleration(acceleration);
+                localizer_ref.set_imu_reading(0, IMUReading { acceleration, ..Default::default() });
             }
-            FromLunasim::Gyroscope { id: _, axis, angle } => {
-                localizer_ref.set_angular_velocity(axis_angle(axis, angle));
-            }
+            FromLunasim::Gyroscope { id: _, .. } => {}
             FromLunasim::DepthMap(depths) => {
                 if !get_observe_depth() {
                     return;
@@ -368,15 +365,15 @@ impl LunasimbotApp {
         let mut pathfinder = DefaultPathfinder {
             world_to_grid,
             grid_to_world,
-            grid: Grid::new(128, 256),
+            grid: Grid::new(THALASSIC_WIDTH as usize, THALASSIC_HEIGHT as usize),
         };
         pathfinder.grid.enable_diagonal_mode();
         pathfinder.grid.fill();
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
-        let (packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
-            self.lunabase_address,
+        let (_packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
+            self.lunabase_address.map(|ip| SocketAddr::new(ip, common::ports::LUNABASE_SIM_TELEOP)),
             lunabot_stage.clone(),
             self.max_pong_delay_ms,
         );
@@ -401,7 +398,7 @@ impl LunasimbotApp {
                     pathfinder.pathfind(&shared_thalassic_data, from, to, &mut into);
                     let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
                         into.iter()
-                            .map(|p| p.coords.cast::<f32>().data.0[0])
+                            .map(|p| p.point.coords.cast::<f32>().data.0[0])
                             .collect(),
                     ));
                     lunasim_stdin.write(bytes);

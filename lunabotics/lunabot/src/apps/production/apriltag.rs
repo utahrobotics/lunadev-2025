@@ -1,10 +1,10 @@
 use std::f64::consts::PI;
 
-use apriltag::{families::TagStandard41h12, DetectorBuilder, Image, TagParams};
+use apriltag::{families::TagStandard41h12, DetectorBuilder, Family, Image, TagParams};
 use apriltag_image::{image::ImageBuffer, ImageExt};
 use apriltag_nalgebra::PoseExt;
 use fxhash::FxHashMap;
-use nalgebra::{Point3, Isometry3, UnitQuaternion, Vector3};
+use nalgebra::{Isometry3, Point3, UnitQuaternion, Vector3};
 use serde::Deserialize;
 
 #[derive(Deserialize, Clone, Copy)]
@@ -87,7 +87,8 @@ impl TagObservation {
         //     * UnitQuaternion::from_axis_angle(&(observer_pose.rotation * Vector3::y_axis()), PI)
         //     * observer_pose.rotation;
         // observer_pose
-        self.tag_global_isometry * self.tag_local_isometry.inverse()
+        let inv_rotation = self.tag_local_isometry.rotation.inverse();
+        self.tag_global_isometry * Isometry3::from_parts((inv_rotation * -self.tag_local_isometry.translation.vector).into(), inv_rotation)
     }
 }
 
@@ -174,6 +175,7 @@ impl AprilTagDetector {
     pub fn run(mut self) {
         let mut detector = DetectorBuilder::new()
             .add_family_bits(TagStandard41h12::default(), 1)
+            .add_family_bits(Family::Tag36h11(Default::default()), 1)
             .build()
             .unwrap();
 

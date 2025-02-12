@@ -16,3 +16,4 @@ serde_json.workspace = true
 chrono = { workspace = true }
 tracing-log = "0.2.0"
 regex = "1.11.1"
+ctrlc = "3.4.5"

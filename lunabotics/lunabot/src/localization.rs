@@ -1,35 +1,34 @@
 use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::Arc,
     time::Duration,
 };
 
-use common::lunasim::FromLunasimbot;
 use crossbeam::atomic::AtomicCell;
 use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector3};
 use simple_motion::StaticNode;
 use spin_sleep::SpinSleeper;
 use tracing::error;
 
-use crate::{
-    apps::LunasimStdin,
-    utils::{lerp_value, swing_twist_decomposition},
-};
+#[cfg(not(feature = "production"))]
+use crate::apps::LunasimStdin;
+use crate::
+    utils::{lerp_value, swing_twist_decomposition}
+;
 
 const ACCELEROMETER_LERP_SPEED: f64 = 150.0;
 const LOCALIZATION_DELTA: f64 = 1.0 / 60.0;
-/// The threshold of speed in m/s for the robot to be considered in motion.
-const IN_MOTION_THRESHOLD: f64 = 0.1;
-const IN_MOTION_DURATION: f64 = 0.5;
+
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct IMUReading {
+    pub angular_velocity: Vector3<f64>,
+    pub acceleration: Vector3<f64>,
+}
 
 #[derive(Default)]
 struct LocalizerRefInner {
-    acceleration: AtomicCell<Vector3<f64>>,
-    angular_velocity: AtomicCell<UnitQuaternion<f64>>,
     april_tag_isometry: AtomicCell<Option<Isometry3<f64>>>,
-    in_motion: AtomicBool,
+    imu_readings: Box<[AtomicCell<Option<IMUReading>>]>
 }
 
 #[derive(Clone)]
@@ -38,48 +37,75 @@ pub struct LocalizerRef {
 }
 
 impl LocalizerRef {
-    pub fn set_acceleration(&self, acceleration: Vector3<f64>) {
-        self.inner.acceleration.store(acceleration);
-    }
-
     pub fn set_april_tag_isometry(&self, isometry: Isometry3<f64>) {
         self.inner.april_tag_isometry.store(Some(isometry));
     }
 
-    pub fn set_angular_velocity(&self, angular_velocity: UnitQuaternion<f64>) {
-        self.inner.angular_velocity.store(angular_velocity);
+    pub fn set_imu_reading(&self, index: usize, imu: IMUReading) {
+        if let Some(cell) = self.inner.imu_readings.get(index) {
+            cell.store(Some(imu));
+        } else {
+            error!("Tried to set an IMU reading at an invalid index: {}", index);
+        }
     }
 
-    fn acceleration(&self) -> Vector3<f64> {
-        self.inner.acceleration.load()
+    fn take_imu_readings(&self) -> IMUReading {
+        let mut out = IMUReading {
+            angular_velocity: Vector3::zeros(),
+            acceleration: Vector3::zeros(),
+        };
+        let mut count = 0usize;
+        self.inner.imu_readings.iter().for_each(|reading| {
+            let Some(reading) = reading.take() else {
+                return;
+            };
+
+            out.angular_velocity += reading.angular_velocity;
+            out.acceleration += reading.acceleration;
+            count += 1;
+        });
+        if count > 0 {
+            out.angular_velocity /= count as f64;
+            out.acceleration /= count as f64;
+        }
+        out
     }
 
     fn april_tag_isometry(&self) -> Option<Isometry3<f64>> {
-        self.inner.april_tag_isometry.take()
+        self.inner.april_tag_isometry.load()
     }
-
-    fn angular_velocity(&self) -> UnitQuaternion<f64> {
-        self.inner.angular_velocity.load()
-    }
-
-    // pub fn is_in_motion(&self) -> bool {
-    //     self.inner.in_motion.load(Ordering::Relaxed)
-    // }
 }
 
 pub struct Localizer {
     root_node: StaticNode,
+    #[cfg(not(feature = "production"))]
     lunasim_stdin: Option<LunasimStdin>,
     localizer_ref: LocalizerRef,
 }
 
 impl Localizer {
-    pub fn new(root_node: StaticNode, lunasim_stdin: Option<LunasimStdin>) -> Self {
+    #[cfg(not(feature = "production"))]
+    pub fn new(root_node: StaticNode, lunasim_stdin: Option<LunasimStdin>, imu_count: usize) -> Self {
         Self {
             root_node,
             lunasim_stdin,
             localizer_ref: LocalizerRef {
-                inner: Default::default(),
+                inner: Arc::new(LocalizerRefInner {
+                    imu_readings: (0..imu_count).map(|_| AtomicCell::new(None)).collect(),
+                    ..Default::default()
+                })
+            },
+        }
+    }
+    #[cfg(feature = "production")]
+    pub fn new(root_node: StaticNode, imu_count: usize) -> Self {
+        Self {
+            root_node,
+            localizer_ref: LocalizerRef {
+                inner: Arc::new(LocalizerRefInner {
+                    imu_readings: (0..imu_count).map(|_| AtomicCell::new(None)).collect(),
+                    ..Default::default()
+                })
             },
         }
     }
@@ -90,9 +116,8 @@ impl Localizer {
 
     pub fn run(self) {
         let spin_sleeper = SpinSleeper::default();
+        #[cfg(not(feature = "production"))]
         let mut bitcode_buffer = bitcode::Buffer::new();
-        let mut is_in_motion = false;
-        let mut is_in_motion_timer = 0.0;
 
         loop {
             spin_sleeper.sleep(Duration::from_secs_f64(LOCALIZATION_DELTA));
@@ -124,16 +149,16 @@ impl Localizer {
                 } else {
                     break 'check;
                 }
-                self.localizer_ref
-                    .inner
-                    .in_motion
-                    .store(false, Ordering::Relaxed);
                 self.root_node.set_isometry(Isometry3::identity());
             }
 
+            let IMUReading {
+                acceleration,
+                angular_velocity,
+            } = self.localizer_ref.take_imu_readings();
             let mut down_axis = UnitVector3::new_unchecked(Vector3::new(0.0, -1.0, 0.0));
             let acceleration =
-                UnitVector3::new_normalize(isometry * self.localizer_ref.acceleration());
+                UnitVector3::new_normalize(isometry * acceleration);
             if !acceleration.x.is_finite()
                 || !acceleration.y.is_finite()
                 || !acceleration.z.is_finite()
@@ -159,44 +184,14 @@ impl Localizer {
                 let (old_swing, _) = swing_twist_decomposition(&isometry.rotation, &down_axis);
                 isometry.rotation = old_swing * new_twist;
             } else {
-                let (_, twist) =
-                    swing_twist_decomposition(&self.localizer_ref.angular_velocity(), &down_axis);
                 isometry.append_rotation_wrt_center_mut(
-                    &UnitQuaternion::default()
-                        .try_slerp(&twist, LOCALIZATION_DELTA, 0.001)
-                        .unwrap_or_default(),
+                    &UnitQuaternion::from_axis_angle(&down_axis, - angular_velocity.y * LOCALIZATION_DELTA),
                 );
-            }
-
-            let currently_in_motion = (isometry.translation.vector
-                - self.root_node.get_global_isometry().translation.vector)
-                .magnitude()
-                / LOCALIZATION_DELTA
-                > IN_MOTION_THRESHOLD;
-            if is_in_motion {
-                if currently_in_motion {
-                    is_in_motion_timer = IN_MOTION_DURATION;
-                } else {
-                    is_in_motion_timer -= LOCALIZATION_DELTA;
-                    if is_in_motion_timer <= 0.0 {
-                        is_in_motion = false;
-                        self.localizer_ref
-                            .inner
-                            .in_motion
-                            .store(false, Ordering::Relaxed);
-                    }
-                }
-            } else if currently_in_motion {
-                is_in_motion = true;
-                is_in_motion_timer = IN_MOTION_DURATION;
-                self.localizer_ref
-                    .inner
-                    .in_motion
-                    .store(true, Ordering::Relaxed);
             }
 
             self.root_node.set_isometry(isometry);
 
+            #[cfg(not(feature = "production"))]
             if let Some(lunasim_stdin) = &self.lunasim_stdin {
                 let (axis, angle) = isometry
                     .rotation
@@ -210,7 +205,7 @@ impl Localizer {
                     isometry.translation.z as f32,
                 ];
 
-                let bytes = bitcode_buffer.encode(&FromLunasimbot::Isometry {
+                let bytes = bitcode_buffer.encode(&common::lunasim::FromLunasimbot::Isometry {
                     axis,
                     angle: angle as f32,
                     origin,

@@ -1,7 +1,6 @@
-use std::{io::{Read, Write}, net::{SocketAddr, TcpListener, TcpStream}};
+use std::{io::{Read, Write}, net::{SocketAddr, TcpStream}};
 
 use bytemuck::{Pod, Zeroable};
-use crossbeam::sync::Parker;
 use tracing::error;
 
 use super::THALASSIC_CELL_COUNT;
@@ -39,14 +38,16 @@ const THALASSIC_BUFFER_SIZE: usize = size_of::<ThalassicData>();
 
 #[cfg(feature = "godot")]
 pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData, &[godot::builtin::Vector3]) + Send + 'static) -> (impl Fn() + Send + Sync) {
-    let parker = Parker::new();
+    use std::net::Ipv4Addr;
+
+    let parker = crossbeam::sync::Parker::new();
     let unparker = parker.unparker().clone();
 
     std::thread::spawn(move || {
-        let listener = match TcpListener::bind("0.0.0.0:20000") {
+        let listener = match std::net::TcpListener::bind(SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), crate::ports::DATAVIZ)) {
             Ok(listener) => listener,
             Err(e) => {
-                godot::global::godot_error!("Failed to bind to port 20000: {}", e);
+                godot::global::godot_error!("Failed to bind to dataviz port: {}", e);
                 return;
             }
         };
@@ -125,6 +126,7 @@ pub fn lunabot_task(address: SocketAddr, mut gen_data: impl FnMut(&mut Thalassic
                 match buffer[0] {
                     0 => {
                         gen_data(&mut data, &mut points);
+                        data.point_count = points.len();
                         if let Err(e) = writer.write_all(bytemuck::bytes_of(&data)) {
                             error!("Failed to write to stream: {}", e);
                             break;

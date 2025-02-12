@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, time::Instant};
 
-use common::FromLunabase;
+use common::{FromLunabase, PathPoint};
 use nalgebra::{Isometry3, Point3};
 use simple_motion::StaticImmutableNode;
 
@@ -8,7 +8,7 @@ use crate::{autonomy::Autonomy, Action, PollWhen};
 
 pub enum Input {
     FromLunabase(FromLunabase),
-    PathCalculated(Vec<Point3<f64>>),
+    PathCalculated(Vec<PathPoint>),
     LunabaseDisconnected,
 }
 
@@ -17,7 +17,7 @@ pub(crate) struct LunabotBlackboard {
     from_lunabase: VecDeque<FromLunabase>,
     autonomy: Autonomy,
     chain: StaticImmutableNode,
-    path: Vec<Point3<f64>>,
+    path: Vec<PathPoint>,
     lunabase_disconnected: bool,
     actions: Vec<Action>,
     poll_when: PollWhen,
@@ -59,12 +59,16 @@ impl LunabotBlackboard {
         self.chain.get_global_isometry()
     }
 
-    pub fn get_path(&self) -> Option<&[Point3<f64>]> {
+    pub fn get_path(&self) -> Option<&[PathPoint]> {
         if self.path.is_empty() {
             None
         } else {
             Some(&self.path)
         }
+    }
+
+    pub fn get_path_mut(&mut self) -> &mut Vec<PathPoint> {
+        &mut self.path
     }
 
     pub fn lunabase_disconnected(&mut self) -> &mut bool {

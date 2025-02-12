@@ -1,5 +1,6 @@
 #[cfg(feature = "production")]
 mod production;
+#[cfg(not(feature = "production"))]
 mod sim;
 
 use std::{fs::File, net::SocketAddr, sync::Arc, time::Duration};
@@ -7,7 +8,8 @@ use std::{fs::File, net::SocketAddr, sync::Arc, time::Duration};
 use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
 #[cfg(feature = "production")]
-pub use production::{Apriltag, CameraInfo, DepthCameraInfo, LunabotApp, dataviz};
+pub use production::{dataviz, Apriltag, CameraInfo, DepthCameraInfo, LunabotApp, IMUInfo, Vesc};
+#[cfg(not(feature = "production"))]
 pub use sim::{LunasimStdin, LunasimbotApp};
 use tasker::tokio::sync::{mpsc, watch};
 use tracing::error;
@@ -49,7 +51,7 @@ impl LunabotConnected {
 }
 
 fn create_packet_builder(
-    lunabase_address: SocketAddr,
+    lunabase_address: Option<SocketAddr>,
     lunabot_stage: Arc<AtomicCell<LunabotStage>>,
     max_pong_delay_ms: u64,
 ) -> (

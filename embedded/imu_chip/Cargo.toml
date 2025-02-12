@@ -21,69 +21,21 @@ rp-pico = "0.9"
 # rp2040-boot2 = "0.3"
 
 panic-semihosting = "0.6.0"
-embassy-executor = { version = "0.7.0", features = ["task-arena-size-98304", "arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
-embassy-rp = { version = "0.3.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl", "rp2040"] }
-embassy-usb = { version = "0.2.0", features = ["defmt"] }
-embassy-futures = { version = "0.1.0" }
+embassy-executor.workspace = true
+embassy-rp.workspace = true
+embassy-usb.workspace = true
+embassy-futures.workspace = true
 static_cell = "2.1.0"
 portable-atomic = { version = "1.5", features = ["critical-section"] }
-embassy-net = { version = "0.6.0", features = ["medium-ip", "proto-ipv4", "tcp"] }
-embassy-time = "0.4.0"
-lsm6dsox = {path = "../../misc/lsm6dsox"}
+embassy-time.workspace = true
+lsm6dsox.workspace = true
 #heapless.workspace = true
-embassy-usb-logger = "0.2.0"
-log = "0.4.22"
-defmt = "0.3.10"
-embedded_common = {path="../../embedded_common"}
+# embassy-usb-logger = "0.4.0"
+defmt.workspace = true
+embedded_common.workspace = true
 
-# cargo build/run
-[profile.dev]
-codegen-units = 1
-debug = 2
-debug-assertions = true
-incremental = false
-opt-level = 3
-overflow-checks = true
-
-# cargo build/run --release
-[profile.release]
-codegen-units = 1
-debug = 2
-debug-assertions = false
-incremental = false
-lto = 'fat'
-opt-level = 3
-overflow-checks = false
-
-# do not optimize proc-macro crates = faster builds from scratch
-[profile.dev.build-override]
-codegen-units = 8
-debug = false
-debug-assertions = false
-opt-level = 0
-overflow-checks = false
-
-[profile.release.build-override]
-codegen-units = 8
-debug = false
-debug-assertions = false
-opt-level = 0
-overflow-checks = false
-
-# # cargo test
-# [profile.test]
-# codegen-units = 1
-# debug = 2
-# debug-assertions = true
-# incremental = false
-# opt-level = 3
-# overflow-checks = true
-
-# # cargo test --release
-# [profile.bench]
-# codegen-units = 1
-# debug = 2
-# debug-assertions = false
-# incremental = false
-# lto = 'fat'
-# opt-level = 3
+cyw43.workspace = true
+cyw43-pio.workspace = true
+embassy-net.workspace = true
+rand.workspace = true
+embassy-sync.workspace = true

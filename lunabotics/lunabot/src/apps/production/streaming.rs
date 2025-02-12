@@ -1,6 +1,6 @@
 use std::{
     io::{ErrorKind, Read},
-    net::{SocketAddr, UdpSocket},
+    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
     sync::{
         atomic::{AtomicBool, Ordering},
         OnceLock,
@@ -8,7 +8,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::Context;
 use nalgebra::Vector2;
 use openh264::{
     encoder::{Encoder, EncoderConfig},
@@ -133,7 +132,7 @@ impl<'a> Read for DownscaleRgbImageReader<'a> {
     }
 }
 
-pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Result<()> {
+pub fn camera_streaming(mut lunabase_address: Option<IpAddr>) {
     let camera_frame_buffer = vec![
         0u8;
         CAMERA_RESOLUTION.x as usize
@@ -148,7 +147,7 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
         camera_streams.1 = camera_frame_buffer.len();
         camera_streams.0 = Box::leak(camera_frame_buffer).as_mut_ptr();
     }
-    let mut h264_enc = Encoder::with_api_config(
+    let mut h264_enc = match Encoder::with_api_config(
         OpenH264API::from_source(),
         EncoderConfig::new()
             .set_bitrate_bps(1_000_000)
@@ -156,11 +155,31 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
             .max_frame_rate(24.0)
             // .rate_control_mode(RateControlMode::Timestamp)
             .set_multiple_thread_idc(4), // .sps_pps_strategy(SpsPpsStrategy::IncreasingId)
-    )
-    .context("Failed to create H264 encoder")?;
-    let udp = UdpSocket::bind("0.0.0.0:0").context("Binding streaming UDP socket")?;
-    udp.connect(lunabase_streaming_address)
-        .context("Connecting to lunabase streaming address")?;
+    ) {
+        Ok(x) => x,
+        Err(e) => {
+            error!("Failed to create H264 encoder: {e}");
+            return;
+        }
+    };
+    let udp = match UdpSocket::bind(SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), common::ports::CAMERAS)) {
+        Ok(x) => x,
+        Err(e) => {
+            error!("Failed to bind to UDP socket: {e}");
+            return;
+        }
+    };
+    if let Err(e) = udp.set_nonblocking(true) {
+        error!("Failed to set UDP socket to non-blocking: {e}");
+        return;
+    }
+    // match udp.connect(lunabase_streaming_address) {
+    //     Ok(_) => {}
+    //     Err(e) => {
+    //         error!("Failed to connect to lunabase streaming address: {e}");
+    //         return;
+    //     }
+    // }
 
     std::thread::spawn(move || {
         let mut yuv_buffer = YUVBuffer::new(
@@ -178,6 +197,16 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
         );
 
         loop {
+            let Some(ip) = lunabase_address else {
+                if let Ok((_, addr)) = udp.recv_from(&mut [0u8; 1]) {
+                    if addr.port() == common::ports::CAMERAS {
+                        lunabase_address = Some(addr.ip());
+                    // } else {
+                    //     warn!("Received data from unknown address: {addr}");
+                    }
+                }
+                continue;
+            };
             now += now.elapsed();
             keyframe = (keyframe + 1) % KEYFRAME_INTERVAL;
             if keyframe == 0 {
@@ -208,13 +237,15 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
                             let nal = layer.nal_unit(nal_i).unwrap();
 
                             nal.chunks(1400).for_each(|chunk| {
-                                // println!("{nal_i} {} {:?}", nal.len(), &chunk[1..8]);
-                                if let Err(e) = udp.send(chunk) {
+                                if let Err(e) = udp.send_to(chunk, SocketAddr::new(ip, common::ports::CAMERAS)) {
                                     if e.kind() == ErrorKind::ConnectionRefused {
-                                        if lunabase_streaming_address.ip().is_loopback() {
-                                            return;
+                                        if let Some(ip) = lunabase_address {
+                                            if ip.is_loopback() {
+                                                return;
+                                            }
                                         }
                                     }
+                                    lunabase_address = None;
                                     error!("Failed to send stream data to lunabase: {e}");
                                 }
                             });
@@ -232,6 +263,4 @@ pub fn camera_streaming(lunabase_streaming_address: SocketAddr) -> anyhow::Resul
             sleeper.sleep(delta);
         }
     });
-
-    Ok(())
 }

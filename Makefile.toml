@@ -13,11 +13,6 @@ workspace = false
 command = "cargo"
 args = ["build", "-p", "lunabase-lib", "--release", "--features=production"]
 
-[tasks.build_lunabase_prodx]
-workspace = false
-command = "cargo"
-args = ["build", "-p", "lunabase-lib", "--release", "--features=extended"]
-
 [tasks.godot]
 workspace = false
 dependencies = [
@@ -38,6 +33,11 @@ workspace = false
 command = "cargo"
 args = ["run", "--features=production", "-p", "lunabot", "--profile", "optdebug", "--", "main"]
 
+[tasks.checkmain]
+workspace=false
+command = "cargo"
+args = ["check", "--features=production", "-p", "lunabot", "--profile", "optdebug"]
+
 [tasks.dataviz]
 workspace = false
 command = "cargo"
@@ -56,7 +56,7 @@ args = ["--path", "godot/lunabase", "--import"]
 [tasks.lunabase]
 workspace = false
 command = "godot"
-args = ["--path", "godot/lunabase", "-d"]
+args = ["--path", "godot/lunabase", "-d", "--", "127.0.0.1"]
 dependencies = [
     "build_lunabase",
     "import_lunabase",
@@ -73,20 +73,12 @@ dependencies = [
 
 [tasks.lunabase_prod]
 workspace = false
-run_task = { name = ["local_lunabase_prod", "lunaserver-web-client-controls", "lunaserver-web-client-streaming"], parallel = true }
-
-[tasks.local_lunabase_prodx]
-workspace = false
 command = "godot"
-args = ["--path", "godot/lunabase", "-d"]
+args = ["--path", "godot/lunabase", "-d", "--", "155.98.6.16"]
 dependencies = [
-    "build_lunabase_prodx",
+    "build_lunabase_prod",
     "import_lunabase",
 ]
-
-[tasks.lunabase_prodx]
-workspace = false
-run_task = { name = ["local_lunabase_prodx", "lunaserver-web-client-controls", "lunaserver-web-client-streaming", "lunaserver-web-client-audio"], parallel = true }
 
 [tasks.edit_lunasim]
 workspace = false
@@ -98,17 +90,11 @@ workspace = false
 command = "godot"
 args = ["--path", "godot/lunabase", "-e"]
 
-[tasks.lunaserver-web-client-controls]
+# Fast lunabase production build
+[tasks.fluna]
 workspace = false
-command = "cargo"
-args = ["run", "-p", "lunaserver-web-client", "--", "10600"]
-
-[tasks.lunaserver-web-client-streaming]
-workspace = false
-command = "cargo"
-args = ["run", "-p", "lunaserver-web-client", "--", "10601"]
-
-[tasks.lunaserver-web-client-audio]
-workspace = false
-command = "cargo"
-args = ["run", "-p", "lunaserver-web-client", "--", "10602"]
+command = "godot"
+args = ["--path", "godot/lunabase", "-d"]
+dependencies = [
+    "build_lunabase_prod",
+]

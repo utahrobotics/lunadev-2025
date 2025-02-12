@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use chrono::{Datelike, Timelike};
 use config::Configuration;
@@ -393,6 +394,31 @@ impl LumpurBuilder {
                 f(line);
             }
         });
+
+        if let Some(value) = std::env::var_os("HEADLESS") {
+            if let Ok(value_str) = value.into_string() {
+                if &value_str != "false" {
+                    drop(log_rx);
+                    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+                    ctrlc::set_handler(move || {
+                        let _ = tx.send(());
+                    }).unwrap();
+                    loop {
+                        if rx.recv_timeout(Duration::from_secs(1)).is_ok() {
+                            break;
+                        }
+                        if let Ok(Some(status)) = child.try_wait() {
+                            std::process::exit(status.code().unwrap_or(0));
+                        }
+                    }
+                    if let Err(e) = ctrlc_evt.set(EventState::Signaled) {
+                        eprintln!("Failed to signal ctrl-c event: {e}");
+                        let _ = child.kill();
+                    }
+                    std::process::exit(child.wait().map(|s| s.code().unwrap_or(0)).unwrap_or(1));
+                }
+            }
+        }
 
         let mut siv = cursive::default();
         let theme = Theme::terminal_default();

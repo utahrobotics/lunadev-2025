@@ -41,7 +41,7 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                             AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
                                 blackboard.calculate_path(
                                     blackboard.get_robot_isometry().translation.vector.into(),
-                                    Point3::new(-3.0, 0.0, -6.0),
+                                    Point3::new(-2.0, 0.0, -5.0),
                                 );
                                 Status::Success
                             }),

@@ -7,6 +7,7 @@ use std::{
 };
 
 use arc_swap::ArcSwapOption;
+use common::{THALASSIC_CELL_COUNT, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
 use crossbeam::{
     atomic::AtomicCell,
     sync::{Parker, Unparker},
@@ -15,7 +16,8 @@ use gputter::is_gputter_initialized;
 use nalgebra::Vector2;
 use tasker::shared::OwnedData;
 use thalassic::{Occupancy, PointCloudStorage, ThalassicBuilder};
-use common::THALASSIC_CELL_COUNT;
+
+use crate::utils::distance_between_tuples;
 
 static OBSERVE_DEPTH: AtomicBool = AtomicBool::new(false);
 static DEPTH_UNPARKER: ArcSwapOption<Unparker> = ArcSwapOption::const_empty();
@@ -41,6 +43,9 @@ pub struct ThalassicData {
     new_robot_radius: AtomicCell<Option<f32>>,
 }
 
+#[derive(PartialEq, Debug)]
+pub enum CellState { RED, GREEN, UNKNOWN }
+
 impl Default for ThalassicData {
     fn default() -> Self {
         Self {
@@ -54,8 +59,101 @@ impl Default for ThalassicData {
 }
 
 impl ThalassicData {
+
+    const MAP_WIDTH: usize = THALASSIC_WIDTH as usize;
+    const MAP_HEIGHT: usize = THALASSIC_HEIGHT as usize;
+
+    // fn index_to_xy(index: usize) -> (usize, usize) {
+    //     (index % Self::MAP_WIDTH, index / Self::MAP_WIDTH)
+    // }
+
+    fn xy_to_index((x, y): (usize, usize)) -> usize {
+        y * Self::MAP_WIDTH + x
+    }
+    
+    fn in_bounds(&self, (x, y): (i32, i32)) -> bool {
+        x >= 0 && x < Self::MAP_WIDTH as i32 && y >= 0 && y < Self::MAP_HEIGHT as i32
+    }
+
     pub fn set_robot_radius(&self, radius: f32) {
         self.new_robot_radius.store(Some(radius));
+    }
+
+
+    /// whether a target position is safe for the robot to be
+    /// - the target position must be green
+    /// - every single cell within `robot radius` of the target must be known
+    /// 
+    /// if unsafe, returns `Err(one of the unknown cells that makes the target unsafe)`
+    pub fn is_safe_for_robot(&self, robot_cell_pos: (usize, usize), target_cell_pos: (usize, usize)) -> Result<(), (usize, usize)> {
+        
+        if robot_cell_pos == target_cell_pos {
+            return Ok(());
+        }
+        
+        let robot_cell_radius = (self.current_robot_radius / THALASSIC_CELL_SIZE).ceil();
+
+        // if the target cell is near the robot, its okay if its not green
+        if 
+            self.get_cell_state(target_cell_pos) != CellState::GREEN && 
+            distance_between_tuples(target_cell_pos, robot_cell_pos) > robot_cell_radius 
+        {
+            return Err(target_cell_pos);
+        }
+
+        let (pos_x, pos_y) = (target_cell_pos.0 as i32, target_cell_pos.1 as i32);
+
+        let mut unsafe_cells = 0;
+
+        // an arbitrary unknown cell causing this position to be unsafe
+        let mut unknown_cell = (0, 0);
+
+        for x in (pos_x - robot_cell_radius as i32)..(pos_x + robot_cell_radius as i32) {
+            for y in (pos_y - robot_cell_radius as i32)..(pos_y + robot_cell_radius as i32) {
+
+                if !self.in_bounds((x, y)) { continue; }
+
+                let nearby_cell = (x as usize, y as usize);
+
+                // if a cell is near the target AND not inside the robot AND and unknown then target cell is dangerous                
+                if 
+                    distance_between_tuples(nearby_cell, target_cell_pos) <= robot_cell_radius &&
+                    distance_between_tuples(nearby_cell, robot_cell_pos) > robot_cell_radius &&
+                    !self.is_known(nearby_cell) 
+                {
+                    unsafe_cells += 1;
+                    unknown_cell = nearby_cell;
+                }
+            }
+        }
+        let total_nearby_cells = (robot_cell_radius * 2.0).powf(2.0);
+        println!("unsafe amount: {}", unsafe_cells as f32 / total_nearby_cells);
+        if unsafe_cells as f32 / total_nearby_cells > 0.0 {
+            return Err(unknown_cell);
+        }
+
+        Ok(())
+    }
+
+    pub fn get_cell_state(&self, pos: (usize, usize)) -> CellState {
+        
+        match self.expanded_obstacle_map[Self::xy_to_index(pos)].occupied() {
+            true => CellState::RED,
+            false => {
+                match self.get_height(pos) == 0.0 {
+                    true => CellState::UNKNOWN,
+                    false => CellState::GREEN,
+                }
+            },
+        }
+    }
+
+    pub fn is_known(&self, pos: (usize, usize)) -> bool {
+        self.get_cell_state(pos) != CellState::UNKNOWN
+    }
+    
+    pub fn get_height(&self, pos: (usize, usize)) -> f32 {
+        self.heightmap[Self::xy_to_index(pos)]
     }
 }
 
@@ -83,6 +181,7 @@ impl PointsStorageChannel {
     }
 }
 
+
 pub fn spawn_thalassic_pipeline(
     buffer: OwnedData<ThalassicData>,
     point_cloud_channels: Box<[Arc<PointsStorageChannel>]>,
@@ -108,7 +207,7 @@ pub fn spawn_thalassic_pipeline(
                 NonZeroU32::new(128).unwrap(),
                 NonZeroU32::new(256).unwrap(),
             ),
-            cell_size: 0.03125,
+            cell_size: THALASSIC_CELL_SIZE,
             max_point_count: NonZeroU32::new(max_point_count).unwrap(),
             max_triangle_count: NonZeroU32::new(max_triangle_count).unwrap(),
         }

@@ -1,6 +1,7 @@
-/target
+target/
 logs*
 .vscode
+.idea
 rustc-ice-*.txt
 *.las
 *.sqlite*
@@ -35,3 +36,8 @@ output/
 flamegraph.svg
 perf.data**
 perf.data
+
+.allow-ws
+.idea
+
+embedded/target/

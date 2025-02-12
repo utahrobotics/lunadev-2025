@@ -19,12 +19,18 @@ const CHOICES: Array[PackedScene] = [
 	preload("res://rocks/Low_Poly_Rock_Small_004.glb")
 ]
 
+@export var index := -1
+
 
 func _ready() -> void:
 	for _i in range(12):
 		await get_tree().physics_frame
 		
-	var rock: Node = CHOICES.pick_random().instantiate()
+	var rock: Node
+	if index == -1:
+		rock = CHOICES.pick_random().instantiate()
+	else:
+		rock = CHOICES[index].instantiate()
 	rock.get_child(0).get_child(0).collision_layer = 16
 	rotation.y = randf() * TAU
 	rock.scale *= randf_range(1.0, 1.5)

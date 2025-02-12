@@ -639,11 +639,19 @@ impl Default for RotationRestrictionSerde {
     }
 }
 
+fn from_euler_angles(roll: f64, pitch: f64, yaw: f64) -> UnitQuaternion<f64> {
+    let mut current = UnitQuaternion::from_scaled_axis(Vector3::y() * yaw);
+    let pitch_axis = current * Vector3::x();
+    current = UnitQuaternion::from_scaled_axis(pitch_axis * pitch) * current;
+    let roll_axis = current * Vector3::z();
+    UnitQuaternion::from_scaled_axis(roll_axis * roll) * current
+}
+
 impl From<RotationRestrictionSerde> for RotationRestriction {
     fn from(rotation: RotationRestrictionSerde) -> Self {
         match rotation {
             RotationRestrictionSerde::Fixed { euler } => RotationRestriction::Fixed {
-                rotation: UnitQuaternion::from_euler_angles(
+                rotation: from_euler_angles(
                     euler[0].to_radians(),
                     euler[1].to_radians(),
                     euler[2].to_radians(),
@@ -656,7 +664,7 @@ impl From<RotationRestrictionSerde> for RotationRestriction {
                 max_angle,
                 current_angle,
             } => RotationRestriction::OneAxis {
-                start_rotation: UnitQuaternion::from_euler_angles(
+                start_rotation: from_euler_angles(
                     start_euler[0].to_radians(),
                     start_euler[1].to_radians(),
                     start_euler[2].to_radians(),
@@ -667,7 +675,7 @@ impl From<RotationRestrictionSerde> for RotationRestriction {
                 current_angle,
             },
             RotationRestrictionSerde::Free { free_euler } => RotationRestriction::Free {
-                rotation: UnitQuaternion::from_euler_angles(
+                rotation: from_euler_angles(
                     free_euler[0].to_radians(),
                     free_euler[1].to_radians(),
                     free_euler[2].to_radians(),

@@ -6,10 +6,10 @@ use ares_bt::{
     sequence::{ParallelAny, Sequence},
     Behavior, InfallibleStatus, Status,
 };
-use common::{FromLunabase, Steering};
+use common::{FromLunabase, PathInstruction, PathPoint, Steering};
 use dig::dig;
 use dump::dump;
-use nalgebra::{distance, Matrix2, Point2, Point3, Vector2, Vector3};
+use nalgebra::{distance, Const, Matrix2, OPoint, Point2, Vector2, Vector3};
 use tracing::{error, warn};
 use traverse::traverse;
 
@@ -80,126 +80,83 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
 }
 
 fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
-    let Some(mut path) = blackboard.get_path() else {
-        return InfallibleStatus::Success;
-    };
 
     let robot = blackboard.get_robot_isometry();
+    let path = blackboard.get_path_mut();
+
+    if path.is_empty() {
+        blackboard.enqueue_action(Action::SetSteering(Steering::default()));
+        return InfallibleStatus::Running;
+    }
+        
+    let first_instr = path[0];
     let pos = Point2::new(robot.translation.x, robot.translation.z);
     let heading = robot
         .rotation
         .transform_vector(&Vector3::new(0.0, 0.0, -1.0))
         .xz();
 
-    match find_target_point_index(pos, path) {
-        Some(i) => {
-            let heading_angle = heading.angle(&Vector2::new(0.0, -1.0));
-            let to_first_point = (path[i].xz() - pos).normalize();
+    if first_instr.is_finished(&pos, &heading.into()) {
+        println!("path follower: finished {:?}", first_instr);
 
-            // direction to first point of path, from robot's pov
-            let to_first_point = if heading.x < 0.0 {
-                rotate_v2_ccw(to_first_point, heading_angle)
-            } else {
-                rotate_v2_ccw(to_first_point, -heading_angle)
-            };
+        if path.len() == 1 && first_instr.instruction == PathInstruction::MoveTo {
+            println!("path follower: done!"); 
+            return InfallibleStatus::Success;
+        }
 
-            *blackboard.get_poll_when() =
-                PollWhen::Instant(Instant::now() + Duration::from_millis(16));
-            // We reborrow path so that we can mutably access get_poll_when
-            let Some(tmp) = blackboard.get_path() else {
-                return InfallibleStatus::Success;
-            };
-            path = tmp;
+        path.remove(0);
+        return InfallibleStatus::Running;
+    }
 
-            // when approaching an arc turn gradually
-            if distance(&pos, &path[i].xz()) < ARC_THRESHOLD && within_arc(path, i) {
-                let (l, r) = scaled_clamp(
-                    -to_first_point.y + to_first_point.x,
-                    -to_first_point.y - to_first_point.x,
-                    0.8,
-                );
-                blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(l, r)));
-                return InfallibleStatus::Running;
-            }
+    let heading_angle = heading.angle(&Vector2::new(0.0, -1.0));
+    let to_first_point = (first_instr.point.xz() - pos).normalize();
 
-            if to_first_point.angle(&Vector2::new(0.0, -1.0)) > 0.1 {
+    // direction to first point of path, from robot's pov
+    let to_first_point = if heading.x < 0.0 {
+        rotate_v2_ccw(to_first_point, heading_angle)
+    } else {
+        rotate_v2_ccw(to_first_point, -heading_angle)
+    };
+
+    match first_instr.instruction {
+        PathInstruction::MoveTo => {
+            if to_first_point.angle(&Vector2::new(0.0, -1.0)).to_degrees() > 20.0 {
                 if to_first_point.x > 0.0 {
                     blackboard
-                        .enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, -1.0)))
+                    .enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, -1.0)))
                 } else {
                     blackboard
                         .enqueue_action(Action::SetSteering(Steering::new_left_right(-1.0, 1.0)))
                 }
             } else {
-                blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, 1.0)))
+                let (l, r) = scaled_clamp(
+                    -to_first_point.y + to_first_point.x * 1.2,
+                    -to_first_point.y - to_first_point.x * 1.2,
+                    1.0,
+                );
+                blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(l, r)))
             }
-            InfallibleStatus::Running
-        }
-        None => {
-            blackboard.enqueue_action(Action::SetSteering(Steering::default()));
-            InfallibleStatus::Success
-        }
-    }
-}
-
-/// min distance for 2 path points to be considered part of an arc
-const ARC_THRESHOLD: f64 = 0.7;
-
-/// is this point considered part of an arc?
-fn within_arc(path: &[Point3<f64>], i: usize) -> bool {
-    return if path.len() == 1 {
-        false
-    } else if i == path.len() - 1 {
-        distance(&path[i].xz(), &path[i - 1].xz()) < ARC_THRESHOLD
-    } else {
-        distance(&path[i].xz(), &path[i + 1].xz()) < ARC_THRESHOLD
+        },
+        PathInstruction::FaceTowards => {
+            if to_first_point.x > 0.0 {
+                blackboard
+                    .enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, -1.0)))
+            } else {
+                blackboard
+                    .enqueue_action(Action::SetSteering(Steering::new_left_right(-1.0, 1.0)))
+            }
+        },
     };
+
+    *blackboard.get_poll_when() =
+        PollWhen::Instant(Instant::now() + Duration::from_millis(16));
+
+    InfallibleStatus::Running
 }
 
-/// min distance for robot to be considered at a point
-const AT_POINT_THRESHOLD: f64 = 0.05;
 
-/// find index of the next point the robot should move towards, based on which path segment the robot is closest to
-///
-/// returns `None` if robot is at the last point
-fn find_target_point_index(pos: Point2<f64>, path: &[Point3<f64>]) -> Option<usize> {
-    if distance(&pos, &path[path.len() - 1].xz()) < AT_POINT_THRESHOLD {
-        return None;
-    }
 
-    let mut min_dist = distance(&pos, &path[0].xz());
-    let mut target_point_index = 0;
 
-    for i in 1..path.len() {
-        let dist = dist_to_segment(pos, path[i - 1].xz(), path[i].xz());
-
-        if dist < min_dist {
-            min_dist = dist;
-            target_point_index = i;
-        }
-    }
-
-    Some(target_point_index)
-}
-
-fn dist_to_segment(point: Point2<f64>, a: Point2<f64>, b: Point2<f64>) -> f64 {
-    let mut line_from_origin = b - a; // move line segment to origin
-    let mut point = point - a; // move point the same amount
-
-    let angle = -line_from_origin.y.signum() * line_from_origin.angle(&Vector2::new(1.0, 0.0));
-
-    // rotate both until segment lines up with the x axis
-    line_from_origin = rotate_v2_ccw(line_from_origin, angle);
-    point = rotate_v2_ccw(point, angle);
-
-    return if point.x <= 0.0 {
-        point.magnitude()
-    } else if point.x >= line_from_origin.x {
-        (point - Vector2::new(line_from_origin.x, 0.0)).magnitude()
-    } else {
-        point.y.abs()
-    };
-}
 
 fn rotate_v2_ccw(vector2: Vector2<f64>, theta: f64) -> Vector2<f64> {
     let rot = Matrix2::new(
