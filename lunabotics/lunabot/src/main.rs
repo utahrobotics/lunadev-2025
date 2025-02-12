@@ -58,6 +58,7 @@ fn main() {
         .symlink_path("godot")
         .symlink_path("target")
         .symlink_path("robot-layout")
+        .symlink_path("3d-models")
         .set_total_ignores([
             ("wgpu_core.*", Level::INFO),
             ("wgpu_hal.*", Level::INFO),
