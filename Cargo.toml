@@ -14,7 +14,6 @@ members = [
     "misc/thalassic",
     "misc/lumpur",
     "misc/simple-motion",
-    "lunabotics/lunaviz-lib",
     "misc/vesc-translator",
 ]
 resolver = "2"

@@ -190,6 +190,20 @@ impl Localizer {
             }
 
             self.root_node.set_isometry(isometry);
+            #[cfg(feature = "production")]
+            {
+                crate::apps::RECORDER.get().map(|recorder| {
+                    if let Err(e) = recorder.recorder.log(
+                        "/robot/structure",
+                        &rerun::Transform3D::from_translation_rotation(
+                            isometry.translation.vector.cast::<f32>().data.0[0],
+                            rerun::Quaternion::from_xyzw(isometry.rotation.as_vector().cast::<f32>().data.0[0]),
+                        )
+                    ) {
+                        error!("Failed to log robot transform: {e}");
+                    }
+                });
+            }
 
             #[cfg(not(feature = "production"))]
             if let Some(lunasim_stdin) = &self.lunasim_stdin {
