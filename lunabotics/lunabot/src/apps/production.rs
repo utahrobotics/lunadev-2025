@@ -14,6 +14,7 @@ use mio::{Events, Interest, Poll, Token};
 use motors::{enumerate_motors, MotorMask, VescIDs};
 use nalgebra::{Scale3, Transform3};
 use pathfinding::grid::Grid;
+use rerun_viz::init_rerun;
 use serde::Deserialize;
 use simple_motion::{ChainBuilder, NodeSerde};
 use streaming::camera_streaming;
@@ -21,6 +22,8 @@ use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn};
 use tracing::error;
 use rp2040::*;
 use udev::Event;
+
+pub use rerun_viz::RECORDER;
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,
@@ -35,9 +38,7 @@ mod depth;
 mod motors;
 mod streaming;
 mod rp2040;
-
-pub mod dataviz;
-// mod audio_streaming;
+mod rerun_viz;
 
 pub use apriltag::Apriltag;
 
@@ -85,6 +86,7 @@ pub struct Vesc {
     speed_multiplier: Option<f32>
 }
 
+
 pub struct LunabotApp {
     pub lunabase_address: Option<IpAddr>,
     pub max_pong_delay_ms: u64,
@@ -94,6 +96,7 @@ pub struct LunabotApp {
     pub imus: FxHashMap<String, IMUInfo>,
     pub robot_layout: String,
     pub vesc: Vesc,
+    pub rerun_spawn_process: bool
 }
 
 impl LunabotApp {
@@ -114,6 +117,9 @@ impl LunabotApp {
         if let Err(e) = init_gputter_blocking() {
             error!("Failed to initialize gputter: {e}");
         }
+
+        init_rerun(self.rerun_spawn_process);
+
         let apriltags = match self
             .apriltags
             .into_iter()
@@ -145,14 +151,6 @@ impl LunabotApp {
         std::thread::spawn(|| localizer.run());
 
         camera_streaming(self.lunabase_address);
-
-        #[cfg(feature = "experimental")]
-        if let Err(e) = audio_streaming::audio_streaming(
-            self.lunabase_audio_streaming_address
-                .unwrap_or_else(|| subaddress_of(self.lunabase_address, 2)),
-        ) {
-            error!("Failed to start audio streaming: {e}");
-        }
 
         enumerate_cameras(
             &localizer_ref,

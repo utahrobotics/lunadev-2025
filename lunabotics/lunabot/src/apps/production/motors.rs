@@ -292,7 +292,6 @@ impl MotorTask {
                     while response.len() < 63 || response.last() != Some(&3) {
                         let n = motor_port.read(&mut tmp_buf).await?;
                         response.extend_from_slice(&tmp_buf[..n]);
-                        println!("{} {:?}", response.len(), response);
                     }
                     std::io::Result::Ok(())
                 };
