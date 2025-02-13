@@ -122,8 +122,7 @@ script/source = "extends Button
 
 
 func _on_pressed() -> void:
-	Lunabot.current_state = Lunabot.State.AUTO
-	$\"../Buttons Label\".text = \"Current Stage: TeleOp\"
+	$\"../Buttons Label\".text = \"Current Stage: Auto\"
 	$\"../../StateInfoTabContainer\".current_tab = 0
 	Lunabot.traverse_obstacles()
 "
@@ -139,7 +138,6 @@ script/source = "extends Button
 
 
 func _on_pressed() -> void:
-	Lunabot.current_state=Lunabot.State.TELEOP
 	$\"../Buttons Label\".text = \"Current Stage: TeleOp\"
 	$\"../../StateInfoTabContainer\".current_tab=1
 	Lunabot.continue_mission()
@@ -156,7 +154,6 @@ script/source = "extends Button
 
 
 func _on_pressed() -> void:
-	Lunabot.current_state=Lunabot.State.STOPPED
 	$\"../Buttons Label\".text = \"Current Stage: Stopped\"
 	$\"../../StateInfoTabContainer\".current_tab=2
 	Lunabot.soft_stop()

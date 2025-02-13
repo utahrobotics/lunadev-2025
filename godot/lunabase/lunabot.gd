@@ -8,6 +8,7 @@ var current_state: State = State.STOPPED
 
 var init_ws: WebSocketPeer
 
+@onready var previous_stage = $"VBoxContainer/Buttons Label".text
 
 func _ready() -> void:
 	while true:
@@ -18,6 +19,16 @@ func _ready() -> void:
 
 
 func _physics_process(_delta: float) -> void:
+	if previous_stage != $"VBoxContainer/Buttons Label".text:
+		print("State Changed")
+		match $"VBoxContainer/Buttons Label".text:
+			"Current Stage: Auto":
+				Lunabot.current_state = Lunabot.State.AUTO
+			"Current Stage: TeleOp":
+				Lunabot.current_state = Lunabot.State.TELEOP
+			"Current Stage: Stopped":
+				Lunabot.current_state = Lunabot.State.STOPPED
+	previous_stage = $"VBoxContainer/Buttons Label".text
 	if init_ws != null:
 		init_ws.poll()
 		if init_ws.get_ready_state() == WebSocketPeer.STATE_CLOSED:
