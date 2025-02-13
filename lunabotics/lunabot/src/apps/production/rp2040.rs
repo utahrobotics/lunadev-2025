@@ -1,9 +1,10 @@
-use std::sync::mpsc::{Receiver, SyncSender};
-
+use crate::localization::{IMUReading, LocalizerRef};
+use crossbeam::queue::ArrayQueue;
 use embedded_common::*;
 use fxhash::FxHashMap;
 use nalgebra::Vector3;
 use simple_motion::StaticImmutableNode;
+use std::sync::mpsc::{Receiver, SyncSender};
 use tasker::{
     get_tokio_handle,
     tokio::{
@@ -16,39 +17,42 @@ use tasker::{
 use tokio_serial::SerialPortBuilderExt;
 use tracing::{debug, error, info, warn};
 use udev::{EventType, MonitorBuilder, Udev};
-use crate::localization::{IMUReading, LocalizerRef};
+
+use imu_fusion::*;
 
 use super::udev_poll;
-
 
 pub struct IMUInfo {
     pub node: StaticImmutableNode,
 }
+
+type TIMESTAMP = f32;
+
+pub struct IMUReadingTimestamped(Vector3<f32>, Vector3<f32>, TIMESTAMP);
 
 pub fn enumerate_imus(
     localizer_ref: &LocalizerRef,
     serial_to_chain: impl IntoIterator<Item = (String, IMUInfo)>,
 ) {
     get_tokio_handle().spawn(imu_wifi_listener());
-    // let data_queue: Box<ArrayQueue<IMUReading>> = Box::new(ArrayQueue::new(64));
-    // let data_queue_ref:&'static ArrayQueue<IMUReading> = Box::leak(data_queue);
+    let data_queue: Box<ArrayQueue<IMUReadingTimestamped>> = Box::new(ArrayQueue::new(64));
+    let data_queue_ref: &'static ArrayQueue<IMUReadingTimestamped> = Box::leak(data_queue);
 
-    // std::thread::spawn(move || {
-    //     const SAMPLE_RATE_HZ: u32 = 100;
-    //     let settings = FusionAhrsSettings::new();
-    //     let mut fusion = Fusion::new(SAMPLE_RATE_HZ, settings);
+    std::thread::spawn(move || {
+        const SAMPLE_RATE_HZ: u32 = 100;
+        let settings = FusionAhrsSettings::new();
+        let mut fusion = Fusion::new(SAMPLE_RATE_HZ, settings);
 
-    //     let mut reading: Option<IMUReading> = None;
-    //     loop {
-    //         reading = data_queue_ref.pop();
-    //         if let Some(IMUReading(gyro, accel, time)) = reading {
-    //             fusion.update_no_mag(gyro.into(), accel.into(), time);
-    //             let acc = fusion.ahrs.linear_acc();
-    //             // tracing::info!("x: {}, y: {}, z: {}", acc.x, acc.y, acc.z);
-    //         }
-    //     }        
-    // });
-
+        let mut reading: Option<IMUReadingTimestamped> = None;
+        loop {
+            reading = data_queue_ref.pop();
+            if let Some(IMUReadingTimestamped(gyro, accel, time)) = reading {
+                fusion.update_no_mag(gyro.into(), accel.into(), time);
+                let acc = fusion.ahrs.linear_acc();
+                // tracing::info!("x: {}, y: {}, z: {}", acc.x, acc.y, acc.z);
+            }
+        }
+    });
 
     let mut threads: FxHashMap<String, SyncSender<String>> = serial_to_chain
         .into_iter()
@@ -62,8 +66,8 @@ pub fn enumerate_imus(
                     path: rx,
                     node,
                     localizer_ref,
-                    index
-                    // queue: data_queue_ref
+                    index,
+                    queue: data_queue_ref,
                 };
                 loop {
                     imu_task.imu_task().block_on();
@@ -163,12 +167,12 @@ pub fn enumerate_imus(
     });
 }
 
-struct IMUTask{
+struct IMUTask {
     path: Receiver<String>,
     node: StaticImmutableNode,
     localizer_ref: LocalizerRef,
     index: usize,
-    // queue: &'static ArrayQueue<IMUReading>,
+    queue: &'static ArrayQueue<IMUReadingTimestamped>,
 }
 
 impl IMUTask {
@@ -196,7 +200,7 @@ impl IMUTask {
         let mut imu_port = BufStream::new(imu_port);
         let mut data: [u8; 25] = [0; 25];
 
-        // let start = Instant::now();
+        let start = std::time::Instant::now();
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
             const ACK: [u8; 1] = [1];
@@ -225,15 +229,22 @@ impl IMUTask {
                     let accel = Vector3::new(accel.x, -accel.z, -accel.y);
                     let transformed_accel = self.node.get_local_isometry().cast() * accel;
 
-                    self.localizer_ref.set_imu_reading(self.index, IMUReading { 
-                        angular_velocity: transformed_rate.cast(), 
-                        acceleration: transformed_accel.cast(), 
-                    });
-                    // if let Err(_) = self.queue.push(IMUReading(transformed_rate, transformed_accel, start.elapsed().as_secs_f32())) {
-                    //     tracing::warn!("couldn't push gyro reading to crossbeam queue");
-                    // }
+                    self.localizer_ref.set_imu_reading(
+                        self.index,
+                        IMUReading {
+                            angular_velocity: transformed_rate.cast(),
+                            acceleration: transformed_accel.cast(),
+                        },
+                    );
+                    if let Err(_) = self.queue.push(IMUReadingTimestamped(
+                        transformed_rate,
+                        transformed_accel,
+                        start.elapsed().as_secs_f32(),
+                    )) {
+                        tracing::warn!("couldn't push gyro reading to crossbeam queue");
+                    }
                 }
-                
+
                 FromIMU::NoDataReady => {
                     continue;
                 }

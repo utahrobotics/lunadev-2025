@@ -39,9 +39,12 @@ rodio = { version = "0.20.1", optional = true }
 tokio-serial = { version = "5.4.5", optional = true }
 mio = { version = "1", optional = true }
 file-lock = { version = "2.1.11", optional = true }
-rerun = { version = "0.22.0", optional = true, features = ["nasm", "sdk"], default-features = false }
+rerun = { version = "0.22.0", optional = true, features = [
+    "nasm",
+    "sdk",
+], default-features = false }
 stl_io = { version = "0.8.3", optional = true }
-# imu-fusion = { version = "0.2.5", optional = true }
+imu-fusion = { version = "0.2.5", optional = true }
 
 [features]
 production = [
@@ -58,8 +61,8 @@ production = [
     "mio",
     "embedded_common",
     "file-lock",
-    # "imu-fusion",
+    "imu-fusion",
     "rerun",
-    "stl_io"
+    "stl_io",
 ]
 experimental = ["opus", "production", "rodio"]

@@ -2808,6 +2808,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "imu-fusion"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5d7b71a133034d36609ba862547bebd7a6f54eb24a723f689a19a3640eb1f01"
+dependencies = [
+ "libm",
+ "nalgebra",
+]
+
+[[package]]
 name = "indent"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3236,6 +3246,7 @@ dependencies = [
  "file-lock",
  "fxhash",
  "gputter",
+ "imu-fusion",
  "lumpur",
  "lunabot-ai",
  "mio",
@@ -5591,6 +5602,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "061507c94fc6ab4ba1c9a0305018408e312e17c041eb63bef8aa726fa33aceae"
 dependencies = [
  "approx",
+ "libm",
  "num-complex",
  "num-traits",
  "paste",
