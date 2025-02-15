@@ -1,4 +1,4 @@
-use common::{PathPoint, PathInstruction};
+use common::{PathInstruction, PathPoint, THALASSIC_HEIGHT, THALASSIC_WIDTH};
 use nalgebra::{Point3, Transform3};
 use pathfinding::{grid::Grid, prelude::astar};
 use tasker::shared::SharedDataReceiver;
@@ -9,18 +9,41 @@ use crate::pipelines::thalassic::{set_observe_depth, ThalassicData, CellState};
 
 const REACH: usize = 10;
 
+const MAX_SCAN_ATTEMPTS: usize = 3;
+
 pub struct DefaultPathfinder {
 
     pub world_to_grid: Transform3<f64>,
     pub grid_to_world: Transform3<f64>,
     pub grid: Grid,
+
+    /// these cells have been scanned `MAX_SCAN_ATTEMPTS` times and yet still unknown.
+    /// 
+    /// avoid them in the future.
+    unscannable_cells: Vec<(usize, usize)>, 
+
+    last_unknown_cell: (usize, usize),
+    times_truncated_here_in_a_row: usize
 }
 
 
 impl DefaultPathfinder {
 
+    pub fn new(world_to_grid: Transform3<f64>, grid_to_world: Transform3<f64>) -> Self {
+        Self {
+            world_to_grid, 
+            grid_to_world,
+            grid: Grid::new(THALASSIC_WIDTH as usize, THALASSIC_HEIGHT as usize),
+            
+            unscannable_cells: vec![],
+            
+            last_unknown_cell: (0, 0),
+            times_truncated_here_in_a_row: 0
+        }
+    }
+
     pub fn pathfind(
-        &self,
+        &mut self,
         shared_thalassic_data: &SharedDataReceiver<ThalassicData>,
         from: Point3<f64>,
         to: Point3<f64>,
@@ -29,6 +52,7 @@ impl DefaultPathfinder {
         shared_thalassic_data.try_get();
         set_observe_depth(true);
         let mut map_data = shared_thalassic_data.get();
+
                 
         loop {
             if map_data.current_robot_radius == 0.5 {
@@ -39,6 +63,16 @@ impl DefaultPathfinder {
             map_data = shared_thalassic_data.get();
         }
         set_observe_depth(false);
+
+        // if a previously unscannable cell was scanned, its no longer unscannable
+        self.unscannable_cells = self.unscannable_cells.iter()
+            .filter_map(|unknown_cell| 
+                match map_data.is_known(*unknown_cell) {
+                    true => None,                           // known cells are removed from unscannable_cells
+                    false => Some(*unknown_cell),
+                }
+            ).collect();
+        
 
         into.clear();
 
@@ -51,13 +85,28 @@ impl DefaultPathfinder {
         macro_rules! neighbours {
             ($p: ident) => {
                 self.grid
-                    .bfs_reachable($p, |potential_neighbor| {
+                    .dfs_reachable($p, |potential_neighbor| {
 
                         let (x, y) = potential_neighbor;
 
-                        // neighbors are: within reach AND not red 
-                        x.abs_diff($p.0) <= REACH && y.abs_diff($p.1) <= REACH && 
-                        map_data.get_cell_state(potential_neighbor) != CellState::RED
+                        if x.abs_diff($p.0) > REACH || y.abs_diff($p.1) > REACH {
+                            return false;
+                        }
+                        if map_data.get_cell_state(potential_neighbor) == CellState::RED {
+                            return false;
+                        }
+
+                        let robot_radius_in_cells = map_data.current_robot_radius / common::THALASSIC_CELL_SIZE;
+
+                        // avoid going near unscannable cells
+                        for unknown_cell in &self.unscannable_cells {
+                            if distance_between_tuples(potential_neighbor, *unknown_cell) < robot_radius_in_cells {
+                                return false;
+                            }
+                        }
+
+                        return true;
+                        
                     })
                     .into_iter()
                     .map(move |neighbor| {
@@ -137,18 +186,42 @@ impl DefaultPathfinder {
             .expect("there should always be a possible path to the goal")
             .0;
         
+
+        let mut cause_of_truncation = None;
+
         // add points in final path to `into`, stopping upon seeing an unsafe point
         for pt in path {
             if let Err(unknown_cell) = map_data.is_safe_for_robot(robot_cell_pos, pt) {
-                println!("truncated, unknown cell: {:?}", unknown_cell);
+                
+                println!("pathfinder: at {:?}, cant go to {:?} bc of unknown cell {:?}", robot_cell_pos, pt, unknown_cell);
                 into.push(cell_pos_to_path_point(unknown_cell, PathInstruction::FaceTowards));
+                
+                cause_of_truncation = Some(unknown_cell);
                 break;
             }
             else {
                 into.push(cell_pos_to_path_point(pt, PathInstruction::MoveTo));
             }
         }
-        
+
+        match cause_of_truncation {
+            None => self.times_truncated_here_in_a_row = 0,
+            Some(unknown_cell) => {
+                if self.last_unknown_cell == unknown_cell { 
+                    self.times_truncated_here_in_a_row += 1; 
+
+                    if self.times_truncated_here_in_a_row >= MAX_SCAN_ATTEMPTS {
+                        self.unscannable_cells.push(unknown_cell);
+                    }
+                }
+                else { 
+                    self.last_unknown_cell = unknown_cell;
+                    self.times_truncated_here_in_a_row = 1; 
+                }
+                println!("pathfinder: truncated due to unknown cell {:?} for the {} time in a row", self.last_unknown_cell, self.times_truncated_here_in_a_row);
+            },
+        }
+
     }
 }
 

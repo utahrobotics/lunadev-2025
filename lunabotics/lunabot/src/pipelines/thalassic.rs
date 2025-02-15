@@ -1,9 +1,8 @@
 use std::{
-    num::NonZeroU32,
-    sync::{
+    collections::{HashSet, VecDeque}, num::NonZeroU32, sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
-    },
+    }
 };
 
 use arc_swap::ArcSwapOption;
@@ -71,7 +70,7 @@ impl ThalassicData {
         y * Self::MAP_WIDTH + x
     }
     
-    fn in_bounds(&self, (x, y): (i32, i32)) -> bool {
+    pub fn in_bounds((x, y): (i32, i32)) -> bool {
         x >= 0 && x < Self::MAP_WIDTH as i32 && y >= 0 && y < Self::MAP_HEIGHT as i32
     }
 
@@ -84,7 +83,7 @@ impl ThalassicData {
     /// - the target position must be green
     /// - every single cell within `robot radius` of the target must be known
     /// 
-    /// if unsafe, returns `Err(one of the unknown cells that makes the target unsafe)`
+    /// if unsafe, returns `Err(the closest unknown cell that makes the target unsafe)`
     pub fn is_safe_for_robot(&self, robot_cell_pos: (usize, usize), target_cell_pos: (usize, usize)) -> Result<(), (usize, usize)> {
         
         if robot_cell_pos == target_cell_pos {
@@ -103,33 +102,38 @@ impl ThalassicData {
 
         let (pos_x, pos_y) = (target_cell_pos.0 as i32, target_cell_pos.1 as i32);
 
-        let mut unsafe_cells = 0;
 
-        // an arbitrary unknown cell causing this position to be unsafe
-        let mut unknown_cell = (0, 0);
+        // using BFS so that the first unknown cell found when scanning the area 
+        // around `target_cell_pos` is also the closest unknown cell to `target_cell_pos` 
 
-        for x in (pos_x - robot_cell_radius as i32)..(pos_x + robot_cell_radius as i32) {
-            for y in (pos_y - robot_cell_radius as i32)..(pos_y + robot_cell_radius as i32) {
+        let mut q: VecDeque<(i32, i32)> = VecDeque::new();
+        let mut visited: HashSet<(i32, i32)> = HashSet::new();
 
-                if !self.in_bounds((x, y)) { continue; }
+        q.push_front((pos_x, pos_y));
+        
+        while !q.is_empty() {
+            for _ in 0..q.len() {
+                let nearby_cell = q.pop_front().unwrap();
+                let nearby_cell_usize = (nearby_cell.0 as usize, nearby_cell.1 as usize);
+                
+                if !Self::in_bounds(nearby_cell) { continue };
+                if distance_between_tuples(nearby_cell_usize, target_cell_pos) > robot_cell_radius { continue };
+                if !visited.insert(nearby_cell) { continue };
+                
+                let (x, y) = nearby_cell;
+                q.push_back((x + 1, y));
+                q.push_back((x - 1, y));
+                q.push_back((x, y + 1));
+                q.push_back((x, y - 1));
 
-                let nearby_cell = (x as usize, y as usize);
-
-                // if a cell is near the target AND not inside the robot AND and unknown then target cell is dangerous                
+                // if a cell is not inside the robot AND and unknown then target cell is dangerous                
                 if 
-                    distance_between_tuples(nearby_cell, target_cell_pos) <= robot_cell_radius &&
-                    distance_between_tuples(nearby_cell, robot_cell_pos) > robot_cell_radius &&
-                    !self.is_known(nearby_cell) 
+                    distance_between_tuples(nearby_cell_usize, robot_cell_pos) > robot_cell_radius &&
+                    !self.is_known(nearby_cell_usize) 
                 {
-                    unsafe_cells += 1;
-                    unknown_cell = nearby_cell;
+                    return Err(nearby_cell_usize);
                 }
             }
-        }
-        let total_nearby_cells = (robot_cell_radius * 2.0).powf(2.0);
-        println!("unsafe amount: {}", unsafe_cells as f32 / total_nearby_cells);
-        if unsafe_cells as f32 / total_nearby_cells > 0.0 {
-            return Err(unknown_cell);
         }
 
         Ok(())

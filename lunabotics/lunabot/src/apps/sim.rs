@@ -364,11 +364,7 @@ impl LunasimbotApp {
             Scale3::new(-0.03125, 1.0, -0.03125).to_homogeneous(),
         );
         let world_to_grid = grid_to_world.try_inverse().unwrap();
-        let mut pathfinder = DefaultPathfinder {
-            world_to_grid,
-            grid_to_world,
-            grid: Grid::new(THALASSIC_WIDTH as usize, THALASSIC_HEIGHT as usize),
-        };
+        let mut pathfinder = DefaultPathfinder::new(world_to_grid, grid_to_world);
         pathfinder.grid.enable_diagonal_mode();
         pathfinder.grid.fill();
 

@@ -6,10 +6,10 @@ use ares_bt::{
     sequence::{ParallelAny, Sequence},
     Behavior, InfallibleStatus, Status,
 };
-use common::{FromLunabase, PathInstruction, PathPoint, Steering};
+use common::{FromLunabase, PathInstruction, Steering};
 use dig::dig;
 use dump::dump;
-use nalgebra::{distance, Const, Matrix2, OPoint, Point2, Vector2, Vector3};
+use nalgebra::{Matrix2, Point2, Vector2, Vector3};
 use tracing::{error, warn};
 use traverse::traverse;
 
@@ -97,7 +97,6 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
         .xz();
 
     if first_instr.is_finished(&pos, &heading.into()) {
-        println!("path follower: finished {:?}", first_instr);
 
         if path.len() == 1 && first_instr.instruction == PathInstruction::MoveTo {
             println!("path follower: done!"); 
