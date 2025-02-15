@@ -38,7 +38,7 @@ use thalassic::DepthProjectorBuilder;
 use tracing::{error, info, warn};
 
 use crate::{
-    localization::Localizer,
+    localization::{IMUReading, Localizer},
     pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline, PointsStorageChannel},
 };
 use crate::{pathfinding::DefaultPathfinder, pipelines::thalassic::ThalassicData};
@@ -248,7 +248,7 @@ impl LunasimbotApp {
         .expect("Failed to parse robot chain");
         let robot_chain = ChainBuilder::from(robot_chain).finish_static();
 
-        let localizer = Localizer::new(robot_chain, Some(lunasim_stdin.clone()));
+        let localizer = Localizer::new(robot_chain, Some(lunasim_stdin.clone()), 1);
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
 
@@ -310,11 +310,9 @@ impl LunasimbotApp {
                     acceleration[1] as f64,
                     acceleration[2] as f64,
                 );
-                localizer_ref.set_acceleration(acceleration);
+                localizer_ref.set_imu_reading(0, IMUReading { acceleration, ..Default::default() });
             }
-            FromLunasim::Gyroscope { id: _, .. } => {
-                localizer_ref.set_angular_velocity(Vector3::zeros());
-            }
+            FromLunasim::Gyroscope { id: _, .. } => {}
             FromLunasim::DepthMap(depths) => {
                 if !get_observe_depth() {
                     return;
@@ -370,7 +368,7 @@ impl LunasimbotApp {
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
-        let (packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
+        let (_packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
             self.lunabase_address.map(|ip| SocketAddr::new(ip, common::ports::LUNABASE_SIM_TELEOP)),
             lunabot_stage.clone(),
             self.max_pong_delay_ms,

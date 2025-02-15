@@ -11,9 +11,10 @@ use gputter::init_gputter_blocking;
 use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use mio::{Events, Interest, Poll, Token};
-use motors::enumerate_motors;
+use motors::{enumerate_motors, MotorMask, VescIDs};
 use nalgebra::{Scale3, Transform3};
 use pathfinding::grid::Grid;
+use rerun_viz::init_rerun;
 use serde::Deserialize;
 use simple_motion::{ChainBuilder, NodeSerde};
 use streaming::camera_streaming;
@@ -21,6 +22,8 @@ use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn};
 use tracing::error;
 use rp2040::*;
 use udev::Event;
+
+pub use rerun_viz::RECORDER;
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,
@@ -35,9 +38,7 @@ mod depth;
 mod motors;
 mod streaming;
 mod rp2040;
-
-pub mod dataviz;
-// mod audio_streaming;
+mod rerun_viz;
 
 pub use apriltag::Apriltag;
 
@@ -62,6 +63,30 @@ pub struct IMUInfo {
     link_name: String,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct VescPair {
+    id1: u8,
+    id2: u8,
+    mask1: MotorMask,
+    mask2: MotorMask,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct SingleVesc {
+    id: u8,
+    mask: MotorMask,
+}
+
+#[derive(Deserialize, Debug, Default)]
+pub struct Vesc {
+    #[serde(default)]
+    singles: Vec<SingleVesc>,
+    #[serde(default)]
+    pairs: Vec<VescPair>,
+    speed_multiplier: Option<f32>
+}
+
+
 pub struct LunabotApp {
     pub lunabase_address: Option<IpAddr>,
     pub max_pong_delay_ms: u64,
@@ -70,6 +95,8 @@ pub struct LunabotApp {
     pub apriltags: FxHashMap<String, Apriltag>,
     pub imus: FxHashMap<String, IMUInfo>,
     pub robot_layout: String,
+    pub vesc: Vesc,
+    pub rerun_spawn_process: bool
 }
 
 impl LunabotApp {
@@ -90,6 +117,9 @@ impl LunabotApp {
         if let Err(e) = init_gputter_blocking() {
             error!("Failed to initialize gputter: {e}");
         }
+
+        init_rerun(self.rerun_spawn_process);
+
         let apriltags = match self
             .apriltags
             .into_iter()
@@ -116,19 +146,11 @@ impl LunabotApp {
         .expect("Failed to parse robot chain");
         let robot_chain = ChainBuilder::from(robot_chain).finish_static();
 
-        let localizer = Localizer::new(robot_chain.clone());
+        let localizer = Localizer::new(robot_chain.clone(), self.imus.len());
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
 
         camera_streaming(self.lunabase_address);
-
-        #[cfg(feature = "experimental")]
-        if let Err(e) = audio_streaming::audio_streaming(
-            self.lunabase_audio_streaming_address
-                .unwrap_or_else(|| subaddress_of(self.lunabase_address, 2)),
-        ) {
-            error!("Failed to start audio streaming: {e}");
-        }
 
         enumerate_cameras(
             &localizer_ref,
@@ -206,7 +228,7 @@ impl LunabotApp {
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
-        let (packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
+        let (_packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
             self.lunabase_address.map(|ip| SocketAddr::new(ip, common::ports::TELEOP)),
             lunabot_stage.clone(),
             self.max_pong_delay_ms,
@@ -232,7 +254,22 @@ impl LunabotApp {
             },
         ));
 
-        let motor_ref = enumerate_motors(handle);
+        let mut vesc_ids = VescIDs::default();
+
+        for SingleVesc { id, mask } in self.vesc.singles {
+            if vesc_ids.add_single_vesc(id, mask) {
+                error!("Motor {id} has already been added");
+                return;
+            }
+        }
+        for VescPair { id1, id2, mask1, mask2 } in self.vesc.pairs {
+            if vesc_ids.add_dual_vesc(id1, id2, mask1, mask2) {
+                error!("Motors {id1} or {id2} have already been added");
+                return;
+            }
+        }
+
+        let motor_ref = enumerate_motors(vesc_ids, self.vesc.speed_multiplier.unwrap_or(1.0));
 
         run_ai(
             robot_chain.into(),

@@ -1,9 +1,0 @@
-[package]
-name = "pathfinding"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-nalgebra = { workspace = true }
-fxhash = { workspace = true }
-heapless = { workspace = true }

@@ -89,3 +89,12 @@ args = ["--path", "godot/lunasim", "-e"]
 workspace = false
 command = "godot"
 args = ["--path", "godot/lunabase", "-e"]
+
+# Fast lunabase production build
+[tasks.fluna]
+workspace = false
+command = "godot"
+args = ["--path", "godot/lunabase", "-d"]
+dependencies = [
+    "build_lunabase_prod",
+]

@@ -1,4 +1,4 @@
-#![feature(result_flattening, array_chunks, iterator_try_collect)]
+#![feature(result_flattening, array_chunks, iterator_try_collect, mpmc_channel, try_blocks)]
 
 use std::net::IpAddr;
 
@@ -27,15 +27,19 @@ lumpur::define_configuration! {
             apriltags: fxhash::FxHashMap<String, apps::Apriltag>,
             #[serde(default)]
             imus: fxhash::FxHashMap<String, apps::IMUInfo>,
-            robot_layout: Option<String>
-        },
-        Dataviz {
-            lunabase_address: IpAddr,
-            max_pong_delay_ms: Option<u64>,
+            robot_layout: Option<String>,
             #[serde(default)]
-            depth_cameras: fxhash::FxHashMap<String, apps::DepthCameraInfo>,
-            robot_layout: Option<String>
-        }
+            vesc: apps::Vesc,
+            #[serde(default)]
+            rerun_spawn_process: bool
+        },
+        // Dataviz {
+        //     lunabase_address: IpAddr,
+        //     max_pong_delay_ms: Option<u64>,
+        //     #[serde(default)]
+        //     depth_cameras: fxhash::FxHashMap<String, apps::DepthCameraInfo>,
+        //     robot_layout: Option<String>
+        // }
     }
 }
 #[cfg(not(feature = "production"))]
@@ -54,6 +58,7 @@ fn main() {
         .symlink_path("godot")
         .symlink_path("target")
         .symlink_path("robot-layout")
+        .symlink_path("3d-models")
         .set_total_ignores([
             ("wgpu_core.*", Level::INFO),
             ("wgpu_hal.*", Level::INFO),
@@ -62,7 +67,6 @@ fn main() {
             ("naga.*", Level::INFO),
         ])
         .set_console_ignores([
-            ("k::urdf", Level::INFO),
             ("wgpu_hal::gles::egl", Level::WARN),
             ("wgpu_hal::vulkan::instance", Level::WARN),
         ])
@@ -93,6 +97,8 @@ fn main() {
             apriltags,
             imus,
             robot_layout,
+            vesc,
+            rerun_spawn_process
         } => {
             apps::LunabotApp {
                 lunabase_address,
@@ -103,26 +109,28 @@ fn main() {
                 depth_cameras,
                 apriltags,
                 imus,
+                vesc,
                 robot_layout: robot_layout
                     .unwrap_or_else(|| "robot-layout/lunabot.json".to_string()),
+                rerun_spawn_process
             }
             .run();
         }
-        #[cfg(feature = "production")]
-        Commands::Dataviz {
-            lunabase_address,
-            max_pong_delay_ms,
-            depth_cameras,
-            robot_layout,
-        } => {
-            apps::dataviz::DatavizApp {
-                lunabase_address,
-                max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
-                depth_cameras,
-                robot_layout: robot_layout
-                    .unwrap_or_else(|| "robot-layout/lunabot.json".to_string()),
-            }
-            .run();
-        }
+        // #[cfg(feature = "production")]
+        // Commands::Dataviz {
+        //     lunabase_address,
+        //     max_pong_delay_ms,
+        //     depth_cameras,
+        //     robot_layout,
+        // } => {
+        //     apps::dataviz::DatavizApp {
+        //         lunabase_address,
+        //         max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
+        //         depth_cameras,
+        //         robot_layout: robot_layout
+        //             .unwrap_or_else(|| "robot-layout/lunabot.json".to_string()),
+        //     }
+        //     .run();
+        // }
     }
 }
