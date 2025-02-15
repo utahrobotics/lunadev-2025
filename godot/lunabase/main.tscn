@@ -122,10 +122,7 @@ script/source = "extends Button
 
 
 func _on_pressed() -> void:
-	Lunabot.current_state = Lunabot.State.AUTO
-	$\"../Buttons Label\".text = \"Current Stage: TeleOp\"
-	$\"../../StateInfoTabContainer\".current_tab = 0
-	Lunabot.traverse_obstacles()
+	Lunabot.emit_signal(\"entered_traverse_obstacles\")
 "
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_u8rpt"]
@@ -139,10 +136,7 @@ script/source = "extends Button
 
 
 func _on_pressed() -> void:
-	Lunabot.current_state=Lunabot.State.TELEOP
-	$\"../Buttons Label\".text = \"Current Stage: TeleOp\"
-	$\"../../StateInfoTabContainer\".current_tab=1
-	Lunabot.continue_mission()
+	Lunabot.emit_signal(\"entered_manual\")
 "
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pf330"]
@@ -156,10 +150,7 @@ script/source = "extends Button
 
 
 func _on_pressed() -> void:
-	Lunabot.current_state=Lunabot.State.STOPPED
-	$\"../Buttons Label\".text = \"Current Stage: Stopped\"
-	$\"../../StateInfoTabContainer\".current_tab=2
-	Lunabot.soft_stop()
+	Lunabot.emit_signal(\"entered_soft_stop\")
 "
 
 [sub_resource type="GDScript" id="GDScript_cj7ej"]
