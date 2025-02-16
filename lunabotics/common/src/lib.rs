@@ -148,7 +148,6 @@ impl PathPoint {
     /// min distance for robot to be considered at a point
     const AT_POINT_THRESHOLD: f64 = 0.2;
     
-    
     /// min radians gap between robot  for robot to be considered facing towards a point
     const FACING_TOWARDS_THRESHOLD: f64 = 0.2;
 

@@ -83,14 +83,17 @@ impl ThalassicData {
     /// - the target position must be green
     /// - every single cell within `robot radius` of the target must be known
     /// 
-    /// if unsafe, returns `Err(the closest unknown cell that makes the target unsafe)`
+    /// cells within `current_robot_radius` of `robot_cell_pos` are always safe
+    /// 
+    /// if unsafe, returns `Err(closest unknown cell that makes the target unsafe)`
     pub fn is_safe_for_robot(&self, robot_cell_pos: (usize, usize), target_cell_pos: (usize, usize)) -> Result<(), (usize, usize)> {
         
-        if robot_cell_pos == target_cell_pos {
-            return Ok(());
-        }
-        
+        if robot_cell_pos == target_cell_pos { return Ok(()) }
+
         let robot_cell_radius = (self.current_robot_radius / THALASSIC_CELL_SIZE).ceil();
+
+        if distance_between_tuples(robot_cell_pos, target_cell_pos) <= robot_cell_radius { return Ok(()) }
+        
 
         // if the target cell is near the robot, its okay if its not green
         if 
@@ -133,6 +136,19 @@ impl ThalassicData {
                 {
                     return Err(nearby_cell_usize);
                 }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// calls `is_safe_for_robot()` for each point in `path`
+    /// 
+    /// if unsafe, returns `Err( (i, closest unknown cell that makes path[i] unsafe) )`
+    pub fn is_path_safe_for_robot(&self, robot_cell_pos: (usize, usize), path: &Vec<(usize, usize)>) -> Result<(), (usize, (usize, usize))> {
+        for (i, pt) in path.iter().enumerate() {
+            if let Err(unknown_cell) = self.is_safe_for_robot(robot_cell_pos, *pt) {
+                return Err((i, unknown_cell));
             }
         }
 

@@ -8,7 +8,7 @@ use std::{
 };
 
 use common::{
-    lunasim::{FromLunasim, FromLunasimbot}, LunabotStage, THALASSIC_HEIGHT, THALASSIC_WIDTH
+    lunasim::{FromLunasim, FromLunasimbot}, LunabotStage
 };
 use crossbeam::atomic::AtomicCell;
 use gputter::{
@@ -20,7 +20,6 @@ use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{
     Isometry3, Scale3, Transform3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4,
 };
-use pathfinding::grid::Grid;
 use simple_motion::{ChainBuilder, NodeSerde};
 use tasker::shared::OwnedData;
 use tasker::tokio;
@@ -363,8 +362,8 @@ impl LunasimbotApp {
         );
         let world_to_grid = grid_to_world.try_inverse().unwrap();
         let mut pathfinder = DefaultPathfinder::new(world_to_grid, grid_to_world);
-        pathfinder.grid.enable_diagonal_mode();
-        pathfinder.grid.fill();
+        pathfinder.cell_grid.enable_diagonal_mode();
+        pathfinder.cell_grid.fill();
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 

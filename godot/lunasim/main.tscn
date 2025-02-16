@@ -1,10 +1,9 @@
-[gd_scene load_steps=33 format=3 uid="uid://bxmnthetrtkso"]
+[gd_scene load_steps=32 format=3 uid="uid://bxmnthetrtkso"]
 
 [ext_resource type="Script" path="res://path_manager.gd" id="1_ohl8f"]
 [ext_resource type="PackedScene" uid="uid://leqgym66qbuo" path="res://robot.tscn" id="1_y4wm8"]
 [ext_resource type="PackedScene" uid="uid://y0gvb4s2mi2x" path="res://apriltag.tscn" id="2_nhvh2"]
 [ext_resource type="Script" path="res://rocks/rock.gd" id="3_5i5qc"]
-[ext_resource type="Script" path="res://rocks/crater.gd" id="3_chv0u"]
 [ext_resource type="Script" path="res://robo_camera.gd" id="3_n7k3i"]
 [ext_resource type="Script" path="res://control_3d.gd" id="5_l5im3"]
 
@@ -433,41 +432,45 @@ mesh = SubResource("PlaneMesh_reayg")
 [node name="Rocks" type="Node3D" parent="Arena"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.906988, 0, -2.93281)
 
-[node name="Rock" type="Node3D" parent="Arena/Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.861442, 2.20208, -1.0874)
+[node name="Rock11" type="Node3D" parent="Arena/Rocks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.20961, 4.404, 0.953028)
 script = ExtResource("3_5i5qc")
+index = 2
 
-[node name="Rock2" type="Node3D" parent="Arena/Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.04035, 2.20208, -0.202815)
+[node name="Rock10" type="Node3D" parent="Arena/Rocks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.906507, 4.404, 0.953028)
 script = ExtResource("3_5i5qc")
+index = 2
 
-[node name="Rock3" type="Node3D" parent="Arena/Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.13282, 2.20208, -1.79477)
+[node name="Rock12" type="Node3D" parent="Arena/Rocks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.3585, 4.404, 0.953028)
 script = ExtResource("3_5i5qc")
+index = 2
 
 [node name="Rock5" type="Node3D" parent="Arena/Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.42093, 2.20208, -3.20901)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.0117, 4.40416, -1.07123)
 script = ExtResource("3_5i5qc")
+index = 3
 
-[node name="Rock4" type="Node3D" parent="Arena/Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.98284, 2.20208, 1.14419)
+[node name="Rock6" type="Node3D" parent="Arena/Rocks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.1054, 4.40416, -1.07123)
 script = ExtResource("3_5i5qc")
+index = 3
 
-[node name="Crater" type="Node3D" parent="Arena/Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.00328, 2.04372, 0.680885)
-script = ExtResource("3_chv0u")
+[node name="Rock7" type="Node3D" parent="Arena/Rocks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.10371, 4.40416, -1.07123)
+script = ExtResource("3_5i5qc")
+index = 3
 
-[node name="Crater2" type="Node3D" parent="Arena/Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.352892, 2.04372, -0.538538)
-script = ExtResource("3_chv0u")
+[node name="Rock8" type="Node3D" parent="Arena/Rocks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.110247, 4.40416, -1.07123)
+script = ExtResource("3_5i5qc")
+index = 3
 
-[node name="Crater3" type="Node3D" parent="Arena/Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.09974, 2.04372, -3.0228)
-script = ExtResource("3_chv0u")
-
-[node name="Crater4" type="Node3D" parent="Arena/Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.32083, 2.04372, -2.51991)
-script = ExtResource("3_chv0u")
+[node name="Rock9" type="Node3D" parent="Arena/Rocks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.779617, 4.40416, -1.07123)
+script = ExtResource("3_5i5qc")
+index = 3
 
 [node name="Robot" parent="." instance=ExtResource("1_y4wm8")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -1)
