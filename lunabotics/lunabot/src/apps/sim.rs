@@ -390,7 +390,7 @@ impl LunasimbotApp {
                     lunasim_stdin.write(bytes);
                 }
                 Action::CalculatePath { from, to, mut into } => {
-                    pathfinder.pathfind(&shared_thalassic_data, from, to, &mut into);
+                    pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into);
                     let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
                         into.iter()
                             .map(|p| p.point.coords.cast::<f32>().data.0[0])

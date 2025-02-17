@@ -1,10 +1,7 @@
 use std::time::{Duration, Instant};
 
 use ares_bt::{
-    converters::AssertCancelSafe,
-    looping::WhileLoop,
-    sequence::{ParallelAny, Sequence},
-    Behavior, InfallibleStatus, Status,
+    converters::AssertCancelSafe, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, FallibleStatus, InfallibleStatus, Status
 };
 use common::{FromLunabase, PathInstruction, Steering};
 use dig::dig;
@@ -79,14 +76,14 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
     )
 }
 
-fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
+fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
 
     let robot = blackboard.get_robot_isometry();
     let path = blackboard.get_path_mut();
 
     if path.is_empty() {
         blackboard.enqueue_action(Action::SetSteering(Steering::default()));
-        return InfallibleStatus::Running;
+        return Status::Running;
     }
         
     let first_instr = path[0];
@@ -98,13 +95,22 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
 
     if first_instr.is_finished(&pos, &heading.into()) {
 
-        if path.len() == 1 && first_instr.instruction == PathInstruction::MoveTo {
-            println!("path follower: done!"); 
-            return InfallibleStatus::Success;
+        if path.len() == 1 { 
+            return match first_instr.instruction {
+                PathInstruction::MoveTo => {
+                    println!("path follower: done!"); 
+                    Status::Success
+                }
+                PathInstruction::FaceTowards => {
+                    println!("path follower: reached end of truncated path"); 
+                    blackboard.enqueue_action(Action::SetSteering(Steering::default()));
+                    Status::Failure
+                }
+            }
         }
 
         path.remove(0);
-        return InfallibleStatus::Running;
+        return Status::Running;
     }
 
     let heading_angle = heading.angle(&Vector2::new(0.0, -1.0));
@@ -150,7 +156,7 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> InfallibleStatus {
     *blackboard.get_poll_when() =
         PollWhen::Instant(Instant::now() + Duration::from_millis(16));
 
-    InfallibleStatus::Running
+    Status::Running
 }
 
 

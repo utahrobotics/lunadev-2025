@@ -46,6 +46,7 @@ impl DefaultPathfinder {
     }
 
     fn get_map_data(&mut self, shared_thalassic_data: &SharedDataReceiver<ThalassicData>, robot_radius: f32) -> SharedData<ThalassicData> {
+        
         shared_thalassic_data.try_get(); // clear out a previous observation if it exists
     
         set_observe_depth(true);
@@ -69,7 +70,7 @@ impl DefaultPathfinder {
                     false => Some(*unknown_cell),
                 }
             ).collect();
-    
+        println!("just finished scanning. unscannable cells: {:?}", self.unscannable_cells);
 
         map_data
     }
@@ -170,7 +171,7 @@ impl DefaultPathfinder {
         Some(path)
     }
 
-    pub fn pathfind(
+    pub fn push_path_into(
         &mut self,
         shared_thalassic_data: &SharedDataReceiver<ThalassicData>,
         from: Point3<f64>,

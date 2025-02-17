@@ -36,7 +36,7 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
             WhileLoop::new(
                 AlwaysSucceed,
                 IfElse::new(
-                    ParallelAny::new((
+                    // ParallelAny::new((
                         Sequence::new((
                             AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
                                 blackboard.calculate_path(
@@ -52,19 +52,20 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                                     Status::Running
                                 }
                             }),
-                            InfallibleShim(AssertCancelSafe(follow_path)),
+                            AssertCancelSafe(follow_path),
                         )),
-                        Sequence::new((WaitBehavior::from(Duration::from_secs(4)), AlwaysFail)),
-                    )),
+                        // Sequence::new((WaitBehavior::from(Duration::from_secs(4)), AlwaysFail)),
+                    // )),
                     AlwaysFail,
-                    Sequence::new((
-                        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-                            info!("Scanning pause");
-                            blackboard.enqueue_action(Action::SetSteering(Default::default()));
-                            Status::Success
-                        }),
-                        WaitBehavior::from(Duration::from_secs(2)),
-                    )),
+                    AlwaysSucceed
+                    // Sequence::new((
+                    //     AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+                    //         info!("Scanning pause");
+                    //         blackboard.enqueue_action(Action::SetSteering(Default::default()));
+                    //         Status::Success
+                    //     }),
+                    //     WaitBehavior::from(Duration::from_secs(2)),
+                    // )),
                 ),
             ),
             AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
