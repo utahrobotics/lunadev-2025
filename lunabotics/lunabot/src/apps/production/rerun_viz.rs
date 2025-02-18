@@ -1,8 +1,7 @@
-use std::{f32::consts::PI, fs::File, sync::OnceLock};
+use std::{f32::consts::PI, sync::OnceLock};
 
 use nalgebra::{UnitQuaternion, Vector3};
-use rerun::{datatypes::UVec3D, Mesh3D, RecordingStream, RecordingStreamResult, ViewCoordinates};
-use stl_io::{read_stl, IndexedTriangle};
+use rerun::{Asset3D, RecordingStream, RecordingStreamResult, ViewCoordinates};
 use tracing::error;
 
 
@@ -62,7 +61,7 @@ pub fn init_rerun(rerun_spawn_process: bool) {
     std::thread::spawn(|| {
         let recorder = &RECORDER.get().unwrap().recorder;
 
-        let mut file = match File::open("3d-models/lunabot.stl") {
+        let asset = match Asset3D::from_file("3d-models/lunabot.stl") {
             Ok(x) => x,
             Err(e) => {
                 error!("Failed to open 3d-models/lunabot.stl: {e}");
@@ -70,24 +69,9 @@ pub fn init_rerun(rerun_spawn_process: bool) {
             }
         };
 
-        let mesh = match read_stl(&mut file) {
-            Ok(x) => x,
-            Err(e) => {
-                error!("Failed to parse 3d-models/lunabot.stl: {e}");
-                return;
-            }
-        };
-
         if let Err(e) = recorder.log_static(
             "/robot/structure/mesh",
-            &Mesh3D::new(
-                mesh.vertices.into_iter().map(|v| (v[0], v[1], v[2])),
-            )
-            .with_triangle_indices(
-                mesh.faces
-                    .into_iter()
-                    .map(|IndexedTriangle { vertices: [i, j, k], .. }| UVec3D::new(i as u32, j as u32, k as u32))
-            )
+            &asset
         ) {
             error!("Failed to log robot structure mesh: {e}");
             return;

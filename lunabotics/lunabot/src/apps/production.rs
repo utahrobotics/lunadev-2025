@@ -13,7 +13,6 @@ use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use mio::{Events, Interest, Poll, Token};
 use motors::{enumerate_motors, MotorMask, VescIDs};
 use nalgebra::{Scale3, Transform3};
-use pathfinding::grid::Grid;
 use rerun_viz::init_rerun;
 use serde::Deserialize;
 use simple_motion::{ChainBuilder, NodeSerde};
@@ -218,13 +217,7 @@ impl LunabotApp {
             Scale3::new(-0.03125, 1.0, -0.03125).to_homogeneous(),
         );
         let world_to_grid = grid_to_world.try_inverse().unwrap();
-        let mut pathfinder = DefaultPathfinder {
-            world_to_grid,
-            grid_to_world,
-            grid: Grid::new(128, 256),
-        };
-        pathfinder.grid.enable_diagonal_mode();
-        pathfinder.grid.fill();
+        let mut pathfinder = DefaultPathfinder::new(world_to_grid, grid_to_world);
 
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
@@ -282,7 +275,7 @@ impl LunabotApp {
                     motor_ref.set_speed(left as f32, right as f32);
                 }
                 Action::CalculatePath { from, to, mut into } => {
-                    pathfinder.pathfind(&shared_thalassic_data, from, to, &mut into);
+                    pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into);
                     inputs.push(Input::PathCalculated(into));
                 }
             },
