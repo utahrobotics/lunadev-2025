@@ -22,7 +22,7 @@ use tracing::error;
 use rp2040::*;
 use udev::Event;
 
-pub use rerun_viz::RECORDER;
+pub use rerun_viz::{RECORDER, ROBOT_STRUCTURE, ROBOT};
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,

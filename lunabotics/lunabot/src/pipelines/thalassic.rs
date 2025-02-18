@@ -196,6 +196,10 @@ impl PointsStorageChannel {
         self.projected.store(Some(projected));
     }
 
+    pub fn return_storage(&self, projected: PointCloudStorage) {
+        self.finished.store(Some(projected));
+    }
+
     pub fn get_finished(&self) -> Option<PointCloudStorage> {
         self.finished.take()
     }
@@ -267,7 +271,7 @@ pub fn spawn_thalassic_pipeline(
                 for (channel, mut points) in points_vec {
                     points =
                         pipeline.provide_points(points, heightmap, gradmap, expanded_obstacle_map);
-                    channel.finished.store(Some(points));
+                    channel.return_storage(points);
                 }
 
                 buffer = owned.pessimistic_share();

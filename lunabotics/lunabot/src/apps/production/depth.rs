@@ -1,18 +1,19 @@
 use std::{
-    cell::OnceCell, num::NonZeroU32, sync::{mpsc::{Receiver, Sender, SyncSender}, Arc}, time::Duration
+    cell::OnceCell, f64::consts::PI, num::NonZeroU32, sync::{mpsc::{Receiver, Sender, SyncSender}, Arc}, time::Duration
 };
 
-use super::apriltag::{
+use super::{apriltag::{
     image::{ImageBuffer, Luma},
-    AprilTagDetector,
-};
+    AprilTagDetector, Apriltag
+}, RECORDER, ROBOT_STRUCTURE, streaming::CameraStream, ROBOT};
 use fxhash::FxHashMap;
 use gputter::types::{AlignedMatrix4, AlignedVec4};
-use nalgebra::{Vector2, Vector4};
+use nalgebra::{UnitQuaternion, Vector2, Vector3, Vector4};
 pub use realsense_rust;
 use realsense_rust::{
     config::Config, device::Device, frame::{ColorFrame, DepthFrame, PixelKind}, kind::{Rs2CameraInfo, Rs2Format, Rs2StreamKind}, pipeline::{ActivePipeline, FrameWaitError, InactivePipeline}
 };
+use rerun::{ImageFormat, Position3D};
 use simple_motion::StaticImmutableNode;
 use tasker::shared::{MaybeOwned, OwnedData};
 use thalassic::{DepthProjector, DepthProjectorBuilder};
@@ -25,8 +26,6 @@ use crate::{
         get_observe_depth, spawn_thalassic_pipeline, PointsStorageChannel, ThalassicData,
     },
 };
-
-use super::{apriltag::Apriltag, streaming::CameraStream};
 
 pub struct DepthCameraInfo {
     pub node: StaticImmutableNode,
@@ -61,6 +60,21 @@ pub fn enumerate_depth_cameras(
                 let (tx, rx) = std::sync::mpsc::sync_channel(1);
                 let pcl_storage_channels_tx = pcl_storage_channels_tx.clone();
                 let init_tx = init_tx.clone();
+                let isometry = node.get_local_isometry();
+
+                if let Some(recorder) = RECORDER.get() {
+                    let local_x = isometry.rotation * Vector3::x_axis();
+                    let corrected_rotation = UnitQuaternion::from_axis_angle(&local_x, PI) * isometry.rotation;
+                    if let Err(e) = recorder.recorder.log_static(
+                        format!("{ROBOT_STRUCTURE}/cameras/depth/{serial}"),
+                        &rerun::Transform3D::from_translation_rotation(
+                            isometry.translation.vector.cast::<f32>().data.0[0],
+                            rerun::Quaternion::from_xyzw(corrected_rotation.as_vector().cast::<f32>().data.0[0]),
+                        )
+                    ) {
+                        error!("Failed to log depth camera transform: {e}");
+                    }
+                }
 
                 std::thread::spawn(move || {
                     let mut camera_task = DepthCameraTask {
@@ -324,6 +338,19 @@ impl DepthCameraTask {
             } else {
                 focal_length_px = depth_format.fx();
             }
+
+            if let Some(recorder) = RECORDER.get() {
+                if let Err(e) = recorder.recorder.log(
+                    format!("{ROBOT_STRUCTURE}/cameras/depth/{}/depth_image", self.serial),
+                    &rerun::Pinhole::from_focal_length_and_resolution(
+                        [depth_format.fx(), depth_format.fy()],
+                        [depth_format.width() as f32, depth_format.height() as f32],
+                    ),
+                ) {
+                    error!("Failed to log depth camera intrinsics for {}: {e}", self.serial);
+                }
+            }
+
             let depth_projecter_builder = DepthProjectorBuilder {
                 image_size: Vector2::new(
                     NonZeroU32::new(depth_format.width() as u32).unwrap(),
@@ -334,7 +361,7 @@ impl DepthCameraTask {
             };
             let pcl_storage = depth_projecter_builder.make_points_storage();
             let pcl_storage_channel = Arc::new(PointsStorageChannel::new_for(&pcl_storage));
-            pcl_storage_channel.set_projected(pcl_storage);
+            pcl_storage_channel.return_storage(pcl_storage);
             if let Some(pcl_storage_channels_tx) = self.pcl_storage_channels_tx.take() {
                 let _ = pcl_storage_channels_tx.send(pcl_storage_channel.clone());
             }
@@ -403,7 +430,7 @@ impl DepthCameraTask {
 
             let observe_depth = get_observe_depth();
             for frame in frames.frames_of_type::<DepthFrame>() {
-                if !observe_depth {
+                if !observe_depth && RECORDER.get().is_none() {
                     continue;
                 }
                 if !matches!(frame.get(0, 0), Some(PixelKind::Z16 { .. })) {
@@ -411,30 +438,65 @@ impl DepthCameraTask {
                 }
                 debug_assert_eq!(frame.bits_per_pixel(), 16);
                 debug_assert_eq!(frame.width() * frame.height() * 2, frame.get_data_size());
+                let slice;
+                let bytes_slice;
                 unsafe {
                     let data: *const _ = frame.get_data();
-                    let slice = std::slice::from_raw_parts(
+                    slice = std::slice::from_raw_parts(
                         data.cast::<u16>(),
                         frame.width() * frame.height(),
                     );
+                    bytes_slice = std::slice::from_raw_parts(
+                        data.cast::<u8>(),
+                        frame.width() * frame.height() * 2
+                    );
+                }
 
-                    let camera_transform = self.node.get_global_isometry();
-                    let camera_transform: AlignedMatrix4<f32> =
-                        camera_transform.to_homogeneous().cast::<f32>().into();
-                    let Some(mut pcl_storage) = pcl_storage_channel.get_finished() else {
-                        break;
-                    };
-                    let depth_scale = match frame.depth_units() {
-                        Ok(x) => x,
-                        Err(e) => {
-                            error!("Failed to get depth scale from RealSense Camera {}: {e}", self.serial);
-                            continue;
-                        }
-                    };
-                    pcl_storage =
-                        depth_projector.project(slice, &camera_transform, pcl_storage, depth_scale);
+                let Some(mut pcl_storage) = pcl_storage_channel.get_finished() else {
+                    break;
+                };
+                let depth_scale = match frame.depth_units() {
+                    Ok(x) => x,
+                    Err(e) => {
+                        error!("Failed to get depth scale from RealSense Camera {}: {e}", self.serial);
+                        continue;
+                    }
+                };
+                let camera_transform = self.node.get_global_isometry();
+                let camera_transform: AlignedMatrix4<f32> =
+                    camera_transform.to_homogeneous().cast::<f32>().into();
+                pcl_storage =
+                    depth_projector.project(slice, &camera_transform, pcl_storage, depth_scale);
+
+                if let Some(recorder) = RECORDER.get() {
                     pcl_storage.read(point_cloud);
+                    let result: rerun::RecordingStreamResult<()> = try {
+                        recorder.recorder.log(
+                            format!("{ROBOT_STRUCTURE}/cameras/depth/{}/depth_image", self.serial),
+                            &rerun::DepthImage::new(
+                                bytes_slice,
+                                ImageFormat::depth([frame.width() as u32, frame.height() as u32], rerun::ChannelDatatype::U16)
+                            ).with_meter(1.0 / depth_scale)
+                        )?;
+                        recorder.recorder.log(
+                            format!("{ROBOT}/point_clouds/{}", self.serial),
+                            &rerun::Points3D::new(
+                                point_cloud.iter()
+                                .map(|point| {
+                                    Position3D::new(point.x, point.y, point.z)
+                                })
+                            ).with_radii(std::iter::repeat_n(0.01, point_cloud.len()))
+                        )?;
+                    };
+                    if let Err(e) = result {
+                        error!("Failed to log depth for {}: {e}", self.serial);
+                    }
+                }
+
+                if observe_depth {
                     pcl_storage_channel.set_projected(pcl_storage);
+                } else {
+                    pcl_storage_channel.return_storage(pcl_storage);
                 }
             }
         }
