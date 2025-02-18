@@ -3,7 +3,7 @@ use std::time::Duration;
 use ares_bt::{
     action::{AlwaysFail, AlwaysSucceed},
     branching::IfElse,
-    converters::{AssertCancelSafe, InfallibleShim},
+    converters::{AssertCancelSafe, InfallibleShim, Invert},
     looping::WhileLoop,
     sequence::{ParallelAny, Sequence},
     Behavior, CancelSafe, Status,
@@ -35,8 +35,7 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
             }),
             WhileLoop::new(
                 AlwaysSucceed,
-                IfElse::new(
-                    // ParallelAny::new((
+                Invert(
                         Sequence::new((
                             AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
                                 blackboard.calculate_path(
@@ -54,19 +53,7 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                             }),
                             AssertCancelSafe(follow_path),
                         )),
-                        // Sequence::new((WaitBehavior::from(Duration::from_secs(4)), AlwaysFail)),
-                    // )),
-                    AlwaysFail,
-                    AlwaysSucceed
-                    // Sequence::new((
-                    //     AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-                    //         info!("Scanning pause");
-                    //         blackboard.enqueue_action(Action::SetSteering(Default::default()));
-                    //         Status::Success
-                    //     }),
-                    //     WaitBehavior::from(Duration::from_secs(2)),
-                    // )),
-                ),
+                    )
             ),
             AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
                 blackboard.get_autonomy().advance();
