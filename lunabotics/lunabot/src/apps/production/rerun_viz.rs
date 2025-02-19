@@ -38,13 +38,6 @@ pub fn init_rerun(rerun_spawn_process: bool) {
             &ViewCoordinates::RIGHT_HAND_Y_UP()
         )?;
         recorder.log_static(
-            "/xyz",
-            &rerun::Arrows3D::from_vectors(
-                [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
-            )
-            .with_colors([[255, 0, 0], [0, 255, 0], [0, 0, 255]]),
-        )?;
-        recorder.log_static(
             format!("{ROBOT_STRUCTURE}/xyz"),
             &rerun::Arrows3D::from_vectors(
                 [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],

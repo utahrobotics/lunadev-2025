@@ -13,6 +13,7 @@ const FOCAL_LENGTH_PX: f32 = {{focal_length_px}};
 const PRINCIPAL_POINT_PX: vec2f = {{principal_point_px}};
 const PIXEL_COUNT: NonZeroU32 = {{pixel_count}};
 const HALF_PIXEL_COUNT: NonZeroU32 = {{half_pixel_count}};
+const MAX_DEPTH: f32 = {{max_depth}};
 
 @compute
 @workgroup_size(8, 8, 1)
@@ -36,11 +37,19 @@ fn depth(
         return;
     }
 
+    let x = f32(global_invocation_id.x) - PRINCIPAL_POINT_PX.x;
+    let y = f32(global_invocation_id.y) - PRINCIPAL_POINT_PX.y;
     let depth = f32(depthu) * depth_scale;
-    let x = (f32(global_invocation_id.x) - PRINCIPAL_POINT_PX.x) / FOCAL_LENGTH_PX;
-    let y = (f32(global_invocation_id.y) - PRINCIPAL_POINT_PX.y) / FOCAL_LENGTH_PX;
 
-    let point = normalize(vec3(x, y, -1)) * depth;
+    if depth > MAX_DEPTH {
+        points[i].w = 0.0;
+        return;
+    }
+
+    let new_scale = depth / FOCAL_LENGTH_PX;
+    var point = vec3(x, y, 0.0) * new_scale;
+    point.z = -depth;
+
     var point_transformed = transform * vec4<f32>(point, 1.0);
     point_transformed.w = 1.0;
     points[i] = point_transformed;

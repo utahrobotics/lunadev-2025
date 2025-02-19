@@ -102,6 +102,7 @@ pub struct DepthProjectorBuilder {
     pub image_size: Vector2<NonZeroU32>,
     pub focal_length_px: f32,
     pub principal_point_px: Vector2<f32>,
+    pub max_depth: f32,
 }
 
 impl DepthProjectorBuilder {
@@ -112,6 +113,7 @@ impl DepthProjectorBuilder {
             points: BufferGroupBinding::<_, AlphaBindGroups>::get::<1, 0>(),
             transform: BufferGroupBinding::<_, AlphaBindGroups>::get::<0, 1>(),
             depth_scale: BufferGroupBinding::<_, AlphaBindGroups>::get::<0, 2>(),
+            max_depth: self.max_depth,
             image_width: self.image_size.x,
             focal_length_px: self.focal_length_px,
             principal_point_px: self.principal_point_px.into(),
