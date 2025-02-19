@@ -257,6 +257,7 @@ impl LunasimbotApp {
             image_size: Vector2::new(NonZeroU32::new(36).unwrap(), NonZeroU32::new(24).unwrap()),
             focal_length_px: 10.392,
             principal_point_px: Vector2::new(17.5, 11.5),
+            max_depth: 3.0
         };
         let mut point_cloud: Box<[_]> =
             std::iter::repeat_n(AlignedVec4::from(Vector4::default()), 36 * 24).collect();

@@ -254,7 +254,7 @@ func _process(delta: float) -> void:
 		for i in range(raycasts.size()):
 			var raycast := raycasts[i]
 			if raycast.is_colliding():
-				depths[i] = raycast.get_collision_point().distance_to(camera.global_position)
+				depths[i] = clampf(- camera.to_local(raycast.get_collision_point()).z, 0.0, 100.0)
 			else:
 				depths[i] = 0.0
 		
