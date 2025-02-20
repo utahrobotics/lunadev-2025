@@ -238,7 +238,7 @@ func _ready() -> void:
 			var raycast := RayCast3D.new()
 			raycast.target_position = Vector3(
 				(x - (WIDTH - 1) / 2.0) / f,
-				(y - (HEIGHT - 1) / 2.0) / f,
+				((HEIGHT - 1) / 2.0 - y) / f,
 				-1
 			).normalized() * MAX_DISTANCE
 			raycasts.append(raycast)

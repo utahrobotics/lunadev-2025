@@ -47,7 +47,7 @@ fn depth(
     }
 
     let new_scale = depth / FOCAL_LENGTH_PX;
-    var point = vec3(x, y, 0.0) * new_scale;
+    var point = vec3(x, -y, 0.0) * new_scale;
     point.z = -depth;
 
     var point_transformed = transform * vec4<f32>(point, 1.0);
