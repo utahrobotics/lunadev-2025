@@ -13,10 +13,12 @@ use crossbeam::{
 };
 use gputter::is_gputter_initialized;
 use nalgebra::Vector2;
+use rerun::Position3D;
 use tasker::shared::OwnedData;
 use thalassic::{Occupancy, PointCloudStorage, ThalassicBuilder};
+use tracing::error;
 
-use crate::utils::distance_between_tuples;
+use crate::{apps::{RECORDER, ROBOT}, utils::distance_between_tuples};
 
 static OBSERVE_DEPTH: AtomicBool = AtomicBool::new(false);
 static DEPTH_UNPARKER: ArcSwapOption<Unparker> = ArcSwapOption::const_empty();
@@ -241,7 +243,7 @@ pub fn spawn_thalassic_pipeline(
         DEPTH_UNPARKER.store(Some(parker.unparker().clone().into()));
 
         std::thread::spawn(move || loop {
-            if !get_observe_depth() {
+            if !get_observe_depth() && RECORDER.get().is_none() {
                 parker.park();
             }
             let mut points_vec = vec![];
@@ -272,6 +274,24 @@ pub fn spawn_thalassic_pipeline(
                     points =
                         pipeline.provide_points(points, heightmap, gradmap, expanded_obstacle_map);
                     channel.return_storage(points);
+                }
+
+                if let Some(recorder) = RECORDER.get() {
+                    if let Err(e) = recorder.recorder.log(
+                        format!("{ROBOT}/heightmap"),
+                        &rerun::Points3D::new(
+                            heightmap.iter().enumerate()
+                            .map(|(i, &height)| {
+                                Position3D::new(
+                                    (i % THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE,
+                                    height,
+                                    (i / THALASSIC_WIDTH as usize) as f32 * -THALASSIC_CELL_SIZE,
+                                )
+                            })
+                        )
+                    ) {
+                        error!("Failed to log heightmap: {e}");
+                    }
                 }
 
                 buffer = owned.pessimistic_share();

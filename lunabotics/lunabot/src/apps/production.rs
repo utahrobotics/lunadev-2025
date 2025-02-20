@@ -22,7 +22,7 @@ use tracing::error;
 use rp2040::*;
 use udev::Event;
 
-pub use rerun_viz::{RECORDER, ROBOT_STRUCTURE, ROBOT};
+pub use rerun_viz::{RECORDER, ROBOT_STRUCTURE, ROBOT, RerunViz};
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,
@@ -85,7 +85,6 @@ pub struct Vesc {
     speed_multiplier: Option<f32>
 }
 
-
 pub struct LunabotApp {
     pub lunabase_address: Option<IpAddr>,
     pub max_pong_delay_ms: u64,
@@ -95,7 +94,7 @@ pub struct LunabotApp {
     pub imus: FxHashMap<String, IMUInfo>,
     pub robot_layout: String,
     pub vesc: Vesc,
-    pub rerun_spawn_process: bool
+    pub rerun_viz: RerunViz
 }
 
 impl LunabotApp {
@@ -117,7 +116,7 @@ impl LunabotApp {
             error!("Failed to initialize gputter: {e}");
         }
 
-        init_rerun(self.rerun_spawn_process);
+        init_rerun(self.rerun_viz);
 
         let apriltags = match self
             .apriltags

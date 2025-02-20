@@ -31,7 +31,7 @@ lumpur::define_configuration! {
             #[serde(default)]
             vesc: apps::Vesc,
             #[serde(default)]
-            rerun_spawn_process: bool
+            rerun_viz: apps::RerunViz
         },
         // Dataviz {
         //     lunabase_address: IpAddr,
@@ -98,7 +98,7 @@ fn main() {
             imus,
             robot_layout,
             vesc,
-            rerun_spawn_process
+            rerun_viz
         } => {
             apps::LunabotApp {
                 lunabase_address,
@@ -112,7 +112,7 @@ fn main() {
                 vesc,
                 robot_layout: robot_layout
                     .unwrap_or_else(|| "robot-layout/lunabot.json".to_string()),
-                rerun_spawn_process
+                rerun_viz
             }
             .run();
         }

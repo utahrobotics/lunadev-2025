@@ -13,7 +13,7 @@ pub use realsense_rust;
 use realsense_rust::{
     config::Config, device::Device, frame::{ColorFrame, DepthFrame, PixelKind}, kind::{Rs2CameraInfo, Rs2Format, Rs2StreamKind}, pipeline::{ActivePipeline, FrameWaitError, InactivePipeline}
 };
-use rerun::{ImageFormat, Position3D};
+use rerun::ImageFormat;
 use simple_motion::StaticImmutableNode;
 use tasker::shared::{MaybeOwned, OwnedData};
 use thalassic::{DepthProjector, DepthProjectorBuilder};
@@ -486,9 +486,7 @@ impl DepthCameraTask {
                             &rerun::Points3D::new(
                                 point_cloud.iter()
                                 .filter(|point| point.w == 1.0)
-                                .map(|point| {
-                                    Position3D::new(point.x, -point.y, point.z)
-                                })
+                                .map(|point| [point.x, point.y, point.z])
                             ).with_radii(std::iter::repeat_n(0.01, point_cloud.len()))
                         )?;
                     };
@@ -497,11 +495,7 @@ impl DepthCameraTask {
                     }
                 }
 
-                if observe_depth {
-                    pcl_storage_channel.set_projected(pcl_storage);
-                } else {
-                    pcl_storage_channel.return_storage(pcl_storage);
-                }
+                pcl_storage_channel.set_projected(pcl_storage);
             }
         }
 

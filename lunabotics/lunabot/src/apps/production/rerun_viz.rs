@@ -2,6 +2,7 @@ use std::{f32::consts::PI, sync::OnceLock};
 
 use nalgebra::{UnitQuaternion, Vector3};
 use rerun::{Asset3D, RecordingStream, RecordingStreamResult, ViewCoordinates};
+use serde::Deserialize;
 use tracing::error;
 
 pub const ROBOT: &str = "/robot";
@@ -13,23 +14,36 @@ pub struct RecorderData {
     pub recorder: RecordingStream,
 }
 
-pub fn init_rerun(rerun_spawn_process: bool) {
-    let recorder = if rerun_spawn_process {
-        match rerun::RecordingStreamBuilder::new("lunabot").spawn() {
-            Ok(x) => x,
-            Err(e) => {
-                error!("Failed to start rerun process: {e}");
-                return;
+#[derive(Deserialize, Default)]
+pub enum RerunViz {
+    Log,
+    Viz,
+    #[default]
+    Disabled
+}
+
+pub fn init_rerun(rerun_viz: RerunViz) {
+    let recorder = match rerun_viz {
+        RerunViz::Viz => {
+            match rerun::RecordingStreamBuilder::new("lunabot").spawn() {
+                Ok(x) => x,
+                Err(e) => {
+                    error!("Failed to start rerun process: {e}");
+                    return;
+                }
             }
         }
-
-    } else {
-        match rerun::RecordingStreamBuilder::new("lunabot").save("recording.rrd") {
-            Ok(x) => x,
-            Err(e) => {
-                error!("Failed to start rerun file logging: {e}");
-                return;
+        RerunViz::Log => {
+            match rerun::RecordingStreamBuilder::new("lunabot").save("recording.rrd") {
+                Ok(x) => x,
+                Err(e) => {
+                    error!("Failed to start rerun file logging: {e}");
+                    return;
+                }
             }
+        }
+        RerunViz::Disabled => {
+            return;
         }
     };
     let result: RecordingStreamResult<()> = try {
