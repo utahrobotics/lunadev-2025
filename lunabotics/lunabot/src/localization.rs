@@ -194,7 +194,7 @@ impl Localizer {
             {
                 crate::apps::RECORDER.get().map(|recorder| {
                     if let Err(e) = recorder.recorder.log(
-                        "/robot/structure",
+                        crate::apps::ROBOT_STRUCTURE,
                         &rerun::Transform3D::from_translation_rotation(
                             isometry.translation.vector.cast::<f32>().data.0[0],
                             rerun::Quaternion::from_xyzw(isometry.rotation.as_vector().cast::<f32>().data.0[0]),
