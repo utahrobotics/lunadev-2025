@@ -1,16 +1,16 @@
 use std::time::Duration;
 
 use ares_bt::{
-    action::{AlwaysFail, AlwaysSucceed},
+    action::AlwaysSucceed,
     branching::IfElse,
-    converters::{AssertCancelSafe, InfallibleShim, Invert},
+    converters::{AssertCancelSafe, Invert},
     looping::WhileLoop,
-    sequence::{ParallelAny, Sequence},
+    sequence::Sequence,
     Behavior, CancelSafe, Status,
 };
 use common::LunabotStage;
 use nalgebra::Point3;
-use tracing::{info, warn};
+use tracing::warn;
 
 use crate::{blackboard::LunabotBlackboard, utils::WaitBehavior, Action};
 
@@ -36,24 +36,33 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
             WhileLoop::new(
                 AlwaysSucceed,
                 Invert(
-                        Sequence::new((
-                            AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-                                blackboard.calculate_path(
-                                    blackboard.get_robot_isometry().translation.vector.into(),
-                                    Point3::new(-2.0, 0.0, -7.0),
-                                );
+                    Sequence::new((
+
+                        // pathfind
+                        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+                            blackboard.calculate_path(
+                                blackboard.get_robot_isometry().translation.vector.into(),
+                                Point3::new(-2.0, 0.0, -7.0),
+                            );
+                            Status::Success
+                        }),
+
+                        // wait for path
+                        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+                            if blackboard.get_path().is_some() {
                                 Status::Success
-                            }),
-                            AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-                                if blackboard.get_path().is_some() {
-                                    Status::Success
-                                } else {
-                                    Status::Running
-                                }
-                            }),
-                            AssertCancelSafe(follow_path),
-                        )),
-                    )
+                            } else {
+                                Status::Running
+                            }
+                        }),
+
+                        // follow path
+                        AssertCancelSafe(follow_path),
+                        
+                        // pause to ensure the robot isn't moving while scanning in the "pathfind" node
+                        WaitBehavior::from(Duration::from_secs(1)), 
+                    )),
+                )
             ),
             AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
                 blackboard.get_autonomy().advance();

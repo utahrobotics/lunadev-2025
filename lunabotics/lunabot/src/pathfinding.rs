@@ -70,7 +70,6 @@ impl DefaultPathfinder {
                     false => Some(*unknown_cell),
                 }
             ).collect();
-        println!("just finished scanning. unscannable cells: {:?}", self.unscannable_cells);
 
         map_data
     }
