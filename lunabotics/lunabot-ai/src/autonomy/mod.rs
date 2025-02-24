@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use ares_bt::{
-    converters::AssertCancelSafe, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, FallibleStatus, InfallibleStatus, Status
+    converters::AssertCancelSafe, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, Status
 };
 use common::{FromLunabase, PathInstruction, Steering};
 use dig::dig;
@@ -99,10 +99,10 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
             return match first_instr.instruction {
                 PathInstruction::MoveTo => {
                     println!("path follower: done!"); 
+                    blackboard.enqueue_action(Action::SetSteering(Steering::default()));
                     Status::Success
                 }
                 PathInstruction::FaceTowards => {
-                    println!("path follower: reached end of truncated path"); 
                     blackboard.enqueue_action(Action::SetSteering(Steering::default()));
                     Status::Failure
                 }
@@ -127,11 +127,9 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
         PathInstruction::MoveTo => {
             if to_first_point.angle(&Vector2::new(0.0, -1.0)).to_degrees() > 20.0 {
                 if to_first_point.x > 0.0 {
-                    blackboard
-                    .enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, -1.0)))
+                    blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, -1.0)))
                 } else {
-                    blackboard
-                        .enqueue_action(Action::SetSteering(Steering::new_left_right(-1.0, 1.0)))
+                    blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(-1.0, 1.0)))
                 }
             } else {
                 let (l, r) = scaled_clamp(
