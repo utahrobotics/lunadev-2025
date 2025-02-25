@@ -358,7 +358,7 @@ impl DepthCameraTask {
                 ),
                 focal_length_px,
                 principal_point_px: Vector2::new(depth_format.ppx(), depth_format.ppy()),
-                max_depth: 3.0,
+                max_depth: 2.0,
             };
             let pcl_storage = depth_projecter_builder.make_points_storage();
             let pcl_storage_channel = Arc::new(PointsStorageChannel::new_for(&pcl_storage));
@@ -479,7 +479,7 @@ impl DepthCameraTask {
                                 ImageFormat::depth([frame.width() as u32, frame.height() as u32], rerun::ChannelDatatype::U16)
                             )
                             .with_meter(1.0 / depth_scale)
-                            .with_depth_range([0.0, 3.0 / depth_scale as f64])
+                            .with_depth_range([0.0, 2.0 / depth_scale as f64])
                         )?;
                         recorder.recorder.log(
                             format!("{ROBOT}/point_clouds/{}", self.serial),
@@ -487,7 +487,7 @@ impl DepthCameraTask {
                                 point_cloud.iter()
                                 .filter(|point| point.w == 1.0)
                                 .map(|point| [point.x, point.y, point.z])
-                            ).with_radii(std::iter::repeat_n(0.01, point_cloud.len()))
+                            ).with_radii(std::iter::repeat_n(0.003, point_cloud.len()))
                         )?;
                     };
                     if let Err(e) = result {
