@@ -15,7 +15,6 @@ use gputter::is_gputter_initialized;
 use nalgebra::Vector2;
 use tasker::shared::OwnedData;
 use thalassic::{Occupancy, PointCloudStorage, ThalassicBuilder};
-use tracing::error;
 
 use crate::utils::distance_between_tuples;
 
@@ -294,7 +293,7 @@ pub fn spawn_thalassic_pipeline(
                             })
                         )
                     ) {
-                        error!("Failed to log heightmap: {e}");
+                        tracing::error!("Failed to log heightmap: {e}");
                     }
                 }
 
