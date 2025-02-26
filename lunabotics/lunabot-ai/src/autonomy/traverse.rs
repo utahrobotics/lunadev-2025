@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use ares_bt::{
     action::AlwaysSucceed,
-    branching::IfElse,
+    branching::{IfElse, TryCatch},
     converters::{AssertCancelSafe, Invert},
     looping::WhileLoop,
     sequence::Sequence,
@@ -15,6 +15,9 @@ use tracing::warn;
 use crate::{blackboard::LunabotBlackboard, utils::WaitBehavior, Action};
 
 use super::{follow_path, Autonomy, AutonomyStage};
+
+
+const PAUSE_AFTER_MOVING_DURATION: Duration = Duration::from_secs(2);
 
 pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     IfElse::new(
@@ -56,11 +59,14 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                             }
                         }),
 
-                        // follow path
-                        AssertCancelSafe(follow_path),
-                        
-                        // pause to ensure the robot isn't moving while scanning in the "pathfind" node
-                        WaitBehavior::from(Duration::from_secs(1)), 
+                        // follow path, then pause regardless of result
+                        TryCatch::new(
+                            Sequence::new((
+                                AssertCancelSafe(follow_path),
+                                WaitBehavior::from(PAUSE_AFTER_MOVING_DURATION)
+                            )),
+                            Invert(WaitBehavior::from(PAUSE_AFTER_MOVING_DURATION)) // return false if `follow_path` returned false
+                        )   
                     )),
                 )
             ),
