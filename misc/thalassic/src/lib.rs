@@ -44,6 +44,7 @@ type DepthBindGrp = (
     UniformBuffer<AlignedMatrix4<f32>>,
     UniformBuffer<f32>,
     StorageBuffer<[AlignedVec4<f32>], HostReadOnly, ShaderReadWrite>,
+    UniformBuffer<u32>,
 );
 
 /// 1. Sum vectors for each cell in the heightmap
@@ -120,7 +121,7 @@ impl DepthProjectorBuilder {
             cell_size: thalassic_ref.cell_size,
             cell_count: NonZeroU32::new(thalassic_ref.heightmap_dimensions.x.get()
                 * thalassic_ref.heightmap_dimensions.y.get()).unwrap(),
-            max_point_count: thalassic_ref.max_point_count,
+            point_count: BufferGroupBinding::<_, AlphaBindGroups>::get::<0, 4>(),
         }
         .compile();
 
@@ -145,6 +146,7 @@ impl DepthProjectorBuilder {
                 UniformBuffer::new(),
                 UniformBuffer::new(),
                 StorageBuffer::new_dyn(pixel_count as usize).unwrap(),
+                UniformBuffer::new(),
             ))),
             sum_bind_grp: thalassic_ref,
         }
@@ -166,9 +168,10 @@ impl DepthProjector {
         depth_scale: f32,
         point_cloud: Option<&mut [AlignedVec4<f32>]>
     ) {
+        let point_count = self.image_size.x.get() * self.image_size.y.get();
         debug_assert_eq!(
             depths.len(),
-            self.image_size.x.get() as usize * self.image_size.y.get() as usize
+            point_count as usize
         );
 
         let depth_grp = self.depth_bind_grp.take().unwrap();
@@ -185,6 +188,7 @@ impl DepthProjector {
                     .write_raw::<0>(bytemuck::cast_slice(depths), &mut lock);
                 bind_grps.0.write::<1, _>(camera_transform, &mut lock);
                 bind_grps.0.write::<2, _>(&depth_scale, &mut lock);
+                bind_grps.0.write::<4, _>(&point_count, &mut lock);
                 &mut bind_grps
             })
             .finish();
@@ -287,7 +291,6 @@ impl ThalassicBuilder {
                     ))),
                 heightmap_dimensions: self.heightmap_dimensions,
                 cell_size: self.cell_size,
-                max_point_count: self.max_point_count,
             },
         }
     }
@@ -310,7 +313,6 @@ pub struct ThalassicPipelineRef {
     sum_bind_grp: Arc<Mutex<(Option<GpuBufferSet<SumBindGrp>>, bool)>>,
     heightmap_dimensions: Vector2<NonZeroU32>,
     cell_size: f32,
-    max_point_count: NonZeroU32,
 }
 
 impl ThalassicPipelineRef {
@@ -319,7 +321,6 @@ impl ThalassicPipelineRef {
             sum_bind_grp: Arc::new(Mutex::new((None, false))),
             heightmap_dimensions: Vector2::new(NonZeroU32::new(128).unwrap(), NonZeroU32::new(128).unwrap()),
             cell_size: 0.1,
-            max_point_count: NonZeroU32::new(1024).unwrap(),
         }
     }
 }
