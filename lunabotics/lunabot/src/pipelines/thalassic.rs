@@ -274,7 +274,7 @@ pub fn spawn_thalassic_pipeline(
 
                 for (channel, mut points) in points_vec {
                     points =
-                        pipeline.provide_points(points, heightmap, gradmap, expanded_obstacle_map);
+                        pipeline.process(points, heightmap, gradmap, expanded_obstacle_map);
                     channel.return_storage(points);
                 }
 

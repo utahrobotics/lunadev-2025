@@ -1,4 +1,4 @@
-use std::{f32::consts::PI, num::NonZeroU32, sync::Arc};
+use std::{num::NonZeroU32, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
 use depth2pcl::Depth2Pcl;
@@ -14,7 +14,7 @@ use gputter::{
 };
 use grad2obstacle::Grad2Obstacle;
 use height2grad::Height2Grad;
-use nalgebra::{Vector2, Vector3, Vector4};
+use nalgebra::{Vector2, Vector3};
 
 // mod clustering;
 mod depth2pcl;
@@ -97,7 +97,7 @@ pub struct DepthProjectorBuilder {
 }
 
 impl DepthProjectorBuilder {
-    pub fn build(self) -> DepthProjector {
+    pub fn build(self, thalassic: &ThalassicPipeline) -> DepthProjector {
         let pixel_count = self.image_size.x.get() * self.image_size.y.get();
         let [depth_fn] = Depth2Pcl {
             depths: BufferGroupBinding::<_, AlphaBindGroups>::get::<0, 0>(),
@@ -128,6 +128,7 @@ impl DepthProjectorBuilder {
                 UniformBuffer::new(),
                 StorageBuffer::new_dyn(pixel_count as usize).unwrap(),
             ))),
+            sum_bind_grp: thalassic.sum_bind_grp.clone(),
         }
     }
 }
@@ -165,9 +166,6 @@ impl DepthProjector {
                     .write_raw::<0>(bytemuck::cast_slice(depths), &mut lock);
                 bind_grps.0.write::<1, _>(camera_transform, &mut lock);
                 bind_grps.0.write::<2, _>(&depth_scale, &mut lock);
-                bind_grps
-                    .1
-                    .write::<1, _>(&self.image_size.x.get(), &mut lock);
                 &mut bind_grps
             })
             .finish();
@@ -252,9 +250,11 @@ impl ThalassicBuilder {
         ThalassicPipeline {
             pipeline,
             bind_grps: Some(bind_grps),
-            points_buffer: Vec::new(),
             new_radius: Some(0.25),
             new_max_gradient: Some(45.0f32.to_radians()),
+            sum_bind_grp: Arc::new(Mutex::new(Some(GpuBufferSet::from((
+                StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),
+            ))))),
         }
     }
 }
@@ -280,14 +280,13 @@ pub struct ThalassicPipeline {
         GpuBufferSet<ObstacleMapperInputBindGrp>,
         GpuBufferSet<ExpanderBindGrp>,
     )>,
-    points_buffer: Vec<AlignedVec4<f32>>,
     new_radius: Option<f32>,
     new_max_gradient: Option<f32>,
     sum_bind_grp: Arc<Mutex<Option<GpuBufferSet<SumBindGrp>>>>,
 }
 
 impl ThalassicPipeline {
-    pub fn provide_points(
+    pub fn process(
         &mut self,
         out_heightmap: &mut [f32],
         out_gradient: &mut [f32],
@@ -315,10 +314,10 @@ impl ThalassicPipeline {
         self.pipeline
             .new_pass(|mut lock| {
                 if let Some(new_radius) = self.new_radius.take() {
-                    bind_grps.6.write::<0, _>(&new_radius, &mut lock);
+                    bind_grps.5.write::<0, _>(&new_radius, &mut lock);
                 }
                 if let Some(new_max_gradient) = self.new_max_gradient.take() {
-                    bind_grps.5.write::<0, _>(&new_max_gradient, &mut lock);
+                    bind_grps.4.write::<0, _>(&new_max_gradient, &mut lock);
                 }
                 &mut bind_grps
             })
