@@ -1,5 +1,5 @@
 use std::{
-    cell::OnceCell, f64::consts::PI, num::NonZeroU32, sync::{mpsc::{Receiver, Sender, SyncSender}, Arc}, time::Duration
+    cell::OnceCell, f64::consts::PI, num::NonZeroU32, sync::mpsc::{Receiver, Sender, SyncSender}, time::Duration
 };
 
 use super::{apriltag::{
@@ -16,14 +16,14 @@ use realsense_rust::{
 use rerun::ImageFormat;
 use simple_motion::StaticImmutableNode;
 use tasker::shared::{MaybeOwned, OwnedData};
-use thalassic::{DepthProjector, DepthProjectorBuilder};
+use thalassic::{DepthProjector, DepthProjectorBuilder, ThalassicPipelineRef};
 use tracing::{error, info, warn};
 
 use crate::{
     apps::production::streaming::DownscaleRgbImageReader,
     localization::LocalizerRef,
     pipelines::thalassic::{
-        get_observe_depth, spawn_thalassic_pipeline, PointsStorageChannel, ThalassicData,
+        get_observe_depth, spawn_thalassic_pipeline, ThalassicData,
     },
 };
 
@@ -33,14 +33,19 @@ pub struct DepthCameraInfo {
     pub stream_index: usize,
 }
 
+const ESTIMATED_MAX_POINT_COUNT: u32 = 1024 * 812;
+
 pub fn enumerate_depth_cameras(
     thalassic_buffer: OwnedData<ThalassicData>,
     localizer_ref: &LocalizerRef,
     serial_to_chain: impl IntoIterator<Item = (String, DepthCameraInfo)>,
     apriltags: &'static [(usize, Apriltag)],
 ) {
+    let thalassic_ref = spawn_thalassic_pipeline(
+        thalassic_buffer,
+        ESTIMATED_MAX_POINT_COUNT,
+    );
     let (init_tx, init_rx) = std::sync::mpsc::channel::<&'static str>();
-    let (pcl_storage_channels_tx, pcl_storage_channels_rx) = std::sync::mpsc::channel();
     let mut threads: FxHashMap<&str, SyncSender<(Device, ActivePipeline)>> = serial_to_chain
         .into_iter()
         .filter_map(
@@ -58,7 +63,6 @@ pub fn enumerate_depth_cameras(
                 let serial: &_ = Box::leak(serial.into_boxed_str());
                 let localizer_ref = localizer_ref.clone();
                 let (tx, rx) = std::sync::mpsc::sync_channel(1);
-                let pcl_storage_channels_tx = pcl_storage_channels_tx.clone();
                 let init_tx = init_tx.clone();
                 let isometry = node.get_local_isometry();
 
@@ -76,6 +80,8 @@ pub fn enumerate_depth_cameras(
                     }
                 }
 
+                let thalassic_ref = thalassic_ref.clone();
+
                 std::thread::spawn(move || {
                     let mut camera_task = DepthCameraTask {
                         pipeline: rx,
@@ -86,7 +92,7 @@ pub fn enumerate_depth_cameras(
                         localizer_ref,
                         node,
                         ignore_apriltags,
-                        pcl_storage_channels_tx: Some(pcl_storage_channels_tx),
+                        thalassic_ref,
                         init_tx
                     };
                     loop {
@@ -101,9 +107,6 @@ pub fn enumerate_depth_cameras(
     let context = match realsense_rust::context::Context::new() {
         Ok(x) => x,
         Err(e) => {
-            // It's debatable whether or not we should spawn the pipeline if no cameras are found.
-            // Spawning it can help expose some bugs though
-            spawn_thalassic_pipeline(thalassic_buffer, Box::new([]));
             error!("Failed to get RealSense Context: {e}");
             return;
         }
@@ -111,7 +114,6 @@ pub fn enumerate_depth_cameras(
     let device_hub = match context.create_device_hub() {
         Ok(x) => x,
         Err(e) => {
-            spawn_thalassic_pipeline(thalassic_buffer, Box::new([]));
             error!("Failed to create RealSense DeviceHub: {e}");
             return;
         }
@@ -220,10 +222,6 @@ pub fn enumerate_depth_cameras(
     });
 
     std::thread::spawn(move || {
-        spawn_thalassic_pipeline(
-            thalassic_buffer,
-            pcl_storage_channels_rx.into_iter().collect(),
-        );
         info!("Thalassic pipeline spawned");
     });
 }
@@ -231,7 +229,6 @@ pub fn enumerate_depth_cameras(
 struct DepthCameraState {
     image: MaybeOwned<ImageBuffer<Luma<u8>, Vec<u8>>>,
     depth_projector: DepthProjector,
-    pcl_storage_channel: Arc<PointsStorageChannel>,
     point_cloud: Box<[AlignedVec4<f32>]>,
 }
 
@@ -244,7 +241,7 @@ struct DepthCameraTask {
     localizer_ref: LocalizerRef,
     node: StaticImmutableNode,
     ignore_apriltags: bool,
-    pcl_storage_channels_tx: Option<Sender<Arc<PointsStorageChannel>>>,
+    thalassic_ref: ThalassicPipelineRef,
     init_tx: Sender<&'static str>
 }
 
@@ -297,7 +294,7 @@ impl DepthCameraTask {
             return;
         };
 
-        let DepthCameraState { image, depth_projector, pcl_storage_channel, point_cloud  } = if let Some(state) = self.state.get_mut() {
+        let DepthCameraState { image, depth_projector, point_cloud  } = if let Some(state) = self.state.get_mut() {
             if state.image.width() as usize != color_format.width() || state.image.height() as usize != color_format.height() {
                 warn!("RealSense Color Camera {} format changed", self.serial);
                 return;
@@ -360,14 +357,8 @@ impl DepthCameraTask {
                 principal_point_px: Vector2::new(depth_format.ppx(), depth_format.ppy()),
                 max_depth: 2.0,
             };
-            let pcl_storage = depth_projecter_builder.make_points_storage();
-            let pcl_storage_channel = Arc::new(PointsStorageChannel::new_for(&pcl_storage));
-            pcl_storage_channel.return_storage(pcl_storage);
-            if let Some(pcl_storage_channels_tx) = self.pcl_storage_channels_tx.take() {
-                let _ = pcl_storage_channels_tx.send(pcl_storage_channel.clone());
-            }
 
-            let depth_projector = depth_projecter_builder.build();
+            let depth_projector = depth_projecter_builder.build(self.thalassic_ref.clone());
             
             let _ = self.state.set(DepthCameraState {
                 image: image.into(),
@@ -376,7 +367,6 @@ impl DepthCameraTask {
                     depth_projector.get_pixel_count().get() as usize,
                 ).collect(),
                 depth_projector,
-                pcl_storage_channel,
             });
             self.state.get_mut().unwrap()
         };
@@ -453,9 +443,6 @@ impl DepthCameraTask {
                     );
                 }
 
-                let Some(mut pcl_storage) = pcl_storage_channel.get_finished() else {
-                    break;
-                };
                 let depth_scale = match frame.depth_units() {
                     Ok(x) => x,
                     Err(e) => {
@@ -466,11 +453,9 @@ impl DepthCameraTask {
                 let camera_transform = self.node.get_global_isometry();
                 let camera_transform: AlignedMatrix4<f32> =
                     camera_transform.to_homogeneous().cast::<f32>().into();
-                pcl_storage =
-                    depth_projector.project(slice, &camera_transform, pcl_storage, depth_scale);
+                depth_projector.project(slice, &camera_transform, depth_scale, Some(point_cloud));
 
                 if let Some(recorder) = RECORDER.get() {
-                    pcl_storage.read(point_cloud);
                     let result: rerun::RecordingStreamResult<()> = try {
                         recorder.recorder.log(
                             format!("{ROBOT_STRUCTURE}/cameras/depth/{}/depth_image", self.serial),
@@ -494,8 +479,6 @@ impl DepthCameraTask {
                         error!("Failed to log depth for {}: {e}", self.serial);
                     }
                 }
-
-                pcl_storage_channel.set_projected(pcl_storage);
             }
         }
 

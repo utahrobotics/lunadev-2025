@@ -38,7 +38,7 @@ use tracing::{error, info, warn};
 
 use crate::{
     localization::{IMUReading, Localizer},
-    pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline, PointsStorageChannel},
+    pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline},
 };
 use crate::{pathfinding::DefaultPathfinder, pipelines::thalassic::ThalassicData};
 
@@ -259,12 +259,6 @@ impl LunasimbotApp {
             principal_point_px: Vector2::new(17.5, 11.5),
             max_depth: 3.0
         };
-        let mut point_cloud: Box<[_]> =
-            std::iter::repeat_n(AlignedVec4::from(Vector4::default()), 36 * 24).collect();
-        let mut depth_projecter = depth_projecter_builder.build();
-        let pcl_storage = depth_projecter_builder.make_points_storage();
-        let pcl_storage_channel = Arc::new(PointsStorageChannel::new_for(&pcl_storage));
-        pcl_storage_channel.set_projected(pcl_storage);
 
         let mut buffer = OwnedData::from(ThalassicData::default());
         let shared_thalassic_data = buffer.create_lendee();
@@ -287,7 +281,8 @@ impl LunasimbotApp {
             },
         );
 
-        spawn_thalassic_pipeline(buffer, Box::new([pcl_storage_channel.clone()]));
+        let thalassic_ref = spawn_thalassic_pipeline(buffer, 36 * 24);
+        let mut depth_projecter = depth_projecter_builder.build(thalassic_ref);
 
         let axis_angle = |axis: [f32; 3], angle: f32| {
             let axis = UnitVector3::new_normalize(Vector3::new(
@@ -300,6 +295,8 @@ impl LunasimbotApp {
         };
 
         let lunasim_stdin2 = lunasim_stdin.clone();
+        let mut point_cloud: Box<[_]> =
+            std::iter::repeat_n(AlignedVec4::from(Vector4::default()), 36 * 24).collect();
         from_lunasim_ref.add_fn_mut(move |msg| match msg {
             FromLunasim::Accelerometer {
                 id: _,
@@ -320,13 +317,7 @@ impl LunasimbotApp {
                 let camera_transform = camera_link.get_global_isometry();
                 let camera_transform: AlignedMatrix4<f32> =
                     camera_transform.to_homogeneous().cast::<f32>().into();
-                let Some(mut pcl_storage) = pcl_storage_channel.get_finished() else {
-                    return;
-                };
-                pcl_storage =
-                    depth_projecter.project(&depths, &camera_transform, pcl_storage, 0.01);
-                pcl_storage.read(&mut point_cloud);
-                pcl_storage_channel.set_projected(pcl_storage);
+                depth_projecter.project(&depths, &camera_transform, 0.01, Some(&mut point_cloud));
                 let msg = FromLunasimbot::PointCloud(
                     point_cloud
                         .iter()
