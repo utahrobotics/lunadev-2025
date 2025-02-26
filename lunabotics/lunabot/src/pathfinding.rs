@@ -7,7 +7,7 @@ use crate::utils::distance_between_tuples;
 
 use crate::pipelines::thalassic::{set_observe_depth, ThalassicData, CellState};
 
-const REACH: usize = 10;
+const REACH: usize = 2;
 
 const MAX_SCAN_ATTEMPTS: usize = 4;
 
