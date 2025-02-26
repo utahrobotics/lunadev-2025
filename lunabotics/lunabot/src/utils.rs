@@ -2,7 +2,9 @@
 
 use std::ops::{Add, Mul, Sub};
 
-use nalgebra::{Quaternion, RealField, SimdRealField, UnitQuaternion, UnitVector3, Vector2, Vector3};
+use nalgebra::{
+    Quaternion, RealField, SimdRealField, UnitQuaternion, UnitVector3, Vector2, Vector3,
+};
 
 /// named as such to avoid confusion with `nalgebra::distance` and `pathfinding::distance`
 pub fn distance_between_tuples((x1, y1): (usize, usize), (x2, y2): (usize, usize)) -> f32 {
@@ -52,12 +54,16 @@ where
 }
 
 /// Calculates the instantaneous angular velocity that has to be applied to `q1` to reach `q2` in `dt` seconds.
-/// 
+///
 /// This is an approximation and may not be accurate for large rotations.
-/// 
+///
 /// # Source
 /// 1. https://mariogc.com/post/angular-velocity-quaternions
-pub fn quat_to_angular_velocity<F>(q1: UnitQuaternion<F>, q2: UnitQuaternion<F>, dt: F) -> Vector3<F>
+pub fn quat_to_angular_velocity<F>(
+    q1: UnitQuaternion<F>,
+    q2: UnitQuaternion<F>,
+    dt: F,
+) -> Vector3<F>
 where
     F: SimdRealField + Copy,
     F::Element: SimdRealField,
@@ -70,24 +76,35 @@ where
 }
 
 /// Applies the given angular velocity to `q1` for `dt` seconds.
-/// 
+///
 /// # Source
 /// 1. https://gamedev.stackexchange.com/questions/108920/applying-angular-velocity-to-quaternion
-pub fn apply_angular_velocity<F>(q1: UnitQuaternion<F>, angular_velocity: Vector3<F>, dt: F) -> UnitQuaternion<F>
+pub fn apply_angular_velocity<F>(
+    q1: UnitQuaternion<F>,
+    angular_velocity: Vector3<F>,
+    dt: F,
+) -> UnitQuaternion<F>
 where
     F: SimdRealField + Copy,
     F::Element: SimdRealField,
 {
     let q1 = q1.into_inner();
     UnitQuaternion::new_normalize(
-        q1 + Quaternion::new(F::zero(), angular_velocity.x, angular_velocity.y, angular_velocity.z) * q1 * dt / (F::one() + F::one())
+        q1 + Quaternion::new(
+            F::zero(),
+            angular_velocity.x,
+            angular_velocity.y,
+            angular_velocity.z,
+        ) * q1
+            * dt
+            / (F::one() + F::one()),
     )
 }
 
 /// Converts the given angular velocity to a quaternion rotation for `dt` seconds.
-/// 
+///
 /// This is an alternative to using [`apply_angular_velocity`] on the identity quaternion which may be faster.
-/// 
+///
 /// # Source
 /// 1. https://math.stackexchange.com/questions/39553/how-do-i-apply-an-angular-velocity-vector3-to-a-unit-quaternion-orientation
 pub fn angular_velocity_to_quat<F>(mut angular_velocity: Vector3<F>, dt: F) -> UnitQuaternion<F>
@@ -101,14 +118,12 @@ where
     let two = F::one() + F::one();
     let multiplier = (magnitude / two).sin() / magnitude;
 
-    UnitQuaternion::new_unchecked(
-        Quaternion::new(
-            (magnitude / two).cos(),
-            angular_velocity.x * multiplier,
-            angular_velocity.y * multiplier,
-            angular_velocity.z * multiplier,
-        )
-    )
+    UnitQuaternion::new_unchecked(Quaternion::new(
+        (magnitude / two).cos(),
+        angular_velocity.x * multiplier,
+        angular_velocity.y * multiplier,
+        angular_velocity.z * multiplier,
+    ))
 }
 
 #[cfg(test)]
@@ -120,8 +135,13 @@ mod tests {
         let mut q1 = UnitQuaternion::<f64>::identity();
         let angular_velocity = Vector3::new(1.0, 3.0, -2.3);
         q1 = super::apply_angular_velocity(q1, angular_velocity, 0.016);
-        let actual_angular_velocity = super::quat_to_angular_velocity(UnitQuaternion::default(), q1, 0.016);
-        assert!((angular_velocity - actual_angular_velocity).magnitude() < 1e-2, "{:?}", actual_angular_velocity);
+        let actual_angular_velocity =
+            super::quat_to_angular_velocity(UnitQuaternion::default(), q1, 0.016);
+        assert!(
+            (angular_velocity - actual_angular_velocity).magnitude() < 1e-2,
+            "{:?}",
+            actual_angular_velocity
+        );
     }
 
     #[test]
@@ -129,7 +149,12 @@ mod tests {
         let mut q1 = UnitQuaternion::<f64>::identity();
         let angular_velocity = Vector3::new(1.0, 3.0, -2.3);
         q1 = super::angular_velocity_to_quat(angular_velocity, 0.016) * q1;
-        let actual_angular_velocity = super::quat_to_angular_velocity(UnitQuaternion::default(), q1, 0.016);
-        assert!((angular_velocity - actual_angular_velocity).magnitude() < 1e-2, "{:?}", actual_angular_velocity);
+        let actual_angular_velocity =
+            super::quat_to_angular_velocity(UnitQuaternion::default(), q1, 0.016);
+        assert!(
+            (angular_velocity - actual_angular_velocity).magnitude() < 1e-2,
+            "{:?}",
+            actual_angular_velocity
+        );
     }
 }

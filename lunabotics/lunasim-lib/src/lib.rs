@@ -1,10 +1,15 @@
 #![feature(try_blocks)]
 
 use std::{
-    io::{stdin, stdout, BufReader, Read, Write}, path::Path, sync::{mpsc::Sender, Arc}
+    io::{stdin, stdout, BufReader, Read, Write},
+    path::Path,
+    sync::{mpsc::Sender, Arc},
 };
 
-use common::{godot_urdf::init_robot_chain, lunasim::{FromLunasim, FromLunasimbot}};
+use common::{
+    godot_urdf::init_robot_chain,
+    lunasim::{FromLunasim, FromLunasimbot},
+};
 use crossbeam::queue::SegQueue;
 use godot::{
     classes::Engine,

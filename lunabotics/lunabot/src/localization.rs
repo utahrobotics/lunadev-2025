@@ -1,7 +1,4 @@
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use crossbeam::atomic::AtomicCell;
 use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector3};
@@ -11,13 +8,10 @@ use tracing::error;
 
 #[cfg(not(feature = "production"))]
 use crate::apps::LunasimStdin;
-use crate::
-    utils::{lerp_value, swing_twist_decomposition}
-;
+use crate::utils::{lerp_value, swing_twist_decomposition};
 
 const ACCELEROMETER_LERP_SPEED: f64 = 150.0;
 const LOCALIZATION_DELTA: f64 = 1.0 / 60.0;
-
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct IMUReading {
@@ -28,7 +22,7 @@ pub struct IMUReading {
 #[derive(Default)]
 struct LocalizerRefInner {
     april_tag_isometry: AtomicCell<Option<Isometry3<f64>>>,
-    imu_readings: Box<[AtomicCell<Option<IMUReading>>]>
+    imu_readings: Box<[AtomicCell<Option<IMUReading>>]>,
 }
 
 #[derive(Clone)]
@@ -85,7 +79,11 @@ pub struct Localizer {
 
 impl Localizer {
     #[cfg(not(feature = "production"))]
-    pub fn new(root_node: StaticNode, lunasim_stdin: Option<LunasimStdin>, imu_count: usize) -> Self {
+    pub fn new(
+        root_node: StaticNode,
+        lunasim_stdin: Option<LunasimStdin>,
+        imu_count: usize,
+    ) -> Self {
         Self {
             root_node,
             lunasim_stdin,
@@ -93,7 +91,7 @@ impl Localizer {
                 inner: Arc::new(LocalizerRefInner {
                     imu_readings: (0..imu_count).map(|_| AtomicCell::new(None)).collect(),
                     ..Default::default()
-                })
+                }),
             },
         }
     }
@@ -105,7 +103,7 @@ impl Localizer {
                 inner: Arc::new(LocalizerRefInner {
                     imu_readings: (0..imu_count).map(|_| AtomicCell::new(None)).collect(),
                     ..Default::default()
-                })
+                }),
             },
         }
     }
@@ -157,8 +155,7 @@ impl Localizer {
                 angular_velocity,
             } = self.localizer_ref.take_imu_readings();
             let mut down_axis = UnitVector3::new_unchecked(Vector3::new(0.0, -1.0, 0.0));
-            let acceleration =
-                UnitVector3::new_normalize(isometry * acceleration);
+            let acceleration = UnitVector3::new_normalize(isometry * acceleration);
             if !acceleration.x.is_finite()
                 || !acceleration.y.is_finite()
                 || !acceleration.z.is_finite()
@@ -184,9 +181,10 @@ impl Localizer {
                 let (old_swing, _) = swing_twist_decomposition(&isometry.rotation, &down_axis);
                 isometry.rotation = old_swing * new_twist;
             } else {
-                isometry.append_rotation_wrt_center_mut(
-                    &UnitQuaternion::from_axis_angle(&down_axis, - angular_velocity.y * LOCALIZATION_DELTA),
-                );
+                isometry.append_rotation_wrt_center_mut(&UnitQuaternion::from_axis_angle(
+                    &down_axis,
+                    -angular_velocity.y * LOCALIZATION_DELTA,
+                ));
             }
 
             self.root_node.set_isometry(isometry);
@@ -197,8 +195,10 @@ impl Localizer {
                         crate::apps::ROBOT_STRUCTURE,
                         &rerun::Transform3D::from_translation_rotation(
                             isometry.translation.vector.cast::<f32>().data.0[0],
-                            rerun::Quaternion::from_xyzw(isometry.rotation.as_vector().cast::<f32>().data.0[0]),
-                        )
+                            rerun::Quaternion::from_xyzw(
+                                isometry.rotation.as_vector().cast::<f32>().data.0[0],
+                            ),
+                        ),
                     ) {
                         error!("Failed to log robot transform: {e}");
                     }

@@ -1,17 +1,29 @@
 use std::{
-    cell::OnceCell, f64::consts::PI, num::NonZeroU32, sync::mpsc::{Receiver, Sender, SyncSender}, time::Duration
+    cell::OnceCell,
+    f64::consts::PI,
+    num::NonZeroU32,
+    sync::mpsc::{Receiver, Sender, SyncSender},
+    time::Duration,
 };
 
-use super::{apriltag::{
-    image::{ImageBuffer, Luma},
-    AprilTagDetector, Apriltag
-}, RECORDER, ROBOT_STRUCTURE, streaming::CameraStream, ROBOT};
+use super::{
+    apriltag::{
+        image::{ImageBuffer, Luma},
+        AprilTagDetector, Apriltag,
+    },
+    streaming::CameraStream,
+    RECORDER, ROBOT, ROBOT_STRUCTURE,
+};
 use fxhash::FxHashMap;
 use gputter::types::{AlignedMatrix4, AlignedVec4};
 use nalgebra::{UnitQuaternion, Vector2, Vector3, Vector4};
 pub use realsense_rust;
 use realsense_rust::{
-    config::Config, device::Device, frame::{ColorFrame, DepthFrame, PixelKind}, kind::{Rs2CameraInfo, Rs2Format, Rs2StreamKind}, pipeline::{ActivePipeline, FrameWaitError, InactivePipeline}
+    config::Config,
+    device::Device,
+    frame::{ColorFrame, DepthFrame, PixelKind},
+    kind::{Rs2CameraInfo, Rs2Format, Rs2StreamKind},
+    pipeline::{ActivePipeline, FrameWaitError, InactivePipeline},
 };
 use rerun::ImageFormat;
 use simple_motion::StaticImmutableNode;
@@ -22,9 +34,7 @@ use tracing::{error, info, warn};
 use crate::{
     apps::production::streaming::DownscaleRgbImageReader,
     localization::LocalizerRef,
-    pipelines::thalassic::{
-        get_observe_depth, spawn_thalassic_pipeline, ThalassicData,
-    },
+    pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline, ThalassicData},
 };
 
 pub struct DepthCameraInfo {
@@ -41,10 +51,7 @@ pub fn enumerate_depth_cameras(
     serial_to_chain: impl IntoIterator<Item = (String, DepthCameraInfo)>,
     apriltags: &'static [(usize, Apriltag)],
 ) {
-    let thalassic_ref = spawn_thalassic_pipeline(
-        thalassic_buffer,
-        ESTIMATED_MAX_POINT_COUNT,
-    );
+    let thalassic_ref = spawn_thalassic_pipeline(thalassic_buffer, ESTIMATED_MAX_POINT_COUNT);
     let (init_tx, init_rx) = std::sync::mpsc::channel::<&'static str>();
     let mut threads: FxHashMap<&str, SyncSender<(Device, ActivePipeline)>> = serial_to_chain
         .into_iter()
@@ -68,13 +75,16 @@ pub fn enumerate_depth_cameras(
 
                 if let Some(recorder) = RECORDER.get() {
                     let local_x = isometry.rotation * Vector3::x_axis();
-                    let corrected_rotation = UnitQuaternion::from_axis_angle(&local_x, PI) * isometry.rotation;
+                    let corrected_rotation =
+                        UnitQuaternion::from_axis_angle(&local_x, PI) * isometry.rotation;
                     if let Err(e) = recorder.recorder.log_static(
                         format!("{ROBOT_STRUCTURE}/cameras/depth/{serial}"),
                         &rerun::Transform3D::from_translation_rotation(
                             isometry.translation.vector.cast::<f32>().data.0[0],
-                            rerun::Quaternion::from_xyzw(corrected_rotation.as_vector().cast::<f32>().data.0[0]),
-                        )
+                            rerun::Quaternion::from_xyzw(
+                                corrected_rotation.as_vector().cast::<f32>().data.0[0],
+                            ),
+                        ),
                     ) {
                         error!("Failed to log depth camera transform: {e}");
                     }
@@ -93,7 +103,7 @@ pub fn enumerate_depth_cameras(
                         node,
                         ignore_apriltags,
                         thalassic_ref,
-                        init_tx
+                        init_tx,
                     };
                     loop {
                         camera_task.depth_camera_task();
@@ -121,7 +131,9 @@ pub fn enumerate_depth_cameras(
 
     std::thread::spawn(move || {
         loop {
-            let Ok(target_serial) = init_rx.recv() else { break; };
+            let Ok(target_serial) = init_rx.recv() else {
+                break;
+            };
             loop {
                 let device = match device_hub.wait_for_device() {
                     Ok(x) => x,
@@ -156,64 +168,95 @@ pub fn enumerate_depth_cameras(
                     warn!("Unexpected RealSense camera with serial {}", current_serial);
                     continue;
                 };
-            
+
                 let Some(usb_cstr) = device.info(Rs2CameraInfo::UsbTypeDescriptor) else {
-                    error!("Failed to read USB type descriptor for RealSense Camera {}", current_serial);
+                    error!(
+                        "Failed to read USB type descriptor for RealSense Camera {}",
+                        current_serial
+                    );
                     continue;
                 };
                 let Ok(usb_str) = usb_cstr.to_str() else {
-                    error!("USB type descriptor for RealSense Camera {} is not utf-8", current_serial);
+                    error!(
+                        "USB type descriptor for RealSense Camera {} is not utf-8",
+                        current_serial
+                    );
                     continue;
                 };
                 let Ok(usb_val) = usb_str.parse::<f32>() else {
-                    error!("USB type descriptor for RealSense Camera {} is not f32", current_serial);
+                    error!(
+                        "USB type descriptor for RealSense Camera {} is not f32",
+                        current_serial
+                    );
                     continue;
                 };
-        
+
                 let mut config = Config::new();
                 if let Err(e) = config.enable_device_from_serial(current_serial_cstr) {
                     error!("Failed to enable RealSense Camera {}: {e}", current_serial);
                     continue;
                 }
-        
+
                 if let Err(e) = config.disable_all_streams() {
-                    error!("Failed to disable all streams in RealSense Camera {}: {e}", current_serial);
-                    continue;
-                }
-        
-                if let Err(e) = config.enable_stream(Rs2StreamKind::Depth, None, 0, 0, Rs2Format::Z16, 0) {
-                    error!("Failed to enable depth stream in RealSense Camera {}: {e}", current_serial);
+                    error!(
+                        "Failed to disable all streams in RealSense Camera {}: {e}",
+                        current_serial
+                    );
                     continue;
                 }
 
-                if let Err(e) = config.enable_stream(Rs2StreamKind::Color, None, 0, 0, Rs2Format::Rgb8, 0) {
-                    error!("Failed to enable color stream in RealSense Camera {}: {e}", current_serial);
+                if let Err(e) =
+                    config.enable_stream(Rs2StreamKind::Depth, None, 0, 0, Rs2Format::Z16, 0)
+                {
+                    error!(
+                        "Failed to enable depth stream in RealSense Camera {}: {e}",
+                        current_serial
+                    );
                     continue;
                 }
-        
+
+                if let Err(e) =
+                    config.enable_stream(Rs2StreamKind::Color, None, 0, 0, Rs2Format::Rgb8, 0)
+                {
+                    error!(
+                        "Failed to enable color stream in RealSense Camera {}: {e}",
+                        current_serial
+                    );
+                    continue;
+                }
+
                 if usb_val < 3.0 {
-                    error!("Depth camera {} is connected to USB {usb_val}", current_serial);
+                    error!(
+                        "Depth camera {} is connected to USB {usb_val}",
+                        current_serial
+                    );
                     continue;
                 }
-        
+
                 let pipeline = match InactivePipeline::try_from(&context) {
                     Ok(x) => x,
                     Err(e) => {
-                        warn!("Failed to open pipeline for RealSense Camera {}: {e}", current_serial);
+                        warn!(
+                            "Failed to open pipeline for RealSense Camera {}: {e}",
+                            current_serial
+                        );
                         continue;
                     }
                 };
                 let pipeline = match pipeline.start(Some(config)) {
                     Ok(x) => x,
                     Err(e) => {
-                        error!("Failed to start pipeline for RealSense Camera {}: {e}", current_serial);
+                        error!(
+                            "Failed to start pipeline for RealSense Camera {}: {e}",
+                            current_serial
+                        );
                         continue;
                     }
                 };
-                
+
                 let current_serial = current_serial.to_string();
                 if let Err(error) = pipeline_sender.send((device, pipeline)) {
-                    error.0.1.stop();
+                    error.0 .1.stop();
                     threads.remove(current_serial.as_str());
                 }
                 break;
@@ -242,7 +285,7 @@ struct DepthCameraTask {
     node: StaticImmutableNode,
     ignore_apriltags: bool,
     thalassic_ref: ThalassicPipelineRef,
-    init_tx: Sender<&'static str>
+    init_tx: Sender<&'static str>,
 }
 
 impl DepthCameraTask {
@@ -254,7 +297,7 @@ impl DepthCameraTask {
                 std::thread::park();
             },
         };
-        
+
         let mut depth_format = None;
         let mut color_format = None;
 
@@ -271,9 +314,15 @@ impl DepthCameraTask {
                 Ok(x) => x,
                 Err(e) => {
                     if is_depth {
-                        error!("Failed to get depth intrinsics for RealSense camera {}: {e}", self.serial);
+                        error!(
+                            "Failed to get depth intrinsics for RealSense camera {}: {e}",
+                            self.serial
+                        );
                     } else {
-                        error!("Failed to get color intrinsics for RealSense camera {}: {e}", self.serial);
+                        error!(
+                            "Failed to get color intrinsics for RealSense camera {}: {e}",
+                            self.serial
+                        );
                     }
                     continue;
                 }
@@ -286,16 +335,28 @@ impl DepthCameraTask {
         }
 
         let Some(depth_format) = depth_format else {
-            error!("Depth stream missing after initialization of {}", self.serial);
+            error!(
+                "Depth stream missing after initialization of {}",
+                self.serial
+            );
             return;
         };
         let Some(color_format) = color_format else {
-            error!("Color stream missing after initialization of {}", self.serial);
+            error!(
+                "Color stream missing after initialization of {}",
+                self.serial
+            );
             return;
         };
 
-        let DepthCameraState { image, depth_projector, point_cloud  } = if let Some(state) = self.state.get_mut() {
-            if state.image.width() as usize != color_format.width() || state.image.height() as usize != color_format.height() {
+        let DepthCameraState {
+            image,
+            depth_projector,
+            point_cloud,
+        } = if let Some(state) = self.state.get_mut() {
+            if state.image.width() as usize != color_format.width()
+                || state.image.height() as usize != color_format.height()
+            {
                 warn!("RealSense Color Camera {} format changed", self.serial);
                 return;
             }
@@ -321,14 +382,15 @@ impl DepthCameraTask {
                 let mut inverse_local = self.node.get_local_isometry();
                 inverse_local.inverse_mut();
                 det.detection_callbacks_ref().add_fn(move |observation| {
-                    localizer_ref
-                        .set_april_tag_isometry(inverse_local * observation.get_isometry_of_observer());
+                    localizer_ref.set_april_tag_isometry(
+                        inverse_local * observation.get_isometry_of_observer(),
+                    );
                 });
                 std::thread::spawn(move || det.run());
             }
 
             let focal_length_px;
-            
+
             if depth_format.fx() != depth_format.fy() {
                 warn!("Depth camera {} has unequal fx and fy", self.serial);
                 focal_length_px = (depth_format.fx() + depth_format.fy()) / 2.0;
@@ -338,13 +400,19 @@ impl DepthCameraTask {
 
             if let Some(recorder) = RECORDER.get() {
                 if let Err(e) = recorder.recorder.log(
-                    format!("{ROBOT_STRUCTURE}/cameras/depth/{}/depth_image", self.serial),
+                    format!(
+                        "{ROBOT_STRUCTURE}/cameras/depth/{}/depth_image",
+                        self.serial
+                    ),
                     &rerun::Pinhole::from_focal_length_and_resolution(
                         [depth_format.fx(), depth_format.fy()],
                         [depth_format.width() as f32, depth_format.height() as f32],
                     ),
                 ) {
-                    error!("Failed to log depth camera intrinsics for {}: {e}", self.serial);
+                    error!(
+                        "Failed to log depth camera intrinsics for {}: {e}",
+                        self.serial
+                    );
                 }
             }
 
@@ -359,25 +427,29 @@ impl DepthCameraTask {
             };
 
             let depth_projector = depth_projecter_builder.build(self.thalassic_ref.clone());
-            
+
             let _ = self.state.set(DepthCameraState {
                 image: image.into(),
                 point_cloud: std::iter::repeat_n(
                     AlignedVec4::from(Vector4::default()),
                     depth_projector.get_pixel_count().get() as usize,
-                ).collect(),
+                )
+                .collect(),
                 depth_projector,
             });
             self.state.get_mut().unwrap()
         };
-        
+
         info!("RealSense Camera {} opened", self.serial);
 
         loop {
             let frames = match pipeline.wait(Some(Duration::from_millis(1000))) {
                 Ok(x) => x,
                 Err(e) => {
-                    error!("Failed to get frame from RealSense Camera {}: {e}", self.serial);
+                    error!(
+                        "Failed to get frame from RealSense Camera {}: {e}",
+                        self.serial
+                    );
                     if matches!(e, FrameWaitError::DidTimeoutBeforeFrameArrival) {
                         device.hardware_reset();
                     }
@@ -439,14 +511,17 @@ impl DepthCameraTask {
                     );
                     bytes_slice = std::slice::from_raw_parts(
                         data.cast::<u8>(),
-                        frame.width() * frame.height() * 2
+                        frame.width() * frame.height() * 2,
                     );
                 }
 
                 let depth_scale = match frame.depth_units() {
                     Ok(x) => x,
                     Err(e) => {
-                        error!("Failed to get depth scale from RealSense Camera {}: {e}", self.serial);
+                        error!(
+                            "Failed to get depth scale from RealSense Camera {}: {e}",
+                            self.serial
+                        );
                         continue;
                     }
                 };
@@ -458,21 +533,29 @@ impl DepthCameraTask {
                 if let Some(recorder) = RECORDER.get() {
                     let result: rerun::RecordingStreamResult<()> = try {
                         recorder.recorder.log(
-                            format!("{ROBOT_STRUCTURE}/cameras/depth/{}/depth_image", self.serial),
+                            format!(
+                                "{ROBOT_STRUCTURE}/cameras/depth/{}/depth_image",
+                                self.serial
+                            ),
                             &rerun::DepthImage::new(
                                 bytes_slice,
-                                ImageFormat::depth([frame.width() as u32, frame.height() as u32], rerun::ChannelDatatype::U16)
+                                ImageFormat::depth(
+                                    [frame.width() as u32, frame.height() as u32],
+                                    rerun::ChannelDatatype::U16,
+                                ),
                             )
                             .with_meter(1.0 / depth_scale)
-                            .with_depth_range([0.0, 2.0 / depth_scale as f64])
+                            .with_depth_range([0.0, 2.0 / depth_scale as f64]),
                         )?;
                         recorder.recorder.log(
                             format!("{ROBOT}/point_clouds/{}", self.serial),
                             &rerun::Points3D::new(
-                                point_cloud.iter()
-                                .filter(|point| point.w == 1.0)
-                                .map(|point| [point.x, point.y, point.z])
-                            ).with_radii(std::iter::repeat_n(0.003, point_cloud.len()))
+                                point_cloud
+                                    .iter()
+                                    .filter(|point| point.w == 1.0)
+                                    .map(|point| [point.x, point.y, point.z]),
+                            )
+                            .with_radii(std::iter::repeat_n(0.003, point_cloud.len())),
                         )?;
                     };
                     if let Err(e) = result {

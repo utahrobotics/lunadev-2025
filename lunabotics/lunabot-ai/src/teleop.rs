@@ -45,14 +45,16 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard> {
                 handle!(msg);
             } else {
                 blackboard.enqueue_action(Action::SetSteering(last_steering));
-                *blackboard.get_poll_when() = PollWhen::Instant(blackboard.get_now() + Duration::from_millis(90));
+                *blackboard.get_poll_when() =
+                    PollWhen::Instant(blackboard.get_now() + Duration::from_millis(90));
                 return Status::Running;
             }
             while let Some(msg) = blackboard.pop_from_lunabase() {
                 handle!(msg);
             }
             blackboard.enqueue_action(Action::SetSteering(last_steering));
-            *blackboard.get_poll_when() = PollWhen::Instant(blackboard.get_now() + Duration::from_millis(90));
+            *blackboard.get_poll_when() =
+                PollWhen::Instant(blackboard.get_now() + Duration::from_millis(90));
             Status::Running
         },
     ))

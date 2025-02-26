@@ -1,7 +1,10 @@
 use std::time::{Duration, Instant};
 
 use ares_bt::{
-    converters::AssertCancelSafe, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, Status
+    converters::AssertCancelSafe,
+    looping::WhileLoop,
+    sequence::{ParallelAny, Sequence},
+    Behavior, Status,
 };
 use common::{FromLunabase, PathInstruction, Steering};
 use dig::dig;
@@ -77,7 +80,6 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
 }
 
 fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
-
     let robot = blackboard.get_robot_isometry();
     let path = blackboard.get_path_mut();
 
@@ -85,7 +87,7 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
         blackboard.enqueue_action(Action::SetSteering(Steering::default()));
         return Status::Running;
     }
-        
+
     let first_instr = path[0];
     let pos = Point2::new(robot.translation.x, robot.translation.z);
     let heading = robot
@@ -94,11 +96,10 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
         .xz();
 
     if first_instr.is_finished(&pos, &heading.into()) {
-
-        if path.len() == 1 { 
+        if path.len() == 1 {
             return match first_instr.instruction {
                 PathInstruction::MoveTo => {
-                    println!("path follower: done!"); 
+                    println!("path follower: done!");
                     blackboard.enqueue_action(Action::SetSteering(Steering::default()));
                     Status::Success
                 }
@@ -106,7 +107,7 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
                     blackboard.enqueue_action(Action::SetSteering(Steering::default()));
                     Status::Failure
                 }
-            }
+            };
         }
 
         path.remove(0);
@@ -127,9 +128,11 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
         PathInstruction::MoveTo => {
             if to_first_point.angle(&Vector2::new(0.0, -1.0)).to_degrees() > 20.0 {
                 if to_first_point.x > 0.0 {
-                    blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, -1.0)))
+                    blackboard
+                        .enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, -1.0)))
                 } else {
-                    blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(-1.0, 1.0)))
+                    blackboard
+                        .enqueue_action(Action::SetSteering(Steering::new_left_right(-1.0, 1.0)))
                 }
             } else {
                 let (l, r) = scaled_clamp(
@@ -139,27 +142,20 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
                 );
                 blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(l, r)))
             }
-        },
+        }
         PathInstruction::FaceTowards => {
             if to_first_point.x > 0.0 {
-                blackboard
-                    .enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, -1.0)))
+                blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, -1.0)))
             } else {
-                blackboard
-                    .enqueue_action(Action::SetSteering(Steering::new_left_right(-1.0, 1.0)))
+                blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(-1.0, 1.0)))
             }
-        },
+        }
     };
 
-    *blackboard.get_poll_when() =
-        PollWhen::Instant(Instant::now() + Duration::from_millis(16));
+    *blackboard.get_poll_when() = PollWhen::Instant(Instant::now() + Duration::from_millis(16));
 
     Status::Running
 }
-
-
-
-
 
 fn rotate_v2_ccw(vector2: Vector2<f64>, theta: f64) -> Vector2<f64> {
     let rot = Matrix2::new(

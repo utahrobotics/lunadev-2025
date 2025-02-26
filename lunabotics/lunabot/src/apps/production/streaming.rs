@@ -162,7 +162,10 @@ pub fn camera_streaming(mut lunabase_address: Option<IpAddr>) {
             return;
         }
     };
-    let udp = match UdpSocket::bind(SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), common::ports::CAMERAS)) {
+    let udp = match UdpSocket::bind(SocketAddr::new(
+        Ipv4Addr::UNSPECIFIED.into(),
+        common::ports::CAMERAS,
+    )) {
         Ok(x) => x,
         Err(e) => {
             error!("Failed to bind to UDP socket: {e}");
@@ -201,8 +204,8 @@ pub fn camera_streaming(mut lunabase_address: Option<IpAddr>) {
                 if let Ok((_, addr)) = udp.recv_from(&mut [0u8; 1]) {
                     if addr.port() == common::ports::CAMERAS {
                         lunabase_address = Some(addr.ip());
-                    // } else {
-                    //     warn!("Received data from unknown address: {addr}");
+                        // } else {
+                        //     warn!("Received data from unknown address: {addr}");
                     }
                 }
                 continue;
@@ -237,7 +240,9 @@ pub fn camera_streaming(mut lunabase_address: Option<IpAddr>) {
                             let nal = layer.nal_unit(nal_i).unwrap();
 
                             nal.chunks(1400).for_each(|chunk| {
-                                if let Err(e) = udp.send_to(chunk, SocketAddr::new(ip, common::ports::CAMERAS)) {
+                                if let Err(e) =
+                                    udp.send_to(chunk, SocketAddr::new(ip, common::ports::CAMERAS))
+                                {
                                     if e.kind() == ErrorKind::ConnectionRefused {
                                         if let Some(ip) = lunabase_address {
                                             if ip.is_loopback() {

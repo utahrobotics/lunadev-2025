@@ -1,4 +1,7 @@
-use std::{io::{Read, Write}, net::{SocketAddr, TcpStream}};
+use std::{
+    io::{Read, Write},
+    net::{SocketAddr, TcpStream},
+};
 
 use bytemuck::{Pod, Zeroable};
 use tracing::error;
@@ -37,14 +40,19 @@ impl Default for ThalassicData {
 const THALASSIC_BUFFER_SIZE: usize = size_of::<ThalassicData>();
 
 #[cfg(feature = "godot")]
-pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData, &[godot::builtin::Vector3]) + Send + 'static) -> (impl Fn() + Send + Sync) {
+pub fn lunabase_task(
+    mut on_data: impl FnMut(&ThalassicData, &[godot::builtin::Vector3]) + Send + 'static,
+) -> (impl Fn() + Send + Sync) {
     use std::net::Ipv4Addr;
 
     let parker = crossbeam::sync::Parker::new();
     let unparker = parker.unparker().clone();
 
     std::thread::spawn(move || {
-        let listener = match std::net::TcpListener::bind(SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), crate::ports::DATAVIZ)) {
+        let listener = match std::net::TcpListener::bind(SocketAddr::new(
+            Ipv4Addr::UNSPECIFIED.into(),
+            crate::ports::DATAVIZ,
+        )) {
             Ok(listener) => listener,
             Err(e) => {
                 godot::global::godot_error!("Failed to bind to dataviz port: {}", e);
@@ -55,7 +63,7 @@ pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData, &[godot::builtin::V
         let mut data = ThalassicData::default();
         let mut points = vec![];
         let mut points_bytes: Vec<[f32; 3]> = vec![];
-    
+
         loop {
             let stream = match listener.accept() {
                 Ok((x, _)) => x,
@@ -64,9 +72,7 @@ pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData, &[godot::builtin::V
                     continue;
                 }
             };
-            let mut reader = brotli::Decompressor::new(
-                stream, THALASSIC_BUFFER_SIZE,
-            );
+            let mut reader = brotli::Decompressor::new(stream, THALASSIC_BUFFER_SIZE);
             loop {
                 parker.park();
                 if let Err(e) = reader.get_mut().write_all(&[0]) {
@@ -96,7 +102,10 @@ pub fn lunabase_task(mut on_data: impl FnMut(&ThalassicData, &[godot::builtin::V
     }
 }
 
-pub fn lunabot_task(address: SocketAddr, mut gen_data: impl FnMut(&mut ThalassicData, &mut Vec<nalgebra::Vector3<f32>>) + Send + 'static) {
+pub fn lunabot_task(
+    address: SocketAddr,
+    mut gen_data: impl FnMut(&mut ThalassicData, &mut Vec<nalgebra::Vector3<f32>>) + Send + 'static,
+) {
     std::thread::spawn(move || {
         let mut buffer = [0u8; 1];
         let mut data = ThalassicData {
@@ -106,7 +115,7 @@ pub fn lunabot_task(address: SocketAddr, mut gen_data: impl FnMut(&mut Thalassic
             point_count: 0,
         };
         let mut points = vec![];
-    
+
         loop {
             let stream = match TcpStream::connect(address) {
                 Ok(x) => x,
@@ -115,9 +124,7 @@ pub fn lunabot_task(address: SocketAddr, mut gen_data: impl FnMut(&mut Thalassic
                     continue;
                 }
             };
-            let mut writer = brotli::CompressorWriter::new(
-                stream, THALASSIC_BUFFER_SIZE, 11, 22
-            );
+            let mut writer = brotli::CompressorWriter::new(stream, THALASSIC_BUFFER_SIZE, 11, 22);
             loop {
                 if let Err(e) = writer.get_mut().read_exact(&mut buffer) {
                     error!("Failed to read from stream: {}", e);

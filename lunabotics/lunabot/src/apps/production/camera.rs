@@ -128,9 +128,7 @@ pub fn enumerate_cameras(
             .chain(
                 udev_poll(listener)
                     .filter(|event| event.event_type() == EventType::Add)
-                    .map(|event| {
-                        event.device()
-                    }),
+                    .map(|event| event.device()),
             )
             .for_each(|device| {
                 let Some(path) = device.devnode() else {

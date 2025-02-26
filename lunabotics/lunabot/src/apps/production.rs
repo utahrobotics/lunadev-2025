@@ -1,4 +1,7 @@
-use std::{net::{IpAddr, SocketAddr}, sync::Arc};
+use std::{
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+};
 
 use anyhow::Context;
 use camera::enumerate_cameras;
@@ -14,15 +17,15 @@ use mio::{Events, Interest, Poll, Token};
 use motors::{enumerate_motors, MotorMask, VescIDs};
 use nalgebra::{Scale3, Transform3};
 use rerun_viz::init_rerun;
+use rp2040::*;
 use serde::Deserialize;
 use simple_motion::{ChainBuilder, NodeSerde};
 use streaming::camera_streaming;
 use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn};
 use tracing::error;
-use rp2040::*;
 use udev::Event;
 
-pub use rerun_viz::{RECORDER, ROBOT_STRUCTURE, ROBOT, RerunViz};
+pub use rerun_viz::{RerunViz, RECORDER, ROBOT, ROBOT_STRUCTURE};
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,
@@ -35,9 +38,9 @@ mod apriltag;
 mod camera;
 mod depth;
 mod motors;
-mod streaming;
-mod rp2040;
 mod rerun_viz;
+mod rp2040;
+mod streaming;
 
 pub use apriltag::Apriltag;
 
@@ -82,7 +85,7 @@ pub struct Vesc {
     singles: Vec<SingleVesc>,
     #[serde(default)]
     pairs: Vec<VescPair>,
-    speed_multiplier: Option<f32>
+    speed_multiplier: Option<f32>,
 }
 
 pub struct LunabotApp {
@@ -94,12 +97,16 @@ pub struct LunabotApp {
     pub imus: FxHashMap<String, IMUInfo>,
     pub robot_layout: String,
     pub vesc: Vesc,
-    pub rerun_viz: RerunViz
+    pub rerun_viz: RerunViz,
 }
 
 impl LunabotApp {
     pub fn run(self) {
-        let filelock = match FileLock::lock("/home/lock/lunabot.lock", false, file_lock::FileOptions::new().write(true)) {
+        let filelock = match FileLock::lock(
+            "/home/lock/lunabot.lock",
+            false,
+            file_lock::FileOptions::new().write(true),
+        ) {
             Ok(x) => x,
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::WouldBlock {
@@ -221,18 +228,15 @@ impl LunabotApp {
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
         let (_packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
-            self.lunabase_address.map(|ip| SocketAddr::new(ip, common::ports::TELEOP)),
+            self.lunabase_address
+                .map(|ip| SocketAddr::new(ip, common::ports::TELEOP)),
             lunabot_stage.clone(),
             self.max_pong_delay_ms,
         );
 
-        enumerate_imus(&localizer_ref, self.imus.into_iter().map(
-            |(
-                port,
-                IMUInfo {
-                    link_name,
-                },
-            )| {
+        enumerate_imus(
+            &localizer_ref,
+            self.imus.into_iter().map(|(port, IMUInfo { link_name })| {
                 (
                     port,
                     rp2040::IMUInfo {
@@ -243,8 +247,8 @@ impl LunabotApp {
                             .into(),
                     },
                 )
-            },
-        ));
+            }),
+        );
 
         let mut vesc_ids = VescIDs::default();
 
@@ -254,7 +258,13 @@ impl LunabotApp {
                 return;
             }
         }
-        for VescPair { id1, id2, mask1, mask2 } in self.vesc.pairs {
+        for VescPair {
+            id1,
+            id2,
+            mask1,
+            mask2,
+        } in self.vesc.pairs
+        {
             if vesc_ids.add_dual_vesc(id1, id2, mask1, mask2) {
                 error!("Motors {id1} or {id2} have already been added");
                 return;
@@ -340,25 +350,26 @@ impl LunabotApp {
     }
 }
 
-pub fn udev_poll(mut socket: udev::MonitorSocket) -> impl Iterator<Item=Event> {
+pub fn udev_poll(mut socket: udev::MonitorSocket) -> impl Iterator<Item = Event> {
     let mut poll = Poll::new().unwrap();
     let mut events = Events::with_capacity(1024);
 
-    poll.registry().register(
-        &mut socket,
-        Token(0),
-        Interest::READABLE | Interest::WRITABLE,
-    ).unwrap();
+    poll.registry()
+        .register(
+            &mut socket,
+            Token(0),
+            Interest::READABLE | Interest::WRITABLE,
+        )
+        .unwrap();
 
-    std::iter::from_fn(move || {
-        loop {
-            poll.poll(&mut events, None).unwrap();
-    
-            for event in &events {
-                if event.token() == Token(0) && event.is_writable() {
-                    return Some(socket.iter().collect::<Vec<_>>());
-                }
+    std::iter::from_fn(move || loop {
+        poll.poll(&mut events, None).unwrap();
+
+        for event in &events {
+            if event.token() == Token(0) && event.is_writable() {
+                return Some(socket.iter().collect::<Vec<_>>());
             }
         }
-    }).flatten()
+    })
+    .flatten()
 }
