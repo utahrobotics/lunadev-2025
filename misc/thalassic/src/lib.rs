@@ -4,7 +4,9 @@ use bytemuck::{Pod, Zeroable};
 use depth2pcl::Depth2Pcl;
 use gputter::{
     buffers::{
-        storage::{HostHidden, HostReadOnly, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, StorageBuffer},
+        storage::{
+            HostHidden, HostReadOnly, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, StorageBuffer,
+        },
         uniform::UniformBuffer,
         GpuBufferSet,
     },
@@ -28,6 +30,7 @@ mod sum2height;
 mod expand_obstacles;
 use expand_obstacles::ExpandObstacles;
 use parking_lot::Mutex;
+use pcl2sum::Pcl2Sum;
 use sum2height::Sum2Height;
 
 /// 1. Depths in arbitrary units
@@ -44,9 +47,7 @@ type DepthBindGrp = (
 );
 
 /// 1. Sum vectors for each cell in the heightmap
-type SumBindGrp = (
-    StorageBuffer<[AlignedVec2<f32>], HostHidden, ShaderReadWrite>,
-);
+type SumBindGrp = (StorageBuffer<[AlignedVec2<f32>], HostHidden, ShaderReadWrite>,);
 
 /// The set of bind groups used by the DepthProjector
 type AlphaBindGroups = (GpuBufferSet<DepthBindGrp>, GpuBufferSet<SumBindGrp>);
@@ -97,7 +98,7 @@ pub struct DepthProjectorBuilder {
 }
 
 impl DepthProjectorBuilder {
-    pub fn build(self, thalassic: &ThalassicPipeline) -> DepthProjector {
+    pub fn build(self, thalassic_ref: ThalassicPipelineRef) -> DepthProjector {
         let pixel_count = self.image_size.x.get() * self.image_size.y.get();
         let [depth_fn] = Depth2Pcl {
             depths: BufferGroupBinding::<_, AlphaBindGroups>::get::<0, 0>(),
@@ -112,13 +113,30 @@ impl DepthProjectorBuilder {
             half_pixel_count: NonZeroU32::new(pixel_count.div_ceil(2)).unwrap(),
         }
         .compile();
+        let [pcl_fn] = Pcl2Sum {
+            sum: BufferGroupBinding::<_, AlphaBindGroups>::get::<1, 0>(),
+            points: BufferGroupBinding::<_, AlphaBindGroups>::get::<0, 3>(),
+            heightmap_width: thalassic_ref.heightmap_dimensions.x,
+            cell_size: thalassic_ref.cell_size,
+            cell_count: NonZeroU32::new(thalassic_ref.heightmap_dimensions.x.get()
+                * thalassic_ref.heightmap_dimensions.y.get()).unwrap(),
+            max_point_count: thalassic_ref.max_point_count,
+        }
+        .compile();
 
-        let mut pipeline = ComputePipeline::new([&depth_fn]);
-        pipeline.workgroups = [Vector3::new(
-            self.image_size.x.get() / 8,
-            self.image_size.y.get() / 8,
-            1,
-        )];
+        let mut pipeline = ComputePipeline::new([&depth_fn, &pcl_fn]);
+        pipeline.workgroups = [
+            Vector3::new(
+                self.image_size.x.get() / 8,
+                self.image_size.y.get() / 8,
+                1,
+            ),
+            Vector3::new(
+                thalassic_ref.heightmap_dimensions.x.get() / 8,
+                thalassic_ref.heightmap_dimensions.y.get() / 8,
+                1,
+            ),
+        ];
         DepthProjector {
             image_size: self.image_size,
             pipeline,
@@ -128,16 +146,16 @@ impl DepthProjectorBuilder {
                 UniformBuffer::new(),
                 StorageBuffer::new_dyn(pixel_count as usize).unwrap(),
             ))),
-            sum_bind_grp: thalassic.sum_bind_grp.clone(),
+            sum_bind_grp: thalassic_ref,
         }
     }
 }
 
 pub struct DepthProjector {
     image_size: Vector2<NonZeroU32>,
-    pipeline: ComputePipeline<AlphaBindGroups, 1>,
+    pipeline: ComputePipeline<AlphaBindGroups, 2>,
     depth_bind_grp: Option<GpuBufferSet<DepthBindGrp>>,
-    sum_bind_grp: Arc<Mutex<Option<GpuBufferSet<SumBindGrp>>>>,
+    sum_bind_grp: ThalassicPipelineRef,
 }
 
 impl DepthProjector {
@@ -146,6 +164,7 @@ impl DepthProjector {
         depths: &[u16],
         camera_transform: &AlignedMatrix4<f32>,
         depth_scale: f32,
+        point_cloud: Option<&mut [AlignedVec4<f32>]>
     ) {
         debug_assert_eq!(
             depths.len(),
@@ -153,9 +172,9 @@ impl DepthProjector {
         );
 
         let depth_grp = self.depth_bind_grp.take().unwrap();
-        let mut sum_bind_grp_lock = self.sum_bind_grp.lock();
+        let mut sum_bind_grp_lock = self.sum_bind_grp.sum_bind_grp.lock();
 
-        let mut bind_grps = (depth_grp, sum_bind_grp_lock.take().unwrap());
+        let mut bind_grps = (depth_grp, sum_bind_grp_lock.0.take().unwrap());
 
         self.pipeline
             .new_pass(|mut lock| {
@@ -170,8 +189,12 @@ impl DepthProjector {
             })
             .finish();
         let (depth_grp, sum_bind_grp) = bind_grps;
+        if let Some(point_cloud) = point_cloud {
+            depth_grp.buffers.3.read(point_cloud);
+        }
         self.depth_bind_grp = Some(depth_grp);
-        sum_bind_grp_lock.replace(sum_bind_grp);
+        sum_bind_grp_lock.0.replace(sum_bind_grp);
+        sum_bind_grp_lock.1 = true;
     }
 
     pub fn get_image_size(&self) -> Vector2<NonZeroU32> {
@@ -252,9 +275,20 @@ impl ThalassicBuilder {
             bind_grps: Some(bind_grps),
             new_radius: Some(0.25),
             new_max_gradient: Some(45.0f32.to_radians()),
-            sum_bind_grp: Arc::new(Mutex::new(Some(GpuBufferSet::from((
-                StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),
-            ))))),
+            sum_bind_grp: ThalassicPipelineRef {
+                sum_bind_grp: Arc::new(Mutex::new(
+                    (
+                        Some(
+                            GpuBufferSet::from((
+                                StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),
+                            )),
+                        ),
+                        false
+                    ))),
+                heightmap_dimensions: self.heightmap_dimensions,
+                cell_size: self.cell_size,
+                max_point_count: self.max_point_count,
+            },
         }
     }
 }
@@ -271,6 +305,25 @@ impl Occupancy {
     }
 }
 
+#[derive(Clone)]
+pub struct ThalassicPipelineRef {
+    sum_bind_grp: Arc<Mutex<(Option<GpuBufferSet<SumBindGrp>>, bool)>>,
+    heightmap_dimensions: Vector2<NonZeroU32>,
+    cell_size: f32,
+    max_point_count: NonZeroU32,
+}
+
+impl ThalassicPipelineRef {
+    pub fn noop() -> Self {
+        Self {
+            sum_bind_grp: Arc::new(Mutex::new((None, false))),
+            heightmap_dimensions: Vector2::new(NonZeroU32::new(128).unwrap(), NonZeroU32::new(128).unwrap()),
+            cell_size: 0.1,
+            max_point_count: NonZeroU32::new(1024).unwrap(),
+        }
+    }
+}
+
 pub struct ThalassicPipeline {
     pipeline: ComputePipeline<BetaBindGroups, 4>,
     bind_grps: Option<(
@@ -282,28 +335,31 @@ pub struct ThalassicPipeline {
     )>,
     new_radius: Option<f32>,
     new_max_gradient: Option<f32>,
-    sum_bind_grp: Arc<Mutex<Option<GpuBufferSet<SumBindGrp>>>>,
+    sum_bind_grp: ThalassicPipelineRef,
 }
 
 impl ThalassicPipeline {
+    pub fn will_process(&self) -> bool {
+        self.sum_bind_grp.sum_bind_grp.lock().1
+    }
+
     pub fn process(
         &mut self,
         out_heightmap: &mut [f32],
         out_gradient: &mut [f32],
         out_expanded_obstacles: &mut [Occupancy],
     ) {
-        let mut sum_bind_grp_lock = self.sum_bind_grp.lock();
+        let mut sum_bind_grp_lock = self.sum_bind_grp.sum_bind_grp.lock();
 
-        let (
-            height_grp,
-            grad_grp,
-            obstacle_map,
-            obstacle_mapper_input_grp,
-            expander_input_grp,
-        ) = self.bind_grps.take().unwrap();
+        if !sum_bind_grp_lock.1 {
+            return;
+        }
+
+        let (height_grp, grad_grp, obstacle_map, obstacle_mapper_input_grp, expander_input_grp) =
+            self.bind_grps.take().unwrap();
 
         let mut bind_grps: BetaBindGroups = (
-            sum_bind_grp_lock.take().unwrap(),
+            sum_bind_grp_lock.0.take().unwrap(),
             height_grp,
             grad_grp,
             obstacle_map,
@@ -345,10 +401,15 @@ impl ThalassicPipeline {
             obstacle_mapper_input_grp,
             expander_input_grp,
         ));
-        sum_bind_grp_lock.replace(points_grp);
+        sum_bind_grp_lock.0.replace(points_grp);
+        sum_bind_grp_lock.1 = false;
     }
 
     pub fn set_radius(&mut self, radius: f32) {
         self.new_radius = Some(radius);
+    }
+
+    pub fn get_ref(&self) -> ThalassicPipelineRef {
+        self.sum_bind_grp.clone()
     }
 }
