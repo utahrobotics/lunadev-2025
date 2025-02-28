@@ -41,3 +41,4 @@ perf.data
 .idea
 
 embedded/target/
+/godot/exports/win/
