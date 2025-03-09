@@ -42,3 +42,5 @@ perf.data
 
 embedded/target/
 /godot/exports/win/
+
+*.blend1
