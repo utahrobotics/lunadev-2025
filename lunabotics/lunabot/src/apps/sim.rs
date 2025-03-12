@@ -262,7 +262,7 @@ impl LunasimbotApp {
             image_size: Vector2::new(NonZeroU32::new(DEPTH_BASE_WIDTH * SCALE).unwrap(), NonZeroU32::new(DEPTH_BASE_HEIGHT * SCALE).unwrap()),
             focal_length_px: 10.392 * SCALE as f32,
             principal_point_px: Vector2::new((DEPTH_BASE_WIDTH * SCALE - 1) as f32 / 2.0, (DEPTH_BASE_HEIGHT * SCALE - 1) as f32 / 2.0),
-            max_depth: 1.0,
+            max_depth: 1.5,
         };
 
         let mut buffer = OwnedData::from(ThalassicData::default());
@@ -395,7 +395,12 @@ impl LunasimbotApp {
                     lunasim_stdin.write(bytes);
                 }
                 Action::CalculatePath { from, to, mut into } => {
-                    pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into);
+                    loop {
+                        pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into);
+                        if !into.is_empty() {
+                            break;
+                        }
+                    }
                     let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
                         into.iter()
                             .map(|p| p.point.coords.cast::<f32>().data.0[0])

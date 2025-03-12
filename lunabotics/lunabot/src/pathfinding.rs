@@ -195,12 +195,14 @@ impl DefaultPathfinder {
             let map_data = self.get_map_data(shared_thalassic_data, self.current_robot_radius);
 
             let Some(mut path) = self.find_path(start_cell, end_cell, &map_data) else {
-                if self.current_robot_radius == 0.0 {
-                    panic!("pathfinder: couldnt find a path even with a robot radius of 0");
+                if self.current_robot_radius <= 0.0 {
+                    into.clear();
+                    tracing::error!("pathfinder: couldnt find a path even with a robot radius of 0");
+                    return;
                 }
 
                 self.current_robot_radius -= 0.1;
-                println!(
+                tracing::warn!(
                     "pathfinder: couldnt find a path, shrinking radius to {}",
                     self.current_robot_radius
                 );
