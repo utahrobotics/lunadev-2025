@@ -19,20 +19,18 @@ pub enum RerunViz {
     Log,
     Viz,
     #[default]
-    Disabled
+    Disabled,
 }
 
 pub fn init_rerun(rerun_viz: RerunViz) {
     let recorder = match rerun_viz {
-        RerunViz::Viz => {
-            match rerun::RecordingStreamBuilder::new("lunabot").spawn() {
-                Ok(x) => x,
-                Err(e) => {
-                    error!("Failed to start rerun process: {e}");
-                    return;
-                }
+        RerunViz::Viz => match rerun::RecordingStreamBuilder::new("lunabot").spawn() {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to start rerun process: {e}");
+                return;
             }
-        }
+        },
         RerunViz::Log => {
             match rerun::RecordingStreamBuilder::new("lunabot").save("recording.rrd") {
                 Ok(x) => x,
@@ -47,25 +45,18 @@ pub fn init_rerun(rerun_viz: RerunViz) {
         }
     };
     let result: RecordingStreamResult<()> = try {
-        recorder.log_static(
-            "/",
-            &ViewCoordinates::RIGHT_HAND_Y_UP()
-        )?;
+        recorder.log_static("/", &ViewCoordinates::RIGHT_HAND_Y_UP())?;
         recorder.log_static(
             format!("{ROBOT_STRUCTURE}/xyz"),
-            &rerun::Arrows3D::from_vectors(
-                [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
-            )
-            .with_colors([[255, 0, 0], [0, 255, 0], [0, 0, 255]]),
+            &rerun::Arrows3D::from_vectors([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+                .with_colors([[255, 0, 0], [0, 255, 0], [0, 0, 255]]),
         )?;
     };
     if let Err(e) = result {
         error!("Failed to setup rerun environment: {e}");
     }
-    
-    let _ = RECORDER.set(RecorderData {
-        recorder,
-    });
+
+    let _ = RECORDER.set(RecorderData { recorder });
 
     std::thread::spawn(|| {
         let recorder = &RECORDER.get().unwrap().recorder;
@@ -78,19 +69,17 @@ pub fn init_rerun(rerun_viz: RerunViz) {
             }
         };
 
-        if let Err(e) = recorder.log_static(
-            format!("{ROBOT_STRUCTURE}/mesh"),
-            &asset
-        ) {
+        if let Err(e) = recorder.log_static(format!("{ROBOT_STRUCTURE}/mesh"), &asset) {
             error!("Failed to log robot structure mesh: {e}");
             return;
         }
-        let rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI / 2.0) * UnitQuaternion::from_axis_angle(&Vector3::x_axis(), -PI / 2.0);
+        let rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI / 2.0)
+            * UnitQuaternion::from_axis_angle(&Vector3::x_axis(), -PI / 2.0);
         if let Err(e) = recorder.log(
             format!("{ROBOT_STRUCTURE}/mesh"),
-            &rerun::Transform3D::from_rotation(
-                rerun::Quaternion::from_xyzw(rotation.as_vector().cast::<f32>().data.0[0]),
-            )
+            &rerun::Transform3D::from_rotation(rerun::Quaternion::from_xyzw(
+                rotation.as_vector().cast::<f32>().data.0[0],
+            )),
         ) {
             error!("Failed to log mesh transform: {e}");
         }

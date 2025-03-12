@@ -130,7 +130,11 @@ impl INode for LunabotConn {
             };
         }
 
-        let lunabot_address_str = Os::singleton().get_cmdline_user_args().get(0).map(|x| x.to_string()).unwrap_or_else(|| "192.168.0.102".into());
+        let lunabot_address_str = Os::singleton()
+            .get_cmdline_user_args()
+            .get(0)
+            .map(|x| x.to_string())
+            .unwrap_or_else(|| "192.168.0.102".into());
         let lunabot_address = {
             if let Ok(addr) = lunabot_address_str.parse::<IpAddr>() {
                 godot_warn!("Connecting to: {lunabot_address_str}");
@@ -151,10 +155,17 @@ impl INode for LunabotConn {
             ]);
         let stream_lendee = shared_rgb_img.create_lendee();
         #[cfg(feature = "production")]
-        stream::camera_streaming(lunabot_address, shared_rgb_img.pessimistic_share(), stream_corrupted);
+        stream::camera_streaming(
+            lunabot_address,
+            shared_rgb_img.pessimistic_share(),
+            stream_corrupted,
+        );
 
-        let udp = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, common::ports::LUNABASE_SIM_TELEOP))
-            .expect("Failed to bind to teleop port");
+        let udp = UdpSocket::bind(SocketAddrV4::new(
+            Ipv4Addr::UNSPECIFIED,
+            common::ports::LUNABASE_SIM_TELEOP,
+        ))
+        .expect("Failed to bind to teleop port");
 
         udp.set_nonblocking(true)
             .expect("Failed to set non-blocking");
@@ -258,7 +269,10 @@ impl INode for LunabotConn {
                             match inner.bitcode_buffer.decode::<FromLunabot>(received) {
                                 Ok(x) => {
                                     if let Some(ip) = inner.send_to {
-                                        if let Err(e) = inner.udp.send_to(&to_send, SocketAddr::new(ip, common::ports::TELEOP)) {
+                                        if let Err(e) = inner.udp.send_to(
+                                            &to_send,
+                                            SocketAddr::new(ip, common::ports::TELEOP),
+                                        ) {
                                             godot_error!("Failed to send ack: {e}");
                                         }
                                         on_msg!(x);
@@ -271,7 +285,10 @@ impl INode for LunabotConn {
                         }
                         RecommendedAction::SendData(hot_packet) => {
                             if let Some(ip) = inner.send_to {
-                                if let Err(e) = inner.udp.send_to(&hot_packet, SocketAddr::new(ip, common::ports::TELEOP)) {
+                                if let Err(e) = inner.udp.send_to(
+                                    &hot_packet,
+                                    SocketAddr::new(ip, common::ports::TELEOP),
+                                ) {
                                     godot_error!("Failed to send hot packet: {e}");
                                 }
                             }
@@ -318,7 +335,10 @@ impl INode for LunabotConn {
                     RecommendedAction::HandleError(cakap_error) => godot_error!("{cakap_error}"),
                     RecommendedAction::SendData(hot_packet) => {
                         if let Some(ip) = inner.send_to {
-                            if let Err(e) = inner.udp.send_to(&hot_packet, SocketAddr::new(ip, common::ports::TELEOP)) {
+                            if let Err(e) = inner
+                                .udp
+                                .send_to(&hot_packet, SocketAddr::new(ip, common::ports::TELEOP))
+                            {
                                 godot_error!("Failed to send hot packet: {e}");
                             }
                         }

@@ -402,7 +402,8 @@ impl LumpurBuilder {
                     let (tx, rx) = std::sync::mpsc::sync_channel(1);
                     ctrlc::set_handler(move || {
                         let _ = tx.send(());
-                    }).unwrap();
+                    })
+                    .unwrap();
                     loop {
                         if rx.recv_timeout(Duration::from_secs(1)).is_ok() {
                             break;

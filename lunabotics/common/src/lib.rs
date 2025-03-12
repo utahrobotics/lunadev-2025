@@ -13,9 +13,9 @@ pub const THALASSIC_CELL_COUNT: u32 = THALASSIC_WIDTH * THALASSIC_HEIGHT;
 #[cfg(feature = "godot_urdf")]
 pub mod godot_urdf;
 pub mod lunasim;
+pub mod ports;
 #[cfg(feature = "thalassic")]
 pub mod thalassic;
-pub mod ports;
 
 #[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]
 pub enum LunabotStage {
@@ -137,7 +137,10 @@ impl Default for Steering {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum PathInstruction { MoveTo, FaceTowards }
+pub enum PathInstruction {
+    MoveTo,
+    FaceTowards,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct PathPoint {
@@ -147,18 +150,20 @@ pub struct PathPoint {
 impl PathPoint {
     /// min distance for robot to be considered at a point
     const AT_POINT_THRESHOLD: f64 = 0.2;
-    
+
     /// min radians gap between robot  for robot to be considered facing towards a point
     const FACING_TOWARDS_THRESHOLD: f64 = 0.2;
 
     pub fn is_finished(&self, robot_pos: &Point2<f64>, robot_heading: &Point2<f64>) -> bool {
-        
         match self.instruction {
-            PathInstruction::MoveTo => 
-                distance(&self.point.xz(), robot_pos) < Self::AT_POINT_THRESHOLD,
+            PathInstruction::MoveTo => {
+                distance(&self.point.xz(), robot_pos) < Self::AT_POINT_THRESHOLD
+            }
 
-            PathInstruction::FaceTowards => 
-                (self.point.xz() - robot_pos).angle(&robot_heading.coords) < Self::FACING_TOWARDS_THRESHOLD
+            PathInstruction::FaceTowards => {
+                (self.point.xz() - robot_pos).angle(&robot_heading.coords)
+                    < Self::FACING_TOWARDS_THRESHOLD
+            }
         }
     }
 }

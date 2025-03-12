@@ -5,7 +5,10 @@ use serde::Deserialize;
 use std::sync::mpmc::Receiver;
 use tasker::{
     get_tokio_handle,
-    tokio::{self, io::{AsyncReadExt, AsyncWriteExt, BufStream}},
+    tokio::{
+        self,
+        io::{AsyncReadExt, AsyncWriteExt, BufStream},
+    },
     BlockOn,
 };
 use tokio_serial::SerialPortBuilderExt;
@@ -307,7 +310,7 @@ impl MotorTask {
                     error!("Failed to read/write to motor port {path_str}: {e}");
                     return;
                 }
-		
+
                 let Ok(buf) = MinLength::try_from(response.as_slice()) else {
                     error!("Received too short of a message from motor port {path_str}");
                     std::thread::sleep(std::time::Duration::from_secs(1));

@@ -30,6 +30,10 @@ udev = { version = "0.9.1", optional = true, features = ["mio10"] }
 v4l = { version = "0.14.0", optional = true }
 openh264 = { workspace = true, optional = true }
 
+# These two are only used in Simulation
+fast_image_resize = "5.1.2"
+bytemuck.workspace = true
+
 apriltag = { version = "0.4.0", optional = true }
 apriltag-image = { version = "0.1.0", optional = true }
 apriltag-nalgebra = { version = "0.1.0", optional = true }
@@ -40,6 +44,7 @@ tokio-serial = { version = "5.4.5", optional = true }
 mio = { version = "1", optional = true }
 file-lock = { version = "2.1.11", optional = true }
 rerun = { version = "0.22.0", optional = true, features = ["nasm", "sdk"], default-features = false }
+image = "0.25.5"
 # imu-fusion = { version = "0.2.5", optional = true }
 
 [features]

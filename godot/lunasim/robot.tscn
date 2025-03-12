@@ -97,7 +97,7 @@ script/source = "extends MultiMeshInstance3D
 
 func _ready() -> void:
 	var mesh: MultiMesh = multimesh
-	mesh.instance_count = 36 * 24
+	mesh.instance_count = 288 * 192
 	LunasimNode.fitted_points.connect(
 		func(points: Array[Vector3]):
 			mesh.visible_instance_count = points.size()

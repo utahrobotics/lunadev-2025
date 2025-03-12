@@ -88,7 +88,11 @@ impl TagObservation {
         //     * observer_pose.rotation;
         // observer_pose
         let inv_rotation = self.tag_local_isometry.rotation.inverse();
-        self.tag_global_isometry * Isometry3::from_parts((inv_rotation * -self.tag_local_isometry.translation.vector).into(), inv_rotation)
+        self.tag_global_isometry
+            * Isometry3::from_parts(
+                (inv_rotation * -self.tag_local_isometry.translation.vector).into(),
+                inv_rotation,
+            )
     }
 }
 

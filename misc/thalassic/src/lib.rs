@@ -119,19 +119,18 @@ impl DepthProjectorBuilder {
             points: BufferGroupBinding::<_, AlphaBindGroups>::get::<0, 3>(),
             heightmap_width: thalassic_ref.heightmap_dimensions.x,
             cell_size: thalassic_ref.cell_size,
-            cell_count: NonZeroU32::new(thalassic_ref.heightmap_dimensions.x.get()
-                * thalassic_ref.heightmap_dimensions.y.get()).unwrap(),
+            cell_count: NonZeroU32::new(
+                thalassic_ref.heightmap_dimensions.x.get()
+                    * thalassic_ref.heightmap_dimensions.y.get(),
+            )
+            .unwrap(),
             point_count: BufferGroupBinding::<_, AlphaBindGroups>::get::<0, 4>(),
         }
         .compile();
 
         let mut pipeline = ComputePipeline::new([&depth_fn, &pcl_fn]);
         pipeline.workgroups = [
-            Vector3::new(
-                self.image_size.x.get() / 8,
-                self.image_size.y.get() / 8,
-                1,
-            ),
+            Vector3::new(self.image_size.x.get() / 8, self.image_size.y.get() / 8, 1),
             Vector3::new(
                 thalassic_ref.heightmap_dimensions.x.get() / 8,
                 thalassic_ref.heightmap_dimensions.y.get() / 8,
@@ -166,13 +165,10 @@ impl DepthProjector {
         depths: &[u16],
         camera_transform: &AlignedMatrix4<f32>,
         depth_scale: f32,
-        point_cloud: Option<&mut [AlignedVec4<f32>]>
+        point_cloud: Option<&mut [AlignedVec4<f32>]>,
     ) {
         let point_count = self.image_size.x.get() * self.image_size.y.get();
-        debug_assert_eq!(
-            depths.len(),
-            point_count as usize
-        );
+        debug_assert_eq!(depths.len(), point_count as usize);
 
         let depth_grp = self.depth_bind_grp.take().unwrap();
         let mut sum_bind_grp_lock = self.sum_bind_grp.sum_bind_grp.lock();
@@ -280,15 +276,13 @@ impl ThalassicBuilder {
             new_radius: Some(0.25),
             new_max_gradient: Some(45.0f32.to_radians()),
             sum_bind_grp: ThalassicPipelineRef {
-                sum_bind_grp: Arc::new(Mutex::new(
-                    (
-                        Some(
-                            GpuBufferSet::from((
-                                StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),
-                            )),
-                        ),
-                        false
-                    ))),
+                sum_bind_grp: Arc::new(Mutex::new((
+                    Some(GpuBufferSet::from((StorageBuffer::new_dyn(
+                        cell_count.get() as usize,
+                    )
+                    .unwrap(),))),
+                    false,
+                ))),
                 heightmap_dimensions: self.heightmap_dimensions,
                 cell_size: self.cell_size,
             },
@@ -319,7 +313,10 @@ impl ThalassicPipelineRef {
     pub fn noop() -> Self {
         Self {
             sum_bind_grp: Arc::new(Mutex::new((None, false))),
-            heightmap_dimensions: Vector2::new(NonZeroU32::new(128).unwrap(), NonZeroU32::new(128).unwrap()),
+            heightmap_dimensions: Vector2::new(
+                NonZeroU32::new(128).unwrap(),
+                NonZeroU32::new(128).unwrap(),
+            ),
             cell_size: 0.1,
         }
     }

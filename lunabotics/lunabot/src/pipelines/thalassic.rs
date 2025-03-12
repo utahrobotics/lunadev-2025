@@ -1,5 +1,7 @@
 use std::{
-    collections::{HashSet, VecDeque}, num::NonZeroU32, sync::atomic::{AtomicBool, Ordering}
+    collections::{HashSet, VecDeque},
+    num::NonZeroU32,
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use common::{THALASSIC_CELL_COUNT, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
@@ -30,7 +32,11 @@ pub struct ThalassicData {
 }
 
 #[derive(PartialEq, Debug)]
-pub enum CellState { RED, GREEN, UNKNOWN }
+pub enum CellState {
+    RED,
+    GREEN,
+    UNKNOWN,
+}
 
 impl Default for ThalassicData {
     fn default() -> Self {
@@ -55,7 +61,7 @@ impl ThalassicData {
     fn xy_to_index((x, y): (usize, usize)) -> usize {
         y * Self::MAP_WIDTH + x
     }
-    
+
     pub fn in_bounds((x, y): (i32, i32)) -> bool {
         x >= 0 && x < Self::MAP_WIDTH as i32 && y >= 0 && y < Self::MAP_HEIGHT as i32
     }
@@ -67,57 +73,66 @@ impl ThalassicData {
     /// whether a target position is safe for the robot to be
     /// - the target position must be green
     /// - every single cell within `robot radius` of the target must be known
-    /// 
+    ///
     /// cells within `current_robot_radius` of `robot_cell_pos` are always safe
-    /// 
+    ///
     /// if unsafe, returns `Err(closest unknown cell that makes the target unsafe)`
-    pub fn is_safe_for_robot(&self, robot_cell_pos: (usize, usize), target_cell_pos: (usize, usize)) -> Result<(), (usize, usize)> {
-        
-        if robot_cell_pos == target_cell_pos { return Ok(()) }
+    pub fn is_safe_for_robot(
+        &self,
+        robot_cell_pos: (usize, usize),
+        target_cell_pos: (usize, usize),
+    ) -> Result<(), (usize, usize)> {
+        if robot_cell_pos == target_cell_pos {
+            return Ok(());
+        }
 
         let robot_cell_radius = (self.current_robot_radius / THALASSIC_CELL_SIZE).ceil();
 
-        if distance_between_tuples(robot_cell_pos, target_cell_pos) <= robot_cell_radius { return Ok(()) }
-        
+        if distance_between_tuples(robot_cell_pos, target_cell_pos) <= robot_cell_radius {
+            return Ok(());
+        }
 
         // if the target cell is near the robot, its okay if its not green
-        if 
-            self.get_cell_state(target_cell_pos) != CellState::GREEN && 
-            distance_between_tuples(target_cell_pos, robot_cell_pos) > robot_cell_radius 
+        if self.get_cell_state(target_cell_pos) != CellState::GREEN
+            && distance_between_tuples(target_cell_pos, robot_cell_pos) > robot_cell_radius
         {
             return Err(target_cell_pos);
         }
 
         let (pos_x, pos_y) = (target_cell_pos.0 as i32, target_cell_pos.1 as i32);
 
-
-        // using BFS so that the first unknown cell found when scanning the area 
-        // around `target_cell_pos` is also the closest unknown cell to `target_cell_pos` 
+        // using BFS so that the first unknown cell found when scanning the area
+        // around `target_cell_pos` is also the closest unknown cell to `target_cell_pos`
 
         let mut q: VecDeque<(i32, i32)> = VecDeque::new();
         let mut visited: HashSet<(i32, i32)> = HashSet::new();
 
         q.push_front((pos_x, pos_y));
-        
+
         while !q.is_empty() {
             for _ in 0..q.len() {
                 let nearby_cell = q.pop_front().unwrap();
                 let nearby_cell_usize = (nearby_cell.0 as usize, nearby_cell.1 as usize);
-                
-                if !Self::in_bounds(nearby_cell) { continue };
-                if distance_between_tuples(nearby_cell_usize, target_cell_pos) > robot_cell_radius { continue };
-                if !visited.insert(nearby_cell) { continue };
-                
+
+                if !Self::in_bounds(nearby_cell) {
+                    continue;
+                };
+                if distance_between_tuples(nearby_cell_usize, target_cell_pos) > robot_cell_radius {
+                    continue;
+                };
+                if !visited.insert(nearby_cell) {
+                    continue;
+                };
+
                 let (x, y) = nearby_cell;
                 q.push_back((x + 1, y));
                 q.push_back((x - 1, y));
                 q.push_back((x, y + 1));
                 q.push_back((x, y - 1));
 
-                // if a cell is not inside the robot AND and unknown then target cell is dangerous                
-                if 
-                    distance_between_tuples(nearby_cell_usize, robot_cell_pos) > robot_cell_radius &&
-                    !self.is_known(nearby_cell_usize) 
+                // if a cell is not inside the robot AND and unknown then target cell is dangerous
+                if distance_between_tuples(nearby_cell_usize, robot_cell_pos) > robot_cell_radius
+                    && !self.is_known(nearby_cell_usize)
                 {
                     return Err(nearby_cell_usize);
                 }
@@ -128,9 +143,13 @@ impl ThalassicData {
     }
 
     /// calls `is_safe_for_robot()` for each point in `path`
-    /// 
+    ///
     /// if unsafe, returns `Err( (i, closest unknown cell that makes path[i] unsafe) )`
-    pub fn is_path_safe_for_robot(&self, robot_cell_pos: (usize, usize), path: &Vec<(usize, usize)>) -> Result<(), (usize, (usize, usize))> {
+    pub fn is_path_safe_for_robot(
+        &self,
+        robot_cell_pos: (usize, usize),
+        path: &Vec<(usize, usize)>,
+    ) -> Result<(), (usize, (usize, usize))> {
         for (i, pt) in path.iter().enumerate() {
             if let Err(unknown_cell) = self.is_safe_for_robot(robot_cell_pos, *pt) {
                 return Err((i, unknown_cell));
@@ -141,14 +160,11 @@ impl ThalassicData {
     }
 
     pub fn get_cell_state(&self, pos: (usize, usize)) -> CellState {
-        
         match self.expanded_obstacle_map[Self::xy_to_index(pos)].occupied() {
             true => CellState::RED,
-            false => {
-                match self.get_height(pos) == 0.0 {
-                    true => CellState::UNKNOWN,
-                    false => CellState::GREEN,
-                }
+            false => match self.get_height(pos) == 0.0 {
+                true => CellState::UNKNOWN,
+                false => CellState::GREEN,
             },
         }
     }
@@ -156,7 +172,7 @@ impl ThalassicData {
     pub fn is_known(&self, pos: (usize, usize)) -> bool {
         self.get_cell_state(pos) != CellState::UNKNOWN
     }
-    
+
     pub fn get_height(&self, pos: (usize, usize)) -> f32 {
         self.heightmap[Self::xy_to_index(pos)]
     }
@@ -183,7 +199,7 @@ pub fn spawn_thalassic_pipeline(
 
         std::thread::spawn(move || loop {
             std::thread::sleep(std::time::Duration::from_millis(100));
-            
+
             if !pipeline.will_process() {
                 continue;
             }
@@ -208,16 +224,13 @@ pub fn spawn_thalassic_pipeline(
             if let Some(recorder) = crate::apps::RECORDER.get() {
                 if let Err(e) = recorder.recorder.log(
                     format!("{}/heightmap", crate::apps::ROBOT),
-                    &rerun::Points3D::new(
-                        heightmap.iter().enumerate()
-                        .map(|(i, &height)| {
-                            rerun::Position3D::new(
-                                (i % THALASSIC_WIDTH as usize) as f32 * -THALASSIC_CELL_SIZE,
-                                height,
-                                (i / THALASSIC_WIDTH as usize) as f32 * -THALASSIC_CELL_SIZE,
-                            )
-                        })
-                    )
+                    &rerun::Points3D::new(heightmap.iter().enumerate().map(|(i, &height)| {
+                        rerun::Position3D::new(
+                            (i % THALASSIC_WIDTH as usize) as f32 * -THALASSIC_CELL_SIZE,
+                            height,
+                            (i / THALASSIC_WIDTH as usize) as f32 * -THALASSIC_CELL_SIZE,
+                        )
+                    })),
                 ) {
                     tracing::error!("Failed to log heightmap: {e}");
                 }
@@ -225,7 +238,7 @@ pub fn spawn_thalassic_pipeline(
 
             buffer = owned.pessimistic_share();
         });
-        
+
         reference
     } else {
         ThalassicPipelineRef::noop()
