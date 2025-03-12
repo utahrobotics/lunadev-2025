@@ -12,11 +12,12 @@ use common::{
     LunabotStage,
 };
 use crossbeam::atomic::AtomicCell;
-use fast_image_resize::{images::ImageRef, PixelType};
+use fast_image_resize::{images::ImageRef, FilterType, PixelType, ResizeAlg, ResizeOptions};
 use gputter::{
     init_gputter_blocking,
     types::{AlignedMatrix4, AlignedVec4},
 };
+use image::ImageEncoder;
 use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{
@@ -256,10 +257,10 @@ impl LunasimbotApp {
         let camera_link = robot_chain.get_node_with_name("depth_camera").unwrap();
 
         let depth_projecter_builder = DepthProjectorBuilder {
-            image_size: Vector2::new(NonZeroU32::new(144).unwrap(), NonZeroU32::new(96).unwrap()),
-            focal_length_px: 10.392 * 4.0,
-            principal_point_px: Vector2::new(143.0 / 2.0, 95.0 / 2.0),
-            max_depth: 2.0,
+            image_size: Vector2::new(NonZeroU32::new(288).unwrap(), NonZeroU32::new(192).unwrap()),
+            focal_length_px: 10.392 * 8.0,
+            principal_point_px: Vector2::new(287.0 / 2.0, 191.0 / 2.0),
+            max_depth: 1.0,
         };
 
         let mut buffer = OwnedData::from(ThalassicData::default());
@@ -283,7 +284,7 @@ impl LunasimbotApp {
             },
         );
 
-        let thalassic_ref = spawn_thalassic_pipeline(buffer, 144 * 96);
+        let thalassic_ref = spawn_thalassic_pipeline(buffer, 288 * 192);
         let mut depth_projecter = depth_projecter_builder.build(thalassic_ref);
 
         let axis_angle = |axis: [f32; 3], angle: f32| {
@@ -298,9 +299,10 @@ impl LunasimbotApp {
 
         let lunasim_stdin2 = lunasim_stdin.clone();
         let mut point_cloud: Box<[_]> =
-            std::iter::repeat_n(AlignedVec4::from(Vector4::default()), 144 * 96).collect();
+            std::iter::repeat_n(AlignedVec4::from(Vector4::default()), 288 * 192).collect();
         let mut resizer = fast_image_resize::Resizer::new();
-        let mut dst_image = fast_image_resize::images::Image::new(144, 96, PixelType::U16);
+        let mut dst_image = fast_image_resize::images::Image::new(288, 192, PixelType::U16);
+        let mut mask_image = fast_image_resize::images::Image::new(288, 192, PixelType::U16);
         from_lunasim_ref.add_fn_mut(move |msg| match msg {
             FromLunasim::Accelerometer {
                 id: _,
@@ -327,16 +329,33 @@ impl LunasimbotApp {
                 let camera_transform = camera_link.get_global_isometry();
                 let camera_transform: AlignedMatrix4<f32> =
                     camera_transform.to_homogeneous().cast::<f32>().into();
+
+                resizer
+                .resize(
+                    &ImageRef::new(36, 24, bytemuck::cast_slice(&depths), PixelType::U16)
+                        .unwrap(),
+                    &mut dst_image,
+                    None,
+                )
+                .unwrap();
+            
                 resizer
                     .resize(
                         &ImageRef::new(36, 24, bytemuck::cast_slice(&depths), PixelType::U16)
                             .unwrap(),
-                        &mut dst_image,
-                        None,
+                        &mut mask_image,
+                        Some(&ResizeOptions::new().resize_alg(ResizeAlg::Nearest)),
                     )
                     .unwrap();
+                let dst_image: &mut [u16] = bytemuck::cast_slice_mut(dst_image.buffer_mut());
+                dst_image.iter_mut().zip(bytemuck::cast_slice::<_, u16>(mask_image.buffer()))
+                    .for_each(|(d, m)| {
+                        if *m == 0 {
+                            *d = 0;
+                        }
+                    });
                 depth_projecter.project(
-                    bytemuck::cast_slice(dst_image.buffer()),
+                    dst_image,
                     &camera_transform,
                     0.01,
                     Some(&mut point_cloud),
