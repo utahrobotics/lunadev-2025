@@ -16,7 +16,6 @@ use crate::{blackboard::LunabotBlackboard, utils::WaitBehavior, Action};
 
 use super::{follow_path, Autonomy, AutonomyStage};
 
-
 const PAUSE_AFTER_MOVING_DURATION: Duration = Duration::from_secs(2);
 
 pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
@@ -47,7 +46,6 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                         );
                         Status::Success
                     }),
-
                     // wait for path
                     AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
                         if blackboard.get_path().is_some() {
@@ -56,17 +54,15 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                             Status::Running
                         }
                     }),
-
                     // follow path, then pause regardless of result
                     TryCatch::new(
                         Sequence::new((
                             AssertCancelSafe(follow_path),
-                            WaitBehavior::from(PAUSE_AFTER_MOVING_DURATION)
+                            WaitBehavior::from(PAUSE_AFTER_MOVING_DURATION),
                         )),
-                        Invert(WaitBehavior::from(PAUSE_AFTER_MOVING_DURATION)) // return false if `follow_path` returned false
-                    )   
-                    )),
-                )
+                        Invert(WaitBehavior::from(PAUSE_AFTER_MOVING_DURATION)), // return false if `follow_path` returned false
+                    ),
+                ))),
             ),
             AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
                 blackboard.get_autonomy().advance();

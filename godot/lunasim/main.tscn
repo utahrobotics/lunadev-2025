@@ -216,9 +216,10 @@ func _ready() -> void:
 [sub_resource type="GDScript" id="GDScript_re1ur"]
 script/source = "extends MarginContainer
 
-const DELTA := 1.0 / 30
-const WIDTH := 36
-const HEIGHT := 24
+const DELTA := 0.3
+const WIDTH: int = 36
+const HEIGHT: int = 24
+const SCALE: int = 3
 const MAX_DISTANCE := 4.0
 
 var raycasts: Array[RayCast3D] = []
@@ -231,14 +232,14 @@ var _timer := DELTA
 
 func _ready() -> void:
 	$AspectRatioContainer.ratio = WIDTH as float / HEIGHT
-	var f := WIDTH / 2.0 / tan(deg_to_rad(camera.fov) / 2.0)
+	var f := WIDTH * SCALE / 2.0 / tan(deg_to_rad(camera.fov) / 2.0)
 	
-	for y in range(HEIGHT):
-		for x in range(WIDTH):
+	for y in range(HEIGHT * SCALE):
+		for x in range(WIDTH * SCALE):
 			var raycast := RayCast3D.new()
 			raycast.target_position = Vector3(
-				(x - (WIDTH - 1) / 2.0) / f,
-				((HEIGHT - 1) / 2.0 - y) / f,
+				(x - (WIDTH * SCALE - 1) / 2.0) / f,
+				((HEIGHT * SCALE - 1) / 2.0 - y) / f,
 				-1
 			).normalized() * MAX_DISTANCE
 			raycasts.append(raycast)

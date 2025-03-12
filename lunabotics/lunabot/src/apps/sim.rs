@@ -12,12 +12,10 @@ use common::{
     LunabotStage,
 };
 use crossbeam::atomic::AtomicCell;
-use fast_image_resize::{images::ImageRef, FilterType, PixelType, ResizeAlg, ResizeOptions};
 use gputter::{
     init_gputter_blocking,
     types::{AlignedMatrix4, AlignedVec4},
 };
-use image::ImageEncoder;
 use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{
@@ -86,6 +84,10 @@ pub struct LunasimbotApp {
     pub lunabase_address: Option<IpAddr>,
     pub max_pong_delay_ms: u64,
 }
+
+const DEPTH_BASE_WIDTH: u32 = 36;
+const DEPTH_BASE_HEIGHT: u32 = 24;
+const SCALE: u32 = 3;
 
 impl LunasimbotApp {
     pub fn run(self) {
@@ -257,9 +259,9 @@ impl LunasimbotApp {
         let camera_link = robot_chain.get_node_with_name("depth_camera").unwrap();
 
         let depth_projecter_builder = DepthProjectorBuilder {
-            image_size: Vector2::new(NonZeroU32::new(288).unwrap(), NonZeroU32::new(192).unwrap()),
-            focal_length_px: 10.392 * 8.0,
-            principal_point_px: Vector2::new(287.0 / 2.0, 191.0 / 2.0),
+            image_size: Vector2::new(NonZeroU32::new(DEPTH_BASE_WIDTH * SCALE).unwrap(), NonZeroU32::new(DEPTH_BASE_HEIGHT * SCALE).unwrap()),
+            focal_length_px: 10.392 * SCALE as f32,
+            principal_point_px: Vector2::new((DEPTH_BASE_WIDTH * SCALE - 1) as f32 / 2.0, (DEPTH_BASE_HEIGHT * SCALE - 1) as f32 / 2.0),
             max_depth: 1.0,
         };
 
@@ -284,7 +286,7 @@ impl LunasimbotApp {
             },
         );
 
-        let thalassic_ref = spawn_thalassic_pipeline(buffer, 288 * 192);
+        let thalassic_ref = spawn_thalassic_pipeline(buffer, 72 * 48);
         let mut depth_projecter = depth_projecter_builder.build(thalassic_ref);
 
         let axis_angle = |axis: [f32; 3], angle: f32| {
@@ -299,10 +301,7 @@ impl LunasimbotApp {
 
         let lunasim_stdin2 = lunasim_stdin.clone();
         let mut point_cloud: Box<[_]> =
-            std::iter::repeat_n(AlignedVec4::from(Vector4::default()), 288 * 192).collect();
-        let mut resizer = fast_image_resize::Resizer::new();
-        let mut dst_image = fast_image_resize::images::Image::new(288, 192, PixelType::U16);
-        let mut mask_image = fast_image_resize::images::Image::new(288, 192, PixelType::U16);
+            std::iter::repeat_n(AlignedVec4::from(Vector4::default()), DEPTH_BASE_WIDTH as usize * DEPTH_BASE_HEIGHT as usize * SCALE as usize * SCALE as usize).collect();
         from_lunasim_ref.add_fn_mut(move |msg| match msg {
             FromLunasim::Accelerometer {
                 id: _,
@@ -330,36 +329,7 @@ impl LunasimbotApp {
                 let camera_transform: AlignedMatrix4<f32> =
                     camera_transform.to_homogeneous().cast::<f32>().into();
 
-                resizer
-                .resize(
-                    &ImageRef::new(36, 24, bytemuck::cast_slice(&depths), PixelType::U16)
-                        .unwrap(),
-                    &mut dst_image,
-                    None,
-                )
-                .unwrap();
-            
-                resizer
-                    .resize(
-                        &ImageRef::new(36, 24, bytemuck::cast_slice(&depths), PixelType::U16)
-                            .unwrap(),
-                        &mut mask_image,
-                        Some(&ResizeOptions::new().resize_alg(ResizeAlg::Nearest)),
-                    )
-                    .unwrap();
-                let dst_image: &mut [u16] = bytemuck::cast_slice_mut(dst_image.buffer_mut());
-                dst_image.iter_mut().zip(bytemuck::cast_slice::<_, u16>(mask_image.buffer()))
-                    .for_each(|(d, m)| {
-                        if *m == 0 {
-                            *d = 0;
-                        }
-                    });
-                depth_projecter.project(
-                    dst_image,
-                    &camera_transform,
-                    0.01,
-                    Some(&mut point_cloud),
-                );
+                depth_projecter.project(&depths, &camera_transform, 0.001, Some(&mut point_cloud));
                 let msg = FromLunasimbot::PointCloud(
                     point_cloud
                         .iter()

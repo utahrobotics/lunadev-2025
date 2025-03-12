@@ -22,7 +22,7 @@ struct LunasimLib;
 #[gdextension]
 unsafe impl ExtensionLibrary for LunasimLib {}
 
-const DEPTH_SCALE: f32 = 0.01;
+const DEPTH_SCALE: f32 = 0.001;
 
 struct LunasimShared {
     from_lunasimbot: SegQueue<FromLunasimbot>,
@@ -245,7 +245,7 @@ impl Lunasim {
             .into_iter()
             .map(|d| {
                 (randfn(d as f64, (d as f64).powi(2) * self.depth_deviation).abs() as f32
-                    / DEPTH_SCALE)
+                    / DEPTH_SCALE).min(65535.0)
                     .round() as u16
             })
             .collect();
