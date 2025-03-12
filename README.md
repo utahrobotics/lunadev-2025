@@ -1,3 +1,5 @@
+![bg2](https://github.com/user-attachments/assets/98dd41d5-def2-445e-9cec-d354fd7c6f0f)
+
 # lunadev-2025
 
 This is the official workspace for the software team for Utah Student Robotics for the NASA Lunabotics 2025 competition.
