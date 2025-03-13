@@ -9,7 +9,15 @@ use crate::{autonomy::Autonomy, Action, PollWhen};
 pub enum Input {
     FromLunabase(FromLunabase),
     PathCalculated(Vec<PathPoint>),
+    FailedToCalculatePath(Vec<PathPoint>),
     LunabaseDisconnected,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum PathfindingState {
+    Idle,
+    Pending,
+    Failed
 }
 
 pub(crate) struct LunabotBlackboard {
@@ -18,6 +26,7 @@ pub(crate) struct LunabotBlackboard {
     autonomy: Autonomy,
     chain: StaticImmutableNode,
     path: Vec<PathPoint>,
+    pathfinding_state: PathfindingState,
     lunabase_disconnected: bool,
     actions: Vec<Action>,
     poll_when: PollWhen,
@@ -30,6 +39,7 @@ impl LunabotBlackboard {
             from_lunabase: Default::default(),
             autonomy: Autonomy::None,
             path: vec![],
+            pathfinding_state: PathfindingState::Idle,
             chain,
             lunabase_disconnected: true,
             actions: vec![],
@@ -86,14 +96,26 @@ impl LunabotBlackboard {
     pub fn digest_input(&mut self, input: Input) {
         match input {
             Input::FromLunabase(msg) => self.from_lunabase.push_back(msg),
-            Input::PathCalculated(path) => self.path = path,
+            Input::PathCalculated(path) => {
+                self.path = path;
+                self.pathfinding_state = PathfindingState::Idle;
+            },
+            Input::FailedToCalculatePath(path) => {
+                self.path = path;
+                self.pathfinding_state = PathfindingState::Failed;
+            },
             Input::LunabaseDisconnected => self.lunabase_disconnected = true,
         }
     }
 
     pub fn calculate_path(&mut self, from: Point3<f64>, to: Point3<f64>) {
         let into = std::mem::take(&mut self.path);
+        self.pathfinding_state = PathfindingState::Pending;
         self.enqueue_action(Action::CalculatePath { from, to, into });
+    }
+
+    pub fn pathfinding_state(&self) -> PathfindingState {
+        self.pathfinding_state
     }
 
     pub fn enqueue_action(&mut self, action: Action) {

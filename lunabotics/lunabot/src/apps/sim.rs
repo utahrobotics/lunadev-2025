@@ -395,19 +395,17 @@ impl LunasimbotApp {
                     lunasim_stdin.write(bytes);
                 }
                 Action::CalculatePath { from, to, mut into } => {
-                    loop {
-                        pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into);
-                        if !into.is_empty() {
-                            break;
-                        }
+                    if pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into) {
+                        let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
+                            into.iter()
+                                .map(|p| p.point.coords.cast::<f32>().data.0[0])
+                                .collect(),
+                        ));
+                        lunasim_stdin.write(bytes);
+                        inputs.push(Input::PathCalculated(into));
+                    } else {
+                        inputs.push(Input::FailedToCalculatePath(into));
                     }
-                    let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
-                        into.iter()
-                            .map(|p| p.point.coords.cast::<f32>().data.0[0])
-                            .collect(),
-                    ));
-                    lunasim_stdin.write(bytes);
-                    inputs.push(Input::PathCalculated(into));
                 }
             },
             |poll_when, inputs| {

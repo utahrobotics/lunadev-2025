@@ -5,7 +5,7 @@ use depth2pcl::Depth2Pcl;
 use gputter::{
     buffers::{
         storage::{
-            HostHidden, HostReadOnly, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, StorageBuffer,
+            HostHidden, HostReadOnly, HostReadWrite, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, StorageBuffer
         },
         uniform::UniformBuffer,
         GpuBufferSet,
@@ -25,10 +25,12 @@ mod height2grad;
 // mod pcl2height;
 mod pcl2sum;
 mod sum2height;
+mod obstaclefilter;
 // pub use clustering::Clusterer;
 
 mod expand_obstacles;
 use expand_obstacles::ExpandObstacles;
+use obstaclefilter::ObstacleFilter;
 use parking_lot::Mutex;
 use pcl2sum::Pcl2Sum;
 use sum2height::Sum2Height;
@@ -58,7 +60,7 @@ type AlphaBindGroups = (GpuBufferSet<DepthBindGrp>, GpuBufferSet<SumBindGrp>);
 /// The units are meters.
 ///
 /// This bind group is the output of the heightmapper ([`pcl2height`]) and the input for the gradientmapper.
-type HeightMapBindGrp = (StorageBuffer<[f32], HostReadOnly, ShaderReadWrite>,);
+type HeightMapBindGrp = (StorageBuffer<[f32], HostReadWrite, ShaderReadWrite>,);
 
 /// 1. The gradient of each cell in the heightmap expressed as an angle in radians.
 ///
@@ -67,8 +69,13 @@ type GradMapBindGrp = (StorageBuffer<[f32], HostReadOnly, ShaderReadWrite>,);
 
 /// 1. Whether or not each cell is an obstacle, denoted with `1` or `0`.
 ///
-/// This bind group is the output of the obstaclemapper and input to the obstacle expander.
+/// This bind group is the output of the obstaclemapper and input to the obstacle filter.
 type ObstacleMapBindGrp = (StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,);
+
+/// 1. Whether or not each cell is an obstacle, denoted with `1` or `0`.
+///
+/// This bind group is the output of the obstacle filter and input to the obstacle expander.
+type FilteredObstacleMapBindGrp = (StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,);
 
 /// 1. The maximum safe gradient.
 ///
@@ -86,6 +93,7 @@ type BetaBindGroups = (
     GpuBufferSet<HeightMapBindGrp>,
     GpuBufferSet<GradMapBindGrp>,
     GpuBufferSet<ObstacleMapBindGrp>,
+    GpuBufferSet<FilteredObstacleMapBindGrp>,
     GpuBufferSet<ObstacleMapperInputBindGrp>,
     GpuBufferSet<ExpanderBindGrp>,
 );
@@ -211,6 +219,8 @@ pub struct ThalassicBuilder {
     pub heightmap_dimensions: Vector2<NonZeroU32>,
     pub cell_size: f32,
     pub max_point_count: NonZeroU32,
+    pub feature_size_cells: u32,
+    pub min_feature_count: u32,
 }
 
 impl ThalassicBuilder {
@@ -239,30 +249,42 @@ impl ThalassicBuilder {
         let [obstacle_fn] = Grad2Obstacle {
             obstacle_map: BufferGroupBinding::<_, BetaBindGroups>::get::<3, 0>(),
             gradient_map: BufferGroupBinding::<_, BetaBindGroups>::get::<2, 0>(),
-            max_gradient: BufferGroupBinding::<_, BetaBindGroups>::get::<5, 0>(),
+            max_gradient: BufferGroupBinding::<_, BetaBindGroups>::get::<6, 0>(),
             height_map: BufferGroupBinding::<_, BetaBindGroups>::get::<1, 0>(),
             heightmap_width: self.heightmap_dimensions.x,
             cell_count,
         }
         .compile();
 
-        let [expand_fn] = ExpandObstacles {
-            obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<3, 0>(),
-            radius: BufferGroupBinding::<_, BetaBindGroups>::get::<5, 0>(),
+        let [obstacle_filter] = ObstacleFilter {
+            in_obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<3, 0>(),
+            filtered_obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<4, 0>(),
+            feature_size_cells: self.feature_size_cells,
+            min_count: self.min_feature_count,
             cell_size: self.cell_size,
             grid_width: self.heightmap_dimensions.x,
             grid_height: self.heightmap_dimensions.y,
         }
         .compile();
 
-        let mut pipeline = ComputePipeline::new([&sum_fn, &grad_fn, &obstacle_fn, &expand_fn]);
+        let [expand_fn] = ExpandObstacles {
+            obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<3, 0>(),
+            radius: BufferGroupBinding::<_, BetaBindGroups>::get::<6, 0>(),
+            cell_size: self.cell_size,
+            grid_width: self.heightmap_dimensions.x,
+            grid_height: self.heightmap_dimensions.y,
+        }
+        .compile();
+
+        let mut pipeline = ComputePipeline::new([&sum_fn, &grad_fn, &obstacle_fn, &obstacle_filter, &expand_fn]);
         pipeline.workgroups = [Vector3::new(
             self.heightmap_dimensions.x.get() / 8,
             self.heightmap_dimensions.y.get() / 8,
             1,
-        ); 4];
+        ); 5];
 
         let bind_grps = (
+            GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
@@ -286,6 +308,7 @@ impl ThalassicBuilder {
                 heightmap_dimensions: self.heightmap_dimensions,
                 cell_size: self.cell_size,
             },
+            cell_count
         }
     }
 }
@@ -298,6 +321,10 @@ impl Occupancy {
     pub const FREE: Self = Self(0);
 
     pub fn occupied(self) -> bool {
+        // True iff the cell is not empty *before* expansion
+        // self.0 == 1
+
+        // True iff the cell is not empty
         self.0 != 0
     }
 }
@@ -323,17 +350,19 @@ impl ThalassicPipelineRef {
 }
 
 pub struct ThalassicPipeline {
-    pipeline: ComputePipeline<BetaBindGroups, 4>,
+    pipeline: ComputePipeline<BetaBindGroups, 5>,
     bind_grps: Option<(
         GpuBufferSet<HeightMapBindGrp>,
         GpuBufferSet<GradMapBindGrp>,
         GpuBufferSet<ObstacleMapBindGrp>,
+        GpuBufferSet<FilteredObstacleMapBindGrp>,
         GpuBufferSet<ObstacleMapperInputBindGrp>,
         GpuBufferSet<ExpanderBindGrp>,
     )>,
     new_radius: Option<f32>,
     new_max_gradient: Option<f32>,
     sum_bind_grp: ThalassicPipelineRef,
+    cell_count: NonZeroU32,
 }
 
 impl ThalassicPipeline {
@@ -353,7 +382,7 @@ impl ThalassicPipeline {
             return;
         }
 
-        let (height_grp, grad_grp, obstacle_map, obstacle_mapper_input_grp, expander_input_grp) =
+        let (height_grp, grad_grp, obstacle_map, filtered_obstacle_map, obstacle_mapper_input_grp, expander_input_grp) =
             self.bind_grps.take().unwrap();
 
         let mut bind_grps: BetaBindGroups = (
@@ -361,6 +390,7 @@ impl ThalassicPipeline {
             height_grp,
             grad_grp,
             obstacle_map,
+            filtered_obstacle_map,
             obstacle_mapper_input_grp,
             expander_input_grp,
         );
@@ -368,10 +398,10 @@ impl ThalassicPipeline {
         self.pipeline
             .new_pass(|mut lock| {
                 if let Some(new_radius) = self.new_radius.take() {
-                    bind_grps.5.write::<0, _>(&new_radius, &mut lock);
+                    bind_grps.6.write::<0, _>(&new_radius, &mut lock);
                 }
                 if let Some(new_max_gradient) = self.new_max_gradient.take() {
-                    bind_grps.4.write::<0, _>(&new_max_gradient, &mut lock);
+                    bind_grps.5.write::<0, _>(&new_max_gradient, &mut lock);
                 }
                 &mut bind_grps
             })
@@ -382,6 +412,7 @@ impl ThalassicPipeline {
             height_grp,
             grad_grp,
             obstacle_map,
+            filtered_obstacle_map,
             obstacle_mapper_input_grp,
             expander_input_grp,
         ) = bind_grps;
@@ -396,11 +427,18 @@ impl ThalassicPipeline {
             height_grp,
             grad_grp,
             obstacle_map,
+            filtered_obstacle_map,
             obstacle_mapper_input_grp,
             expander_input_grp,
         ));
         sum_bind_grp_lock.0.replace(points_grp);
         sum_bind_grp_lock.1 = false;
+    }
+
+    pub fn reset_heightmap(&mut self) {
+        let bind_grps = self.bind_grps.as_mut().unwrap();
+        bind_grps.0 = GpuBufferSet::from((StorageBuffer::new_dyn(self.cell_count.get() as usize).unwrap(),));
+        // bind_grps.1.buffers.0 = StorageBuffer::new_dyn(self.cell_count.get() as usize).unwrap();
     }
 
     pub fn set_radius(&mut self, radius: f32) {

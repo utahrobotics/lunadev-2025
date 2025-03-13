@@ -182,7 +182,7 @@ impl DefaultPathfinder {
         from: Point3<f64>,
         to: Point3<f64>,
         into: &mut Vec<PathPoint>,
-    ) {
+    ) -> bool {
         into.clear();
 
         let start_cell = self.world_to_cells * from;
@@ -198,7 +198,10 @@ impl DefaultPathfinder {
                 if self.current_robot_radius <= 0.0 {
                     into.clear();
                     tracing::error!("pathfinder: couldnt find a path even with a robot radius of 0");
-                    return;
+                    self.current_robot_radius = 0.5;
+                    map_data.set_robot_radius(self.current_robot_radius);
+                    map_data.queue_reset_heightmap();
+                    return false;
                 }
 
                 self.current_robot_radius -= 0.1;
@@ -245,7 +248,7 @@ impl DefaultPathfinder {
                             .map(|pos| cell_to_path_pt(*pos, PathInstruction::MoveTo)),
                     );
                     into.push(cell_to_path_pt(unknown_cell, PathInstruction::FaceTowards));
-                    return;
+                    break;
                 }
             }
             // path is safe
@@ -255,8 +258,10 @@ impl DefaultPathfinder {
                     path.iter()
                         .map(|pos| cell_to_path_pt(*pos, PathInstruction::MoveTo)),
                 );
-                return;
+                break;
             }
         }
+
+        true
     }
 }

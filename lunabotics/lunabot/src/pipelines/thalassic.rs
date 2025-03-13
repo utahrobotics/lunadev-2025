@@ -29,6 +29,7 @@ pub struct ThalassicData {
     pub expanded_obstacle_map: [Occupancy; THALASSIC_CELL_COUNT as usize],
     pub current_robot_radius: f32,
     new_robot_radius: AtomicCell<Option<f32>>,
+    reset_heightmap: AtomicBool,
 }
 
 #[derive(PartialEq, Debug)]
@@ -46,6 +47,7 @@ impl Default for ThalassicData {
             expanded_obstacle_map: [Occupancy::FREE; THALASSIC_CELL_COUNT as usize],
             new_robot_radius: AtomicCell::new(None),
             current_robot_radius: 0.25,
+            reset_heightmap: AtomicBool::new(false),
         }
     }
 }
@@ -68,6 +70,10 @@ impl ThalassicData {
 
     pub fn set_robot_radius(&self, radius: f32) {
         self.new_robot_radius.store(Some(radius));
+    }
+
+    pub fn queue_reset_heightmap(&self) {
+        self.reset_heightmap.store(true, Ordering::Relaxed);
     }
 
     /// whether a target position is safe for the robot to be
@@ -192,6 +198,8 @@ pub fn spawn_thalassic_pipeline(
             ),
             cell_size: THALASSIC_CELL_SIZE,
             max_point_count: NonZeroU32::new(max_point_count).unwrap(),
+            feature_size_cells: 5,
+            min_feature_count: 7,
         }
         .build();
 
@@ -211,11 +219,17 @@ pub fn spawn_thalassic_pipeline(
                 expanded_obstacle_map,
                 new_robot_radius,
                 current_robot_radius,
+                reset_heightmap
             } = &mut *owned;
 
             if let Some(radius) = new_robot_radius.take() {
                 *current_robot_radius = radius;
                 pipeline.set_radius(radius);
+            }
+
+            if *reset_heightmap.get_mut() {
+                *reset_heightmap.get_mut() = false;
+                pipeline.reset_heightmap();
             }
 
             pipeline.process(heightmap, gradmap, expanded_obstacle_map);

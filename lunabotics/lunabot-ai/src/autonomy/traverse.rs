@@ -12,7 +12,7 @@ use common::LunabotStage;
 use nalgebra::Point3;
 use tracing::warn;
 
-use crate::{blackboard::LunabotBlackboard, utils::WaitBehavior, Action};
+use crate::{blackboard::{LunabotBlackboard, PathfindingState}, utils::WaitBehavior, Action};
 
 use super::{follow_path, Autonomy, AutonomyStage};
 
@@ -38,22 +38,37 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
             WhileLoop::new(
                 AlwaysSucceed,
                 Invert(Sequence::new((
-                    // pathfind
-                    AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-                        blackboard.calculate_path(
-                            blackboard.get_robot_isometry().translation.vector.into(),
-                            Point3::new(-2.0, 0.0, -7.0),
-                        );
-                        Status::Success
-                    }),
-                    // wait for path
-                    AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-                        if blackboard.get_path().is_some() {
-                            Status::Success
-                        } else {
-                            Status::Running
-                        }
-                    }),
+                    Invert(WhileLoop::new(
+                        AlwaysSucceed,
+                        Sequence::new((
+                            // pathfind
+                            AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+                                blackboard.calculate_path(
+                                    blackboard.get_robot_isometry().translation.vector.into(),
+                                    Point3::new(-2.0, 0.0, -7.0),
+                                );
+                                Status::Success
+                            }),
+                            // wait for path
+                            AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+                                match blackboard.pathfinding_state() {
+                                    PathfindingState::Idle => {
+                                        if blackboard.get_path().is_some() {
+                                            // failure breaks the loop
+                                            Status::Failure
+                                        } else {
+                                            Status::Running
+                                        }
+                                    },
+                                    PathfindingState::Pending => Status::Running,
+                                    PathfindingState::Failed => {
+                                        tracing::error!("Failed to find path");
+                                        Status::Success
+                                    },
+                                }
+                            })
+                        ))
+                    )),
                     // follow path, then pause regardless of result
                     TryCatch::new(
                         Sequence::new((
