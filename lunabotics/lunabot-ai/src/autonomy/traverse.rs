@@ -61,10 +61,7 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                                         }
                                     },
                                     PathfindingState::Pending => Status::Running,
-                                    PathfindingState::Failed => {
-                                        tracing::error!("Failed to find path");
-                                        Status::Success
-                                    },
+                                    PathfindingState::Failed => Status::Success,
                                 }
                             })
                         ))

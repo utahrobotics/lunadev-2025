@@ -26,6 +26,11 @@ fn compute_main(@builtin(global_invocation_id) cell: vec3u) {
         return;
     }
 
+    if (cell.x >= GRID_WIDTH - 1 || cell.x == 0 || cell.y == 0 || cell.y >= GRID_HEIGHT - 1) {
+        filtered_obstacles[this_index] = 1u;
+        return;
+    }
+
     // convert to i32 temporarily to avoid underflowing to maximum u32 values
     let start_x = u32( max( i32(0), i32(pos.x - FEATURE_RADIUS_CELLS ) ) );
     let end_x = min(GRID_WIDTH-1, pos.x + FEATURE_RADIUS_CELLS);
@@ -42,15 +47,16 @@ fn compute_main(@builtin(global_invocation_id) cell: vec3u) {
 
             if (in_obstacles[nearby_i] == 1) {
                 count += 1;
+
+                if (count >= MIN_COUNT) {
+                    filtered_obstacles[this_index] = 1;
+                    return;
+                }
             }
         }
     }
 
-    if (count >= MIN_COUNT) {
-        filtered_obstacles[this_index] = 1;
-    } else {
-        filtered_obstacles[this_index] = 0;
-    }
+    filtered_obstacles[this_index] = 0;
 }
 
 

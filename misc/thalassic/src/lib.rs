@@ -268,7 +268,7 @@ impl ThalassicBuilder {
         .compile();
 
         let [expand_fn] = ExpandObstacles {
-            obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<3, 0>(),
+            obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<4, 0>(),
             radius: BufferGroupBinding::<_, BetaBindGroups>::get::<6, 0>(),
             cell_size: self.cell_size,
             grid_width: self.heightmap_dimensions.x,
@@ -418,7 +418,7 @@ impl ThalassicPipeline {
         ) = bind_grps;
         height_grp.buffers.0.read(out_heightmap);
         grad_grp.buffers.0.read(out_gradient);
-        obstacle_map
+        filtered_obstacle_map
             .buffers
             .0
             .read(bytemuck::cast_slice_mut(out_expanded_obstacles));
