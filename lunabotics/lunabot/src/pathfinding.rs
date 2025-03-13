@@ -197,14 +197,16 @@ impl DefaultPathfinder {
             let Some(mut path) = self.find_path(start_cell, end_cell, &map_data) else {
                 self.current_robot_radius -= 0.1;
 
-                if self.current_robot_radius <= 0.0 {
+                if self.current_robot_radius <= 0.1 {
                     into.clear();
-                    tracing::error!("pathfinder: couldnt find a path even with a robot radius of 0");
+                    tracing::error!("pathfinder: couldnt find a path even with a robot radius of 0.1");
                     self.current_robot_radius = 0.5;
                     map_data.set_robot_radius(self.current_robot_radius);
                     map_data.queue_reset_heightmap();
                     return false;
                 }
+                
+                map_data.set_robot_radius(self.current_robot_radius);
 
                 tracing::warn!(
                     "pathfinder: couldnt find a path, shrinking radius to {}",

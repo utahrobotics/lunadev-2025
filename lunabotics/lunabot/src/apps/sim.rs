@@ -87,7 +87,7 @@ pub struct LunasimbotApp {
 
 const DEPTH_BASE_WIDTH: u32 = 36;
 const DEPTH_BASE_HEIGHT: u32 = 24;
-const SCALE: u32 = 3;
+const SCALE: u32 = 2;
 
 impl LunasimbotApp {
     pub fn run(self) {

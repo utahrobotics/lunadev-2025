@@ -219,7 +219,7 @@ script/source = "extends MarginContainer
 const DELTA := 0.3
 const WIDTH: int = 36
 const HEIGHT: int = 24
-const SCALE: int = 3
+const SCALE: int = 2
 const MAX_DISTANCE := 4.0
 
 var raycasts: Array[RayCast3D] = []
