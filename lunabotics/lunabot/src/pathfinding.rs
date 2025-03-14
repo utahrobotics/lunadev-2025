@@ -199,13 +199,15 @@ impl DefaultPathfinder {
 
                 if self.current_robot_radius <= 0.1 {
                     into.clear();
-                    tracing::error!("pathfinder: couldnt find a path even with a robot radius of 0.1");
+                    tracing::error!(
+                        "pathfinder: couldnt find a path even with a robot radius of 0.1"
+                    );
                     self.current_robot_radius = 0.5;
                     map_data.set_robot_radius(self.current_robot_radius);
                     map_data.queue_reset_heightmap();
                     return false;
                 }
-                
+
                 map_data.set_robot_radius(self.current_robot_radius);
 
                 tracing::warn!(

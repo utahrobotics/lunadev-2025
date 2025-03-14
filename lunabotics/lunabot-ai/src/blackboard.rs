@@ -17,7 +17,7 @@ pub enum Input {
 pub(crate) enum PathfindingState {
     Idle,
     Pending,
-    Failed
+    Failed,
 }
 
 pub(crate) struct LunabotBlackboard {
@@ -99,11 +99,11 @@ impl LunabotBlackboard {
             Input::PathCalculated(path) => {
                 self.path = path;
                 self.pathfinding_state = PathfindingState::Idle;
-            },
+            }
             Input::FailedToCalculatePath(path) => {
                 self.path = path;
                 self.pathfinding_state = PathfindingState::Failed;
-            },
+            }
             Input::LunabaseDisconnected => self.lunabase_disconnected = true,
         }
     }

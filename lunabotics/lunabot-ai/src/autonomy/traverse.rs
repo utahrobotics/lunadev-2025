@@ -12,7 +12,11 @@ use common::LunabotStage;
 use nalgebra::Point3;
 use tracing::warn;
 
-use crate::{blackboard::{LunabotBlackboard, PathfindingState}, utils::WaitBehavior, Action};
+use crate::{
+    blackboard::{LunabotBlackboard, PathfindingState},
+    utils::WaitBehavior,
+    Action,
+};
 
 use super::{follow_path, Autonomy, AutonomyStage};
 
@@ -59,12 +63,12 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                                         } else {
                                             Status::Running
                                         }
-                                    },
+                                    }
                                     PathfindingState::Pending => Status::Running,
                                     PathfindingState::Failed => Status::Success,
                                 }
-                            })
-                        ))
+                            }),
+                        )),
                     )),
                     // follow path, then pause regardless of result
                     TryCatch::new(

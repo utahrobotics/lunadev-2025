@@ -5,7 +5,8 @@ use depth2pcl::Depth2Pcl;
 use gputter::{
     buffers::{
         storage::{
-            HostHidden, HostReadOnly, HostReadWrite, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, StorageBuffer
+            HostHidden, HostReadOnly, HostReadWrite, HostWriteOnly, ShaderReadOnly,
+            ShaderReadWrite, StorageBuffer,
         },
         uniform::UniformBuffer,
         GpuBufferSet,
@@ -23,9 +24,9 @@ mod depth2pcl;
 mod grad2obstacle;
 mod height2grad;
 // mod pcl2height;
+mod obstaclefilter;
 mod pcl2sum;
 mod sum2height;
-mod obstaclefilter;
 // pub use clustering::Clusterer;
 
 mod expand_obstacles;
@@ -276,7 +277,13 @@ impl ThalassicBuilder {
         }
         .compile();
 
-        let mut pipeline = ComputePipeline::new([&sum_fn, &grad_fn, &obstacle_fn, &obstacle_filter, &expand_fn]);
+        let mut pipeline = ComputePipeline::new([
+            &sum_fn,
+            &grad_fn,
+            &obstacle_fn,
+            &obstacle_filter,
+            &expand_fn,
+        ]);
         pipeline.workgroups = [Vector3::new(
             self.heightmap_dimensions.x.get() / 8,
             self.heightmap_dimensions.y.get() / 8,
@@ -308,7 +315,7 @@ impl ThalassicBuilder {
                 heightmap_dimensions: self.heightmap_dimensions,
                 cell_size: self.cell_size,
             },
-            cell_count
+            cell_count,
         }
     }
 }
@@ -382,8 +389,14 @@ impl ThalassicPipeline {
             return;
         }
 
-        let (height_grp, grad_grp, obstacle_map, filtered_obstacle_map, obstacle_mapper_input_grp, expander_input_grp) =
-            self.bind_grps.take().unwrap();
+        let (
+            height_grp,
+            grad_grp,
+            obstacle_map,
+            filtered_obstacle_map,
+            obstacle_mapper_input_grp,
+            expander_input_grp,
+        ) = self.bind_grps.take().unwrap();
 
         let mut bind_grps: BetaBindGroups = (
             sum_bind_grp_lock.0.take().unwrap(),
@@ -437,7 +450,8 @@ impl ThalassicPipeline {
 
     pub fn reset_heightmap(&mut self) {
         let bind_grps = self.bind_grps.as_mut().unwrap();
-        bind_grps.0 = GpuBufferSet::from((StorageBuffer::new_dyn(self.cell_count.get() as usize).unwrap(),));
+        bind_grps.0 =
+            GpuBufferSet::from((StorageBuffer::new_dyn(self.cell_count.get() as usize).unwrap(),));
         // bind_grps.1.buffers.0 = StorageBuffer::new_dyn(self.cell_count.get() as usize).unwrap();
     }
 

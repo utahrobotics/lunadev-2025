@@ -43,7 +43,7 @@ impl LocalizerRef {
         }
     }
 
-    fn take_imu_readings(&self) -> IMUReading {
+    fn take_imu_readings(&self) -> Option<IMUReading> {
         let mut out = IMUReading {
             angular_velocity: Vector3::zeros(),
             acceleration: Vector3::zeros(),
@@ -61,8 +61,10 @@ impl LocalizerRef {
         if count > 0 {
             out.angular_velocity /= count as f64;
             out.acceleration /= count as f64;
+            Some(out)
+        } else {
+            None
         }
-        out
     }
 
     fn april_tag_isometry(&self) -> Option<Isometry3<f64>> {
@@ -116,8 +118,6 @@ impl Localizer {
         let spin_sleeper = SpinSleeper::default();
         #[cfg(not(feature = "production"))]
         let mut bitcode_buffer = bitcode::Buffer::new();
-        let mut last_acceleration = - Vector3::y_axis();
-        let mut last_angular_velocity = Vector3::zeros();
 
         loop {
             spin_sleeper.sleep(Duration::from_secs_f64(LOCALIZATION_DELTA));
@@ -152,39 +152,40 @@ impl Localizer {
                 self.root_node.set_isometry(Isometry3::identity());
             }
 
-            let IMUReading {
-                acceleration,
-                angular_velocity,
-            } = self.localizer_ref.take_imu_readings();
-            let mut down_axis = - Vector3::y_axis();
-            let acceleration = UnitVector3::new_normalize(isometry * acceleration);
-            if acceleration.x.is_finite()
-                && acceleration.y.is_finite()
-                && acceleration.z.is_finite()
-            {
-                last_acceleration = acceleration;
-            }
-            if angular_velocity.x.is_finite()
-                && angular_velocity.y.is_finite()
-                && angular_velocity.z.is_finite()
-            {
-                last_angular_velocity = angular_velocity;
-            }
-            // tracing::info!("{:.2} {:.2} {:.2}", last_acceleration.x, last_acceleration.y, last_acceleration.z);
-            let angle = down_axis.angle(&last_acceleration)
-                * lerp_value(LOCALIZATION_DELTA, ACCELEROMETER_LERP_SPEED);
+            let mut down_axis = -Vector3::y_axis();
+            let mut angular_velocity = None;
 
-            if angle > 1.0f64.to_radians() {
-                let cross = UnitVector3::new_normalize(down_axis.cross(&last_acceleration));
-                isometry.append_rotation_wrt_center_mut(&UnitQuaternion::from_axis_angle(
-                    &cross, -angle,
-                ));
+            if let Some(IMUReading {
+                acceleration,
+                angular_velocity: tmp_angular_velocity,
+            }) = self.localizer_ref.take_imu_readings()
+            {
+                if tmp_angular_velocity.x.is_finite()
+                    && tmp_angular_velocity.y.is_finite()
+                    && tmp_angular_velocity.z.is_finite()
+                {
+                    angular_velocity = Some(tmp_angular_velocity);
+                }
+                let acceleration = UnitVector3::new_normalize(isometry * acceleration);
+                if acceleration.x.is_finite()
+                    && acceleration.y.is_finite()
+                    && acceleration.z.is_finite()
+                {
+                    let angle = down_axis.angle(&acceleration)
+                        * lerp_value(LOCALIZATION_DELTA, ACCELEROMETER_LERP_SPEED);
+
+                    if angle > 0.001 {
+                        let cross = UnitVector3::new_normalize(down_axis.cross(&acceleration));
+                        isometry.append_rotation_wrt_center_mut(&UnitQuaternion::from_axis_angle(
+                            &cross, -angle,
+                        ));
+                    }
+                }
             }
 
             down_axis = isometry.rotation * down_axis;
 
             if let Some(tag_isometry) = self.localizer_ref.april_tag_isometry() {
-                tracing::info!("Tag");
                 isometry.translation = tag_isometry.translation;
 
                 let (_, new_twist) = swing_twist_decomposition(&tag_isometry.rotation, &down_axis);
@@ -197,10 +198,10 @@ impl Localizer {
                 {
                     isometry.rotation = new_rotation;
                 }
-            } else {
+            } else if let Some(angular_velocity) = angular_velocity {
                 isometry.append_rotation_wrt_center_mut(&UnitQuaternion::from_axis_angle(
                     &down_axis,
-                    -last_angular_velocity.y * LOCALIZATION_DELTA,
+                    -angular_velocity.y * LOCALIZATION_DELTA,
                 ));
             }
 

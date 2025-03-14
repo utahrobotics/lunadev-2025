@@ -219,7 +219,7 @@ pub fn spawn_thalassic_pipeline(
                 expanded_obstacle_map,
                 new_robot_radius,
                 current_robot_radius,
-                reset_heightmap
+                reset_heightmap,
             } = &mut *owned;
 
             if let Some(radius) = new_robot_radius.take() {

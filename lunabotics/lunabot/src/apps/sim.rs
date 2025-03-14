@@ -259,9 +259,15 @@ impl LunasimbotApp {
         let camera_link = robot_chain.get_node_with_name("depth_camera").unwrap();
 
         let depth_projecter_builder = DepthProjectorBuilder {
-            image_size: Vector2::new(NonZeroU32::new(DEPTH_BASE_WIDTH * SCALE).unwrap(), NonZeroU32::new(DEPTH_BASE_HEIGHT * SCALE).unwrap()),
+            image_size: Vector2::new(
+                NonZeroU32::new(DEPTH_BASE_WIDTH * SCALE).unwrap(),
+                NonZeroU32::new(DEPTH_BASE_HEIGHT * SCALE).unwrap(),
+            ),
             focal_length_px: 10.392 * SCALE as f32,
-            principal_point_px: Vector2::new((DEPTH_BASE_WIDTH * SCALE - 1) as f32 / 2.0, (DEPTH_BASE_HEIGHT * SCALE - 1) as f32 / 2.0),
+            principal_point_px: Vector2::new(
+                (DEPTH_BASE_WIDTH * SCALE - 1) as f32 / 2.0,
+                (DEPTH_BASE_HEIGHT * SCALE - 1) as f32 / 2.0,
+            ),
             max_depth: 1.5,
         };
 
@@ -300,8 +306,14 @@ impl LunasimbotApp {
         };
 
         let lunasim_stdin2 = lunasim_stdin.clone();
-        let mut point_cloud: Box<[_]> =
-            std::iter::repeat_n(AlignedVec4::from(Vector4::default()), DEPTH_BASE_WIDTH as usize * DEPTH_BASE_HEIGHT as usize * SCALE as usize * SCALE as usize).collect();
+        let mut point_cloud: Box<[_]> = std::iter::repeat_n(
+            AlignedVec4::from(Vector4::default()),
+            DEPTH_BASE_WIDTH as usize
+                * DEPTH_BASE_HEIGHT as usize
+                * SCALE as usize
+                * SCALE as usize,
+        )
+        .collect();
         from_lunasim_ref.add_fn_mut(move |msg| match msg {
             FromLunasim::Accelerometer {
                 id: _,
