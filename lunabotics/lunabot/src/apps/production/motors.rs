@@ -66,18 +66,18 @@ impl VescIDs {
 }
 
 pub struct MotorRef {
-    speeds: AtomicCell<(f32, f32)>,
+    speeds: AtomicCell<Option<(f32, f32)>>,
 }
 
 impl MotorRef {
     pub fn set_speed(&self, left: f32, right: f32) {
-        self.speeds.store((left, right));
+        self.speeds.store(Some((left, right)));
     }
 }
 
 pub fn enumerate_motors(vesc_ids: VescIDs, speed_multiplier: f32) -> &'static MotorRef {
     let motor_ref: &_ = Box::leak(Box::new(MotorRef {
-        speeds: AtomicCell::new((0.0, 0.0)),
+        speeds: AtomicCell::new(None),
     }));
 
     let (tx, rx) = std::sync::mpmc::sync_channel::<String>(1);
@@ -340,18 +340,17 @@ impl MotorTask {
         let slave_mask =
             slave_can_id.map(|can_id| *self.vesc_ids.motor_masks.get(&can_id).unwrap());
 
-        let mut last_values = (f32::NAN, f32::NAN);
         let backoff = Backoff::new();
 
         loop {
             let values = loop {
-                let values = self.motor_ref.speeds.load();
-                if values != last_values {
+                let values = self.motor_ref.speeds.take();
+                if let Some(values) = values {
                     break values;
                 }
                 backoff.snooze();
             };
-            last_values = values;
+            backoff.reset();
 
             let task = async {
                 if let Some(can_id) = slave_can_id {

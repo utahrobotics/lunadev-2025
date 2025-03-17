@@ -3215,6 +3215,7 @@ dependencies = [
  "arc-swap",
  "bitcode",
  "cakap2",
+ "chrono",
  "common",
  "crossbeam",
  "embedded_common",
