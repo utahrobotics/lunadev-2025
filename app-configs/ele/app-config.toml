@@ -1,5 +1,4 @@
 [Main]
-# lunabase_address = "127.0.0.1"
 robot_layout = "robot-layout/ele.json"
 lunabase_address = "192.168.0.100"
 
@@ -27,17 +26,17 @@ stream_index = 0
 
 [Main.apriltags."1"]
 tag_position = [0.0, 0.6477, 0.0]
-forward_axis = [0.0, 0.0, -1.0]
+forward_axis = [0.0, 0.0, 1.0]
 tag_width = 0.104775
 
 [Main.apriltags."13"]
-tag_position = [1.83, 0.75, -0.127]
-forward_axis = [0.0, 0.0, -1.0]
+tag_position = [-1.83, 0.75, 0.127]
+forward_axis = [0.0, 0.0, 1.0]
 tag_width = 0.15
 
 [Main.apriltags."26"]
-tag_position = [-0.65, 0.7, -0.93]
-forward_axis = [1.0, 0.0, 0.0]
+tag_position = [0.65, 0.7, 0.93]
+forward_axis = [-1.0, 0.0, 0.0]
 tag_width = 0.152
 
 [Main.imus."21"]

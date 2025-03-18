@@ -1,8 +1,6 @@
 [Main]
-# lunabase_address = "127.0.0.1"
 robot_layout = "robot-layout/ele.json"
 lunabase_address = "192.168.0.100"
-rerun_viz = "Log"
 
 [Main.cameras."pci-0000:35:00.0-usb-0:1:1.0"]
 link_name = "right_camera"
@@ -28,17 +26,17 @@ stream_index = 0
 
 [Main.apriltags."1"]
 tag_position = [0.0, 0.6477, 0.0]
-forward_axis = [0.0, 0.0, -1.0]
+forward_axis = [0.0, 0.0, 1.0]
 tag_width = 0.104775
 
 [Main.apriltags."13"]
-tag_position = [1.83, 0.75, -0.127]
-forward_axis = [0.0, 0.0, -1.0]
+tag_position = [-1.83, 0.75, 0.127]
+forward_axis = [0.0, 0.0, 1.0]
 tag_width = 0.15
 
 [Main.apriltags."26"]
-tag_position = [-0.65, 0.7, -0.93]
-forward_axis = [1.0, 0.0, 0.0]
+tag_position = [0.65, 0.7, 0.93]
+forward_axis = [-1.0, 0.0, 0.0]
 tag_width = 0.152
 
 [Main.imus."21"]
@@ -48,16 +46,16 @@ link_name = "imu_21"
 link_name = "imu_42"
 
 [Main.vesc]
-speed_multiplier = 0.2
+speed_multiplier = 1.0
 
 [[Main.vesc.pairs]]
 id1 = 75
 id2 = 110
-mask1 = "Left"
-mask2 = "Left"
+mask1 = "Right"
+mask2 = "Right"
 
 [[Main.vesc.pairs]]
 id1 = 63
 id2 = 74
-mask1 = "Right"
-mask2 = "Right"
+mask1 = "Left"
+mask2 = "Left"
