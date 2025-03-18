@@ -53,7 +53,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if raycast.is_colliding():
 		var blend := pow(0.5, delta * TERRAIN_TRANSLATION_LERP_SPEED)
-		position = position.lerp(raycast.get_collision_point(), blend)
+		global_position = global_position.lerp(raycast.get_collision_point(), blend)
 		var normal := raycast.get_collision_normal()
 		var angle := normal.angle_to(global_basis.y)
 		if angle > 0.001:

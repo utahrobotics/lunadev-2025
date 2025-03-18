@@ -16,7 +16,7 @@ build_shader!(
     fn height(
         @builtin(global_invocation_id) global_invocation_id : vec3u,
     ) {
-        let heightmap_point = vec2(- f32(global_invocation_id.x), - f32(global_invocation_id.y)) * CELL_SIZE;
+        let heightmap_point = vec2(f32(global_invocation_id.x), f32(global_invocation_id.y)) * CELL_SIZE;
         let heightmap_index = global_invocation_id.x + global_invocation_id.y * HEIGHTMAP_WIDTH;
 
         for (var i = 0u; i < point_count; i++) {

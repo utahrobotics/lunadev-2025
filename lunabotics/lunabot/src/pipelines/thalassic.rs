@@ -240,9 +240,9 @@ pub fn spawn_thalassic_pipeline(
                     format!("{}/heightmap", crate::apps::ROBOT),
                     &rerun::Points3D::new(heightmap.iter().enumerate().map(|(i, &height)| {
                         rerun::Position3D::new(
-                            (i % THALASSIC_WIDTH as usize) as f32 * -THALASSIC_CELL_SIZE,
+                            (i % THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE,
                             height,
-                            (i / THALASSIC_WIDTH as usize) as f32 * -THALASSIC_CELL_SIZE,
+                            (i / THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE,
                         )
                     })),
                 ) {

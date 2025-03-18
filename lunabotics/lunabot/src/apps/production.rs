@@ -220,7 +220,7 @@ impl LunabotApp {
         );
 
         let grid_to_world = Transform3::from_matrix_unchecked(
-            Scale3::new(-0.03125, 1.0, -0.03125).to_homogeneous(),
+            Scale3::new(0.03125, 1.0, 0.03125).to_homogeneous(),
         );
         let world_to_grid = grid_to_world.try_inverse().unwrap();
         let mut pathfinder = DefaultPathfinder::new(world_to_grid, grid_to_world);
