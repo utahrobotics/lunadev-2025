@@ -71,6 +71,8 @@ fn main() {
             ("yaserde.*", Level::INFO),
             ("mio.*", Level::INFO),
             ("naga.*", Level::INFO),
+            ("re_sdk.*", Level::INFO),
+            ("re_chunk.*", Level::INFO)
         ])
         .set_console_ignores([
             ("wgpu_hal::gles::egl", Level::WARN),

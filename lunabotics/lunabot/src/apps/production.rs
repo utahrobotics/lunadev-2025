@@ -15,7 +15,7 @@ use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use mio::{Events, Interest, Poll, Token};
 use motors::{enumerate_motors, MotorMask, VescIDs};
-use nalgebra::{Scale3, Transform3};
+use nalgebra::{Scale3, Transform3, UnitQuaternion};
 use rerun_viz::init_rerun;
 use rp2040::*;
 use serde::Deserialize;
@@ -63,6 +63,8 @@ pub struct DepthCameraInfo {
 #[derive(Deserialize, Debug)]
 pub struct IMUInfo {
     link_name: String,
+    #[serde(default)]
+    correction: UnitQuaternion<f32>
 }
 
 #[derive(Deserialize, Debug)]
@@ -236,15 +238,17 @@ impl LunabotApp {
 
         enumerate_imus(
             &localizer_ref,
-            self.imus.into_iter().map(|(port, IMUInfo { link_name })| {
+            self.imus.into_iter().map(|(port, IMUInfo { link_name, correction })| {
                 (
                     port,
                     rp2040::IMUInfo {
+                        correction,
                         node: robot_chain
                             .get_node_with_name(&link_name)
                             .context("Failed to find IMU link")
                             .unwrap()
                             .into(),
+                        link_name,
                     },
                 )
             }),

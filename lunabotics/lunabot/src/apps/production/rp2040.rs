@@ -3,7 +3,7 @@ use std::sync::mpsc::{Receiver, SyncSender};
 use crate::localization::{IMUReading, LocalizerRef};
 use embedded_common::*;
 use fxhash::FxHashMap;
-use nalgebra::Vector3;
+use nalgebra::{UnitQuaternion, UnitVector3, Vector3};
 use simple_motion::StaticImmutableNode;
 use tasker::{
     get_tokio_handle,
@@ -22,6 +22,8 @@ use super::udev_poll;
 
 pub struct IMUInfo {
     pub node: StaticImmutableNode,
+    pub link_name: String,
+    pub correction: UnitQuaternion<f32>
 }
 
 pub fn enumerate_imus(
@@ -51,7 +53,7 @@ pub fn enumerate_imus(
     let mut threads: FxHashMap<String, SyncSender<String>> = serial_to_chain
         .into_iter()
         .enumerate()
-        .filter_map(|(index, (port, IMUInfo { node }))| {
+        .filter_map(|(index, (port, IMUInfo { node, correction, link_name }))| {
             let port2 = port.clone();
             let (tx, rx) = std::sync::mpsc::sync_channel(1);
             let localizer_ref = localizer_ref.clone();
@@ -60,7 +62,9 @@ pub fn enumerate_imus(
                     path: rx,
                     node,
                     localizer_ref,
-                    index, // queue: data_queue_ref
+                    index,
+                    correction,
+                    link_name
                 };
                 loop {
                     imu_task.imu_task().block_on();
@@ -165,8 +169,11 @@ struct IMUTask {
     node: StaticImmutableNode,
     localizer_ref: LocalizerRef,
     index: usize,
-    // queue: &'static ArrayQueue<IMUReading>,
+    link_name: String,
+    correction: UnitQuaternion<f32>
 }
+
+const INIT_ACCEL_COUNT: usize = 10;
 
 impl IMUTask {
     async fn imu_task(&mut self) {
@@ -193,6 +200,9 @@ impl IMUTask {
         let mut imu_port = BufStream::new(imu_port);
         let mut data: [u8; 25] = [0; 25];
 
+        let mut init_accel_sum = Vector3::zeros();
+        let mut init_accel_count = 0usize;
+
         // let start = Instant::now();
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
@@ -216,11 +226,31 @@ impl IMUTask {
             };
             match msg {
                 FromIMU::Reading(rate, accel) => {
+                    let local_isometry = self.node.get_local_isometry().cast();
                     let angular_velocity = Vector3::new(-rate.x, rate.z, rate.y);
-                    let transformed_rate = self.node.get_local_isometry().cast() * angular_velocity;
+                    let transformed_rate = self.correction * local_isometry.rotation * angular_velocity;
 
                     let accel = Vector3::new(accel.x, -accel.z, -accel.y);
-                    let transformed_accel = self.node.get_local_isometry().cast() * accel;
+                    let transformed_accel = self.correction * local_isometry.rotation * accel;
+
+                    if init_accel_count < INIT_ACCEL_COUNT {
+                        init_accel_count += 1;
+                        init_accel_sum += accel;
+
+                        if init_accel_count == INIT_ACCEL_COUNT {
+                            init_accel_sum.unscale_mut(init_accel_count as f32);
+                            if let Some(mut init_accel) = UnitVector3::try_new(init_accel_sum, 0.01) {
+                                init_accel = local_isometry.rotation * init_accel;
+                                if let Some(correction) = UnitQuaternion::rotation_between_axis(&init_accel, &-Vector3::y_axis()) {
+                                    tracing::info!("{} estimated correction: [{:.3}, {:.3}, {:.3}, {:.3}]", self.link_name, correction.i, correction.j, correction.k, correction.w);
+                                } else {
+                                    tracing::error!("{} failed to get correction quat", self.link_name);
+                                }
+                            } else {
+                                tracing::error!("{} failed to acceleration", self.link_name);
+                            }
+                        }
+                    }
 
                     self.localizer_ref.set_imu_reading(
                         self.index,
