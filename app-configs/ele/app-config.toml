@@ -41,9 +41,11 @@ tag_width = 0.152
 
 [Main.imus."21"]
 link_name = "imu_21"
+correction = [-0.027, 0.000, 0.005, 1.000]
 
 [Main.imus."42"]
 link_name = "imu_42"
+correction = [-0.020, 0.000, -0.006, 1.000]
 
 [Main.vesc]
 speed_multiplier = 0.2
