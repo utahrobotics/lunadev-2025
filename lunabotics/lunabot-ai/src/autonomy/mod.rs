@@ -6,10 +6,10 @@ use ares_bt::{
     sequence::{ParallelAny, Sequence},
     Behavior, Status,
 };
-use common::{FromLunabase, PathInstruction, Steering};
+use common::{FromLunabase, PathInstruction, PathPoint, Steering};
 use dig::dig;
 use dump::dump;
-use nalgebra::{Matrix2, Point2, Vector2, Vector3};
+use nalgebra::{distance, Matrix2, Point2, Point3, Vector2, Vector3};
 use tracing::{error, warn};
 use traverse::traverse;
 
@@ -81,6 +81,9 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
 
 fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
     let robot = blackboard.get_robot_isometry();
+    
+    let latest_pos = blackboard.get_latest_position();
+    let now = blackboard.get_now();
     let path = blackboard.get_path_mut();
 
     if path.is_empty() {
@@ -88,20 +91,34 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
         return Status::Running;
     }
 
-    let first_instr = path[0];
-    let pos = Point2::new(robot.translation.x, robot.translation.z);
+    let curr_instr = path[0];
+    let pos: Point3<f64> = robot.translation.vector.into();
     let heading = robot
         .rotation
         .transform_vector(&Vector3::new(0.0, 0.0, -1.0))
         .xz();
 
-    if first_instr.is_finished(&pos, &heading.into()) {
-        if path.len() == 1 {
-            return match first_instr.instruction {
-                PathInstruction::MoveTo => {
-                    println!("path follower: done!");
-                    blackboard.enqueue_action(Action::SetSteering(Steering::default()));
-                    Status::Success
+    if curr_instr.is_finished(&pos.xz(), &heading.into()) {
+        path.remove(0);
+        let path_complete = path.is_empty();
+        
+        *blackboard.backtracking() = false;
+        
+        // if we just completed a "MoveTo" point
+        if curr_instr.instruction == PathInstruction::MoveTo {
+            blackboard.push_completed_pt(curr_instr.point);
+        }
+        
+        if path_complete {
+            blackboard.enqueue_action(Action::SetSteering(Steering::default()));
+            
+            return match curr_instr.instruction {
+                PathInstruction::MoveTo => match *blackboard.backtracking() {
+                    true => Status::Failure, // the last point was reached, but we were just backtracking
+                    false => {
+                        println!("path follower: done!");
+                        Status::Success
+                    }
                 }
                 PathInstruction::FaceTowards => {
                     blackboard.enqueue_action(Action::SetSteering(Steering::default()));
@@ -109,13 +126,52 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
                 }
             };
         }
-
-        path.remove(0);
+        
         return Status::Running;
     }
-
+    
+    
+    match latest_pos {
+        None => blackboard.set_latest_position(pos),
+        Some((prev_pos, time_of_prev_pos)) => {
+            
+            // robot has moved away from prev position, update `latest_position`
+            if distance(&prev_pos, &pos) > 0.01 { 
+                blackboard.set_latest_position(pos);
+                println!("path follower: new snapshot {:?}", blackboard.get_latest_position());
+            }
+            
+            // robot has been here for a while now, avoid this spot and start backtracking
+            else if now.duration_since(time_of_prev_pos).as_secs() > 10 {
+                println!("path follower: been at point {} for too long!", pos);
+                
+                // build the backtracking path by popping previously completed pathpoints
+                // until the backtracking path leads far enough away
+                let mut backtrack_path = vec![];
+                while let Some(completed_pt) = blackboard.pop_completed_pt() {
+                    if distance(&completed_pt.xz(), &pos.xz()) < 0.5 {
+                        backtrack_path.push(PathPoint {point: completed_pt, instruction: PathInstruction::MoveTo});
+                    }
+                }
+                blackboard.clear_completed_pts();
+                
+                // replace path with the backtracking path
+                let path = blackboard.get_path_mut(); // don't use the old mut ref to path to follow rust's mutable/immutable reference rules
+                path.clear();
+                path.extend(backtrack_path);
+                
+                blackboard.enqueue_action(Action::AvoidPoint(pos));
+                *blackboard.backtracking() = true;
+                return Status::Running;
+            }
+        },
+    };
+    
+    
+    println!("path finder: doing {:?} at pos {}", curr_instr, pos);
+    
     let heading_angle = heading.angle(&Vector2::new(0.0, -1.0));
-    let to_first_point = (first_instr.point.xz() - pos).normalize();
+    let to_first_point = (curr_instr.point.xz() - pos.xz()).normalize();
 
     // direction to first point of path, from robot's pov
     let to_first_point = if heading.x < 0.0 {
@@ -124,7 +180,7 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
         rotate_v2_ccw(to_first_point, -heading_angle)
     };
 
-    match first_instr.instruction {
+    match curr_instr.instruction {
         PathInstruction::MoveTo => {
             if to_first_point.angle(&Vector2::new(0.0, -1.0)).to_degrees() > 20.0 {
                 if to_first_point.x > 0.0 {

@@ -17,10 +17,12 @@ pub struct DefaultPathfinder {
     pub cell_grid: Grid,
 
     current_robot_radius: f32,
+    
+    /// - cleared once destination is reached
+    cells_to_avoid: Vec<(usize, usize)>,
 
     /// these cells have been scanned `MAX_SCAN_ATTEMPTS` times and yet still unknown.
-    ///
-    /// avoid them in the future.
+    /// - cleared once they are scanned
     unscannable_cells: Vec<(usize, usize)>,
     last_unknown_cell: (usize, usize),
     times_blocked_here_in_a_row: usize,
@@ -34,11 +36,27 @@ impl DefaultPathfinder {
             cell_grid: Grid::new(THALASSIC_WIDTH as usize, THALASSIC_HEIGHT as usize),
 
             current_robot_radius: 0.5,
-
+            
+            cells_to_avoid: vec![],
+            
             unscannable_cells: vec![],
             last_unknown_cell: (0, 0),
             times_blocked_here_in_a_row: 0,
         }
+    }
+    
+    fn world_point_to_cell(&self, point: Point3<f64>) -> (usize, usize) {
+        let cell = self.world_to_cells * point;
+        (cell.x as usize, cell.z as usize)
+    }
+    
+    /// iterator of `unscannable_cells` and `cells_to_avoid`
+    fn all_unsafe_cells(&self) -> impl Iterator<Item = &(usize, usize)> {
+        self.unscannable_cells.iter().chain(self.cells_to_avoid.iter())
+    }
+    
+    pub fn avoid_point(&mut self, point: Point3<f64>) {
+        self.cells_to_avoid.push(self.world_point_to_cell(point));
     }
 
     fn get_map_data(
@@ -51,7 +69,7 @@ impl DefaultPathfinder {
         set_observe_depth(true);
         let mut map_data = shared_thalassic_data.get();
         loop {
-            if map_data.current_robot_radius == robot_radius {
+            if map_data.current_robot_radius_meters == robot_radius {
                 break;
             }
             map_data.set_robot_radius(robot_radius);
@@ -72,7 +90,7 @@ impl DefaultPathfinder {
 
         map_data
     }
-
+    
     fn find_path(
         &self,
         mut start_cell: (usize, usize),
@@ -81,7 +99,19 @@ impl DefaultPathfinder {
     ) -> Option<Vec<(usize, usize)>> {
         // allows checking if position is known inside `move || {}` closures without moving `map_data`
         let is_known = |pos: (usize, usize)| map_data.is_known(pos);
-
+        
+        // `false` if pos is close to any of `all_unsafe_cells()`
+        let is_safe = |pos: (usize, usize)| {
+            let robot_radius_in_cells = map_data.current_robot_radius_meters / common::THALASSIC_CELL_SIZE;
+            for unsafe_cell in self.all_unsafe_cells() {
+                if distance_between_tuples(pos, *unsafe_cell) < robot_radius_in_cells {
+                    return false;
+                }
+            }
+            true
+        };
+        
+        
         macro_rules! neighbours {
             ($p: ident) => {
                 self.cell_grid
@@ -95,19 +125,7 @@ impl DefaultPathfinder {
                             return false;
                         }
 
-                        let robot_radius_in_cells =
-                            map_data.current_robot_radius / common::THALASSIC_CELL_SIZE;
-
-                        // avoid going near unscannable cells
-                        for unknown_cell in &self.unscannable_cells {
-                            if distance_between_tuples(potential_neighbor, *unknown_cell)
-                                < robot_radius_in_cells
-                            {
-                                return false;
-                            }
-                        }
-
-                        return true;
+                        return is_safe(potential_neighbor);
                     })
                     .into_iter()
                     .map(move |neighbor| {
@@ -127,12 +145,11 @@ impl DefaultPathfinder {
             };
         }
 
-        let heuristic =
-            move |p: &(usize, usize)| (distance_between_tuples(*p, end_cell) * 10000.0) as usize;
+        let heuristic = move |p: &(usize, usize)| (distance_between_tuples(*p, end_cell) * 10000.0) as usize;
 
         let mut path = vec![];
 
-        // if in red, prepend a path to safety
+        // if in red or an unsafe cell, prepend a path to safety
         if map_data.get_cell_state(start_cell) == CellState::RED {
             println!("Current cell is occupied, finding closest safe cell");
             let Some((mut path_to_safety, _)) = astar(
@@ -152,7 +169,7 @@ impl DefaultPathfinder {
                         })
                 },
                 |_| 0,
-                |&pos| map_data.get_cell_state(pos) == CellState::GREEN,
+                |&pos| map_data.get_cell_state(pos) == CellState::GREEN && is_safe(pos),
             ) else {
                 error!("Failed to find path to safety");
                 return None;
@@ -185,11 +202,8 @@ impl DefaultPathfinder {
     ) -> bool {
         into.clear();
 
-        let start_cell = self.world_to_cells * from;
-        let start_cell = (start_cell.x as usize, start_cell.z as usize);
-
-        let end_cell = self.world_to_cells * to;
-        let end_cell = (end_cell.x as usize, end_cell.z as usize);
+        let start_cell = self.world_point_to_cell(from);
+        let end_cell = self.world_point_to_cell(to);
 
         loop {
             let map_data = self.get_map_data(shared_thalassic_data, self.current_robot_radius);
@@ -217,7 +231,7 @@ impl DefaultPathfinder {
 
                 continue;
             };
-
+            
             let cell_to_path_pt = |(x, z): (usize, usize), instruction: PathInstruction| {
                 let mut world_point = self.cells_to_world * Point3::new(x as f64, 0.0, z as f64);
                 world_point.y = map_data.get_height((x, z)) as f64;

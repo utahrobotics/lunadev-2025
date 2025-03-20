@@ -1,7 +1,7 @@
-use std::{collections::VecDeque, time::Instant};
+use std::{collections::{vec_deque, VecDeque}, time::{Duration, Instant}};
 
 use common::{FromLunabase, PathPoint};
-use nalgebra::{Isometry3, Point3};
+use nalgebra::{distance, Isometry3, Point2, Point3};
 use simple_motion::StaticImmutableNode;
 
 use crate::{autonomy::Autonomy, Action, PollWhen};
@@ -30,6 +30,14 @@ pub(crate) struct LunabotBlackboard {
     lunabase_disconnected: bool,
     actions: Vec<Action>,
     poll_when: PollWhen,
+    
+    backtracking: bool,
+    
+    /// stack of completed MoveTo points within 0.5 meters from latest position 
+    recently_completed_pts: Vec<Point3<f64>>,
+    
+    /// (position, timestamp)
+    latest_position: Option<(Point3<f64>, Instant)>,
 }
 
 impl LunabotBlackboard {
@@ -44,6 +52,10 @@ impl LunabotBlackboard {
             lunabase_disconnected: true,
             actions: vec![],
             poll_when: PollWhen::NoDelay,
+            
+            backtracking: false,
+            recently_completed_pts: vec![].into(),
+            latest_position: None
         }
     }
 }
@@ -92,6 +104,30 @@ impl LunabotBlackboard {
     pub(crate) fn update_now(&mut self) {
         self.now = Instant::now();
     }
+    
+    pub fn backtracking(&mut self) -> &mut bool {
+        &mut self.backtracking
+    }
+    
+    pub fn get_latest_position(&self) -> Option<(Point3<f64>, Instant)> {
+        self.latest_position
+    }
+    
+    pub fn set_latest_position(&mut self, pos: Point3<f64>) {
+        self.latest_position = Some((pos, self.now));
+    }
+    
+    pub fn pop_completed_pt(&mut self) -> Option<Point3<f64>> {
+        self.recently_completed_pts.pop()
+    }
+    
+    pub fn push_completed_pt(&mut self, pos: Point3<f64>) {
+        self.recently_completed_pts.push(pos);
+    }
+    
+    pub fn clear_completed_pts(&mut self) {
+        self.recently_completed_pts.clear();
+    }
 
     pub fn digest_input(&mut self, input: Input) {
         match input {
@@ -111,6 +147,8 @@ impl LunabotBlackboard {
     pub fn calculate_path(&mut self, from: Point3<f64>, to: Point3<f64>) {
         let into = std::mem::take(&mut self.path);
         self.pathfinding_state = PathfindingState::Pending;
+        
+        
         self.enqueue_action(Action::CalculatePath { from, to, into });
     }
 

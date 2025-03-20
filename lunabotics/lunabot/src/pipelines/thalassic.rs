@@ -27,7 +27,7 @@ pub struct ThalassicData {
     pub heightmap: [f32; THALASSIC_CELL_COUNT as usize],
     pub gradmap: [f32; THALASSIC_CELL_COUNT as usize],
     pub expanded_obstacle_map: [Occupancy; THALASSIC_CELL_COUNT as usize],
-    pub current_robot_radius: f32,
+    pub current_robot_radius_meters: f32,
     new_robot_radius: AtomicCell<Option<f32>>,
     reset_heightmap: AtomicBool,
 }
@@ -46,7 +46,7 @@ impl Default for ThalassicData {
             gradmap: [0.0; THALASSIC_CELL_COUNT as usize],
             expanded_obstacle_map: [Occupancy::FREE; THALASSIC_CELL_COUNT as usize],
             new_robot_radius: AtomicCell::new(None),
-            current_robot_radius: 0.25,
+            current_robot_radius_meters: 0.25,
             reset_heightmap: AtomicBool::new(false),
         }
     }
@@ -92,7 +92,7 @@ impl ThalassicData {
             return Ok(());
         }
 
-        let robot_cell_radius = (self.current_robot_radius / THALASSIC_CELL_SIZE).ceil();
+        let robot_cell_radius = (self.current_robot_radius_meters / THALASSIC_CELL_SIZE).ceil();
 
         if distance_between_tuples(robot_cell_pos, target_cell_pos) <= robot_cell_radius {
             return Ok(());
@@ -174,7 +174,7 @@ impl ThalassicData {
             },
         }
     }
-
+    
     pub fn is_known(&self, pos: (usize, usize)) -> bool {
         self.get_cell_state(pos) != CellState::UNKNOWN
     }
@@ -218,7 +218,7 @@ pub fn spawn_thalassic_pipeline(
                 gradmap,
                 expanded_obstacle_map,
                 new_robot_radius,
-                current_robot_radius,
+                current_robot_radius_meters: current_robot_radius,
                 reset_heightmap,
             } = &mut *owned;
 

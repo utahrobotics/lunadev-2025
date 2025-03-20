@@ -2,6 +2,10 @@ class_name Rock
 extends Node3D
 
 
+
+
+
+# index = line number - 10
 const CHOICES: Array[PackedScene] = [
 	preload("res://rocks/Low_Poly_Cuboid_Rock_001.glb"),
 	preload("res://rocks/Low_Poly_Cuboid_Rock_003.glb"),
@@ -14,9 +18,8 @@ const CHOICES: Array[PackedScene] = [
 	preload("res://rocks/Low_Poly_Rock_004.glb"),
 	preload("res://rocks/Low_Poly_Rock_005.glb"),
 	preload("res://rocks/Low_Poly_Rock_Small_001.glb"),
-	# This rock is quite large
-	#preload("res://rocks/Low_Poly_Rock_Small_002.glb"),
-	preload("res://rocks/Low_Poly_Rock_Small_004.glb")
+	preload("res://rocks/Low_Poly_Rock_Small_004.glb"),
+	#preload("res://rocks/Low_Poly_Rock_Small_002.glb") # This rock is quite large
 ]
 
 @export var index := -1

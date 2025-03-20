@@ -419,6 +419,10 @@ impl LunasimbotApp {
                         inputs.push(Input::FailedToCalculatePath(into));
                     }
                 }
+                Action::AvoidPoint(point) => {
+                    println!("got avoid point action", );
+                    pathfinder.avoid_point(point);
+                }
             },
             |poll_when, inputs| {
                 let wait_disconnect = async {
