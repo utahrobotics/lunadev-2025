@@ -1,7 +1,7 @@
 use std::{collections::{vec_deque, VecDeque}, time::{Duration, Instant}};
 
 use common::{FromLunabase, PathPoint};
-use nalgebra::{distance, Isometry3, Point2, Point3};
+use nalgebra::{distance, Isometry3, Point2, Point3, Quaternion, UnitQuaternion};
 use simple_motion::StaticImmutableNode;
 
 use crate::{autonomy::Autonomy, Action, PollWhen};
@@ -31,13 +31,10 @@ pub(crate) struct LunabotBlackboard {
     actions: Vec<Action>,
     poll_when: PollWhen,
     
-    backtracking: bool,
+    backing_away_from: Option<Point3<f64>>,
     
-    /// stack of completed MoveTo points within 0.5 meters from latest position 
-    recently_completed_pts: Vec<Point3<f64>>,
-    
-    /// (position, timestamp)
-    latest_position: Option<(Point3<f64>, Instant)>,
+    /// (position, rotation, timestamp)
+    latest_transform: Option<(Point3<f64>, UnitQuaternion<f64>, Instant)>,
 }
 
 impl LunabotBlackboard {
@@ -53,9 +50,8 @@ impl LunabotBlackboard {
             actions: vec![],
             poll_when: PollWhen::NoDelay,
             
-            backtracking: false,
-            recently_completed_pts: vec![].into(),
-            latest_position: None
+            backing_away_from: None,
+            latest_transform: None
         }
     }
 }
@@ -105,30 +101,18 @@ impl LunabotBlackboard {
         self.now = Instant::now();
     }
     
-    pub fn backtracking(&mut self) -> &mut bool {
-        &mut self.backtracking
+    pub fn backing_away_from(&mut self) -> &mut Option<Point3<f64>> {
+        &mut self.backing_away_from
     }
     
-    pub fn get_latest_position(&self) -> Option<(Point3<f64>, Instant)> {
-        self.latest_position
+    pub fn get_latest_transform(&self) -> Option<(Point3<f64>, UnitQuaternion<f64>, Instant)> {
+        self.latest_transform
     }
     
-    pub fn set_latest_position(&mut self, pos: Point3<f64>) {
-        self.latest_position = Some((pos, self.now));
+    pub fn set_latest_transform(&mut self, pos: Point3<f64>, heading: UnitQuaternion<f64>) {
+        self.latest_transform = Some((pos, heading, self.now));
     }
     
-    pub fn pop_completed_pt(&mut self) -> Option<Point3<f64>> {
-        self.recently_completed_pts.pop()
-    }
-    
-    pub fn push_completed_pt(&mut self, pos: Point3<f64>) {
-        self.recently_completed_pts.push(pos);
-    }
-    
-    pub fn clear_completed_pts(&mut self) {
-        self.recently_completed_pts.clear();
-    }
-
     pub fn digest_input(&mut self, input: Input) {
         match input {
             Input::FromLunabase(msg) => self.from_lunabase.push_back(msg),

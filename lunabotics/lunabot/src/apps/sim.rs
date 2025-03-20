@@ -423,6 +423,9 @@ impl LunasimbotApp {
                     println!("got avoid point action", );
                     pathfinder.avoid_point(point);
                 }
+                Action::ClearPointsToAvoid => {
+                    pathfinder.clear_points_to_avoid();
+                }
             },
             |poll_when, inputs| {
                 let wait_disconnect = async {

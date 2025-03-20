@@ -11,7 +11,7 @@ use ares_bt::{
 use autonomy::autonomy;
 use blackboard::LunabotBlackboard;
 use common::{FromLunabase, LunabotStage, PathPoint, Steering};
-use nalgebra::{Point2, Point3};
+use nalgebra::Point3;
 use simple_motion::StaticImmutableNode;
 use teleop::teleop;
 use tracing::warn;
@@ -32,7 +32,9 @@ pub enum Action {
         to: Point3<f64>,
         into: Vec<PathPoint>,
     },
-    AvoidPoint(Point3<f64>)
+    
+    AvoidPoint(Point3<f64>),
+    ClearPointsToAvoid
 }
 
 #[derive(Debug, Clone, Copy)]

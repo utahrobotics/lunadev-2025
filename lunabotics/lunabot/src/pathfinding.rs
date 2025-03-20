@@ -58,6 +58,10 @@ impl DefaultPathfinder {
     pub fn avoid_point(&mut self, point: Point3<f64>) {
         self.cells_to_avoid.push(self.world_point_to_cell(point));
     }
+    
+    pub fn clear_points_to_avoid(&mut self) {
+        self.cells_to_avoid.clear();
+    }
 
     fn get_map_data(
         &mut self,
@@ -97,19 +101,27 @@ impl DefaultPathfinder {
         end_cell: (usize, usize),
         map_data: &SharedData<ThalassicData>,
     ) -> Option<Vec<(usize, usize)>> {
+        
+        println!("pathfinding while avoiding points: {:?}", self.all_unsafe_cells().collect::<Vec<&(usize, usize)>>());
+        
         // allows checking if position is known inside `move || {}` closures without moving `map_data`
         let is_known = |pos: (usize, usize)| map_data.is_known(pos);
         
-        // `false` if pos is close to any of `all_unsafe_cells()`
-        let is_safe = |pos: (usize, usize)| {
+        // `true` if not red AND far away from any of the cells in `all_unsafe_cells()`
+        let is_valid_path_point = |pos: (usize, usize)| {
+            if map_data.get_cell_state(pos) == CellState::RED { return false; }
+            
             let robot_radius_in_cells = map_data.current_robot_radius_meters / common::THALASSIC_CELL_SIZE;
+            
             for unsafe_cell in self.all_unsafe_cells() {
                 if distance_between_tuples(pos, *unsafe_cell) < robot_radius_in_cells {
                     return false;
                 }
             }
+            
             true
         };
+        
         
         
         macro_rules! neighbours {
@@ -121,11 +133,8 @@ impl DefaultPathfinder {
                         if x.abs_diff($p.0) > REACH || y.abs_diff($p.1) > REACH {
                             return false;
                         }
-                        if map_data.get_cell_state(potential_neighbor) == CellState::RED {
-                            return false;
-                        }
 
-                        return is_safe(potential_neighbor);
+                        return is_valid_path_point(potential_neighbor);
                     })
                     .into_iter()
                     .map(move |neighbor| {
@@ -149,8 +158,8 @@ impl DefaultPathfinder {
 
         let mut path = vec![];
 
-        // if in red or an unsafe cell, prepend a path to safety
-        if map_data.get_cell_state(start_cell) == CellState::RED {
+        // prepend a path to safety
+        if !is_valid_path_point(start_cell) {
             println!("Current cell is occupied, finding closest safe cell");
             let Some((mut path_to_safety, _)) = astar(
                 &start_cell,
@@ -169,7 +178,7 @@ impl DefaultPathfinder {
                         })
                 },
                 |_| 0,
-                |&pos| map_data.get_cell_state(pos) == CellState::GREEN && is_safe(pos),
+                |&pos| is_valid_path_point(pos),
             ) else {
                 error!("Failed to find path to safety");
                 return None;
