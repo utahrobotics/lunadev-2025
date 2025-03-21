@@ -292,6 +292,10 @@ impl LunabotApp {
                     pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into);
                     inputs.push(Input::PathCalculated(into));
                 }
+                Action::AvoidPoint(_) => {
+                    // inputs.push()
+                }
+                Action::ClearPointsToAvoid =>{},
             },
             |poll_when, inputs| {
                 let wait_disconnect = async {
