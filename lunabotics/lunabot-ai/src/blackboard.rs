@@ -53,7 +53,7 @@ impl LunabotBlackboard {
             actions: vec![],
             poll_when: PollWhen::NoDelay,
             
-            target_position: Point3::new(1.0, 0.0, 7.0),
+            target_position: Point3::new(1.0, 0.0, 3.0),
             
             backing_away_from: None,
             latest_transform: None

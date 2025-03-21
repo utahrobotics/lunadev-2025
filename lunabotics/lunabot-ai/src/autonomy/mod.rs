@@ -74,7 +74,7 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
                 }
                 Status::Running
             }),
-            Sequence::new(( traverse(), dig(), traverse(), dump())),
+            Sequence::new(( dig(), dump(), traverse())),
         )),
     )
 }
@@ -131,14 +131,13 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
         if path_complete {
             blackboard.enqueue_action(Action::SetSteering(Steering::default()));
             
+            // ensures that time between path follows aren't interpreted as being stuck in one place for a long time
+            blackboard.clear_latest_transform();
+            
             return match curr_instr.instruction {
                 PathInstruction::MoveTo => {
                     println!("path follower: done!");
                     blackboard.enqueue_action(Action::ClearPointsToAvoid);
-                    
-                    // ensures that time between path follows aren't interpreted as being stuck in one place for a long time
-                    blackboard.clear_latest_transform();
-                    
                     Status::Success
                 }
                 PathInstruction::FaceTowards => Status::Failure

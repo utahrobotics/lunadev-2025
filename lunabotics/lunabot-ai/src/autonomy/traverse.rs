@@ -13,7 +13,7 @@ use nalgebra::Point3;
 use tracing::warn;
 
 use crate::{
-    blackboard::{LunabotBlackboard, PathfindingState},
+    blackboard::{self, LunabotBlackboard, PathfindingState},
     utils::WaitBehavior,
     Action,
 };
@@ -47,9 +47,10 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                         Sequence::new((
                             // pathfind
                             AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+                                let target = *blackboard.get_target_mut();
                                 blackboard.calculate_path(
                                     blackboard.get_robot_isometry().translation.vector.into(),
-                                    Point3::new(1.0, 0.0, 7.0),
+                                    target
                                 );
                                 Status::Success
                             }),
@@ -78,6 +79,25 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                         )),
                         Invert(WaitBehavior::from(PAUSE_AFTER_MOVING_DURATION)), // return false if `follow_path` returned false
                     ),
+                    
+                    // TODO temporary
+                    // if path following is successful, toggle next pathfinding target
+                    AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+                        let completed_target = blackboard.get_target_mut();
+                        let dig_location = Point3::new(1.0, 0.0, 3.0);
+                        let dump_location = Point3::new(3.0, 0.0, 4.0);
+                        
+                        if completed_target == &dig_location {
+                            println!("now moving to dump location {}", dump_location);
+                            *blackboard.get_target_mut() = dump_location;
+                        }
+                        else {
+                            println!("now moving to dig location {}", dig_location);
+                            *blackboard.get_target_mut() = dig_location;
+                        }
+                        
+                        Status::Failure
+                    })
                 ))),
             ),
             AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
