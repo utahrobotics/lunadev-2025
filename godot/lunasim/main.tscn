@@ -436,37 +436,7 @@ mesh = SubResource("PlaneMesh_reayg")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.906988, 0, -2.93281)
 
 [node name="Rock9" type="Node3D" parent="Arena/Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.107026, 4.40416, 0.962295)
-script = ExtResource("3_5i5qc")
-index = 0
-
-[node name="Rock10" type="Node3D" parent="Arena/Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.401261, 4.40416, 1.04288)
-script = ExtResource("3_5i5qc")
-index = 0
-
-[node name="Rock11" type="Node3D" parent="Arena/Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.683499, 4.40416, 1.08007)
-script = ExtResource("3_5i5qc")
-index = 0
-
-[node name="Rock12" type="Node3D" parent="Arena/Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.03682, 4.40416, 1.45199)
-script = ExtResource("3_5i5qc")
-index = 0
-
-[node name="Rock13" type="Node3D" parent="Arena/Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.22898, 4.40416, 1.92308)
-script = ExtResource("3_5i5qc")
-index = 0
-
-[node name="Rock14" type="Node3D" parent="Arena/Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.30336, 4.40416, 2.15243)
-script = ExtResource("3_5i5qc")
-index = 0
-
-[node name="Rock15" type="Node3D" parent="Arena/Rocks"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.30956, 4.40416, 2.61113)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.107027, 4.40416, 0.668244)
 script = ExtResource("3_5i5qc")
 index = 0
 
