@@ -26,10 +26,13 @@ pub(crate) struct LunabotBlackboard {
     autonomy: Autonomy,
     chain: StaticImmutableNode,
     path: Vec<PathPoint>,
-    pathfinding_state: PathfindingState,
     lunabase_disconnected: bool,
     actions: Vec<Action>,
     poll_when: PollWhen,
+    
+    target_position: Point3<f64>, 
+    
+    pathfinding_state: PathfindingState,
     
     backing_away_from: Option<Point3<f64>>,
     
@@ -49,6 +52,8 @@ impl LunabotBlackboard {
             lunabase_disconnected: true,
             actions: vec![],
             poll_when: PollWhen::NoDelay,
+            
+            target_position: Point3::new(1.0, 0.0, 7.0),
             
             backing_away_from: None,
             latest_transform: None
@@ -88,6 +93,10 @@ impl LunabotBlackboard {
     pub fn get_path_mut(&mut self) -> &mut Vec<PathPoint> {
         &mut self.path
     }
+    
+    pub fn get_target_mut(&mut self) -> &mut Point3<f64> {
+        &mut self.target_position
+    }
 
     pub fn lunabase_disconnected(&mut self) -> &mut bool {
         &mut self.lunabase_disconnected
@@ -111,6 +120,10 @@ impl LunabotBlackboard {
     
     pub fn set_latest_transform(&mut self, pos: Point3<f64>, heading: UnitQuaternion<f64>) {
         self.latest_transform = Some((pos, heading, self.now));
+    }
+    
+    pub fn clear_latest_transform(&mut self) {
+        self.latest_transform = None;
     }
     
     pub fn digest_input(&mut self, input: Input) {
