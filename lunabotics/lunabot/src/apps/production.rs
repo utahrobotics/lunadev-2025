@@ -285,7 +285,6 @@ impl LunabotApp {
                 }
                 Action::SetSteering(steering) => {
                     let (left, right) = steering.get_left_and_right();
-                    tracing::info!("set steering");
                     motor_ref.set_speed(left as f32, right as f32);
                 }
                 Action::CalculatePath { from, to, mut into } => {
