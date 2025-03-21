@@ -108,7 +108,6 @@ fn main() {
             vesc,
             rerun_viz,
         } => {
-            println!("rerun viz: {:?}", rerun_viz);
             apps::LunabotApp {
                 lunabase_address,
                 max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
