@@ -14,7 +14,7 @@ pub struct RecorderData {
     pub recorder: RecordingStream,
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, Debug)]
 pub enum RerunViz {
     Log,
     Viz,
