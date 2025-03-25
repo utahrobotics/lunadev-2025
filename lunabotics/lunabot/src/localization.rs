@@ -19,10 +19,21 @@ pub struct IMUReading {
     pub acceleration: Vector3<f64>,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RsIMUAccel {
+    pub acceleration: Vector3<f64>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RsIMUAngular {
+    pub angular_velocity: Vector3<f64>,
+}
+
 #[derive(Default)]
 struct LocalizerRefInner {
     april_tag_isometry: AtomicCell<Option<Isometry3<f64>>>,
     imu_readings: Box<[AtomicCell<Option<IMUReading>>]>,
+    realsense_imu_reading: (AtomicCell<Option<RsIMUAccel>>, AtomicCell<Option<RsIMUAngular>>),
 }
 
 #[derive(Clone)]
@@ -31,6 +42,15 @@ pub struct LocalizerRef {
 }
 
 impl LocalizerRef {
+
+    pub fn set_realsense_imu_accel(&self, imu: RsIMUAccel) {
+        self.inner.realsense_imu_reading.0.store(Some(imu));
+    }
+
+    pub fn set_realsense_imu_angular(&self, imu: RsIMUAngular) {
+        self.inner.realsense_imu_reading.1.store(Some(imu));
+    }
+
     pub fn set_april_tag_isometry(&self, isometry: Isometry3<f64>) {
         self.inner.april_tag_isometry.store(Some(isometry));
     }
@@ -48,7 +68,9 @@ impl LocalizerRef {
             angular_velocity: Vector3::zeros(),
             acceleration: Vector3::zeros(),
         };
-        let mut count = 0usize;
+        let mut count_accel = 0usize;
+        let mut count_angular = 0usize;
+
         self.inner.imu_readings.iter().for_each(|reading| {
             let Some(reading) = reading.take() else {
                 return;
@@ -56,11 +78,24 @@ impl LocalizerRef {
 
             out.angular_velocity += reading.angular_velocity;
             out.acceleration += reading.acceleration;
-            count += 1;
+            count_accel += 1;
+            count_angular += 1;
         });
-        if count > 0 {
-            out.angular_velocity /= count as f64;
-            out.acceleration /= count as f64;
+        if let Some(accel) = self.inner.realsense_imu_reading.0.take() {
+            count_accel+=1;
+            out.acceleration += accel.acceleration
+        }
+        if let Some(angular) = self.inner.realsense_imu_reading.1.take() {
+            count_angular+=1;
+            out.angular_velocity += angular.angular_velocity
+        }
+        if count_accel > 0 {
+            out.acceleration /= count_accel as f64;
+        } 
+        if count_angular > 0 {
+            out.angular_velocity /= count_angular as f64;
+        }
+        if count_accel > 0 || count_angular > 0 {
             Some(out)
         } else {
             None

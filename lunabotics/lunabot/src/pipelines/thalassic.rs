@@ -213,6 +213,31 @@ pub fn spawn_thalassic_pipeline(
             }
 
             let mut owned = buffer.recall_or_replace_with(Default::default);
+
+            {
+                let ThalassicData {
+                    heightmap,
+                    gradmap,
+                    expanded_obstacle_map,
+                    new_robot_radius,
+                    current_robot_radius_meters: current_robot_radius,
+                    reset_heightmap,
+                } = &mut *owned;
+    
+                if let Some(radius) = new_robot_radius.take() {
+                    *current_robot_radius = radius;
+                    pipeline.set_radius(radius);
+                }
+    
+                if *reset_heightmap.get_mut() {
+                    *reset_heightmap.get_mut() = false;
+                    pipeline.reset_heightmap();
+                }
+    
+                pipeline.process(heightmap, gradmap, expanded_obstacle_map);
+            }
+
+            // immutable ref for doing logging stuff
             let ThalassicData {
                 heightmap,
                 gradmap,
@@ -220,19 +245,7 @@ pub fn spawn_thalassic_pipeline(
                 new_robot_radius,
                 current_robot_radius_meters: current_robot_radius,
                 reset_heightmap,
-            } = &mut *owned;
-
-            if let Some(radius) = new_robot_radius.take() {
-                *current_robot_radius = radius;
-                pipeline.set_radius(radius);
-            }
-
-            if *reset_heightmap.get_mut() {
-                *reset_heightmap.get_mut() = false;
-                pipeline.reset_heightmap();
-            }
-
-            pipeline.process(heightmap, gradmap, expanded_obstacle_map);
+            } = &*owned;
 
             #[cfg(feature = "production")]
             if let Some(recorder) = crate::apps::RECORDER.get() {

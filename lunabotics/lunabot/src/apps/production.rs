@@ -18,6 +18,8 @@ use motors::{enumerate_motors, MotorMask, VescIDs};
 use nalgebra::{Scale3, Transform3, UnitQuaternion};
 use rerun_viz::init_rerun;
 use rp2040::*;
+
+
 use serde::Deserialize;
 use simple_motion::{ChainBuilder, NodeSerde};
 use streaming::camera_streaming;
@@ -64,7 +66,7 @@ pub struct DepthCameraInfo {
 pub struct IMUInfo {
     link_name: String,
     #[serde(default)]
-    correction: UnitQuaternion<f32>
+    correction: UnitQuaternion<f32>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -238,7 +240,7 @@ impl LunabotApp {
 
         enumerate_imus(
             &localizer_ref,
-            self.imus.into_iter().map(|(port, IMUInfo { link_name, correction })| {
+            self.imus.into_iter().map(|(port, IMUInfo { link_name, correction})| {
                 (
                     port,
                     rp2040::IMUInfo {

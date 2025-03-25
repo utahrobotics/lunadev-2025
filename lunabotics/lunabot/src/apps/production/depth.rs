@@ -344,7 +344,6 @@ impl DepthCameraTask {
                 Rs2Format::Rgb8 => StreamType::Img,
                 Rs2Format::Z16 => StreamType::Depth,
                 Rs2Format::MotionXyz32F => {
-                    tracing::info!("got motion stream");
                     StreamType::Accel                 
                 },
                 format => {
@@ -500,7 +499,11 @@ impl DepthCameraTask {
             };
             for frame in frames.frames_of_type::<AccelFrame>() {
                 let [x,y,z] = frame.acceleration();
-                tracing::info!("x: {x}, y: {y}, z: {z}");
+                self.localizer_ref.set_realsense_imu_accel(
+                    crate::localization::RsIMUAccel {
+                        acceleration: Vector3::new(x/9.8, y/9.8,z/9.8).cast()
+                    }
+                );
             }
 
             for frame in frames.frames_of_type::<ColorFrame>() {

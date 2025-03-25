@@ -37,7 +37,7 @@ lumpur::define_configuration! {
             #[serde(default)]
             vesc: apps::Vesc,
             #[serde(default)]
-            rerun_viz: apps::RerunViz
+            rerun_viz: apps::RerunViz,
         },
         // Dataviz {
         //     lunabase_address: IpAddr,

@@ -23,14 +23,14 @@ use super::udev_poll;
 pub struct IMUInfo {
     pub node: StaticImmutableNode,
     pub link_name: String,
-    pub correction: UnitQuaternion<f32>
+    pub correction: UnitQuaternion<f32>,
 }
 
 pub fn enumerate_imus(
     localizer_ref: &LocalizerRef,
     serial_to_chain: impl IntoIterator<Item = (String, IMUInfo)>,
 ) {
-    get_tokio_handle().spawn(imu_wifi_listener());
+    get_tokio_handle().spawn(imu_wifi_listener()); // is this needed anymore?
     // let data_queue: Box<ArrayQueue<IMUReading>> = Box::new(ArrayQueue::new(64));
     // let data_queue_ref:&'static ArrayQueue<IMUReading> = Box::leak(data_queue);
 
@@ -251,7 +251,6 @@ impl IMUTask {
                             }
                         }
                     }
-
                     self.localizer_ref.set_imu_reading(
                         self.index,
                         IMUReading {
