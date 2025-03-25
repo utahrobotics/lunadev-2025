@@ -21,7 +21,7 @@ pub use realsense_rust;
 use realsense_rust::{
     config::Config,
     device::Device,
-    frame::{ColorFrame, DepthFrame, PixelKind},
+    frame::{ColorFrame, DepthFrame, PixelKind, AccelFrame},
     kind::{Rs2CameraInfo, Rs2Format, Rs2StreamKind},
     pipeline::{ActivePipeline, FrameWaitError, InactivePipeline},
 };
@@ -215,6 +215,14 @@ pub fn enumerate_depth_cameras(
                     continue;
                 }
 
+                if let Err(e) = config.enable_stream(Rs2StreamKind::Accel,None, 0, 0, Rs2Format::MotionXyz32F, 0) {
+                    error!(
+                        "Failed to enable motion stream in RealSense Camera {}: {e}",
+                        current_serial
+                    );
+                    continue;
+                }
+
                 if let Err(e) =
                     config.enable_stream(Rs2StreamKind::Color, None, 0, 0, Rs2Format::Rgb8, 0)
                 {
@@ -288,7 +296,37 @@ struct DepthCameraTask {
     init_tx: Sender<&'static str>,
 }
 
+enum StreamType {
+    Depth,
+    Img,
+    Accel,
+}
+
+impl StreamType {
+    fn is_depth(&self) -> bool {
+        match self {
+            Self::Depth => {
+                true
+            }
+            _ => {
+                false
+            }
+        }
+    }
+    fn is_img(&self) -> bool {
+        match self {
+            Self::Img => {
+                true
+            }
+            _ => {
+                false
+            }
+        }
+    }
+}
+
 impl DepthCameraTask {
+
     fn depth_camera_task(&mut self) {
         let _ = self.init_tx.send(self.serial);
         let (device, mut pipeline) = match self.pipeline.recv() {
@@ -302,9 +340,13 @@ impl DepthCameraTask {
         let mut color_format = None;
 
         for stream in pipeline.profile().streams() {
-            let is_depth = match stream.format() {
-                Rs2Format::Rgb8 => false,
-                Rs2Format::Z16 => true,
+            let stream_type = match stream.format() {
+                Rs2Format::Rgb8 => StreamType::Img,
+                Rs2Format::Z16 => StreamType::Depth,
+                Rs2Format::MotionXyz32F => {
+                    tracing::info!("got motion stream");
+                    StreamType::Accel                 
+                },
                 format => {
                     error!("Unexpected format {format:?} for {}", self.serial);
                     continue;
@@ -313,12 +355,12 @@ impl DepthCameraTask {
             let intrinsics = match stream.intrinsics() {
                 Ok(x) => x,
                 Err(e) => {
-                    if is_depth {
+                    if stream_type.is_depth() {
                         error!(
                             "Failed to get depth intrinsics for RealSense camera {}: {e}",
                             self.serial
                         );
-                    } else {
+                    } else if stream_type.is_img() {
                         error!(
                             "Failed to get color intrinsics for RealSense camera {}: {e}",
                             self.serial
@@ -327,9 +369,9 @@ impl DepthCameraTask {
                     continue;
                 }
             };
-            if is_depth {
+            if stream_type.is_depth() {
                 depth_format = Some(intrinsics);
-            } else {
+            } else if stream_type.is_img() {
                 color_format = Some(intrinsics);
             }
         }
@@ -456,6 +498,10 @@ impl DepthCameraTask {
                     break;
                 }
             };
+            for frame in frames.frames_of_type::<AccelFrame>() {
+                let [x,y,z] = frame.acceleration();
+                tracing::info!("x: {x}, y: {y}, z: {z}");
+            }
 
             for frame in frames.frames_of_type::<ColorFrame>() {
                 // This is a bug in RealSense. It will say the pixel kind is BGR8 when it is actually RGB8.
