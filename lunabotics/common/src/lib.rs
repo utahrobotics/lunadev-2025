@@ -3,6 +3,7 @@ use std::io::Write;
 use bitcode::{Decode, Encode};
 use nalgebra::{distance, Point2, Point3};
 
+/// Taken from https://opus-codec.org/docs/opus_api-1.5/group__opus__encoder.html#gad2d6bf6a9ffb6674879d7605ed073e25
 pub const AUDIO_FRAME_SIZE: u32 = 960;
 pub const AUDIO_SAMPLE_RATE: u32 = 48000;
 pub const THALASSIC_CELL_SIZE: f32 = 0.03125;

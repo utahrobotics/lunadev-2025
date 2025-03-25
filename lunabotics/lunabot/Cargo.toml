@@ -62,5 +62,6 @@ production = [
     "file-lock",
     # "imu-fusion",
     "rerun",
+    "opus",
+    "rodio"
 ]
-experimental = ["opus", "production", "rodio"]

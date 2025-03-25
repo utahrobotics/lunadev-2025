@@ -1,66 +1,81 @@
-use std::net::{SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 
-use anyhow::Context;
 use common::AUDIO_FRAME_SIZE;
+use crossbeam::atomic::AtomicCell;
 use rodio::{cpal::{default_host, traits::{HostTrait, StreamTrait}, StreamConfig}, DeviceTrait};
-use tracing::debug;
+use tracing::{error, info};
 
 
-pub fn audio_streaming(lunabase_audio_streaming_address: SocketAddr) -> anyhow::Result<()> {
-    let udp = UdpSocket::bind("0.0.0.0:0").context("Binding streaming UDP socket")?;
-    udp.connect(lunabase_audio_streaming_address)
-        .context("Connecting to lunabase streaming address")?;
-    let audio_input = default_host()
-        .default_input_device()
-        .context("No input device")?;
+pub fn audio_streaming() -> &'static AtomicCell<Option<IpAddr>> {
+    let address: &_ = Box::leak(Box::new(AtomicCell::new(None)));
+    let udp = match UdpSocket::bind(SocketAddr::new(
+        Ipv4Addr::UNSPECIFIED.into(),
+        common::ports::AUDIO,
+    )) {
+        Ok(x) => x,
+        Err(e) => {
+            error!("Failed to bind to UDP socket: {e}");
+            return address;
+        }
+    };
+    let audio_input = match default_host()
+        .default_input_device() {
+            Some(x) => x,
+            None => {
+                error!("Failed to get default audio input device");
+                return address;
+            }
+    };
 
-    let mut enc = opus::Encoder::new(common::AUDIO_SAMPLE_RATE, opus::Channels::Mono, opus::Application::LowDelay)?;
+    let mut enc = opus::Encoder::new(common::AUDIO_SAMPLE_RATE, opus::Channels::Mono, opus::Application::LowDelay).unwrap();
     // enc.set_inband_fec(true)?;
-    enc.set_bitrate(opus::Bitrate::Bits(96000))?;
-    let mut encoded = [0u8; 4096];
+    enc.set_bitrate(opus::Bitrate::Bits(96000)).unwrap();
+    let mut encoded = [0u8; AUDIO_FRAME_SIZE as usize];
     let mut samples_vec = vec![];
 
     std::thread::spawn(move || {
         let result = audio_input.build_input_stream(
             &StreamConfig {
                 channels: 1,
-                sample_rate: rodio::cpal::SampleRate(48000),
-                buffer_size: rodio::cpal::BufferSize::Fixed(AUDIO_FRAME_SIZE),
+                sample_rate: rodio::cpal::SampleRate(common::AUDIO_SAMPLE_RATE),
+                buffer_size: rodio::cpal::BufferSize::Default,
             },
             move |samples: &[i16], _info| {
                 samples_vec.extend_from_slice(samples);
                 while samples_vec.len() >= AUDIO_FRAME_SIZE as usize {
-                    match enc.encode(&samples_vec[0..AUDIO_FRAME_SIZE as usize], &mut encoded) {
-                        Ok(n) => {
-                            let _ = udp.send(&encoded[..n]);
-                        },
-                        Err(e) => {
-                            debug!("Error encoding audio: {}", e);
+                    if let Some(ip) = address.load() {
+                        match enc.encode(&samples_vec[0..AUDIO_FRAME_SIZE as usize], &mut encoded) {
+                            Ok(n) => {
+                                let _ = udp.send_to(&encoded[..n], SocketAddr::new(ip, common::ports::AUDIO));
+                            },
+                            Err(e) => {
+                                error!("Error encoding audio: {}", e);
+                            }
                         }
                     }
                     samples_vec.drain(0..AUDIO_FRAME_SIZE as usize);
                 }
             },
             |e| {
-                debug!("Error in audio input stream: {}", e);
+                error!("Error in audio input stream: {}", e);
             },
             None
         );
         match result {
             Ok(stream) => {
                 if let Err(e) = stream.play() {
-                    debug!("Error playing audio input stream: {}", e);
+                    error!("Error playing audio input stream: {}", e);
                     return;
                 }
-                loop {
-                    std::thread::park();
-                }
-            },
+                info!("Audio streaming started with device: {}", audio_input.name().unwrap_or_else(|_| "unknown device".to_string()));
+                // Dropping the stream will stop it
+                std::mem::forget(stream);
+            }
             Err(e) => {
-                debug!("Error creating audio input stream: {}", e);
+                error!("Error creating audio input stream: {}", e);
             }
         }
     });
 
-    Ok(())
+    address
 }

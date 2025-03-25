@@ -1,8 +1,3 @@
-use std::{
-    io::{Read, Write},
-    net::{SocketAddr, TcpStream},
-};
-
 use bytemuck::{Pod, Zeroable};
 use tracing::error;
 
@@ -36,5 +31,3 @@ impl Default for ThalassicData {
         Self::zeroed()
     }
 }
-
-const THALASSIC_BUFFER_SIZE: usize = size_of::<ThalassicData>();
