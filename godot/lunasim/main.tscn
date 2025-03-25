@@ -488,8 +488,8 @@ stretch = true
 
 [node name="SubViewport" type="SubViewport" parent="CanvasLayer/TabContainer/ExternalView/SubviewportContainer"]
 handle_input_locally = false
-size = Vector2i(1132, 597)
-render_target_update_mode = 4
+size = Vector2i(2, 2)
+render_target_update_mode = 0
 
 [node name="ExternalCamera" type="Camera3D" parent="CanvasLayer/TabContainer/ExternalView/SubviewportContainer/SubViewport"]
 transform = Transform3D(0.283078, -0.220396, 0.93343, -1.77252e-08, 0.973239, 0.229795, -0.959097, -0.0650499, 0.275503, 4.23287, 1.8355, 1.95419)

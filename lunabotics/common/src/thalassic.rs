@@ -1,5 +1,4 @@
 use bytemuck::{Pod, Zeroable};
-use tracing::error;
 
 use super::THALASSIC_CELL_COUNT;
 
