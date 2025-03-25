@@ -6,10 +6,7 @@ use std::{
     sync::{mpsc::Sender, Arc},
 };
 
-use common::{
-    godot_urdf::init_robot_chain,
-    lunasim::{FromLunasim, FromLunasimbot},
-};
+use common::lunasim::{FromLunasim, FromLunasimbot};
 use crossbeam::queue::SegQueue;
 use godot::{
     classes::Engine,
@@ -50,7 +47,6 @@ struct Lunasim {
 #[godot_api]
 impl INode for Lunasim {
     fn init(base: Base<Node>) -> Self {
-        init_robot_chain(Path::new("../../robot-layout/sim.json"));
         let (to_lunasimbot, to_lunasimbot_rx) = std::sync::mpsc::channel();
         let shared = Arc::new(LunasimShared {
             from_lunasimbot: SegQueue::default(),

@@ -10,4 +10,4 @@ crate-type = ["cdylib"]  # Compile this crate to a dynamic C library.
 godot = { workspace = true }
 crossbeam = { workspace = true }
 bitcode = { workspace = true }
-common = { path = "../common", features = ["godot_urdf"] }
+common = { path = "../common" }

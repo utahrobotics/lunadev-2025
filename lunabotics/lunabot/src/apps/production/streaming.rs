@@ -18,6 +18,8 @@ use spin_sleep::SpinSleeper;
 use tasker::parking_lot::RwLock;
 use tracing::{error, info};
 
+mod audio;
+
 const CAMERA_COL_COUNT: usize = 3;
 const CAMERA_ROW_COUNT: usize = 2;
 pub const CAMERA_RESOLUTION: Vector2<u32> = Vector2::new(640, 360);
@@ -132,7 +134,7 @@ impl<'a> Read for DownscaleRgbImageReader<'a> {
     }
 }
 
-pub fn camera_streaming(mut lunabase_address: Option<IpAddr>) {
+pub fn start_streaming(mut lunabase_address: Option<IpAddr>) {
     let camera_frame_buffer = vec![
         0u8;
         CAMERA_RESOLUTION.x as usize
@@ -176,13 +178,6 @@ pub fn camera_streaming(mut lunabase_address: Option<IpAddr>) {
         error!("Failed to set UDP socket to non-blocking: {e}");
         return;
     }
-    // match udp.connect(lunabase_streaming_address) {
-    //     Ok(_) => {}
-    //     Err(e) => {
-    //         error!("Failed to connect to lunabase streaming address: {e}");
-    //         return;
-    //     }
-    // }
 
     std::thread::spawn(move || {
         let mut yuv_buffer = YUVBuffer::new(
@@ -204,8 +199,6 @@ pub fn camera_streaming(mut lunabase_address: Option<IpAddr>) {
                 if let Ok((_, addr)) = udp.recv_from(&mut [0u8; 1]) {
                     if addr.port() == common::ports::CAMERAS {
                         lunabase_address = Some(addr.ip());
-                        // } else {
-                        //     warn!("Received data from unknown address: {addr}");
                     }
                 }
                 continue;

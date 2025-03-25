@@ -1146,9 +1146,7 @@ dependencies = [
  "brotli",
  "bytemuck",
  "crossbeam",
- "godot",
  "nalgebra",
- "simple-motion",
  "tracing",
 ]
 

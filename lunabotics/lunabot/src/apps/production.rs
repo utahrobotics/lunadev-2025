@@ -20,7 +20,7 @@ use rerun_viz::init_rerun;
 use rp2040::*;
 use serde::Deserialize;
 use simple_motion::{ChainBuilder, NodeSerde};
-use streaming::camera_streaming;
+use streaming::start_streaming;
 use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn};
 use tracing::error;
 use udev::Event;
@@ -157,7 +157,7 @@ impl LunabotApp {
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
 
-        camera_streaming(self.lunabase_address);
+        start_streaming(self.lunabase_address);
 
         enumerate_cameras(
             &localizer_ref,

@@ -10,8 +10,8 @@ pub const THALASSIC_WIDTH: u32 = 128;
 pub const THALASSIC_HEIGHT: u32 = 256;
 pub const THALASSIC_CELL_COUNT: u32 = THALASSIC_WIDTH * THALASSIC_HEIGHT;
 
-#[cfg(feature = "godot_urdf")]
-pub mod godot_urdf;
+// #[cfg(feature = "godot_urdf")]
+// pub mod godot_urdf;
 pub mod lunasim;
 pub mod ports;
 #[cfg(feature = "thalassic")]
