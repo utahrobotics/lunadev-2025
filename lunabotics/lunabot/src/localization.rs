@@ -33,6 +33,7 @@ pub struct RsIMUAngular {
 struct LocalizerRefInner {
     april_tag_isometry: AtomicCell<Option<Isometry3<f64>>>,
     imu_readings: Box<[AtomicCell<Option<IMUReading>>]>,
+    #[cfg(feature="production")]
     realsense_imu_readings: Box<[(AtomicCell<Option<RsIMUAccel>>, AtomicCell<Option<RsIMUAngular>>)]>,
 }
 
@@ -42,13 +43,14 @@ pub struct LocalizerRef {
 }
 
 impl LocalizerRef {
-
+    #[cfg(feature="production")]
     pub fn set_realsense_imu_accel(&self, index: usize, imu: RsIMUAccel) {
         if let Some(cell) = self.inner.realsense_imu_readings.get(index) {
             cell.0.store(Some(imu));
         }
     }
 
+    #[cfg(feature="production")]
     pub fn set_realsense_imu_angular(&self, index: usize, imu: RsIMUAngular) {
         if let Some(cell) = self.inner.realsense_imu_readings.get(index) {
             cell.1.store(Some(imu));
@@ -85,6 +87,8 @@ impl LocalizerRef {
             count_accel += 1;
             count_angular += 1;
         });
+
+        #[cfg(feature="production")]
         self.inner.realsense_imu_readings.iter().for_each(|reading| {
             if let Some(accel) = reading.0.take() {
                 count_accel+=1;
@@ -127,7 +131,6 @@ impl Localizer {
         root_node: StaticNode,
         lunasim_stdin: Option<LunasimStdin>,
         imu_count: usize,
-        realsense_count: usize
     ) -> Self {
         Self {
             root_node,
@@ -135,12 +138,12 @@ impl Localizer {
             localizer_ref: LocalizerRef {
                 inner: Arc::new(LocalizerRefInner {
                     imu_readings: (0..imu_count).map(|_| AtomicCell::new(None)).collect(),
-                    realsense_imu_readings: (0..realsense_count).map(|_| (AtomicCell::new(None), AtomicCell::new(None))).collect(),
                     ..Default::default()
                 }),
             },
         }
     }
+    
     #[cfg(feature = "production")]
     pub fn new(root_node: StaticNode, imu_count: usize, realsense_count: usize) -> Self {
         Self {
