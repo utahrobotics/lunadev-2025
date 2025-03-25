@@ -137,6 +137,7 @@ impl<'a> Read for DownscaleRgbImageReader<'a> {
 
 pub fn start_streaming(mut lunabase_address: Option<IpAddr>) {
     let audio_send_to = audio_streaming();
+    audio_send_to.store(lunabase_address);
     let camera_frame_buffer = vec![
         0u8;
         CAMERA_RESOLUTION.x as usize
