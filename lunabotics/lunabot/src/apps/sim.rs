@@ -252,7 +252,7 @@ impl LunasimbotApp {
         .expect("Failed to parse robot chain");
         let robot_chain = ChainBuilder::from(robot_chain).finish_static();
 
-        let localizer = Localizer::new(robot_chain, Some(lunasim_stdin.clone()), 1);
+        let localizer = Localizer::new(robot_chain, Some(lunasim_stdin.clone()), 1,1);
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
 

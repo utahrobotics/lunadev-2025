@@ -33,7 +33,7 @@ pub struct RsIMUAngular {
 struct LocalizerRefInner {
     april_tag_isometry: AtomicCell<Option<Isometry3<f64>>>,
     imu_readings: Box<[AtomicCell<Option<IMUReading>>]>,
-    realsense_imu_reading: (AtomicCell<Option<RsIMUAccel>>, AtomicCell<Option<RsIMUAngular>>),
+    realsense_imu_readings: Box<[(AtomicCell<Option<RsIMUAccel>>, AtomicCell<Option<RsIMUAngular>>)]>,
 }
 
 #[derive(Clone)]
@@ -43,12 +43,16 @@ pub struct LocalizerRef {
 
 impl LocalizerRef {
 
-    pub fn set_realsense_imu_accel(&self, imu: RsIMUAccel) {
-        self.inner.realsense_imu_reading.0.store(Some(imu));
+    pub fn set_realsense_imu_accel(&self, index: usize, imu: RsIMUAccel) {
+        if let Some(cell) = self.inner.realsense_imu_readings.get(index) {
+            cell.0.store(Some(imu));
+        }
     }
 
-    pub fn set_realsense_imu_angular(&self, imu: RsIMUAngular) {
-        self.inner.realsense_imu_reading.1.store(Some(imu));
+    pub fn set_realsense_imu_angular(&self, index: usize, imu: RsIMUAngular) {
+        if let Some(cell) = self.inner.realsense_imu_readings.get(index) {
+            cell.1.store(Some(imu));
+        }
     }
 
     pub fn set_april_tag_isometry(&self, isometry: Isometry3<f64>) {
@@ -81,14 +85,17 @@ impl LocalizerRef {
             count_accel += 1;
             count_angular += 1;
         });
-        if let Some(accel) = self.inner.realsense_imu_reading.0.take() {
-            count_accel+=1;
-            out.acceleration += accel.acceleration
-        }
-        if let Some(angular) = self.inner.realsense_imu_reading.1.take() {
-            count_angular+=1;
-            out.angular_velocity += angular.angular_velocity
-        }
+        self.inner.realsense_imu_readings.iter().for_each(|reading| {
+            if let Some(accel) = reading.0.take() {
+                count_accel+=1;
+                out.acceleration += accel.acceleration
+            }
+            if let Some(angular) = reading.1.take() {
+                count_angular+=1;
+                out.angular_velocity += angular.angular_velocity
+            }
+        });
+        
         if count_accel > 0 {
             out.acceleration /= count_accel as f64;
         } 
@@ -120,6 +127,7 @@ impl Localizer {
         root_node: StaticNode,
         lunasim_stdin: Option<LunasimStdin>,
         imu_count: usize,
+        realsense_count: usize
     ) -> Self {
         Self {
             root_node,
@@ -127,18 +135,20 @@ impl Localizer {
             localizer_ref: LocalizerRef {
                 inner: Arc::new(LocalizerRefInner {
                     imu_readings: (0..imu_count).map(|_| AtomicCell::new(None)).collect(),
+                    realsense_imu_readings: (0..realsense_count).map(|_| (AtomicCell::new(None), AtomicCell::new(None))).collect(),
                     ..Default::default()
                 }),
             },
         }
     }
     #[cfg(feature = "production")]
-    pub fn new(root_node: StaticNode, imu_count: usize) -> Self {
+    pub fn new(root_node: StaticNode, imu_count: usize, realsense_count: usize) -> Self {
         Self {
             root_node,
             localizer_ref: LocalizerRef {
                 inner: Arc::new(LocalizerRefInner {
                     imu_readings: (0..imu_count).map(|_| AtomicCell::new(None)).collect(),
+                    realsense_imu_readings: (0..realsense_count).map(|_| (AtomicCell::new(None), AtomicCell::new(None))).collect(),
                     ..Default::default()
                 }),
             },

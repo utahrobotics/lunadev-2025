@@ -45,7 +45,7 @@ pub struct DepthCameraInfo {
 
 const ESTIMATED_MAX_POINT_COUNT: u32 = 1024 * 812;
 
-pub fn enumerate_depth_cameras(
+pub fn enumerate_realsense_devices(
     thalassic_buffer: OwnedData<ThalassicData>,
     localizer_ref: &LocalizerRef,
     serial_to_chain: impl IntoIterator<Item = (String, DepthCameraInfo)>,
@@ -55,15 +55,16 @@ pub fn enumerate_depth_cameras(
     let (init_tx, init_rx) = std::sync::mpsc::channel::<&'static str>();
     let mut threads: FxHashMap<&str, SyncSender<(Device, ActivePipeline)>> = serial_to_chain
         .into_iter()
+        .enumerate()
         .filter_map(
-            |(
+            |(index, (
                 serial,
                 DepthCameraInfo {
                     node,
                     ignore_apriltags,
                     stream_index,
                 },
-            )| {
+            ))| {
                 let Some(camera_stream) = CameraStream::new(stream_index) else {
                     return None;
                 };
@@ -104,6 +105,7 @@ pub fn enumerate_depth_cameras(
                         ignore_apriltags,
                         thalassic_ref,
                         init_tx,
+                        index,
                     };
                     loop {
                         camera_task.depth_camera_task();
@@ -294,6 +296,7 @@ struct DepthCameraTask {
     ignore_apriltags: bool,
     thalassic_ref: ThalassicPipelineRef,
     init_tx: Sender<&'static str>,
+    index: usize,
 }
 
 enum StreamType {
@@ -500,8 +503,9 @@ impl DepthCameraTask {
             for frame in frames.frames_of_type::<AccelFrame>() {
                 let [x,y,z] = frame.acceleration();
                 self.localizer_ref.set_realsense_imu_accel(
+                    self.index,
                     crate::localization::RsIMUAccel {
-                        acceleration: Vector3::new(x/9.8, y/9.8,z/9.8).cast()
+                        acceleration: Vector3::new(*x, *y, *z).cast()
                     }
                 );
             }
