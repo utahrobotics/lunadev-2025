@@ -2,7 +2,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 
 use common::AUDIO_FRAME_SIZE;
 use crossbeam::atomic::AtomicCell;
-use rodio::{buffer::SamplesBuffer, cpal::{default_host, traits::{HostTrait, StreamTrait}, StreamConfig}, static_buffer::StaticSamplesBuffer, DeviceTrait, OutputStream, Sink};
+use rodio::{cpal::{default_host, traits::{HostTrait, StreamTrait}, StreamConfig}, DeviceTrait};
 use tracing::{error, info};
 
 
@@ -19,16 +19,6 @@ pub fn audio_streaming() -> &'static AtomicCell<Option<IpAddr>> {
         }
     };
     let host = default_host();
-    let input_devices = match host.input_devices() {
-        Ok(x) => x,
-        Err(e) => {
-            error!("Failed to get audio input devices: {e}");
-            return address;
-        }
-    };
-    // let audio_input = input_devices.for_each(|device| {
-    //     tracing::info!("{}", device.name().unwrap_or_else(|_| "unknown device".to_string()));
-    // });
     let audio_input = match host
         .default_input_device() {
             Some(x) => x,
@@ -39,10 +29,11 @@ pub fn audio_streaming() -> &'static AtomicCell<Option<IpAddr>> {
     };
 
     let mut enc = opus::Encoder::new(common::AUDIO_SAMPLE_RATE, opus::Channels::Mono, opus::Application::LowDelay).unwrap();
-    enc.set_inband_fec(true).unwrap();
+    // enc.set_inband_fec(true).unwrap();
     enc.set_bitrate(opus::Bitrate::Bits(96000)).unwrap();
-    let mut encoded = [0u8; AUDIO_FRAME_SIZE as usize];
+    let mut encoded = [0u8; 4096];
     let mut samples_vec = vec![];
+    let mut i = 0u32;
 
     std::thread::spawn(move || {
         let result = audio_input.build_input_stream(
@@ -55,14 +46,16 @@ pub fn audio_streaming() -> &'static AtomicCell<Option<IpAddr>> {
                 samples_vec.extend_from_slice(samples);
                 while samples_vec.len() >= AUDIO_FRAME_SIZE as usize {
                     if let Some(ip) = address.load() {
-                        match enc.encode(&samples_vec[0..AUDIO_FRAME_SIZE as usize], &mut encoded) {
+                        match enc.encode(&samples_vec[0..AUDIO_FRAME_SIZE as usize], &mut encoded[4..]) {
                             Ok(n) => {
-                                let _ = udp.send_to(&encoded[..n], SocketAddr::new(ip, common::ports::AUDIO));
+                                encoded[0..4].copy_from_slice(&i.to_le_bytes());
+                                let _ = udp.send_to(&encoded[..n + 4], SocketAddr::new(ip, common::ports::AUDIO));
                             },
                             Err(e) => {
                                 error!("Error encoding audio: {}", e);
                             }
                         }
+                        i += 1;
                     }
                     samples_vec.drain(0..AUDIO_FRAME_SIZE as usize);
                 }
