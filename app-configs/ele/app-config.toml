@@ -18,7 +18,7 @@ stream_index = 4
 link_name = "depth_camera"
 stream_index = 1
 
-[Main.cameras."pci-0000:34:00.4-usb-0:1.4.4:1.0"]
+[Main.cameras."pci-0000:34:00.4-usb-0:1.1:1.0"]
 link_name = "left_camera"
 focal_length_x_px = 805
 focal_length_y_px = 805
