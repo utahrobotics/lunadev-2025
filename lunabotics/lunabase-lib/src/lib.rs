@@ -145,6 +145,20 @@ impl INode for LunabotConn {
             }
         };
 
+        if let Some(lunabot_address) = lunabot_address {
+            common::lunabase_sync::lunabase_task(lunabot_address,
+                |thalassic| {
+
+                },
+                |_path| {
+
+                },
+                |e| {
+                    godot_error!("Error in lunabase sync: {e}");
+                },
+            );
+        }
+
         init_panic_hook();
 
         let stream_corrupted: &_ = Box::leak(Box::new(AtomicBool::new(false)));

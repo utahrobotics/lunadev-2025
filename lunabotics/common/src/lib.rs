@@ -1,3 +1,5 @@
+#![feature(f16, try_blocks)]
+
 use std::io::Write;
 
 use bitcode::{Decode, Encode};
@@ -15,8 +17,8 @@ pub const THALASSIC_CELL_COUNT: u32 = THALASSIC_WIDTH * THALASSIC_HEIGHT;
 // pub mod godot_urdf;
 pub mod lunasim;
 pub mod ports;
-#[cfg(feature = "thalassic")]
-pub mod thalassic;
+#[cfg(feature = "lunabase_sync")]
+pub mod lunabase_sync;
 
 #[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]
 pub enum LunabotStage {

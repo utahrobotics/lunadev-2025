@@ -55,7 +55,7 @@ production = [
     "apriltag",
     "apriltag-nalgebra",
     "apriltag-image",
-    "common/thalassic",
+    "common/lunabase_sync",
     "tokio-serial",
     "mio",
     "embedded_common",

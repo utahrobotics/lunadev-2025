@@ -191,6 +191,17 @@ impl LunabotApp {
 
         let mut buffer = OwnedData::from(ThalassicData::default());
         let shared_thalassic_data = buffer.create_lendee();
+        let shared_thalassic_data2 = buffer.create_lendee();
+
+        common::lunabase_sync::lunabot_task(move |_path, thalassic_data| {
+            let raw_data = shared_thalassic_data2.get();
+            thalassic_data.heightmap.iter_mut().zip(&raw_data.heightmap).for_each(
+                |(dst, &src)| {
+                    *dst = src as f16;
+                }
+            );
+            (false, true)
+        });
 
         enumerate_depth_cameras(
             buffer,

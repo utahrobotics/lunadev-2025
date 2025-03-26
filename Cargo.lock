@@ -1007,7 +1007,6 @@ dependencies = [
  "bitcode",
  "brotli",
  "bytemuck",
- "crossbeam",
  "nalgebra",
  "tracing",
 ]

@@ -3,7 +3,8 @@
     array_chunks,
     iterator_try_collect,
     mpmc_channel,
-    try_blocks
+    try_blocks,
+    f16
 )]
 
 use std::net::IpAddr;
