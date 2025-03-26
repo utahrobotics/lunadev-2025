@@ -237,15 +237,17 @@ pub fn spawn_thalassic_pipeline(
                 pipeline.process(heightmap, gradmap, expanded_obstacle_map);
             }
 
+            buffer = owned.pessimistic_share();
+
             // immutable ref for doing logging stuff
             let ThalassicData {
                 heightmap,
-                gradmap,
-                expanded_obstacle_map,
-                new_robot_radius,
-                current_robot_radius_meters: current_robot_radius,
-                reset_heightmap,
-            } = &*owned;
+                gradmap: _,
+                expanded_obstacle_map: _,
+                new_robot_radius: _,
+                current_robot_radius_meters: _,
+                reset_heightmap: _,
+            } = &*buffer;
 
             #[cfg(feature = "production")]
             if let Some(recorder) = crate::apps::RECORDER.get() {
@@ -276,7 +278,7 @@ pub fn spawn_thalassic_pipeline(
                         )
                     })).with_colors((0..THALASSIC_CELL_COUNT).map(|i| {
                         let pos = ThalassicData::index_to_xy(i as usize);
-                        let color = match (&owned).get_cell_state(pos) {
+                        let color = match (&buffer).get_cell_state(pos) {
                             CellState::GREEN => {
                                 rerun::Color::from_rgb(0,255,0)
                             }
@@ -297,8 +299,6 @@ pub fn spawn_thalassic_pipeline(
                     tracing::error!("Failed to log expanded obstacle map: {e}");
                 }
             }
-
-            buffer = owned.pessimistic_share();
         });
 
         reference
