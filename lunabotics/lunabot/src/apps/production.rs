@@ -7,7 +7,7 @@ use anyhow::Context;
 use camera::enumerate_cameras;
 use common::LunabotStage;
 use crossbeam::atomic::AtomicCell;
-use depth::enumerate_depth_cameras;
+use depth::enumerate_realsense_devices;
 use file_lock::FileLock;
 use fxhash::FxHashMap;
 use gputter::init_gputter_blocking;
@@ -18,6 +18,7 @@ use motors::{enumerate_motors, MotorMask, VescIDs};
 use nalgebra::{Scale3, Transform3, UnitQuaternion};
 use rerun_viz::init_rerun;
 use rp2040::*;
+
 use serde::Deserialize;
 use simple_motion::{ChainBuilder, NodeSerde};
 use streaming::start_streaming;
@@ -64,7 +65,7 @@ pub struct DepthCameraInfo {
 pub struct IMUInfo {
     link_name: String,
     #[serde(default)]
-    correction: UnitQuaternion<f32>
+    correction: UnitQuaternion<f32>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -153,7 +154,7 @@ impl LunabotApp {
         .expect("Failed to parse robot chain");
         let robot_chain = ChainBuilder::from(robot_chain).finish_static();
 
-        let localizer = Localizer::new(robot_chain.clone(), self.imus.len());
+        let localizer = Localizer::new(robot_chain.clone(), self.imus.len(), self.depth_cameras.len());
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
 
@@ -203,7 +204,7 @@ impl LunabotApp {
             (false, true)
         });
 
-        enumerate_depth_cameras(
+        enumerate_realsense_devices(
             buffer,
             &localizer_ref,
             self.depth_cameras.into_iter().map(
@@ -249,7 +250,7 @@ impl LunabotApp {
 
         enumerate_imus(
             &localizer_ref,
-            self.imus.into_iter().map(|(port, IMUInfo { link_name, correction })| {
+            self.imus.into_iter().map(|(port, IMUInfo { link_name, correction})| {
                 (
                     port,
                     rp2040::IMUInfo {
