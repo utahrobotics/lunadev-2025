@@ -216,12 +216,12 @@ impl CameraTask {
         };
         
         // if frames are not in MJPG, attempt to set the format to MJPG
-        if format.fourcc.repr != [77,74,80,71] {
-            camera.set_format(
+        if &format.fourcc.repr != b"MJPG" {
+            let result = camera.set_format(
                 &Format {
                     width: format.width,
                     height: format.height,
-                    fourcc: FourCC::new(&[77,74,80,71]),
+                    fourcc: FourCC::new(b"MJPG"),
                     field_order: format.field_order,
                     stride: format.stride,
                     size: format.size,
@@ -230,7 +230,12 @@ impl CameraTask {
                     quantization: format.quantization,
                     transfer: format.transfer
                 }
-            ).unwrap();
+            );
+
+            if let Err(e) = result {
+                error!("Failed to set camera to mjpg {}: {e}", self.port);
+                return;
+            }
         }
         let image = if let Some(image) = self.image.get_mut() {
             if image.width() != format.width || image.height() != format.height {
