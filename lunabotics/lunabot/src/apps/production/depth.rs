@@ -21,7 +21,7 @@ pub use realsense_rust;
 use realsense_rust::{
     config::Config,
     device::Device,
-    frame::{ColorFrame, DepthFrame, PixelKind, AccelFrame},
+    frame::{ColorFrame, DepthFrame, PixelKind, AccelFrame, GyroFrame},
     kind::{Rs2CameraInfo, Rs2Format, Rs2StreamKind},
     pipeline::{ActivePipeline, FrameWaitError, InactivePipeline},
 };
@@ -219,7 +219,15 @@ pub fn enumerate_realsense_devices(
 
                 if let Err(e) = config.enable_stream(Rs2StreamKind::Accel,None, 0, 0, Rs2Format::MotionXyz32F, 0) {
                     error!(
-                        "Failed to enable motion stream in RealSense Camera {}: {e}",
+                        "Failed to enable accel stream in RealSense Camera {}: {e}",
+                        current_serial
+                    );
+                    continue;
+                }
+
+                if let Err(e) = config.enable_stream(Rs2StreamKind::Gyro, None, 0, 0, Rs2Format::MotionXyz32F, 0) {
+                    error!(
+                        "Failed to enable gyro stream in RealSense Camera {}: {e}",
                         current_serial
                     );
                     continue;
@@ -506,6 +514,15 @@ impl DepthCameraTask {
                     self.index,
                     crate::localization::RsIMUAccel {
                         acceleration: Vector3::new(*x, *y, *z).cast()
+                    }
+                );
+            }
+            for frame in frames.frames_of_type::<GyroFrame>() {
+                let [x,y,z] = frame.rotational_velocity();
+                self.localizer_ref.set_realsense_imu_angular(
+                    self.index,
+                    crate::localization::RsIMUAngular {
+                        angular_velocity: Vector3::new(*x, *y, *z).cast()
                     }
                 );
             }
