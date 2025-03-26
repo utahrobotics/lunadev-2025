@@ -1,0 +1,79 @@
+[gd_scene load_steps=4 format=3 uid="uid://bteyw33qt0xtm"]
+
+[ext_resource type="PackedScene" uid="uid://caooqbmods0y5" path="res://camera_overlay.tscn" id="1_u601m"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_nppr3"]
+font_size = 64
+
+[sub_resource type="GDScript" id="GDScript_cy4kw"]
+script/source = "extends Label
+
+
+func _process(_delta: float) -> void:
+	if Lunabot.is_stream_corrupted():
+		text = \"Stream Error\"
+		modulate = Color.RED
+	else:
+		text = \"Stream OK\"
+		modulate = Color.GREEN
+"
+
+[node name="CameraFeed" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="TextureRect" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Stream OK"
+label_settings = SubResource("LabelSettings_nppr3")
+script = SubResource("GDScript_cy4kw")
+
+[node name="AspectRatioContainer" type="AspectRatioContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+ratio = 1.66
+
+[node name="GridContainer" type="GridContainer" parent="AspectRatioContainer"]
+layout_mode = 2
+columns = 3
+
+[node name="CameraOverlay" parent="AspectRatioContainer/GridContainer" instance=ExtResource("1_u601m")]
+layout_mode = 2
+
+[node name="CameraOverlay2" parent="AspectRatioContainer/GridContainer" instance=ExtResource("1_u601m")]
+layout_mode = 2
+
+[node name="CameraOverlay3" parent="AspectRatioContainer/GridContainer" instance=ExtResource("1_u601m")]
+layout_mode = 2
+
+[node name="CameraOverlay4" parent="AspectRatioContainer/GridContainer" instance=ExtResource("1_u601m")]
+layout_mode = 2
+
+[node name="CameraOverlay5" parent="AspectRatioContainer/GridContainer" instance=ExtResource("1_u601m")]
+layout_mode = 2
+
+[node name="CameraOverlay6" parent="AspectRatioContainer/GridContainer" instance=ExtResource("1_u601m")]
+layout_mode = 2

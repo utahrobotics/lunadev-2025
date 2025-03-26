@@ -1,4 +1,6 @@
-[gd_scene load_steps=19 format=3 uid="uid://53po1wtuhcem"]
+[gd_scene load_steps=18 format=3 uid="uid://53po1wtuhcem"]
+
+[ext_resource type="PackedScene" uid="uid://bteyw33qt0xtm" path="res://camera_feed.tscn" id="1_qoli6"]
 
 [sub_resource type="GDScript" id="GDScript_2pc2q"]
 script/source = "extends Label
@@ -171,22 +173,6 @@ func _process(_delta: float) -> void:
 		texture_rect.texture.update(Lunabot.stream_image)
 "
 
-[sub_resource type="LabelSettings" id="LabelSettings_nppr3"]
-font_size = 64
-
-[sub_resource type="GDScript" id="GDScript_cy4kw"]
-script/source = "extends Label
-
-
-func _process(_delta: float) -> void:
-	if Lunabot.is_stream_corrupted():
-		text = \"Stream Error\"
-		modulate = Color.RED
-	else:
-		text = \"Stream OK\"
-		modulate = Color.GREEN
-"
-
 [node name="Control" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -339,24 +325,7 @@ size = Vector2i(720, 480)
 visible = false
 script = SubResource("GDScript_cj7ej")
 
-[node name="TextureRect" type="TextureRect" parent="Window"]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-expand_mode = 1
-stretch_mode = 5
-
-[node name="Label" type="Label" parent="Window"]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-text = "Stream OK"
-label_settings = SubResource("LabelSettings_nppr3")
-script = SubResource("GDScript_cy4kw")
+[node name="CameraFeed" parent="Window" instance=ExtResource("1_qoli6")]
 
 [connection signal="resized" from="CenterContainer" to="CenterContainer" method="_on_resized"]
 [connection signal="pressed" from="VBoxContainer/Auto Button" to="VBoxContainer/Auto Button" method="_on_pressed"]
