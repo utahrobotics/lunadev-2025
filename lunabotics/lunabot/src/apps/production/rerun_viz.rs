@@ -1,7 +1,7 @@
 use std::{f32::consts::PI, sync::OnceLock};
 
 use nalgebra::{UnitQuaternion, Vector3};
-use rerun::{Asset3D, RecordingStream, RecordingStreamResult, ViewCoordinates};
+use rerun::{Asset3D, RecordingStream, RecordingStreamResult, SpawnOptions, ViewCoordinates};
 use serde::Deserialize;
 use tracing::error;
 
@@ -23,8 +23,12 @@ pub enum RerunViz {
 }
 
 pub fn init_rerun(rerun_viz: RerunViz) {
+    let opts = SpawnOptions {
+        memory_limit: "25%".to_string(),
+        ..Default::default()
+    };
     let recorder = match rerun_viz {
-        RerunViz::Viz => match rerun::RecordingStreamBuilder::new("lunabot").spawn() {
+        RerunViz::Viz => match rerun::RecordingStreamBuilder::new("lunabot").spawn_opts(&opts, None) {
             Ok(x) => x,
             Err(e) => {
                 error!("Failed to start rerun process: {e}");
