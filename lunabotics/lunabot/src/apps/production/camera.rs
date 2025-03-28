@@ -272,17 +272,15 @@ impl CameraTask {
                         observation.tag_global_isometry.translation.x as f32, 
                         observation.tag_global_isometry.translation.y as f32, 
                         observation.tag_global_isometry.translation.z as f32)];
-
+                    let seen_at = chrono::Local::now().time();
                     if let Err(e) = rec.recorder.log(format!("apriltags/{}/location",observation.tag_id), &Points3D::new(
                         location
                     ).with_radii(
                         [0.2]
-                    )) {
-                        error!("Couldn't log april tag: {e}")
-                    }
-                    let seen_at = chrono::Local::now().time();
-                    if let Err(e) = rec.recorder.log(format!("apriltags/{}/last_seen",observation.tag_id), &TextLog::new(
-                        format!("{}", seen_at)
+                    ).with_labels(
+                        [
+                            format!("{}", seen_at)
+                        ]
                     )) {
                         error!("Couldn't log april tag: {e}")
                     }
