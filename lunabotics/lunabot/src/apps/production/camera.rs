@@ -10,6 +10,7 @@ use super::apriltag::{
     AprilTagDetector,
 };
 use fxhash::FxHashMap;
+use rerun::Points3D;
 use simple_motion::StaticImmutableNode;
 use tasker::shared::{MaybeOwned, OwnedData};
 use tracing::{error, info, warn};
@@ -265,6 +266,19 @@ impl CameraTask {
                 //     pose.rotation.axis().unwrap().y,
                 //     pose.rotation.axis().unwrap().z,
                 // );
+
+                if let Some(rec) = crate::apps::RECORDER.get() {
+                    if let Err(e) = rec.recorder.log(format!("apriltags/{}/tag",observation.tag_id), &Points3D::new(
+                        [(
+                            observation.tag_local_isometry.translation.x as f32, 
+                            observation.tag_local_isometry.translation.y as f32, 
+                            observation.tag_local_isometry.translation.z as f32)]
+                    ).with_radii(
+                        [0.2]
+                    )) {
+                        error!("Couldn't log april tag: {e}")
+                    }
+                }
                 localizer_ref
                     .set_april_tag_isometry(observation.get_isometry_of_observer() * inverse_local);
             });
