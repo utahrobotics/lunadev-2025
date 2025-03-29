@@ -14,6 +14,7 @@ use super::{
     streaming::CameraStream,
     RECORDER, ROBOT, ROBOT_STRUCTURE,
 };
+use chrono::SubsecRound;
 use fxhash::FxHashMap;
 use gputter::types::{AlignedMatrix4, AlignedVec4};
 use nalgebra::{UnitQuaternion, Vector2, Vector3, Vector4};
@@ -382,6 +383,31 @@ impl DepthCameraTask {
                 let mut inverse_local = self.node.get_local_isometry();
                 inverse_local.inverse_mut();
                 det.detection_callbacks_ref().add_fn(move |observation| {
+                    if let Some(rec) = crate::apps::RECORDER.get() {
+                        let location = (
+                            observation.tag_global_isometry.translation.x as f32, 
+                            observation.tag_global_isometry.translation.y as f32, 
+                            observation.tag_global_isometry.translation.z as f32);
+                        let seen_at = chrono::Local::now().time().trunc_subsecs(0);
+                        let quaterion = observation.tag_global_isometry.rotation.quaternion().as_vector().iter().map(
+                            |val| *val as f32
+                        ).collect::<Vec<f32>>();
+                        if let Err(e) = rec.recorder.log(
+                            format!("apriltags/{}/location",observation.tag_id), 
+                            &rerun::Boxes3D::from_centers_and_half_sizes(
+                                [(location)],
+                                [(0.1, 0.1, 0.01)]
+                            ).with_quaternions(
+                                [
+                                    [quaterion[0], quaterion[1], quaterion[2], quaterion[3]]
+                                ]
+                            ).with_labels(
+                                [format!("{}", seen_at)]
+                            )
+                        ) {
+                            error!("Couldn't log april tag: {e}")
+                        }
+                    }
                     localizer_ref.set_april_tag_isometry(
                         inverse_local * observation.get_isometry_of_observer(),
                     );
