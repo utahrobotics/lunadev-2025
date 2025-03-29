@@ -231,7 +231,8 @@ impl IMUTask {
                     let transformed_rate = self.correction * local_isometry.rotation * angular_velocity;
 
                     let accel = Vector3::new(accel.x, -accel.z, -accel.y);
-                    let transformed_accel = self.correction * local_isometry.rotation * accel;
+                    // g's to m/s^2
+                    let transformed_accel = self.correction * local_isometry.rotation * accel * 9.8;
 
                     if init_accel_count < INIT_ACCEL_COUNT {
                         init_accel_count += 1;

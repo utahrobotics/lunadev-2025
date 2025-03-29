@@ -6,9 +6,12 @@ use simple_motion::StaticNode;
 use spin_sleep::SpinSleeper;
 use tracing::error;
 
+#[cfg(feature="production")]
+use imu_fusion::{Fusion,FusionAhrsSettings, FusionVector};
+
 #[cfg(not(feature = "production"))]
 use crate::apps::LunasimStdin;
-use crate::utils::{lerp_value, swing_twist_decomposition};
+use crate::utils::{lerp_value, swing_twist_decomposition, convert_imu_to_ned, convert_ned_to_imu, nalgebra_to_fusion, fusion_to_nalgebra};
 
 const ACCELEROMETER_LERP_SPEED: f64 = 150.0;
 const LOCALIZATION_DELTA: f64 = 1.0 / 60.0;
@@ -77,6 +80,9 @@ pub struct Localizer {
     #[cfg(not(feature = "production"))]
     lunasim_stdin: Option<LunasimStdin>,
     localizer_ref: LocalizerRef,
+
+    #[cfg(feature = "production")]
+    fusion: Fusion
 }
 
 impl Localizer {
@@ -97,8 +103,13 @@ impl Localizer {
             },
         }
     }
+
     #[cfg(feature = "production")]
     pub fn new(root_node: StaticNode, imu_count: usize) -> Self {
+        let mut ahrs_settings = FusionAhrsSettings::new();
+        ahrs_settings.convention = imu_fusion::FusionConvention::NED;
+        let frequency = 1.0/LOCALIZATION_DELTA;
+        let mut fusion = imu_fusion::Fusion::new(frequency.ceil() as u32, ahrs_settings);
         Self {
             root_node,
             localizer_ref: LocalizerRef {
@@ -107,6 +118,7 @@ impl Localizer {
                     ..Default::default()
                 }),
             },
+            fusion
         }
     }
 
@@ -114,15 +126,16 @@ impl Localizer {
         self.localizer_ref.clone()
     }
 
-    pub fn run(self) {
+    pub fn run(mut self) {
+        use std::time::Instant;
         let spin_sleeper = SpinSleeper::default();
         #[cfg(not(feature = "production"))]
         let mut bitcode_buffer = bitcode::Buffer::new();
-
+        let start_time = std::time::Instant::now();
         loop {
             spin_sleeper.sleep(Duration::from_secs_f64(LOCALIZATION_DELTA));
             let mut isometry = self.root_node.get_global_isometry();
-
+            
             'check: {
                 if isometry.translation.x.is_nan()
                     || isometry.translation.y.is_nan()
@@ -160,6 +173,15 @@ impl Localizer {
                 angular_velocity: tmp_angular_velocity,
             }) = self.localizer_ref.take_imu_readings()
             {
+                let acceleration_fusion = nalgebra_to_fusion(convert_imu_to_ned(acceleration.cast()));
+                let angular_velocity_fusion = nalgebra_to_fusion(convert_imu_to_ned(tmp_angular_velocity.cast()));
+
+                self.fusion.update_no_mag(angular_velocity_fusion, acceleration_fusion, start_time.elapsed().as_secs_f32());
+
+                let gravity = convert_ned_to_imu(fusion_to_nalgebra(self.fusion.ahrs.calculate_half_gravity() * 2.) * (9.8));
+                let linear_acc = convert_ned_to_imu(fusion_to_nalgebra(self.fusion.ahrs.linear_acc()));
+                let acceleration: Vector3<f64> = linear_acc.cast();
+                let tmp_angular_velocity = convert_ned_to_imu(fusion_to_nalgebra(self.fusion.ahrs.linear_acc()));
                 if tmp_angular_velocity.x.is_finite()
                     && tmp_angular_velocity.y.is_finite()
                     && tmp_angular_velocity.z.is_finite()
