@@ -6,7 +6,7 @@ use godot::prelude::*;
 use godot::{
     builtin::Vector2,
     classes::{AudioStreamGenerator, AudioStreamGeneratorPlayback, AudioStreamPlayer},
-    global::{godot_error, godot_print},
+    global::godot_error,
     obj::{BaseMut, Gd, NewAlloc, NewGd},
 };
 use opus_static_sys::{opus_decode_float, OpusDecoder};
@@ -20,11 +20,14 @@ pub struct AudioStreaming {
     audio_buffer: [f32; AUDIO_FRAME_SIZE as usize],
     udp_buffer: [u8; 4096],
     player: Gd<AudioStreamPlayer>,
+    expected_i: Option<u32>,
 }
 
 impl AudioStreaming {
     pub fn new() -> Self {
-        let generator = AudioStreamGenerator::new_gd();
+        let mut generator = AudioStreamGenerator::new_gd();
+        generator.set_mix_rate(AUDIO_SAMPLE_RATE as f32);
+        // generator.set_buffer_length(0.8);
         let mut player = AudioStreamPlayer::new_alloc();
         player.set_autoplay(true);
         player.set_stream(&generator);
@@ -59,6 +62,7 @@ impl AudioStreaming {
             audio_buffer: [0.0; AUDIO_FRAME_SIZE as usize],
             udp_buffer: [0u8; 4096],
             player,
+            expected_i: None,
         }
     }
 
@@ -73,49 +77,51 @@ impl AudioStreaming {
                         if n == 4096 {
                             godot_warn!("Received a full buffer of audio data");
                         }
+                        let i = u32::from_le_bytes([self.udp_buffer[0], self.udp_buffer[1], self.udp_buffer[2], self.udp_buffer[3]]);
+                        if self.expected_i.is_none() {
+                            self.expected_i = Some(i);
+                        }
+                        let expected_i = self.expected_i.unwrap();
+
+                        if i != expected_i {
+                            let result = unsafe {
+                                opus_decode_float(
+                                    self.decoder.as_ptr(),
+                                    std::ptr::null(),
+                                    0,
+                                    self.audio_buffer.as_mut_ptr(),
+                                    AUDIO_FRAME_SIZE as i32,
+                                    0
+                                )
+                            };
+                            godot_error!("Missed packet: {}", result);
+                        }
+
+                        self.expected_i = Some(i + 1);
                         let result = unsafe {
                             opus_decode_float(
                                 self.decoder.as_ptr(),
-                                self.udp_buffer.as_ptr().cast(),
-                                n as i32,
+                                self.udp_buffer.as_ptr().add(4).cast(),
+                                n as i32 - 4,
                                 self.audio_buffer.as_mut_ptr(),
                                 AUDIO_FRAME_SIZE as i32,
-                                1
+                                0
                             )
                         };
                         if result < 0 {
                             godot_error!("Failed to decode audio: {}", -result);
                         } else {
-                            // godot_print!("Decoded {} samples", result);
-                            self.player.get_stream_playback().unwrap().cast::<AudioStreamGeneratorPlayback>().push_buffer(
+                            let mut playback = self.player.get_stream_playback().unwrap().cast::<AudioStreamGeneratorPlayback>();
+                            if playback.get_frames_available() < result {
+                                godot_warn!("Dropped {} frames", result - playback.get_frames_available());
+                            }
+                            playback.push_buffer(
                                 &self.audio_buffer[..result as usize]
                                     .iter()
                                     .map(|&x| Vector2::new(x, x))
                                     .collect(),
                             );
                         }
-                        // match self.decoder.decode_float(
-                        //     &self.udp_buffer[..n],
-                        //     &mut self.audio_buffer,
-                        //     false,
-                        // ) {
-                        //     Ok(n) => {
-                        //         // godot_print!("{:?}", &self.audio_buffer[0..n]);
-                        //         self.playback.push_buffer(
-                        //             &self.audio_buffer[0..n]
-                        //                 .iter()
-                        //                 .map(|&x| Vector2::new(x, x))
-                        //                 .collect(),
-                        //         );
-                        //     }
-                        //     Err(e) => {
-                        //         godot_print!("{n}");
-                        //         godot_error!("Failed to decode audio: {}", e);
-                        //         if let Err(e) = self.decoder.reset_state() {
-                        //             godot_error!("Failed to reset decoder state: {}", e);
-                        //         }
-                        //     }
-                        // }
                     }
                     Err(e) => {
                         if e.kind() == std::io::ErrorKind::WouldBlock
