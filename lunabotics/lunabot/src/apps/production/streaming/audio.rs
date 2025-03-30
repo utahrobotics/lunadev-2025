@@ -6,38 +6,37 @@ use tracing::{error, info};
 
 
 pub fn audio_streaming(mut lunabase_address: Option<IpAddr>) {
-    let udp = match UdpSocket::bind(SocketAddr::new(
-        Ipv4Addr::UNSPECIFIED.into(),
-        common::ports::AUDIO,
-    )) {
-        Ok(x) => x,
-        Err(e) => {
-            error!("Failed to bind to UDP socket: {e}");
-            return;
-        }
-    };
-    if let Err(e) = udp.set_nonblocking(true) {
-        error!("Failed to set UDP socket to non-blocking: {e}");
-        return;
-    }
-    let host = default_host();
-    let audio_input = match host
-        .default_input_device() {
-            Some(x) => x,
-            None => {
-                error!("Failed to get default audio input device");
+    std::thread::spawn(move || {
+        let udp = match UdpSocket::bind(SocketAddr::new(
+            Ipv4Addr::UNSPECIFIED.into(),
+            common::ports::AUDIO,
+        )) {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to bind to UDP socket: {e}");
                 return;
             }
-    };
-
-    let mut enc = opus::Encoder::new(common::AUDIO_SAMPLE_RATE, opus::Channels::Mono, opus::Application::LowDelay).unwrap();
-    // enc.set_inband_fec(true).unwrap();
-    enc.set_bitrate(opus::Bitrate::Bits(96000)).unwrap();
-    let mut encoded = [0u8; 4096];
-    let mut samples_vec = vec![];
-    let mut i = 0u32;
-
-    std::thread::spawn(move || {
+        };
+        if let Err(e) = udp.set_nonblocking(true) {
+            error!("Failed to set UDP socket to non-blocking: {e}");
+            return;
+        }
+        let host = default_host();
+        let audio_input = match host
+            .default_input_device() {
+                Some(x) => x,
+                None => {
+                    error!("Failed to get default audio input device");
+                    return;
+                }
+        };
+    
+        let mut enc = opus::Encoder::new(common::AUDIO_SAMPLE_RATE, opus::Channels::Mono, opus::Application::LowDelay).unwrap();
+        // enc.set_inband_fec(true).unwrap();
+        enc.set_bitrate(opus::Bitrate::Bits(96000)).unwrap();
+        let mut encoded = [0u8; 4096];
+        let mut samples_vec = vec![];
+        let mut i = 0u32;
         let result = audio_input.build_input_stream(
             &StreamConfig {
                 channels: 1,
