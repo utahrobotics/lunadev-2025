@@ -17,6 +17,8 @@ use tasker::shared::{MaybeOwned, OwnedData};
 use tracing::{error, info, warn};
 use udev::{EventType, MonitorBuilder, Udev};
 use v4l::{buffer::Type, io::traits::CaptureStream, prelude::MmapStream, video::Capture};
+use v4l::FourCC;
+use v4l::Format;
 
 use crate::{apps::production::udev_poll, localization::LocalizerRef};
 
@@ -197,19 +199,46 @@ impl CameraTask {
             },
         };
         let mut camera = match v4l::Device::with_path(&path) {
-            Ok(x) => x,
+            Ok(x) => {
+                x
+            },
             Err(e) => {
                 warn!("Failed to open camera {}: {e}", self.port);
                 return;
             }
         };
         let format = match camera.format() {
-            Ok(x) => x,
+            Ok(x) => {
+                x
+            },
             Err(e) => {
                 warn!("Failed to get format for camera {}: {e}", self.port);
                 return;
             }
         };
+        
+        // if frames are not in MJPG, attempt to set the format to MJPG
+        if &format.fourcc.repr != b"MJPG" {
+            let result = camera.set_format(
+                &Format {
+                    width: format.width,
+                    height: format.height,
+                    fourcc: FourCC::new(b"MJPG"),
+                    field_order: format.field_order,
+                    stride: format.stride,
+                    size: format.size,
+                    flags: format.flags,
+                    colorspace: format.colorspace,
+                    quantization: format.quantization,
+                    transfer: format.transfer
+                }
+            );
+
+            if let Err(e) = result {
+                error!("Failed to set camera to mjpg {}: {e}", self.port);
+                return;
+            }
+        }
         let image = if let Some(image) = self.image.get_mut() {
             if image.width() != format.width || image.height() != format.height {
                 warn!("Camera {} format changed", self.port);
