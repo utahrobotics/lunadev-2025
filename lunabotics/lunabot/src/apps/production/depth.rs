@@ -264,10 +264,6 @@ pub fn enumerate_depth_cameras(
             }
         }
     });
-
-    std::thread::spawn(move || {
-        info!("Thalassic pipeline spawned");
-    });
 }
 
 struct DepthCameraState {
