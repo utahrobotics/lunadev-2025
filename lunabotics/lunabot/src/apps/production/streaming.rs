@@ -136,53 +136,53 @@ impl<'a> Read for DownscaleRgbImageReader<'a> {
 }
 
 pub fn start_streaming(mut lunabase_address: Option<IpAddr>) {
-    let audio_send_to = audio_streaming();
-    audio_send_to.store(lunabase_address);
-    let camera_frame_buffer = vec![
-        0u8;
-        CAMERA_RESOLUTION.x as usize
-            * CAMERA_RESOLUTION.y as usize
-            * CAMERA_ROW_COUNT
-            * CAMERA_COL_COUNT
-            * 3
-    ]
-    .into_boxed_slice();
-    {
-        let mut camera_streams = CAMERA_STREAMS.write();
-        camera_streams.1 = camera_frame_buffer.len();
-        camera_streams.0 = Box::leak(camera_frame_buffer).as_mut_ptr();
-    }
-    let mut h264_enc = match Encoder::with_api_config(
-        OpenH264API::from_source(),
-        EncoderConfig::new()
-            .set_bitrate_bps(1_000_000)
-            // .enable_skip_frame(true)
-            .max_frame_rate(24.0)
-            // .rate_control_mode(RateControlMode::Timestamp)
-            .set_multiple_thread_idc(4), // .sps_pps_strategy(SpsPpsStrategy::IncreasingId)
-    ) {
-        Ok(x) => x,
-        Err(e) => {
-            error!("Failed to create H264 encoder: {e}");
-            return;
-        }
-    };
-    let udp = match UdpSocket::bind(SocketAddr::new(
-        Ipv4Addr::UNSPECIFIED.into(),
-        common::ports::CAMERAS,
-    )) {
-        Ok(x) => x,
-        Err(e) => {
-            error!("Failed to bind to UDP socket: {e}");
-            return;
-        }
-    };
-    if let Err(e) = udp.set_nonblocking(true) {
-        error!("Failed to set UDP socket to non-blocking: {e}");
-        return;
-    }
+    audio_streaming(lunabase_address);
 
     std::thread::spawn(move || {
+        let camera_frame_buffer = vec![
+            0u8;
+            CAMERA_RESOLUTION.x as usize
+                * CAMERA_RESOLUTION.y as usize
+                * CAMERA_ROW_COUNT
+                * CAMERA_COL_COUNT
+                * 3
+        ]
+        .into_boxed_slice();
+        {
+            let mut camera_streams = CAMERA_STREAMS.write();
+            camera_streams.1 = camera_frame_buffer.len();
+            camera_streams.0 = Box::leak(camera_frame_buffer).as_mut_ptr();
+        }
+        let mut h264_enc = match Encoder::with_api_config(
+            OpenH264API::from_source(),
+            EncoderConfig::new()
+                .set_bitrate_bps(1_000_000)
+                // .enable_skip_frame(true)
+                .max_frame_rate(24.0)
+                // .rate_control_mode(RateControlMode::Timestamp)
+                .set_multiple_thread_idc(4), // .sps_pps_strategy(SpsPpsStrategy::IncreasingId)
+        ) {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to create H264 encoder: {e}");
+                return;
+            }
+        };
+        let udp = match UdpSocket::bind(SocketAddr::new(
+            Ipv4Addr::UNSPECIFIED.into(),
+            common::ports::CAMERAS,
+        )) {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to bind to UDP socket: {e}");
+                return;
+            }
+        };
+        if let Err(e) = udp.set_nonblocking(true) {
+            error!("Failed to set UDP socket to non-blocking: {e}");
+            return;
+        }
+        
         let mut yuv_buffer = YUVBuffer::new(
             CAMERA_RESOLUTION.x as usize * CAMERA_COL_COUNT,
             CAMERA_RESOLUTION.y as usize * CAMERA_ROW_COUNT,
@@ -202,7 +202,6 @@ pub fn start_streaming(mut lunabase_address: Option<IpAddr>) {
                 if let Ok((_, addr)) = udp.recv_from(&mut [0u8; 1]) {
                     if addr.port() == common::ports::CAMERAS {
                         lunabase_address = Some(addr.ip());
-                        audio_send_to.store(lunabase_address);
                     }
                 }
                 continue;
@@ -248,7 +247,6 @@ pub fn start_streaming(mut lunabase_address: Option<IpAddr>) {
                                         }
                                     }
                                     lunabase_address = None;
-                                    audio_send_to.store(None);
                                     error!("Failed to send stream data to lunabase: {e}");
                                 }
                             });
