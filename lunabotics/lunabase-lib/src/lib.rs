@@ -177,7 +177,10 @@ impl INode for LunabotConn {
 
         let udp = UdpSocket::bind(SocketAddrV4::new(
             Ipv4Addr::UNSPECIFIED,
+            #[cfg(not(feature = "production"))]
             common::ports::LUNABASE_SIM_TELEOP,
+            #[cfg(feature = "production")]
+            common::ports::TELEOP,
         ))
         .expect("Failed to bind to teleop port");
 
@@ -186,7 +189,7 @@ impl INode for LunabotConn {
 
         let cakap_sm = PeerStateMachine::new(Duration::from_millis(150), 1024, 1400);
         #[cfg(feature = "production")]
-        let audio_streaming = audio::AudioStreaming::new();
+        let audio_streaming = audio::AudioStreaming::new(lunabot_address);
 
         Self {
             inner: Some(LunabotConnInner {
@@ -386,7 +389,7 @@ impl INode for LunabotConn {
         }
         #[cfg(feature = "production")]
         if let Some(mut audio_streaming) = self.audio_streaming.take() {
-            audio_streaming.poll(self.base_mut());
+            audio_streaming.poll(self.base_mut(), delta);
             self.audio_streaming = Some(audio_streaming);
         }
     }

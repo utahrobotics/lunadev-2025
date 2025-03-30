@@ -1,5 +1,4 @@
-use std::net::UdpSocket;
-use std::ptr::NonNull;
+use std::net::{IpAddr, UdpSocket};
 
 use common::{AUDIO_FRAME_SIZE, AUDIO_SAMPLE_RATE};
 use godot::prelude::*;
@@ -9,21 +8,24 @@ use godot::{
     global::godot_error,
     obj::{BaseMut, Gd, NewAlloc, NewGd},
 };
+use opus::Decoder;
 
 use crate::LunabotConn;
 
 pub struct AudioStreaming {
     // playback: Gd<AudioStreamGeneratorPlayback>,
     udp: Option<UdpSocket>,
-    decoder: NonNull<u32>,
+    decoder: Decoder,
     audio_buffer: [f32; AUDIO_FRAME_SIZE as usize],
     udp_buffer: [u8; 4096],
     player: Gd<AudioStreamPlayer>,
     expected_i: Option<u32>,
+    lunabot_address: Option<IpAddr>,
+    ping_timeout: f64
 }
 
 impl AudioStreaming {
-    pub fn new() -> Self {
+    pub fn new(lunabot_address: Option<IpAddr>) -> Self {
         let mut generator = AudioStreamGenerator::new_gd();
         generator.set_mix_rate(AUDIO_SAMPLE_RATE as f32);
         // generator.set_buffer_length(0.8);
@@ -31,7 +33,7 @@ impl AudioStreaming {
         player.set_autoplay(true);
         player.set_stream(&generator);
 
-        let udp = UdpSocket::bind(std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), common::ports::AUDIO))
+        let udp = UdpSocket::bind(std::net::SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), common::ports::AUDIO))
             .map(|udp| {
                 if let Err(e) = udp.set_nonblocking(true) {
                     godot_error!("Failed to set UDP socket to non-blocking: {:?}", e);
@@ -48,25 +50,17 @@ impl AudioStreaming {
 
         Self {
             udp,
-            decoder: unsafe {
-                // let mut err_code = 0;
-                // let dec_ptr = opus_static_sys::opus_decoder_create(AUDIO_SAMPLE_RATE as i32, 1, &mut err_code);
-                
-                // let Some(dec) = NonNull::new(dec_ptr) else {
-                //     panic!("Failed to create Opus decoder: {}", err_code);
-                // };
-
-                // dec
-                todo!()
-            },
+            decoder: Decoder::new(AUDIO_SAMPLE_RATE, opus::Channels::Mono).unwrap(),
             audio_buffer: [0.0; AUDIO_FRAME_SIZE as usize],
             udp_buffer: [0u8; 4096],
             player,
             expected_i: None,
+            lunabot_address,
+            ping_timeout: 1.0,
         }
     }
 
-    pub fn poll(&mut self, mut base: BaseMut<LunabotConn>) {
+    pub fn poll(&mut self, mut base: BaseMut<LunabotConn>, delta: f64) {
         if !self.player.is_inside_tree() {
             base.add_child(&self.player);
         }
@@ -94,40 +88,40 @@ impl AudioStreaming {
                             //         0
                             //     )
                             // };
+                            godot_error!("Missed packet");
                             // godot_error!("Missed packet: {}", result);
                         }
 
                         self.expected_i = Some(i + 1);
-                        let result = unsafe {
-                            // opus_decode_float(
-                            //     self.decoder.as_ptr(),
-                            //     self.udp_buffer.as_ptr().add(4).cast(),
-                            //     n as i32 - 4,
-                            //     self.audio_buffer.as_mut_ptr(),
-                            //     AUDIO_FRAME_SIZE as i32,
-                            //     0
-                            // )
-                            1
-                        };
-                        if result < 0 {
-                            godot_error!("Failed to decode audio: {}", -result);
-                        } else {
-                            let mut playback = self.player.get_stream_playback().unwrap().cast::<AudioStreamGeneratorPlayback>();
-                            if playback.get_frames_available() < result {
-                                godot_warn!("Dropped {} frames", result - playback.get_frames_available());
+                        let result = self.decoder.decode_float(&self.udp_buffer[4..n], &mut self.audio_buffer, false);
+                        match result {
+                            Ok(n) => {
+                                let mut playback = self.player.get_stream_playback().unwrap().cast::<AudioStreamGeneratorPlayback>();
+                                if (playback.get_frames_available() as usize) < n {
+                                    godot_warn!("Dropped {} frames", n - playback.get_frames_available() as usize);
+                                }
+                                playback.push_buffer(
+                                    &self.audio_buffer[..n]
+                                        .iter()
+                                        .map(|&x| Vector2::new(x, x))
+                                        .collect(),
+                                );
                             }
-                            playback.push_buffer(
-                                &self.audio_buffer[..result as usize]
-                                    .iter()
-                                    .map(|&x| Vector2::new(x, x))
-                                    .collect(),
-                            );
+                            Err(e) => godot_error!("Failed to decode audio: {}", e)
                         }
                     }
                     Err(e) => {
-                        if e.kind() == std::io::ErrorKind::WouldBlock
-                            || e.kind() == std::io::ErrorKind::TimedOut
-                        {
+                        if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) {
+                            let Some(ip) = self.lunabot_address else {
+                                break;
+                            };
+                            self.ping_timeout -= delta;
+                            if self.ping_timeout <= 0.0 {
+                                self.ping_timeout = 1.0;
+                                if let Err(e) = udp.send_to(&[0u8; 1], std::net::SocketAddr::new(ip, common::ports::AUDIO)) {
+                                    godot_error!("Failed to send audio ping: {e}");
+                                }
+                            }
                             break;
                         }
                         godot_error!("Failed to receive stream data: {e}");
