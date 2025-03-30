@@ -1,8 +1,6 @@
 use std::net::{IpAddr, UdpSocket};
 
 use common::{AUDIO_FRAME_SIZE, AUDIO_SAMPLE_RATE};
-#[cfg(not(target_arch = "aarch64"))]
-use godot::prelude::*;
 use godot::{
     classes::{AudioStreamGenerator, AudioStreamPlayer},
     global::{godot_error, godot_warn},
