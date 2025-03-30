@@ -1,13 +1,11 @@
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::{io::ErrorKind, net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket}};
 
 use common::AUDIO_FRAME_SIZE;
-use crossbeam::atomic::AtomicCell;
 use rodio::{cpal::{default_host, traits::{HostTrait, StreamTrait}, StreamConfig}, DeviceTrait};
 use tracing::{error, info};
 
 
-pub fn audio_streaming() -> &'static AtomicCell<Option<IpAddr>> {
-    let address: &_ = Box::leak(Box::new(AtomicCell::new(None)));
+pub fn audio_streaming(mut lunabase_address: Option<IpAddr>) {
     let udp = match UdpSocket::bind(SocketAddr::new(
         Ipv4Addr::UNSPECIFIED.into(),
         common::ports::AUDIO,
@@ -15,16 +13,20 @@ pub fn audio_streaming() -> &'static AtomicCell<Option<IpAddr>> {
         Ok(x) => x,
         Err(e) => {
             error!("Failed to bind to UDP socket: {e}");
-            return address;
+            return;
         }
     };
+    if let Err(e) = udp.set_nonblocking(true) {
+        error!("Failed to set UDP socket to non-blocking: {e}");
+        return;
+    }
     let host = default_host();
     let audio_input = match host
         .default_input_device() {
             Some(x) => x,
             None => {
                 error!("Failed to get default audio input device");
-                return address;
+                return;
             }
     };
 
@@ -43,20 +45,37 @@ pub fn audio_streaming() -> &'static AtomicCell<Option<IpAddr>> {
                 buffer_size: rodio::cpal::BufferSize::Default,
             },
             move |samples: &[i16], _info| {
+                let Some(ip) = lunabase_address else {
+                    if let Ok((_, addr)) = udp.recv_from(&mut [0u8; 1]) {
+                        if addr.port() == common::ports::AUDIO {
+                            lunabase_address = Some(addr.ip());
+                            samples_vec.clear();
+                        }
+                    }
+                    return;
+                };
                 samples_vec.extend_from_slice(samples);
                 while samples_vec.len() >= AUDIO_FRAME_SIZE as usize {
-                    if let Some(ip) = address.load() {
-                        match enc.encode(&samples_vec[0..AUDIO_FRAME_SIZE as usize], &mut encoded[4..]) {
-                            Ok(n) => {
-                                encoded[0..4].copy_from_slice(&i.to_le_bytes());
-                                let _ = udp.send_to(&encoded[..n + 4], SocketAddr::new(ip, common::ports::AUDIO));
-                            },
-                            Err(e) => {
-                                error!("Error encoding audio: {}", e);
+                    match enc.encode(&samples_vec[0..AUDIO_FRAME_SIZE as usize], &mut encoded[4..]) {
+                        Ok(n) => {
+                            encoded[..4].copy_from_slice(&i.to_le_bytes());
+                            if let Err(e) = udp.send_to(&encoded[..n + 4], SocketAddr::new(ip, common::ports::AUDIO)) {
+                                if e.kind() == ErrorKind::ConnectionRefused {
+                                    if let Some(ip) = lunabase_address {
+                                        if ip.is_loopback() {
+                                            break;
+                                        }
+                                    }
+                                }
+                                lunabase_address = None;
+                                error!("Failed to send audio data to lunabase: {e}");
                             }
+                        },
+                        Err(e) => {
+                            error!("Error encoding audio: {}", e);
                         }
-                        i += 1;
                     }
+                    i += 1;
                     samples_vec.drain(0..AUDIO_FRAME_SIZE as usize);
                 }
             },
@@ -80,6 +99,4 @@ pub fn audio_streaming() -> &'static AtomicCell<Option<IpAddr>> {
             }
         }
     });
-
-    address
 }

@@ -136,8 +136,7 @@ impl<'a> Read for DownscaleRgbImageReader<'a> {
 }
 
 pub fn start_streaming(mut lunabase_address: Option<IpAddr>) {
-    let audio_send_to = audio_streaming();
-    audio_send_to.store(lunabase_address);
+    audio_streaming(lunabase_address);
     let camera_frame_buffer = vec![
         0u8;
         CAMERA_RESOLUTION.x as usize
@@ -202,7 +201,6 @@ pub fn start_streaming(mut lunabase_address: Option<IpAddr>) {
                 if let Ok((_, addr)) = udp.recv_from(&mut [0u8; 1]) {
                     if addr.port() == common::ports::CAMERAS {
                         lunabase_address = Some(addr.ip());
-                        audio_send_to.store(lunabase_address);
                     }
                 }
                 continue;
@@ -248,7 +246,6 @@ pub fn start_streaming(mut lunabase_address: Option<IpAddr>) {
                                         }
                                     }
                                     lunabase_address = None;
-                                    audio_send_to.store(None);
                                     error!("Failed to send stream data to lunabase: {e}");
                                 }
                             });
