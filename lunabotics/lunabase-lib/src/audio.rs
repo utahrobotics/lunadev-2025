@@ -1,20 +1,25 @@
 use std::net::{IpAddr, UdpSocket};
 
 use common::{AUDIO_FRAME_SIZE, AUDIO_SAMPLE_RATE};
+#[cfg(not(target_arch = "aarch64"))]
 use godot::prelude::*;
 use godot::{
-    builtin::Vector2,
-    classes::{AudioStreamGenerator, AudioStreamGeneratorPlayback, AudioStreamPlayer},
-    global::godot_error,
+    classes::{AudioStreamGenerator, AudioStreamPlayer},
+    global::{godot_error, godot_warn},
     obj::{BaseMut, Gd, NewAlloc, NewGd},
 };
+#[cfg(not(target_arch = "aarch64"))]
+use godot::{builtin::Vector2, classes::AudioStreamGeneratorPlayback};
+#[cfg(not(target_arch = "aarch64"))]
 use opus::Decoder;
 
 use crate::LunabotConn;
 
+#[allow(dead_code)]
 pub struct AudioStreaming {
     // playback: Gd<AudioStreamGeneratorPlayback>,
     udp: Option<UdpSocket>,
+    #[cfg(not(target_arch = "aarch64"))]
     decoder: Decoder,
     audio_buffer: [f32; AUDIO_FRAME_SIZE as usize],
     udp_buffer: [u8; 4096],
@@ -26,6 +31,9 @@ pub struct AudioStreaming {
 
 impl AudioStreaming {
     pub fn new(lunabot_address: Option<IpAddr>) -> Self {
+        #[cfg(target_arch = "aarch64")]
+        godot_warn!("Audio streaming is not supported on aarch64");
+        
         let mut generator = AudioStreamGenerator::new_gd();
         generator.set_mix_rate(AUDIO_SAMPLE_RATE as f32);
         // generator.set_buffer_length(0.8);
@@ -50,6 +58,7 @@ impl AudioStreaming {
 
         Self {
             udp,
+            #[cfg(not(target_arch = "aarch64"))]
             decoder: Decoder::new(AUDIO_SAMPLE_RATE, opus::Channels::Mono).unwrap(),
             audio_buffer: [0.0; AUDIO_FRAME_SIZE as usize],
             udp_buffer: [0u8; 4096],
@@ -64,6 +73,10 @@ impl AudioStreaming {
         if !self.player.is_inside_tree() {
             base.add_child(&self.player);
         }
+
+        #[cfg(target_arch = "aarch64")]
+        let _delta = delta;
+        #[cfg(not(target_arch = "aarch64"))]
         if let Some(udp) = &self.udp {
             loop {
                 match udp.recv(&mut self.udp_buffer) {

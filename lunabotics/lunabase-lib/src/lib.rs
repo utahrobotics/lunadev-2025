@@ -22,7 +22,7 @@ use godot::{
 };
 use tasker::shared::{OwnedData, SharedDataReceiver};
 
-#[cfg(feature = "production")]
+#[cfg(feature = "audio")]
 mod audio;
 #[cfg(feature = "production")]
 mod stream;
@@ -98,7 +98,7 @@ struct LunabotConn {
     #[var]
     stream_image_updated: bool,
     last_received_duration: f64,
-    #[cfg(feature = "production")]
+    #[cfg(feature = "audio")]
     audio_streaming: Option<audio::AudioStreaming>,
 }
 
@@ -124,7 +124,7 @@ impl INode for LunabotConn {
                 base,
                 stream_image,
                 stream_image_updated: false,
-                #[cfg(feature = "production")]
+                #[cfg(feature = "audio")]
                 audio_streaming: None,
                 last_received_duration: 0.0,
             };
@@ -188,7 +188,7 @@ impl INode for LunabotConn {
             .expect("Failed to set non-blocking");
 
         let cakap_sm = PeerStateMachine::new(Duration::from_millis(150), 1024, 1400);
-        #[cfg(feature = "production")]
+        #[cfg(feature = "audio")]
         let audio_streaming = audio::AudioStreaming::new(lunabot_address);
 
         Self {
@@ -206,7 +206,7 @@ impl INode for LunabotConn {
             base,
             stream_image,
             stream_image_updated: false,
-            #[cfg(feature = "production")]
+            #[cfg(feature = "audio")]
             audio_streaming: Some(audio_streaming),
             last_received_duration: 0.0,
         }
@@ -387,7 +387,7 @@ impl INode for LunabotConn {
                 }
             }
         }
-        #[cfg(feature = "production")]
+        #[cfg(feature = "audio")]
         if let Some(mut audio_streaming) = self.audio_streaming.take() {
             audio_streaming.poll(self.base_mut(), delta);
             self.audio_streaming = Some(audio_streaming);
