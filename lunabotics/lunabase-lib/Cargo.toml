@@ -15,8 +15,8 @@ tasker.workspace = true
 crossbeam.workspace = true
 
 openh264 = { workspace = true, optional = true }
-# opus = { workspace = true, optional = true }
-opus-static-sys = "1.0.1"
+opus = { workspace = true, optional = true }
+# opus-static-sys = "1.0.1"
 
 [features]
 production = ["openh264"]
