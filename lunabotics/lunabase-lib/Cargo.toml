@@ -19,4 +19,5 @@ opus = { workspace = true, optional = true }
 # opus-static-sys = "1.0.1"
 
 [features]
-production = ["openh264", "opus"]
+audio = ["opus"]
+production = ["openh264", "audio"]
