@@ -92,7 +92,7 @@ impl AudioStreaming {
                             // godot_error!("Missed packet: {}", result);
                         }
 
-                        self.expected_i = Some(i + 1);
+                        self.expected_i = Some(i.wrapping_add(1));
                         let result = self.decoder.decode_float(&self.udp_buffer[4..n], &mut self.audio_buffer, false);
                         match result {
                             Ok(n) => {
