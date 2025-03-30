@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3 uid="uid://53po1wtuhcem"]
+[gd_scene load_steps=17 format=3 uid="uid://53po1wtuhcem"]
 
 [ext_resource type="PackedScene" uid="uid://bteyw33qt0xtm" path="res://camera_feed.tscn" id="1_qoli6"]
 
@@ -155,24 +155,6 @@ func _on_pressed() -> void:
 	Lunabot.emit_signal(\"entered_soft_stop\")
 "
 
-[sub_resource type="GDScript" id="GDScript_cj7ej"]
-script/source = "extends Window
-
-
-@onready var texture_rect: TextureRect = $TextureRect
-
-
-func _ready() -> void:
-	visible = LunabotConn.CAMERA_STREAMING
-	texture_rect.texture = ImageTexture.create_from_image(Lunabot.stream_image)
-
-
-func _process(_delta: float) -> void:
-	if Lunabot.stream_image_updated:
-		Lunabot.stream_image_updated = false
-		texture_rect.texture.update(Lunabot.stream_image)
-"
-
 [node name="Control" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -322,8 +304,6 @@ text = "Stopped data goes here"
 [node name="Window" type="Window" parent="."]
 position = Vector2i(0, 36)
 size = Vector2i(720, 480)
-visible = false
-script = SubResource("GDScript_cj7ej")
 
 [node name="CameraFeed" parent="Window" instance=ExtResource("1_qoli6")]
 

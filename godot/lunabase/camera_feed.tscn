@@ -1,6 +1,24 @@
-[gd_scene load_steps=4 format=3 uid="uid://bteyw33qt0xtm"]
+[gd_scene load_steps=5 format=3 uid="uid://bteyw33qt0xtm"]
 
 [ext_resource type="PackedScene" uid="uid://caooqbmods0y5" path="res://camera_overlay.tscn" id="1_u601m"]
+
+[sub_resource type="GDScript" id="GDScript_yv71w"]
+script/source = "extends Control
+
+
+@onready var texture_rect: TextureRect = $TextureRect
+
+
+func _ready() -> void:
+	get_parent().visible = LunabotConn.CAMERA_STREAMING
+	texture_rect.texture = ImageTexture.create_from_image(Lunabot.stream_image)
+
+
+func _process(_delta: float) -> void:
+	if Lunabot.stream_image_updated:
+		Lunabot.stream_image_updated = false
+		texture_rect.texture.update(Lunabot.stream_image)
+"
 
 [sub_resource type="LabelSettings" id="LabelSettings_nppr3"]
 font_size = 64
@@ -25,6 +43,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+script = SubResource("GDScript_yv71w")
 
 [node name="TextureRect" type="TextureRect" parent="."]
 layout_mode = 1
