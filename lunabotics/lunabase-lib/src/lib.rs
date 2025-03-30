@@ -15,7 +15,7 @@ use cakap2::{
     packet::{Action, ReliableIndex},
     Event, PeerStateMachine, RecommendedAction,
 };
-use common::{FromLunabase, FromLunabot, LunabotStage, Steering};
+use common::{FromLunabase, FromLunabot, LunabotStage, Steering, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
 use godot::{
     classes::{image::Format, Engine, Image, Os},
     prelude::*,
@@ -471,12 +471,22 @@ impl LunabotConn {
     #[signal]
     fn entered_dump(&self);
 
-    #[cfg(feature = "production")]
     #[constant]
-    const CAMERA_STREAMING: bool = true;
-    #[cfg(not(feature = "production"))]
+    const CAMERA_STREAMING: bool = cfg!(feature = "production");
     #[constant]
-    const CAMERA_STREAMING: bool = false;
+    const STREAM_WIDTH: i32 = STREAM_WIDTH as i32;
+    #[constant]
+    const STREAM_HEIGHT: i32 = STREAM_HEIGHT as i32;
+    #[constant]
+    const GRID_WIDTH: i32 = THALASSIC_WIDTH as i32;
+    #[constant]
+    const GRID_HEIGHT: i32 = THALASSIC_HEIGHT as i32;
+
+    /// There is a bug that prevents const f64 from being used in the godot_api macro
+    #[func]
+    fn get_cell_size() -> f64 {
+        THALASSIC_CELL_SIZE as f64
+    }
 
     #[func]
     fn is_stream_corrupted(&self) -> bool {

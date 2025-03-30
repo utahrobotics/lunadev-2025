@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3 uid="uid://bteyw33qt0xtm"]
+[gd_scene load_steps=11 format=3 uid="uid://bteyw33qt0xtm"]
 
 [ext_resource type="PackedScene" uid="uid://caooqbmods0y5" path="res://camera_overlay.tscn" id="1_u601m"]
 
@@ -34,6 +34,47 @@ func _process(_delta: float) -> void:
 	else:
 		text = \"Stream OK\"
 		modulate = Color.GREEN
+"
+
+[sub_resource type="GDScript" id="GDScript_5bhfl"]
+script/source = "extends AspectRatioContainer
+
+
+func _ready() -> void:
+	ratio = Lunabot.STREAM_WIDTH as float / Lunabot.STREAM_HEIGHT
+"
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wx6gq"]
+shading_mode = 0
+albedo_color = Color(0.6, 1, 1, 1)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_jrlfw"]
+material = SubResource("StandardMaterial3D_wx6gq")
+size = Vector2(0.02, 0.02)
+
+[sub_resource type="MultiMesh" id="MultiMesh_o4dpg"]
+transform_format = 1
+use_colors = true
+mesh = SubResource("PlaneMesh_jrlfw")
+
+[sub_resource type="GDScript" id="GDScript_n8i4y"]
+script/source = "extends MultiMeshInstance3D
+
+
+func _ready() -> void:
+	multimesh.instance_count = Lunabot.GRID_WIDTH * Lunabot.GRID_HEIGHT
+	for x in range(Lunabot.GRID_WIDTH):
+		for z in range(Lunabot.GRID_HEIGHT):
+			var point := Vector3(x, 0, z) * LunabotConn.get_cell_size()
+			multimesh.set_instance_transform(x + z * Lunabot.GRID_WIDTH, Transform3D(Basis(), point))
+"
+
+[sub_resource type="GDScript" id="GDScript_10njw"]
+script/source = "extends CheckButton
+
+
+func _on_toggled(toggled_on: bool) -> void:
+	$\"../../MultiMeshInstance3D\".visible = toggled_on
 "
 
 [node name="CameraFeed" type="Control"]
@@ -82,9 +123,12 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 ratio = 1.66
+script = SubResource("GDScript_5bhfl")
 
 [node name="GridContainer" type="GridContainer" parent="AspectRatioContainer"]
 layout_mode = 2
+theme_override_constants/h_separation = 0
+theme_override_constants/v_separation = 0
 columns = 3
 
 [node name="CameraOverlay" parent="AspectRatioContainer/GridContainer" instance=ExtResource("1_u601m")]
@@ -104,3 +148,27 @@ layout_mode = 2
 
 [node name="CameraOverlay6" parent="AspectRatioContainer/GridContainer" instance=ExtResource("1_u601m")]
 layout_mode = 2
+
+[node name="MultiMeshInstance3D" type="MultiMeshInstance3D" parent="."]
+multimesh = SubResource("MultiMesh_o4dpg")
+script = SubResource("GDScript_n8i4y")
+
+[node name="HBoxContainer" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -40.0
+offset_right = 44.0
+grow_vertical = 0
+
+[node name="Label" type="Label" parent="HBoxContainer"]
+layout_mode = 2
+text = "Terrain Viz"
+
+[node name="CheckButton" type="CheckButton" parent="HBoxContainer"]
+layout_mode = 2
+button_pressed = true
+script = SubResource("GDScript_10njw")
+
+[connection signal="toggled" from="HBoxContainer/CheckButton" to="HBoxContainer/CheckButton" method="_on_toggled"]
