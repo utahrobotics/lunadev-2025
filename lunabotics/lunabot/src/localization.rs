@@ -184,10 +184,11 @@ impl Localizer {
             }) = self.localizer_ref.take_imu_readings()
             {
                 let corrections = imu_calib::CalibrationParameters::new(
-                    Vector3::new(0.0081738, 0.000611, -0.504),
-                    Vector3::new(0.0011325, 0.004970, 0.0055726),
-                    Vector3::new(1.00205, 0.99870, 1.12487),
-                    Vector3::new(1., 1., 1.)
+                    Vector3::new(0.0, 0.0, 0.0),
+                    Vector3::new(0.00, 0.00, 0.00),
+                    Vector3::new(1., 1., 1.),
+                    Vector3::new(1., 1., 1.),
+                    false
                 );
 
                 if tmp_angular_velocity.x.is_finite()
@@ -208,15 +209,14 @@ impl Localizer {
                 if last_calibrated.elapsed().as_secs() > 40 {
                     println!("Calibrating, this may take a while...");
                     println!("Number of Samples: {}", self.calibrator.sample_count());
-                    match self.calibrator.calibrate() {
+                    // calibrate without trying to find scaling biases 
+                    match self.calibrator.calibrate(false) {
                         Ok(correction) => {
                             println!("corrections: {:?}", correction);
-                            last_corrections = Some(correction);
                             std::process::exit(0);
                         }
                         Err(e) => {
                             tracing::error!("Failed to calculate errors: {e}");
-                            last_corrections = None;
                         }
                     };
                     last_calibrated = std::time::Instant::now();

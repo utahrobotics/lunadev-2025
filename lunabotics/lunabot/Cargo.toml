@@ -41,6 +41,7 @@ mio = { version = "1", optional = true }
 file-lock = { version = "2.1.11", optional = true }
 rerun = { version = "0.22.0", optional = true, features = ["nasm", "sdk"], default-features = false }
 imu-fusion = { version = "0.2.5", optional = true }
+imu-calib ={ workspace = true, optional = true}
 
 # fix for https://github.com/apache/arrow-rs/issues/7196
 chrono = "= 0.4.39"
@@ -63,5 +64,9 @@ production = [
     "imu-fusion",
     "rerun",
     "opus",
-    "rodio"
+    "rodio",
+    "imu-calib"    
+]
+calibrate = [
+    "production",
 ]

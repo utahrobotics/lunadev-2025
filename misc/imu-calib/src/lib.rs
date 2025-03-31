@@ -13,26 +13,29 @@ pub struct CalibrationParameters {
     pub gyroscope_bias: Vector3<f64>,
     pub accelerometer_scale: Vector3<f64>,
     pub gyroscope_scale: Vector3<f64>,
+    pub with_scaling: bool,
 }
 
 impl CalibrationParameters {
     /// Constructs a new set of calibration parameters from known biases.
-    pub fn new(accelerometer_bias: Vector3<f64>, gyroscope_bias: Vector3<f64>, accelerometer_scale: Vector3<f64>, gyroscope_scale: Vector3<f64>) -> Self {
+    pub fn new(accelerometer_bias: Vector3<f64>, gyroscope_bias: Vector3<f64>, accelerometer_scale: Vector3<f64>, gyroscope_scale: Vector3<f64>, with_scaling: bool) -> Self {
         Self {
             accelerometer_bias,
             gyroscope_bias,
             accelerometer_scale,
             gyroscope_scale,
+            with_scaling,
         }
     }
 
     /// Creates parameters with zero bias and unit scale.
-    pub fn identity() -> Self {
+    pub fn identity(with_scaling: bool) -> Self {
         CalibrationParameters {
             accelerometer_bias: Vector3::zeros(),
             gyroscope_bias: Vector3::zeros(),
             accelerometer_scale: Vector3::new(1.0, 1.0, 1.0),
             gyroscope_scale: Vector3::new(1.0, 1.0, 1.0),
+            with_scaling
         }
     }
 
@@ -47,7 +50,7 @@ impl CalibrationParameters {
     }
 
     /// Creates parameters from a flat vector provided by the optimizer.
-    pub fn from_slice(params: &[f64]) -> Result<Self, &'static str> {
+    pub fn from_slice(params: &[f64], with_scaling: bool) -> Result<Self, &'static str> {
         if params.len() != NUM_PARAMS {
             return Err("Incorrect number of parameters in slice");
         }
@@ -56,12 +59,16 @@ impl CalibrationParameters {
             gyroscope_bias: Vector3::new(params[3], params[4], params[5]),
             accelerometer_scale: Vector3::new(params[6], params[7], params[8]),
             gyroscope_scale: Vector3::new(params[9], params[10], params[11]),
+            with_scaling
         })
     }
 
     /// Applies correction to an accelerometer reading.
     pub fn correct_accelerometer(&self, raw: &Vector3<f64>) -> Vector3<f64> {
         let bias_corrected = raw - self.accelerometer_bias;
+        if !self.with_scaling {
+            return bias_corrected;
+        }
         Vector3::new(
             bias_corrected.x / self.accelerometer_scale.x,
             bias_corrected.y / self.accelerometer_scale.y,
@@ -72,6 +79,9 @@ impl CalibrationParameters {
     /// Applies correction to an gyroscope reading.
     pub fn correct_gyroscope(&self, raw: &Vector3<f64>) -> Vector3<f64> {
         let bias_corrected = raw - self.gyroscope_bias;
+        if !self.with_scaling {
+            return bias_corrected;
+        }
         Vector3::new(
             bias_corrected.x / self.gyroscope_scale.x,
             bias_corrected.y / self.gyroscope_scale.y,
@@ -148,7 +158,7 @@ impl Calibrator {
     }     
 
     /// Performs the calibration using the collected static samples
-    pub fn calibrate(&mut self) -> Result<CalibrationParameters, String> {
+    pub fn calibrate(&mut self, with_scaling: bool) -> Result<CalibrationParameters, String> {
         if self.static_readings.len() < 6 {
             return Err("Insufficient static samples for calibration (need at least 6)".to_string());
         }
@@ -157,6 +167,7 @@ impl Calibrator {
 
         let cost_function = ImuCostFunction {
             readings: &self.static_readings,
+            with_scaling
         };
 
         let cost_function_nd = NumericalDifferentiation::new(cost_function);
@@ -167,10 +178,10 @@ impl Calibrator {
             .gradient_tolerance(1e-5)
             .max_iterations(Some(10_000));
 
-        let result = minimizer.minimize(&cost_function_nd, CalibrationParameters::identity().to_vec());
+        let result = minimizer.minimize(&cost_function_nd, CalibrationParameters::identity(with_scaling).to_vec());
 
         let best_params_vec = result.position();
-        CalibrationParameters::from_slice(best_params_vec)
+        CalibrationParameters::from_slice(best_params_vec, with_scaling)
             .map_err(|e| format!("Failed to parse final parameters: {}", e))
 
     }
@@ -179,13 +190,14 @@ impl Calibrator {
 
 struct ImuCostFunction<'a> {
     readings: &'a [(Vector3<f64>, Vector3<f64>)],
+    with_scaling: bool,
 }
 
 impl<'a> Function for ImuCostFunction<'a> {
     fn value(&self, params_vec: &[f64]) -> f64 {
         let ideal_accel = Vector3::new(0.,-G_ACCEL,0.);
         let ideal_gyro = Vector3::new(0.,0.,0.);
-        let params = match CalibrationParameters::from_slice(params_vec) {
+        let params = match CalibrationParameters::from_slice(params_vec, self.with_scaling) {
             Ok(p) => p,
             Err(_) => return f64::INFINITY,
         };
@@ -223,8 +235,9 @@ mod tests {
     use super::*;
     use nalgebra::*;
     use rand::Rng;
+
     #[test]
-    fn test_calib_with_noise() {
+    fn test_calib_with_noise_and_scaling() {
         let mut calibrator = Calibrator::new();
         let accel_bias = Vector3::new(0.01, 0.1, 0.2);
         let gyro_bias = Vector3::new(0.,0.2,0.01);
@@ -257,7 +270,48 @@ mod tests {
         }
         println!("finished adding static samples");
 
-        let result = calibrator.calibrate().unwrap();
+        let result = calibrator.calibrate(true).unwrap();
+        let corrected_accel = result.correct_accelerometer(&((scaled_accel)+accel_bias));
+        let corrected_gyro = result.correct_gyroscope(&((scaled_gyro)+gyro_bias));
+        println!("actual accel: {actual_accel}, corrected accel: {corrected_accel}");
+        println!("actual gyro: {actual_gyro}, corrected gyro: {corrected_gyro}");
+    }
+
+    #[test]
+    fn test_calib_with_noise_no_scaling() {
+        let mut calibrator = Calibrator::new();
+        let accel_bias = Vector3::new(0.01, 0.1, 0.2);
+        let gyro_bias = Vector3::new(0.,0.2,0.01);
+
+        let accel_scale_bias = Vector3::new(1., 1., 1.);
+        let gyro_scale_bias = Vector3::new(1., 1., 1.);
+
+
+        let mut rng = rand::rng();
+        let actual_accel = Vector3::new(0.,-G_ACCEL, 0.);
+        let actual_gyro = Vector3::new(0.,0., 0.);
+        let scaled_accel = actual_accel.component_mul(&accel_scale_bias);
+        let scaled_gyro = actual_gyro.component_mul(&gyro_scale_bias);
+        for _ in 0..2316 {
+            let xrand_accel =rng.random_range(-0.4..=0.4);
+            let yrand_accel =rng.random_range(-0.4..=0.4);
+            let zrand_accel =rng.random_range(-0.4..=0.4);
+            let accel_noise = Vector3::new(xrand_accel, yrand_accel, zrand_accel);
+            
+            let xrand_gyro = rng.random_range(-0.4..=0.4);
+            let yrand_gyro =rng.random_range(-0.4..=0.4);
+            let zrand_gyro = rng.random_range(-0.4..=0.4);
+            let gyro_noise = Vector3::new(xrand_gyro, yrand_gyro, zrand_gyro);
+
+            let noisy_biased_accel = (accel_noise + scaled_accel + accel_bias);
+
+            let noisy_biased_gyro = (gyro_noise + scaled_gyro + gyro_bias);
+
+            calibrator.add_static_sample(noisy_biased_accel, noisy_biased_gyro);
+        }
+        println!("finished adding static samples");
+
+        let result = calibrator.calibrate(false).unwrap();
         let corrected_accel = result.correct_accelerometer(&((scaled_accel)+accel_bias));
         let corrected_gyro = result.correct_gyroscope(&((scaled_gyro)+gyro_bias));
         println!("actual accel: {actual_accel}, corrected accel: {corrected_accel}");
