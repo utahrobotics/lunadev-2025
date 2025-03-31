@@ -14,7 +14,7 @@ members = [
     "misc/thalassic",
     "misc/lumpur",
     "misc/simple-motion",
-    "misc/vesc-translator",
+    "misc/vesc-translator", "misc/imu-calib",
 ]
 resolver = "2"
 exclude = ["output/", "embedded/", "lunaserver-web/"]
