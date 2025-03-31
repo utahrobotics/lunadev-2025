@@ -62,6 +62,7 @@ glidesort = "0.1.2"
 opus = "0.3.0"
 
 tasker = { path = "misc/tasker" }
+imu-calib = {path = "misc/imu-calib"}
 lumpur = { path = "misc/lumpur" }
 cakap2 = { path = "misc/cakap2" }
 lunabase-lib = { path = "lunabotics/lunabase-lib" }

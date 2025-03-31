@@ -82,7 +82,10 @@ pub struct Localizer {
     localizer_ref: LocalizerRef,
 
     #[cfg(feature = "production")]
-    fusion: Fusion
+    fusion: Fusion,
+
+    #[cfg(feature = "calibrate")]
+    calibrator: imu_calib::Calibrator
 }
 
 impl Localizer {
@@ -118,7 +121,9 @@ impl Localizer {
                     ..Default::default()
                 }),
             },
-            fusion
+            fusion,
+            #[cfg(feature = "calibrate")]
+            calibrator: imu_calib::Calibrator::new()
         }
     }
 
@@ -131,7 +136,12 @@ impl Localizer {
         let spin_sleeper = SpinSleeper::default();
         #[cfg(not(feature = "production"))]
         let mut bitcode_buffer = bitcode::Buffer::new();
+
         let start_time = std::time::Instant::now();
+
+        #[cfg(feature = "calibrate")]
+        let mut last_calibrated = std::time::Instant::now();
+
         loop {
             spin_sleeper.sleep(Duration::from_secs_f64(LOCALIZATION_DELTA));
             let mut isometry = self.root_node.get_global_isometry();
@@ -173,21 +183,46 @@ impl Localizer {
                 angular_velocity: tmp_angular_velocity,
             }) = self.localizer_ref.take_imu_readings()
             {
-                let acceleration_fusion = nalgebra_to_fusion(convert_imu_to_ned(acceleration.cast()));
-                let angular_velocity_fusion = nalgebra_to_fusion(convert_imu_to_ned(tmp_angular_velocity.cast()));
+                let corrections = imu_calib::CalibrationParameters::new(
+                    Vector3::new(0.0081738, 0.000611, -0.504),
+                    Vector3::new(0.0011325, 0.004970, 0.0055726),
+                    Vector3::new(1.00205, 0.99870, 1.12487),
+                    Vector3::new(1., 1., 1.)
+                );
 
-                self.fusion.update_no_mag(angular_velocity_fusion, acceleration_fusion, start_time.elapsed().as_secs_f32());
-
-                let gravity = convert_ned_to_imu(fusion_to_nalgebra(self.fusion.ahrs.calculate_half_gravity() * 2.) * (9.8));
-                let linear_acc = convert_ned_to_imu(fusion_to_nalgebra(self.fusion.ahrs.linear_acc()));
-                let acceleration: Vector3<f64> = linear_acc.cast();
-                let tmp_angular_velocity = convert_ned_to_imu(fusion_to_nalgebra(self.fusion.ahrs.linear_acc()));
                 if tmp_angular_velocity.x.is_finite()
                     && tmp_angular_velocity.y.is_finite()
                     && tmp_angular_velocity.z.is_finite()
                 {
-                    angular_velocity = Some(tmp_angular_velocity);
+                    angular_velocity = Some(corrections.correct_gyroscope(&tmp_angular_velocity));
                 }
+
+                let acceleration = corrections.correct_accelerometer(&acceleration);
+
+                #[cfg(feature="calibrate")]
+                if let Some(angular_velocity) = angular_velocity {
+                    self.calibrator.add_static_sample(acceleration, angular_velocity);
+                }
+
+                #[cfg(feature="calibrate")]
+                if last_calibrated.elapsed().as_secs() > 40 {
+                    println!("Calibrating, this may take a while...");
+                    println!("Number of Samples: {}", self.calibrator.sample_count());
+                    match self.calibrator.calibrate() {
+                        Ok(correction) => {
+                            println!("corrections: {:?}", correction);
+                            last_corrections = Some(correction);
+                            std::process::exit(0);
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to calculate errors: {e}");
+                            last_corrections = None;
+                        }
+                    };
+                    last_calibrated = std::time::Instant::now();
+                    self.calibrator.reset();
+                }
+
                 let acceleration = UnitVector3::new_normalize(isometry * acceleration);
                 if acceleration.x.is_finite()
                     && acceleration.y.is_finite()

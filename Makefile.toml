@@ -20,6 +20,12 @@ dependencies = [
     "build_lunasim"
 ]
 
+[tasks.calibrate]
+workspace = false
+command = "cargo"
+args = ["run", "--features=production,calibrate", "-p", "lunabot", "--profile", "optdebug", "--", "main"]
+
+
 [tasks.sim]
 workspace = false
 command = "cargo"
