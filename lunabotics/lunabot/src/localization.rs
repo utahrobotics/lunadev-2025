@@ -81,6 +81,8 @@ pub struct Localizer {
     #[cfg(feature = "production")]
     packet_builder: PacketBuilder,
     localizer_ref: LocalizerRef,
+    #[cfg(feature = "production")]
+    pub isometry_sync_delta: f64,
 }
 
 impl Localizer {
@@ -111,7 +113,8 @@ impl Localizer {
                     ..Default::default()
                 }),
             },
-            packet_builder
+            packet_builder,
+            isometry_sync_delta: 0.1
         }
     }
 
@@ -123,6 +126,8 @@ impl Localizer {
         let spin_sleeper = SpinSleeper::default();
         #[cfg(not(feature = "production"))]
         let mut bitcode_buffer = bitcode::Buffer::new();
+        #[cfg(feature = "production")]
+        let mut isometry_sync_timer = self.isometry_sync_delta;
 
         loop {
             spin_sleeper.sleep(Duration::from_secs_f64(LOCALIZATION_DELTA));
@@ -213,12 +218,16 @@ impl Localizer {
             self.root_node.set_isometry(isometry);
             #[cfg(feature = "production")]
             {
-                let data = bitcode::encode(&FromLunabot::RobotIsometry {
-                    origin: isometry.translation.vector.cast().data.0[0],
-                    quat: isometry.rotation.as_vector().cast().data.0[0],
-                });
-                let packet = self.packet_builder.new_unreliable(PacketBody { data }).unwrap();
-                self.packet_builder.send_packet(cakap2::packet::Action::SendUnreliable(packet));
+                isometry_sync_timer -= LOCALIZATION_DELTA;
+                if isometry_sync_timer <= 0.0 {
+                    isometry_sync_timer = self.isometry_sync_delta;
+                    let data = bitcode::encode(&FromLunabot::RobotIsometry {
+                        origin: isometry.translation.vector.cast().data.0[0],
+                        quat: isometry.rotation.as_vector().cast().data.0[0],
+                    });
+                    let packet = self.packet_builder.new_unreliable(PacketBody { data }).unwrap();
+                    self.packet_builder.send_packet(cakap2::packet::Action::SendUnreliable(packet));
+                }
 
                 crate::apps::RECORDER.get().map(|recorder| {
                     if let Err(e) = recorder.recorder.log(
