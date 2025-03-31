@@ -49,7 +49,7 @@ script/source = "extends CheckButton
 
 
 func _on_toggled(toggled_on: bool) -> void:
-	$\"../../Arena/MultiMeshInstance3D\".visible = toggled_on
+	$\"../../Arena/Terrain\".visible = toggled_on
 "
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wx6gq"]

@@ -2,6 +2,19 @@
 
 [sub_resource type="GDScript" id="GDScript_saefo"]
 script/source = "extends SubViewportContainer
+
+
+@onready var camera: Camera3D = $SubViewport/Camera3D
+
+
+func _ready() -> void:
+	if !Lunabot.does_camera_exist(get_index()):
+		hide()
+		set_process(false)
+
+
+func _process(_delta: float) -> void:
+	camera.transform = Lunabot.get_camera_transform(get_index())
 "
 
 [node name="CameraOverlay" type="SubViewportContainer"]
@@ -17,4 +30,4 @@ size = Vector2i(2, 2)
 render_target_update_mode = 4
 
 [node name="Camera3D" type="Camera3D" parent="SubViewport"]
-transform = Transform3D(-0.838671, 0, -0.544639, 0, 1, 0, 0.544639, 0, -0.838671, 0, 0.466379, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)

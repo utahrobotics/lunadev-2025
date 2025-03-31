@@ -14,10 +14,14 @@ bitcode = { workspace = true }
 tasker.workspace = true
 crossbeam.workspace = true
 
+serde = { workspace = true, optional = true }
 openh264 = { workspace = true, optional = true }
 opus = { workspace = true, optional = true }
-# opus-static-sys = "1.0.1"
+fxhash = { workspace = true, optional = true }
+toml = { workspace = true, optional = true }
+simple-motion = { workspace = true, optional = true }
+nalgebra = { workspace = true, optional = true }
 
 [features]
 audio = ["opus"]
-production = ["openh264", "audio"]
+production = ["openh264", "audio", "serde", "fxhash", "toml", "simple-motion", "nalgebra"]

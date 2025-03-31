@@ -40,13 +40,6 @@ lumpur::define_configuration! {
             #[serde(default)]
             rerun_viz: apps::RerunViz
         },
-        // Dataviz {
-        //     lunabase_address: IpAddr,
-        //     max_pong_delay_ms: Option<u64>,
-        //     #[serde(default)]
-        //     depth_cameras: fxhash::FxHashMap<String, apps::DepthCameraInfo>,
-        //     robot_layout: Option<String>
-        // }
     }
 }
 #[cfg(not(feature = "production"))]
