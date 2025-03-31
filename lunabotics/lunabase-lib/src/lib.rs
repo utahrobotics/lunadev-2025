@@ -12,8 +12,9 @@ use cakap2::{
     packet::{Action, ReliableIndex},
     Event, PeerStateMachine, RecommendedAction,
 };
+use crossbeam::atomic::AtomicCell;
 use nalgebra::{Isometry3, Quaternion, Vector3, UnitQuaternion};
-use common::{FromLunabase, FromLunabot, LunabotStage, Steering, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
+use common::{lunabase_sync::ThalassicData, FromLunabase, FromLunabot, LunabotStage, Steering, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
 use godot::{
     classes::{image::Format, Engine, Image, Os},
     prelude::*,
@@ -102,6 +103,8 @@ struct LunabotConn {
     audio_streaming: Option<audio::AudioStreaming>,
     #[cfg(feature = "production")]
     app_config: Option<config::AppConfig>,
+    #[cfg(feature = "production")]
+    thalassic_data: &'static AtomicCell<Option<ThalassicData>>,
 }
 
 thread_local! {
@@ -113,6 +116,8 @@ thread_local! {
 #[godot_api]
 impl INode for LunabotConn {
     fn init(base: Base<Node>) -> Self {
+        let thalassic_data: &_ = Box::leak(Box::new(AtomicCell::new(None)));
+
         let stream_image = Image::create_empty(
             STREAM_WIDTH as i32,
             STREAM_HEIGHT as i32,
@@ -131,6 +136,8 @@ impl INode for LunabotConn {
                 last_received_duration: 0.0,
                 #[cfg(feature = "production")]
                 app_config: None,
+                #[cfg(feature = "production")]
+                thalassic_data,
             };
         }
 
@@ -151,8 +158,8 @@ impl INode for LunabotConn {
 
         if let Some(lunabot_address) = lunabot_address {
             common::lunabase_sync::lunabase_task(lunabot_address,
-                |_thalassic| {
-                    
+                |thalassic| {
+                    thalassic_data.store(Some(thalassic.clone()));
                 },
                 |_path| {
 
@@ -218,6 +225,8 @@ impl INode for LunabotConn {
             last_received_duration: 0.0,
             #[cfg(feature = "production")]
             app_config: config::load_config(),
+            #[cfg(feature = "production")]
+            thalassic_data,
         }
     }
 
@@ -420,6 +429,12 @@ impl INode for LunabotConn {
             audio_streaming.poll(self.base_mut(), delta);
             self.audio_streaming = Some(audio_streaming);
         }
+
+        #[cfg(feature = "production")]
+        if let Some(thalassic) = self.thalassic_data.take() {
+            let heightmap: PackedFloat32Array = thalassic.heightmap.into_iter().map(|x| x as f32).collect();
+            self.base_mut().emit_signal("heightmap_received", &[heightmap.to_variant()]);
+        }
     }
 }
 
@@ -498,6 +513,8 @@ impl LunabotConn {
     fn entered_dig(&self);
     #[signal]
     fn entered_dump(&self);
+    #[signal]
+    fn heightmap_received(&self, heightmap: PackedFloat32Array);
 
     #[constant]
     const CAMERA_STREAMING: bool = cfg!(feature = "production");

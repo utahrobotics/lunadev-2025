@@ -75,6 +75,15 @@ func _ready() -> void:
 		for z in range(Lunabot.GRID_HEIGHT):
 			var point := Vector3(x, 0, z) * LunabotConn.get_cell_size()
 			multimesh.set_instance_transform(x + z * Lunabot.GRID_WIDTH, Transform3D(Basis(), point))
+	
+	Lunabot.heightmap_received.connect(
+		func(heightmap: PackedFloat32Array):
+			for x in range(Lunabot.GRID_WIDTH):
+				for z in range(Lunabot.GRID_HEIGHT):
+					var i := x + z * Lunabot.GRID_WIDTH
+					var point := Vector3(x, heightmap[i], z) * LunabotConn.get_cell_size()
+					multimesh.set_instance_transform(i, Transform3D(Basis(), point))
+	)
 "
 
 [node name="CameraFeed" type="Control"]
