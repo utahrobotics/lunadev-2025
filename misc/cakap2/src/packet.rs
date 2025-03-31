@@ -81,9 +81,7 @@ pub struct PacketBuilder {
 impl PacketBuilder {
     /// Sends the given bytes unreliably.
     ///
-    /// The last 8 bytes of the given message will be overwritten with zeroes, so leave space for that.
-    /// If the given bytes are shorter than 9, the bytes will be returned. This means packets cannot
-    /// have a zero-sized payload.
+    /// Packets cannot have a zero-sized payload.
     pub fn new_unreliable(&self, body: PacketBody) -> Result<UnreliablePacket, BuildPacketError> {
         if body.data.is_empty() {
             return Err(BuildPacketError::EmptyBuffer { buffer: body.data });
@@ -102,9 +100,7 @@ impl PacketBuilder {
 
     /// Sends the given bytes reliably.
     ///
-    /// The last 8 bytes of the given message will be overwritten with a reliable index, so leave space for that.
-    /// If the given bytes are shorter than 9, the bytes will be returned. This means packets cannot
-    /// have a zero-sized payload.
+    /// Packets cannot have a zero-sized payload.
     ///
     /// # Safety
     /// Strictly speaking, unexpected behavior can occur if this method is called 2^63 - 1 times per struct due to overflow.

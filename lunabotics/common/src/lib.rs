@@ -5,7 +5,7 @@ use std::io::Write;
 use bitcode::{Decode, Encode};
 use nalgebra::{distance, Point2, Point3};
 
-/// Taken from https://opus-codec.org/docs/opus_api-1.5/group__opus__encoder.html#gad2d6bf6a9ffb6674879d7605ed073e25
+// Taken from https://opus-codec.org/docs/opus_api-1.5/group__opus__encoder.html#gad2d6bf6a9ffb6674879d7605ed073e25
 pub const AUDIO_FRAME_SIZE: u32 = 960;
 pub const AUDIO_SAMPLE_RATE: u32 = 48000;
 pub const THALASSIC_CELL_SIZE: f32 = 0.03125;
@@ -13,8 +13,6 @@ pub const THALASSIC_WIDTH: u32 = 128;
 pub const THALASSIC_HEIGHT: u32 = 256;
 pub const THALASSIC_CELL_COUNT: u32 = THALASSIC_WIDTH * THALASSIC_HEIGHT;
 
-// #[cfg(feature = "godot_urdf")]
-// pub mod godot_urdf;
 pub mod lunasim;
 pub mod ports;
 #[cfg(feature = "lunabase_sync")]
@@ -58,8 +56,12 @@ impl FromLunabase {
     }
 }
 
-#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+#[derive(Debug, Encode, Decode, Clone, Copy)]
 pub enum FromLunabot {
+    RobotIsometry {
+        origin: [f32; 3],
+        quat: [f32; 4],
+    },
     Ping(LunabotStage),
 }
 

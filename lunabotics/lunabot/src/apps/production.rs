@@ -153,7 +153,16 @@ impl LunabotApp {
         .expect("Failed to parse robot chain");
         let robot_chain = ChainBuilder::from(robot_chain).finish_static();
 
-        let localizer = Localizer::new(robot_chain.clone(), self.imus.len());
+        let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
+
+        let (packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
+            self.lunabase_address
+                .map(|ip| SocketAddr::new(ip, common::ports::TELEOP)),
+            lunabot_stage.clone(),
+            self.max_pong_delay_ms,
+        );
+
+        let localizer = Localizer::new(robot_chain.clone(), self.imus.len(), packet_builder);
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
 
@@ -237,15 +246,6 @@ impl LunabotApp {
         );
         let world_to_grid = grid_to_world.try_inverse().unwrap();
         let mut pathfinder = DefaultPathfinder::new(world_to_grid, grid_to_world);
-
-        let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
-
-        let (_packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
-            self.lunabase_address
-                .map(|ip| SocketAddr::new(ip, common::ports::TELEOP)),
-            lunabot_stage.clone(),
-            self.max_pong_delay_ms,
-        );
 
         enumerate_imus(
             &localizer_ref,
