@@ -81,7 +81,8 @@ func _ready() -> void:
 			for x in range(Lunabot.GRID_WIDTH):
 				for z in range(Lunabot.GRID_HEIGHT):
 					var i := x + z * Lunabot.GRID_WIDTH
-					var point := Vector3(x, heightmap[i], z) * LunabotConn.get_cell_size()
+					var point := Vector3(x, 0.0, z) * LunabotConn.get_cell_size()
+					point.z = heightmap[i]
 					multimesh.set_instance_transform(i, Transform3D(Basis(), point))
 	)
 "

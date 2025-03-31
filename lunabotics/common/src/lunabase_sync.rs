@@ -45,7 +45,7 @@ const BROTLI_BUFFER_SIZE: usize = 4096;
 pub fn lunabot_task(request_data: impl Fn(&mut Vec<Vector3<f16>>, &mut ThalassicData) -> (bool, bool) + Sync + 'static) {
     let request_data: &_ = Box::leak(Box::new(request_data));
     std::thread::spawn(move || {
-        let listener = match TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), crate::ports::LUNABASE_SYNC_DATA)) {
+        let listener = match TcpListener::bind(SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), crate::ports::LUNABASE_SYNC_DATA)) {
             Ok(listener) => listener,
             Err(e) => {
                 tracing::error!("Failed to bind to port {}: {}", crate::ports::LUNABASE_SYNC_DATA, e);

@@ -160,6 +160,7 @@ impl INode for LunabotConn {
             common::lunabase_sync::lunabase_task(lunabot_address,
                 |thalassic| {
                     thalassic_data.store(Some(thalassic.clone()));
+                    // godot_print!("Thalassic data received {:?}", thalassic.heightmap.iter().filter(|&&h| h as f32 != 0.0).count());
                 },
                 |_path| {
 
