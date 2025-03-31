@@ -9,7 +9,7 @@ script/source = "extends SubViewportContainer
 
 func _ready() -> void:
 	if !Lunabot.does_camera_exist(get_index()):
-		hide()
+		modulate.a = 0
 		set_process(false)
 
 
