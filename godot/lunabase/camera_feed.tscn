@@ -168,6 +168,7 @@ text = "Terrain Viz"
 
 [node name="CheckButton" type="CheckButton" parent="HBoxContainer"]
 layout_mode = 2
+focus_mode = 0
 button_pressed = true
 script = SubResource("GDScript_10njw")
 
