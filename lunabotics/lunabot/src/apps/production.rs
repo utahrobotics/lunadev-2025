@@ -299,8 +299,11 @@ impl LunabotApp {
                     motor_ref.set_speed(left as f32, right as f32);
                 }
                 Action::CalculatePath { from, to, mut into } => {
-                    pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into);
-                    inputs.push(Input::PathCalculated(into));
+                    if pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into) {
+                        inputs.push(Input::PathCalculated(into));
+                    } else {
+                        inputs.push(Input::FailedToCalculatePath(into));
+                    }
                 }
                 Action::AvoidPoint(point) => {
                     pathfinder.avoid_point(point);

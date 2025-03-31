@@ -13,9 +13,9 @@ use nalgebra::Point3;
 use tracing::warn;
 
 use crate::{
-    blackboard::{self, LunabotBlackboard, PathfindingState},
+    blackboard::{LunabotBlackboard, PathfindingState},
     utils::WaitBehavior,
-    Action,
+    Action, PollWhen,
 };
 
 use super::{follow_path, Autonomy, AutonomyStage};
@@ -52,6 +52,7 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                                     blackboard.get_robot_isometry().translation.vector.into(),
                                     target
                                 );
+                                *blackboard.get_poll_when() = PollWhen::ReceivedLunabase;
                                 Status::Success
                             }),
                             // wait for path
@@ -62,15 +63,36 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                                             // failure breaks the loop
                                             Status::Failure
                                         } else {
+                                            *blackboard.get_poll_when() = PollWhen::ReceivedLunabase;
                                             Status::Running
                                         }
                                     }
-                                    PathfindingState::Pending => Status::Running,
-                                    PathfindingState::Failed => Status::Success,
+                                    PathfindingState::Pending => {
+                                        *blackboard.get_poll_when() = PollWhen::ReceivedLunabase;
+                                        Status::Running
+                                    }
+                                    PathfindingState::Failed => Status::Success
                                 }
                             }),
                         )),
                     )),
+                    // AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+                    //     match blackboard.pathfinding_state() {
+                    //         PathfindingState::Idle => {
+                    //             if blackboard.get_path().is_some() {
+                    //                 // failure breaks the loop
+                    //                 Status::Failure
+                    //             } else {
+                    //                 Status::Running
+                    //             }
+                    //         }
+                    //         PathfindingState::Pending => unreachable!(),
+                    //         PathfindingState::Failed => {
+                    //             warn!("Pathfinding failed");
+                    //             Status::Failure
+                    //         }
+                    //     }
+                    // }),
                     // follow path, then pause regardless of result
                     TryCatch::new(
                         Sequence::new((
@@ -79,7 +101,6 @@ pub(super) fn traverse() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                         )),
                         Invert(WaitBehavior::from(PAUSE_AFTER_MOVING_DURATION)), // return false if `follow_path` returned false
                     ),
-                    
                     // TODO temporary
                     // if path following is successful, toggle next pathfinding target
                     AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
