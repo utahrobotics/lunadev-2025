@@ -44,6 +44,14 @@ func _ready() -> void:
 	ratio = Lunabot.STREAM_WIDTH as float / Lunabot.STREAM_HEIGHT
 "
 
+[sub_resource type="GDScript" id="GDScript_10njw"]
+script/source = "extends CheckButton
+
+
+func _on_toggled(toggled_on: bool) -> void:
+	$\"../../Arena/MultiMeshInstance3D\".visible = toggled_on
+"
+
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wx6gq"]
 shading_mode = 0
 albedo_color = Color(0.6, 1, 1, 1)
@@ -67,14 +75,6 @@ func _ready() -> void:
 		for z in range(Lunabot.GRID_HEIGHT):
 			var point := Vector3(x, 0, z) * LunabotConn.get_cell_size()
 			multimesh.set_instance_transform(x + z * Lunabot.GRID_WIDTH, Transform3D(Basis(), point))
-"
-
-[sub_resource type="GDScript" id="GDScript_10njw"]
-script/source = "extends CheckButton
-
-
-func _on_toggled(toggled_on: bool) -> void:
-	$\"../../MultiMeshInstance3D\".visible = toggled_on
 "
 
 [node name="CameraFeed" type="Control"]
@@ -149,10 +149,6 @@ layout_mode = 2
 [node name="CameraOverlay6" parent="AspectRatioContainer/GridContainer" instance=ExtResource("1_u601m")]
 layout_mode = 2
 
-[node name="MultiMeshInstance3D" type="MultiMeshInstance3D" parent="."]
-multimesh = SubResource("MultiMesh_o4dpg")
-script = SubResource("GDScript_n8i4y")
-
 [node name="HBoxContainer" type="HBoxContainer" parent="."]
 layout_mode = 1
 anchors_preset = 2
@@ -171,5 +167,11 @@ layout_mode = 2
 focus_mode = 0
 button_pressed = true
 script = SubResource("GDScript_10njw")
+
+[node name="Arena" type="Node3D" parent="."]
+
+[node name="Terrain" type="MultiMeshInstance3D" parent="Arena"]
+multimesh = SubResource("MultiMesh_o4dpg")
+script = SubResource("GDScript_n8i4y")
 
 [connection signal="toggled" from="HBoxContainer/CheckButton" to="HBoxContainer/CheckButton" method="_on_toggled"]

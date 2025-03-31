@@ -65,8 +65,6 @@ impl PeerStateMachine {
     /// 32 bytes per unit. That is, if `max_received_set_size` is 100, then the received set will consume approximately up to 3200 bytes.
     /// Setting this value too low may cause this peer to acknowledge reliable packets that have already been received (thus handling
     /// them twice).
-    ///
-    /// The returned [`RecommendedAction`] is an action that should be taken immediately after creating the state machine.
     pub fn new(
         retransmission_duration: Duration,
         max_received_set_size: usize,

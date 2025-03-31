@@ -2,7 +2,6 @@
 
 use std::{
     io::{stdin, stdout, BufReader, Read, Write},
-    path::Path,
     sync::{mpsc::Sender, Arc},
 };
 

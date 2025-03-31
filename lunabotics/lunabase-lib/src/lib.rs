@@ -147,13 +147,16 @@ impl INode for LunabotConn {
 
         if let Some(lunabot_address) = lunabot_address {
             common::lunabase_sync::lunabase_task(lunabot_address,
-                |thalassic| {
-
+                |_thalassic| {
+                    
                 },
                 |_path| {
 
                 },
                 |e| {
+                    if e.kind() == std::io::ErrorKind::ConnectionRefused {
+                        return;
+                    }
                     godot_error!("Error in lunabase sync: {e}");
                 },
             );
@@ -232,6 +235,14 @@ impl INode for LunabotConn {
                 ($msg: ident) => {{
                     received = true;
                     match $msg {
+                        FromLunabot::RobotIsometry { origin: [x, y, z], quat: [i, j, k, w] } => {
+                            let transform = Transform3D {
+                                basis: Basis::from_quat(Quaternion { x: i, y: j, z: k, w }),
+                                origin: Vector3 { x, y, z },
+                            };
+                            self.base_mut().emit_signal("robot_transform", &[transform.to_variant()]);
+                            inner = self.inner.as_mut().unwrap();
+                        }
                         FromLunabot::Ping(stage) => {
                             match stage {
                                 LunabotStage::TeleOp => {
@@ -470,6 +481,8 @@ impl LunabotConn {
     fn entered_dig(&self);
     #[signal]
     fn entered_dump(&self);
+    #[signal]
+    fn robot_transform(&self, transform: Transform3D);
 
     #[constant]
     const CAMERA_STREAMING: bool = cfg!(feature = "production");

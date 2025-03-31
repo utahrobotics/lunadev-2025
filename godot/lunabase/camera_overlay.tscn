@@ -1,9 +1,14 @@
-[gd_scene format=3 uid="uid://caooqbmods0y5"]
+[gd_scene load_steps=2 format=3 uid="uid://caooqbmods0y5"]
+
+[sub_resource type="GDScript" id="GDScript_saefo"]
+script/source = "extends SubViewportContainer
+"
 
 [node name="CameraOverlay" type="SubViewportContainer"]
 size_flags_horizontal = 3
 size_flags_vertical = 3
 stretch = true
+script = SubResource("GDScript_saefo")
 
 [node name="SubViewport" type="SubViewport" parent="."]
 transparent_bg = true
