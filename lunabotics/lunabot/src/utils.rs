@@ -126,59 +126,6 @@ where
     ))
 }
 
-#[cfg(feature = "production")]
-pub fn fusion_to_nalgebra(vec: imu_fusion::FusionVector) -> Vector3<f32> {
-    return Vector3::new(
-        vec.x,
-        vec.y,
-        vec.z
-    )
-} 
-
-#[cfg(feature = "production")]
-pub fn nalgebra_to_fusion(vec: Vector3<f32>) -> imu_fusion::FusionVector {
-    return imu_fusion::FusionVector::new(
-        vec.x,
-        vec.y,
-        vec.z,
-    )
-}
-
-
-/// Converts a sensor vector (IMU frame: forward = -z, up = y, left = x)
-/// into the NED (North, East, Down) coordinate system.
-///
-/// Mapping:
-///   - North = -sensor.z  (sensor forward)
-///   - East  = -sensor.x  (sensor right)
-///   - Down  = -sensor.y  (opposite of sensor up)
-pub fn convert_imu_to_ned<F>(sensor: Vector3<F>) -> Vector3<F> 
-where
-    F: SimdRealField + Copy + RealField,
-    F::Element: SimdRealField,
-{
-    Vector3::new(-sensor.z, -sensor.x, -sensor.y)
-}
-
-/// Converts a NED vector (North, East, Down) back to the sensor (IMU) coordinate system.
-///
-/// Inverse Mapping of convert_imu_to_ned:
-///   Given:
-///     North = -sensor.z  => sensor.z = -North
-///     East  = -sensor.x  => sensor.x = -East
-///     Down  = -sensor.y  => sensor.y = -Down
-///   So, the sensor vector is:
-///     sensor.x = -ned.y   (ned vector is ordered as (North, East, Down))
-///     sensor.y = -ned.z
-///     sensor.z = -ned.x
-pub fn convert_ned_to_imu<F>(ned: Vector3<F>) -> Vector3<F>
-where
-    F: SimdRealField + Copy + RealField,
-    F::Element: SimdRealField, 
-{
-    Vector3::new(-ned.y, -ned.z, -ned.x)
-}
-
 
 
 #[cfg(test)]

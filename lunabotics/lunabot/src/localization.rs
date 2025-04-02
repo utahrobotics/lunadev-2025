@@ -1,17 +1,18 @@
 use std::{sync::Arc, time::Duration};
 
 use crossbeam::atomic::AtomicCell;
-use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector3};
+use imu_calib::FusionWrapper;
+use nalgebra::{Isometry3, Rotation3, UnitQuaternion, UnitVector3, Vector3};
 use simple_motion::StaticNode;
 use spin_sleep::SpinSleeper;
 use tracing::error;
 
 #[cfg(feature="production")]
-use imu_fusion::{Fusion,FusionAhrsSettings, FusionVector};
+use imu_fusion::{Fusion,FusionAhrsSettings};
 
 #[cfg(not(feature = "production"))]
 use crate::apps::LunasimStdin;
-use crate::utils::{lerp_value, swing_twist_decomposition, convert_imu_to_ned, convert_ned_to_imu, nalgebra_to_fusion, fusion_to_nalgebra};
+use crate::utils::{lerp_value, swing_twist_decomposition};
 
 const ACCELEROMETER_LERP_SPEED: f64 = 150.0;
 const LOCALIZATION_DELTA: f64 = 1.0 / 60.0;
@@ -142,6 +143,12 @@ impl Localizer {
         #[cfg(feature = "calibrate")]
         let mut last_calibrated = std::time::Instant::now();
 
+        let euler_angles = (0.011733161032710543, -0.044685107434663446, 2.970195342756871e-6);
+        let corrections = imu_calib::CalibrationParameters::new(
+            Rotation3::from_euler_angles(euler_angles.0,euler_angles.1,euler_angles.2)
+        );
+        let mut fusion = FusionWrapper::from_calibration_params(corrections, 60);
+
         loop {
             spin_sleeper.sleep(Duration::from_secs_f64(LOCALIZATION_DELTA));
             let mut isometry = self.root_node.get_global_isometry();
@@ -183,22 +190,17 @@ impl Localizer {
                 angular_velocity: tmp_angular_velocity,
             }) = self.localizer_ref.take_imu_readings()
             {
-                let corrections = imu_calib::CalibrationParameters::new(
-                    Vector3::new(0.0, 0.0, 0.0),
-                    Vector3::new(0.00, 0.00, 0.00),
-                    Vector3::new(1., 1., 1.),
-                    Vector3::new(1., 1., 1.),
-                    false
-                );
+
 
                 if tmp_angular_velocity.x.is_finite()
                     && tmp_angular_velocity.y.is_finite()
                     && tmp_angular_velocity.z.is_finite()
                 {
-                    angular_velocity = Some(corrections.correct_gyroscope(&tmp_angular_velocity));
+                    fusion.update_no_mag(acceleration, tmp_angular_velocity, start_time.elapsed().as_secs_f32());
+                    angular_velocity = Some(fusion.angular_velocity());
                 }
+                let acceleration = fusion.linear_acc();
 
-                let acceleration = corrections.correct_accelerometer(&acceleration);
 
                 #[cfg(feature="calibrate")]
                 if let Some(angular_velocity) = angular_velocity {
@@ -212,7 +214,7 @@ impl Localizer {
                     // calibrate without trying to find scaling biases 
                     match self.calibrator.calibrate(false) {
                         Ok(correction) => {
-                            println!("corrections: {:?}", correction);
+                            println!("correction euler angles: {:?}", correction.rotation.euler_angles());
                             std::process::exit(0);
                         }
                         Err(e) => {
