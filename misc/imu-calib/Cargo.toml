@@ -7,6 +7,7 @@ edition = "2024"
 optimization = "0.2.0"
 nalgebra.workspace = true
 approx = "0.5.1"
+imu-fusion = "0.2.5"
 
 
 [dev-dependencies]
