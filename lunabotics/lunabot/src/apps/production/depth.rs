@@ -462,7 +462,7 @@ impl DepthCameraTask {
             self.state.get_mut().unwrap()
         };
 
-        info!("RealSense Camera {} opened", self.serial);
+        info!("RealSense Camera {} opened with (fx, fy) = ({:.0}, {:.0}), (width, height) = ({:.0}, {:.0})", self.serial, color_format.fx(), color_format.fy(), color_format.width(), color_format.height());
 
         loop {
             let frames = match pipeline.wait(Some(Duration::from_millis(1000))) {
