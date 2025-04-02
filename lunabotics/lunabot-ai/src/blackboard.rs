@@ -1,7 +1,7 @@
-use std::{collections::{vec_deque, VecDeque}, time::{Duration, Instant}};
+use std::{collections::VecDeque, time::Instant};
 
 use common::{FromLunabase, PathPoint};
-use nalgebra::{distance, Isometry3, Point2, Point3, Quaternion, UnitQuaternion};
+use nalgebra::{Isometry3, Point3, UnitQuaternion};
 use simple_motion::StaticImmutableNode;
 
 use crate::{autonomy::Autonomy, Action, PollWhen};
