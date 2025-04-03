@@ -2634,10 +2634,15 @@ dependencies = [
  "cakap2",
  "common",
  "crossbeam",
+ "fxhash",
  "godot",
+ "nalgebra",
  "openh264",
  "opus",
+ "serde",
+ "simple-motion",
  "tasker",
+ "toml",
 ]
 
 [[package]]

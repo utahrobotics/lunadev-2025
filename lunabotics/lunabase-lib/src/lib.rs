@@ -1,13 +1,10 @@
 #![feature(backtrace_frames)]
 
 use std::{
-    collections::VecDeque,
-    net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
-    sync::{
+    collections::VecDeque, net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket}, sync::{
         atomic::{AtomicBool, Ordering},
         Once,
-    },
-    time::{Duration, Instant},
+    }, time::{Duration, Instant}
 };
 
 use bitcode::encode;
@@ -15,7 +12,9 @@ use cakap2::{
     packet::{Action, ReliableIndex},
     Event, PeerStateMachine, RecommendedAction,
 };
-use common::{FromLunabase, FromLunabot, LunabotStage, Steering, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
+use crossbeam::atomic::AtomicCell;
+use nalgebra::{Isometry3, Quaternion, Vector3, UnitQuaternion};
+use common::{lunabase_sync::ThalassicData, FromLunabase, FromLunabot, LunabotStage, Steering, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
 use godot::{
     classes::{image::Format, Engine, Image, Os},
     prelude::*,
@@ -26,6 +25,8 @@ use tasker::shared::{OwnedData, SharedDataReceiver};
 mod audio;
 #[cfg(feature = "production")]
 mod stream;
+#[cfg(feature = "production")]
+mod config;
 
 const STREAM_WIDTH: u32 = 1920;
 const STREAM_HEIGHT: u32 = 720;
@@ -100,6 +101,10 @@ struct LunabotConn {
     last_received_duration: f64,
     #[cfg(feature = "audio")]
     audio_streaming: Option<audio::AudioStreaming>,
+    #[cfg(feature = "production")]
+    app_config: Option<config::AppConfig>,
+    #[cfg(feature = "production")]
+    thalassic_data: &'static AtomicCell<Option<ThalassicData>>,
 }
 
 thread_local! {
@@ -111,6 +116,8 @@ thread_local! {
 #[godot_api]
 impl INode for LunabotConn {
     fn init(base: Base<Node>) -> Self {
+        let thalassic_data: &_ = Box::leak(Box::new(AtomicCell::new(None)));
+
         let stream_image = Image::create_empty(
             STREAM_WIDTH as i32,
             STREAM_HEIGHT as i32,
@@ -127,6 +134,10 @@ impl INode for LunabotConn {
                 #[cfg(feature = "audio")]
                 audio_streaming: None,
                 last_received_duration: 0.0,
+                #[cfg(feature = "production")]
+                app_config: None,
+                #[cfg(feature = "production")]
+                thalassic_data,
             };
         }
 
@@ -148,12 +159,16 @@ impl INode for LunabotConn {
         if let Some(lunabot_address) = lunabot_address {
             common::lunabase_sync::lunabase_task(lunabot_address,
                 |thalassic| {
-
+                    thalassic_data.store(Some(thalassic.clone()));
+                    // godot_print!("Thalassic data received {:?}", thalassic.heightmap.iter().filter(|&&h| h as f32 != 0.0).count());
                 },
                 |_path| {
 
                 },
                 |e| {
+                    if e.kind() == std::io::ErrorKind::ConnectionRefused {
+                        return;
+                    }
                     godot_error!("Error in lunabase sync: {e}");
                 },
             );
@@ -209,6 +224,10 @@ impl INode for LunabotConn {
             #[cfg(feature = "audio")]
             audio_streaming: Some(audio_streaming),
             last_received_duration: 0.0,
+            #[cfg(feature = "production")]
+            app_config: config::load_config(),
+            #[cfg(feature = "production")]
+            thalassic_data,
         }
     }
 
@@ -232,6 +251,25 @@ impl INode for LunabotConn {
                 ($msg: ident) => {{
                     received = true;
                     match $msg {
+                        #[cfg(feature = "production")]
+                        FromLunabot::RobotIsometry { origin: [x, y, z], quat: [i, j, k, w] } => {
+                            if let Some(app_config) = &self.app_config {
+                                app_config.robot_chain.set_isometry(
+                                    Isometry3::from_parts(
+                                        Vector3::new(x, y, z).cast().into(),
+                                        UnitQuaternion::new_unchecked(Quaternion::new(w, i, j, k).cast()),
+                                    ),
+                                );
+                            }
+                            // let transform = Transform3D {
+                            //     basis: Basis::from_quat(Quaternion { x: i, y: j, z: k, w }),
+                            //     origin: Vector3 { x, y, z },
+                            // };
+                            // self.base_mut().emit_signal("robot_transform", &[transform.to_variant()]);
+                            inner = self.inner.as_mut().unwrap();
+                        }
+                        #[cfg(not(feature = "production"))]
+                        FromLunabot::RobotIsometry { .. } => {}
                         FromLunabot::Ping(stage) => {
                             match stage {
                                 LunabotStage::TeleOp => {
@@ -392,6 +430,12 @@ impl INode for LunabotConn {
             audio_streaming.poll(self.base_mut(), delta);
             self.audio_streaming = Some(audio_streaming);
         }
+
+        #[cfg(feature = "production")]
+        if let Some(thalassic) = self.thalassic_data.take() {
+            let heightmap: PackedFloat32Array = thalassic.heightmap.into_iter().map(|x| x as f32).collect();
+            self.base_mut().emit_signal("heightmap_received", &[heightmap.to_variant()]);
+        }
     }
 }
 
@@ -470,6 +514,8 @@ impl LunabotConn {
     fn entered_dig(&self);
     #[signal]
     fn entered_dump(&self);
+    #[signal]
+    fn heightmap_received(&self, heightmap: PackedFloat32Array);
 
     #[constant]
     const CAMERA_STREAMING: bool = cfg!(feature = "production");
@@ -486,6 +532,59 @@ impl LunabotConn {
     #[func]
     fn get_cell_size() -> f64 {
         THALASSIC_CELL_SIZE as f64
+    }
+
+    #[cfg(feature = "production")]
+    #[func]
+    fn get_camera_transform(&self, stream_index: i64) -> Transform3D {
+        if stream_index < 0 {
+            godot_error!("Invalid stream index: {stream_index}");
+            return Transform3D::default();
+        }
+        let stream_index = stream_index as usize;
+        let Some(app_config) = &self.app_config else {
+            return Transform3D::default();
+        };
+        let Some(Some(node)) = app_config.camera_nodes.get(stream_index) else {
+            godot_error!("Invalid or nonexistent stream index: {stream_index}");
+            return Transform3D::default();
+        };
+        let isometry = node.get_global_isometry();
+        let [x, y, z] = isometry.translation.vector.cast().data.0[0];
+        let [i, j, k, w] = isometry.rotation.coords.cast().data.0[0];
+        Transform3D {
+            basis: Basis::from_quat(godot::prelude::Quaternion { x: i, y: j, z: k, w }),
+            origin: godot::prelude::Vector3 { x, y, z },
+        }
+    }
+
+    #[cfg(feature = "production")]
+    #[func]
+    fn does_camera_exist(&self, stream_index: i64) -> bool {
+        if stream_index < 0 {
+            godot_error!("Invalid stream index: {stream_index}");
+            return false;
+        }
+        let Some(app_config) = &self.app_config else {
+            return false;
+        };
+        let stream_index = stream_index as usize;
+        let Some(Some(_)) = app_config.camera_nodes.get(stream_index) else {
+            return false;
+        };
+        true
+    }
+
+    #[cfg(not(feature = "production"))]
+    #[func]
+    fn get_camera_transform(&self, stream_index: i64) -> Transform3D {
+        Transform3D::default()
+    }
+
+    #[cfg(not(feature = "production"))]
+    #[func]
+    fn does_camera_exist(&self, stream_index: i64) -> bool {
+        false
     }
 
     #[func]

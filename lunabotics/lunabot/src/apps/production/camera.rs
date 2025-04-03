@@ -11,7 +11,7 @@ use super::apriltag::{
 };
 use chrono::SubsecRound;
 use fxhash::FxHashMap;
-use rerun::{Boxes3D, Points3D, TextLog};
+use rerun::Boxes3D;
 use simple_motion::StaticImmutableNode;
 use tasker::shared::{MaybeOwned, OwnedData};
 use tracing::{error, info, warn};

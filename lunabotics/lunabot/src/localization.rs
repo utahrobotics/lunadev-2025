@@ -1,5 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
+use cakap2::packet::PacketBody;
+use common::FromLunabot;
 use crossbeam::atomic::AtomicCell;
 use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector3};
 use simple_motion::StaticNode;
@@ -8,7 +10,7 @@ use tracing::error;
 
 #[cfg(not(feature = "production"))]
 use crate::apps::LunasimStdin;
-use crate::utils::{lerp_value, swing_twist_decomposition};
+use crate::{teleop::PacketBuilder, utils::{lerp_value, swing_twist_decomposition}};
 
 use imu_calib::*;
 
@@ -83,7 +85,11 @@ pub struct Localizer {
     root_node: StaticNode,
     #[cfg(not(feature = "production"))]
     lunasim_stdin: Option<LunasimStdin>,
+    #[cfg(feature = "production")]
+    packet_builder: PacketBuilder,
     localizer_ref: LocalizerRef,
+    #[cfg(feature = "production")]
+    pub isometry_sync_delta: f64,
 }
 
 impl Localizer {
@@ -105,7 +111,7 @@ impl Localizer {
         }
     }
     #[cfg(feature = "production")]
-    pub fn new(root_node: StaticNode, imu_count: usize) -> Self {
+    pub fn new(root_node: StaticNode, imu_count: usize, packet_builder: PacketBuilder) -> Self {
         Self {
             root_node,
             localizer_ref: LocalizerRef {
@@ -114,6 +120,8 @@ impl Localizer {
                     ..Default::default()
                 }),
             },
+            packet_builder,
+            isometry_sync_delta: 0.1
         }
     }
 
@@ -125,6 +133,8 @@ impl Localizer {
         let spin_sleeper = SpinSleeper::default();
         #[cfg(not(feature = "production"))]
         let mut bitcode_buffer = bitcode::Buffer::new();
+        #[cfg(feature = "production")]
+        let mut isometry_sync_timer = self.isometry_sync_delta;
 
         #[cfg(feature = "calibrate")]
         let start_time = std::time::Instant::now();
@@ -264,6 +274,17 @@ impl Localizer {
             self.root_node.set_isometry(isometry);
             #[cfg(feature = "production")]
             {
+                isometry_sync_timer -= LOCALIZATION_DELTA;
+                if isometry_sync_timer <= 0.0 {
+                    isometry_sync_timer = self.isometry_sync_delta;
+                    let data = bitcode::encode(&FromLunabot::RobotIsometry {
+                        origin: isometry.translation.vector.cast().data.0[0],
+                        quat: isometry.rotation.as_vector().cast().data.0[0],
+                    });
+                    let packet = self.packet_builder.new_unreliable(PacketBody { data }).unwrap();
+                    self.packet_builder.send_packet(cakap2::packet::Action::SendUnreliable(packet));
+                }
+
                 crate::apps::RECORDER.get().map(|recorder| {
                     if let Err(e) = recorder.recorder.log(
                         crate::apps::ROBOT_STRUCTURE,

@@ -15,6 +15,7 @@ tree.txt
 
 *-gitignore
 /app-config.toml
+/godot/lunabase/app-config.toml
 rtp.sdp
 
 *-venv

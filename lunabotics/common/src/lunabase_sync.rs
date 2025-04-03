@@ -1,6 +1,6 @@
 use std::{io::{Read, Write}, net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream}};
 
-use brotli::CompressorWriter;
+use brotli::{CompressorWriter, Decompressor};
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Vector3;
 
@@ -40,10 +40,12 @@ impl TryFrom<u8> for SyncDataTypes {
     }
 }
 
+const BROTLI_BUFFER_SIZE: usize = 4096;
+
 pub fn lunabot_task(request_data: impl Fn(&mut Vec<Vector3<f16>>, &mut ThalassicData) -> (bool, bool) + Sync + 'static) {
     let request_data: &_ = Box::leak(Box::new(request_data));
     std::thread::spawn(move || {
-        let listener = match TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), crate::ports::LUNABASE_SYNC_DATA)) {
+        let listener = match TcpListener::bind(SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), crate::ports::LUNABASE_SYNC_DATA)) {
             Ok(listener) => listener,
             Err(e) => {
                 tracing::error!("Failed to bind to port {}: {}", crate::ports::LUNABASE_SYNC_DATA, e);
@@ -57,7 +59,7 @@ pub fn lunabot_task(request_data: impl Fn(&mut Vec<Vector3<f16>>, &mut Thalassic
             match listener.accept() {
                 Ok((peer, _)) => {
                     std::thread::spawn(move || {
-                        let mut peer = CompressorWriter::new(peer, 4096, 11, 22);
+                        let mut peer = CompressorWriter::new(peer, BROTLI_BUFFER_SIZE, 11, 22);
                         let mut path = Vec::new();
                         let mut thalassic_data = ThalassicData::default();
 
@@ -101,7 +103,7 @@ pub fn lunabase_task(lunabot_addr: IpAddr, mut on_thalassic: impl FnMut(&Thalass
         let mut thalassic_data = ThalassicData::default();
         let mut path = Vec::new();
         loop {
-            let mut stream = match TcpStream::connect(SocketAddr::new(lunabot_addr, crate::ports::LUNABASE_SYNC_DATA)) {
+            let stream = match TcpStream::connect(SocketAddr::new(lunabot_addr, crate::ports::LUNABASE_SYNC_DATA)) {
                 Ok(stream) => stream,
                 Err(e) => {
                     on_error(e);
@@ -109,6 +111,7 @@ pub fn lunabase_task(lunabot_addr: IpAddr, mut on_thalassic: impl FnMut(&Thalass
                     continue;
                 }
             };
+            let mut stream = Decompressor::new(stream, BROTLI_BUFFER_SIZE);
 
             loop {
                 let result: std::io::Result<()> = try {
