@@ -1,6 +1,6 @@
 #![allow(unused_parens)]
-use nalgebra::{Matrix3, Normed, Quaternion, RealField, Rotation3, SimdRealField, UnitQuaternion, UnitVector3, Vector3, Vector4};
-use optimization::{Function, Function1, Minimizer, Evaluation, GradientDescent, ArmijoLineSearch, NumericalDifferentiation, ExactLineSearch};
+use nalgebra::{Quaternion, UnitQuaternion, UnitVector3, Vector3, Vector4};
+use optimization::{Function, Minimizer, Evaluation, GradientDescent, ArmijoLineSearch, NumericalDifferentiation};
 use std::vec::Vec;
 use serde::{Deserialize, Serialize};
 
@@ -216,6 +216,7 @@ impl Calibrator {
     }
 
     /// Estimate the initial misalignment based on the average acceleration vector.
+    #[allow(unused)]
     fn estimate_initial_misalignment(&self) -> UnitQuaternion<f64> {
         let ideal_gravity_direction = UnitVector3::new_normalize(Vector3::new(0.0, -G_ACCEL, 0.0));
         if let Some(avg_accel) = self.avg_accel_vector() {
@@ -276,7 +277,7 @@ impl<'a> Function for ImuCostFunction<'a> {
         }
         let w_g = 10.0;
         let w_a = 5.0;
-        let w_m = 0.5;
+        let _w_m = 0.5;
         for (accel_raw, gyro_raw) in self.readings {
             let accel_corrected = params.correct_accelerometer(accel_raw);
             let gyro_corrected = params.correct_gyroscope(gyro_raw);
@@ -293,9 +294,8 @@ impl<'a> Function for ImuCostFunction<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nalgebra::*;
     use rand::Rng;
-    use rand::distr::{Distribution, Uniform};
+    use rand::distr::Uniform;
 
     fn generate_test_sample(
         ideal_accel: &Vector3<f64>,
