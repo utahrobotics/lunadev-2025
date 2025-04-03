@@ -17,6 +17,7 @@ use mio::{Events, Interest, Poll, Token};
 use motors::{enumerate_motors, MotorMask, VescIDs};
 use nalgebra::{Scale3, Transform3, UnitQuaternion};
 use rerun_viz::init_rerun;
+use imu_calib::*;
 use rp2040::*;
 use serde::Deserialize;
 use simple_motion::{ChainBuilder, NodeSerde};
@@ -100,6 +101,7 @@ pub struct LunabotApp {
     pub robot_layout: String,
     pub vesc: Vesc,
     pub rerun_viz: RerunViz,
+    pub imu_correction: Option<CalibrationParameters>
 }
 
 impl LunabotApp {
@@ -246,6 +248,10 @@ impl LunabotApp {
             lunabot_stage.clone(),
             self.max_pong_delay_ms,
         );
+
+        // correction parameters are defined in app-config.toml
+        // corrections are applied in the localizer
+        localizer_ref.set_imu_correction_parameters(self.imu_correction);
 
         enumerate_imus(
             &localizer_ref,

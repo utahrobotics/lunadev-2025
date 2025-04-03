@@ -10,6 +10,8 @@ use tracing::error;
 use crate::apps::LunasimStdin;
 use crate::utils::{lerp_value, swing_twist_decomposition};
 
+use imu_calib::*;
+
 const ACCELEROMETER_LERP_SPEED: f64 = 150.0;
 const LOCALIZATION_DELTA: f64 = 1.0 / 60.0;
 
@@ -23,6 +25,7 @@ pub struct IMUReading {
 struct LocalizerRefInner {
     april_tag_isometry: AtomicCell<Option<Isometry3<f64>>>,
     imu_readings: Box<[AtomicCell<Option<IMUReading>>]>,
+    imu_correction: AtomicCell<Option<CalibrationParameters>>
 }
 
 #[derive(Clone)]
@@ -31,6 +34,10 @@ pub struct LocalizerRef {
 }
 
 impl LocalizerRef {
+    pub fn set_imu_correction_parameters(&self, correction: Option<CalibrationParameters>) {
+        self.inner.imu_correction.store(correction);
+    }
+
     pub fn set_april_tag_isometry(&self, isometry: Isometry3<f64>) {
         self.inner.april_tag_isometry.store(Some(isometry));
     }
@@ -119,8 +126,20 @@ impl Localizer {
         #[cfg(not(feature = "production"))]
         let mut bitcode_buffer = bitcode::Buffer::new();
 
+        #[cfg(feature = "calibrate")]
+        let start_time = std::time::Instant::now();
+
+        #[cfg(feature = "calibrate")]
+        let mut calibrator = Calibrator::new();
+
+        // let mut sum = Vector3::zeros();
+        // let mut sum_gyro = Vector3::zeros();
+        // let mut iterations = 0;
         loop {
+
+            #[cfg(not(feature = "calibrate"))] // allow the loop to speed up if calibrating to collect samples faster
             spin_sleeper.sleep(Duration::from_secs_f64(LOCALIZATION_DELTA));
+
             let mut isometry = self.root_node.get_global_isometry();
 
             'check: {
@@ -160,12 +179,49 @@ impl Localizer {
                 angular_velocity: tmp_angular_velocity,
             }) = self.localizer_ref.take_imu_readings()
             {
+
                 if tmp_angular_velocity.x.is_finite()
                     && tmp_angular_velocity.y.is_finite()
                     && tmp_angular_velocity.z.is_finite()
                 {
-                    angular_velocity = Some(tmp_angular_velocity);
+                    
+                    #[cfg(feature="calibrate")]
+                    calibrator.add_static_sample(acceleration, tmp_angular_velocity);
+                    
+                    if let Some(correction) = self.localizer_ref.inner.imu_correction.load() {
+                        let corrected = correction.correct_gyroscope(&tmp_angular_velocity);
+                        angular_velocity = Some(corrected);
+                    } else {
+                        angular_velocity = Some(tmp_angular_velocity);
+                    }
                 }
+
+                let acceleration = if let Some(correction) = self.localizer_ref.inner.imu_correction.load() {                    
+                    let corrected = correction.correct_accelerometer(&acceleration);
+                    corrected
+                } else {
+                    acceleration
+                };
+
+
+                #[cfg(feature="calibrate")]
+                if start_time.elapsed().as_secs() > 10 {
+                    println!("Calibrating, this may take a while...");
+                    println!("Number of Samples: {}", calibrator.sample_count());
+                    // calibrate without trying to find scaling biases 
+                    match calibrator.calibrate(false) {
+                        Ok(correction) => {
+                            // expect is ok here because worst case the calibration fails.
+                            println!("Correction parameters: {}", correction.serialize_to_string().expect("couldn't serialize correction params"));
+                            std::process::exit(0);
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to calculate Correction parameters: {e}");
+                            std::process::exit(0);
+                        }
+                    };
+                }
+
                 let acceleration = UnitVector3::new_normalize(isometry * acceleration);
                 if acceleration.x.is_finite()
                     && acceleration.y.is_finite()

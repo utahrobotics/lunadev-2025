@@ -38,7 +38,8 @@ lumpur::define_configuration! {
             #[serde(default)]
             vesc: apps::Vesc,
             #[serde(default)]
-            rerun_viz: apps::RerunViz
+            rerun_viz: apps::RerunViz,
+            imu_correction: Option<imu_calib::CalibrationParameters>
         },
         // Dataviz {
         //     lunabase_address: IpAddr,
@@ -108,6 +109,7 @@ fn main() {
             robot_layout,
             vesc,
             rerun_viz,
+            imu_correction,
         } => {
             apps::LunabotApp {
                 lunabase_address,
@@ -120,6 +122,7 @@ fn main() {
                 robot_layout: robot_layout
                     .unwrap_or_else(|| "robot-layout/lunabot.json".to_string()),
                 rerun_viz,
+                imu_correction
             }
             .run();
         }

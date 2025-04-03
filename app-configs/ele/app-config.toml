@@ -41,11 +41,19 @@ tag_width = 0.152
 
 [Main.imus."21"]
 link_name = "imu_21"
-correction = [-0.027, 0.000, 0.005, 1.000]
 
 [Main.imus."42"]
 link_name = "imu_42"
-correction = [-0.020, 0.000, -0.006, 1.000]
+
+[Main.imu_correction]
+accelerometer_bias = [0.000014598908463930101, 0.0017554738784322087, -0.0011911207615312067]
+# the gyroscope actually does have enough additive bias not related to misalignment for it to be problematic
+gyroscope_bias = [0.0006571120908115184, 0.004827296195746945, 0.00391800269744208]
+accelerometer_scale = [1.0006693944778715, 1.0, 1.000337980374186]
+gyroscope_scale = [1.0000005396753637, 1.0000079263524984, 1.0000176571997035]
+with_scaling = false
+misalignment = [-0.025058877215028884, 0.00000045302256055162416, -0.0003060294069638255, 0.9996859301893365]
+
 
 [Main.vesc]
 speed_multiplier = 0.2

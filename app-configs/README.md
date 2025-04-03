@@ -25,3 +25,14 @@ Set to whatever the serial number of the imu is. Serial number is defined by the
 ### Main.vesc
 
 ### Main.vesc_pairs
+
+### Main.imu_correction
+To generate IMU corrections run '''cargo make calibrate''' while the robot is on a flat surface.
+
+
+* accelerometer_bias - [f64; 3] - Additive bias to the accelerometer.
+* gyroscope_bias - [f64; 3] - Additive bias to the gyroscope.
+* accelerometer_scale - [f64; 3] - Scaling bias.
+* gyroscope_scale - [f64; 3] - Scaling bias.
+* with_scaling - bool - Weather or not to try calculating scaling bias, included as an option but not needed in most cases.
+* misalignment - [f64; 4] - Quaternion representing orientation misalignment. 

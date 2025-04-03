@@ -98,3 +98,10 @@ args = ["--path", "godot/lunabase", "-d", "--", "192.168.0.102"]
 dependencies = [
     "build_lunabase_prod",
 ]
+
+
+# collects imu readings for 10 seconds then runs calibration code from misc/imu-calib
+[tasks.calibrate]
+workspace = false
+command = "cargo"
+args = ["run", "--features=production,calibrate", "-p", "lunabot", "--profile", "optdebug", "--", "main"]
