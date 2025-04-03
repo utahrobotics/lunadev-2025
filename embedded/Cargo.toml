@@ -3,7 +3,7 @@ members = [
     "imu_chip",
     "lsm6dsox",
     "embedded_common"
-]
+, "actuator"]
 resolver = "2"
 exclude = []
 
