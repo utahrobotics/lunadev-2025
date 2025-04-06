@@ -1,6 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
+#[cfg(feature = "production")]
 use cakap2::packet::PacketBody;
+#[cfg(feature = "production")]
 use common::FromLunabot;
 use crossbeam::atomic::AtomicCell;
 use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector3};
@@ -10,7 +12,9 @@ use tracing::error;
 
 #[cfg(not(feature = "production"))]
 use crate::apps::LunasimStdin;
-use crate::{teleop::PacketBuilder, utils::{lerp_value, swing_twist_decomposition}};
+#[cfg(feature = "production")]
+use crate::teleop::PacketBuilder;
+use crate::utils::{lerp_value, swing_twist_decomposition};
 
 #[cfg(feature = "production")]
 use imu_calib::*;
