@@ -108,12 +108,12 @@ impl Steering {
     pub fn get_left_and_right(self) -> (f64, f64) {
         (
             if self.left < 0 {
-                -self.left as f64 / i8::MIN as f64
+                -(self.left as f64) / i8::MIN as f64
             } else {
                 self.left as f64 / i8::MAX as f64
             },
             if self.right < 0 {
-                -self.right as f64 / i8::MIN as f64
+                -(self.right as f64) / i8::MIN as f64
             } else {
                 self.right as f64 / i8::MAX as f64
             }
