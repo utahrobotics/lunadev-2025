@@ -103,7 +103,7 @@ impl std::fmt::Debug for Steering {
 }
 
 impl Steering {
-    pub const DEFAULT_WEIGHT: f64 = 0.1;
+    pub const DEFAULT_WEIGHT: f64 = 25.0;
 
     pub fn get_left_and_right(self) -> (f64, f64) {
         (
@@ -124,10 +124,9 @@ impl Steering {
         f16::from_bits(self.weight) as f64
     }
 
-    pub fn new(mut left: f64, mut right: f64, mut weight: f64) -> Self {
+    pub fn new(mut left: f64, mut right: f64, weight: f64) -> Self {
         left = left.max(-1.0).min(1.0);
         right = right.max(-1.0).min(1.0);
-        weight = weight.max(0.0).min(1.0);
 
         let left = if left < 0.0 {
             (-left * i8::MIN as f64) as i8

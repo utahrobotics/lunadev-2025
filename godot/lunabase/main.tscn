@@ -95,7 +95,7 @@ func move_smooth(joystick: Vector2):
 	Lunabot.set_steering_left_right(
 		joystick.y + joystick.x, 
 		joystick.y - joystick.x,
-		Lunabot.get_default_steering_weight()
+		LunabotConn.get_default_steering_weight()
 	)
 
 ## move robot with joystick position

@@ -39,7 +39,7 @@ use tracing::{error, info, warn};
 
 use crate::{
     localization::{IMUReading, Localizer},
-    pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline},
+    pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline}, utils::SteeringLerper,
 };
 use crate::{pathfinding::DefaultPathfinder, pipelines::thalassic::ThalassicData};
 
@@ -391,6 +391,15 @@ impl LunasimbotApp {
         );
 
         let mut bitcode_buffer = bitcode::Buffer::new();
+        let lunasim_stdin2 = lunasim_stdin.clone();
+        let lerper = SteeringLerper::new(move |left, right| {
+            let bytes = bitcode_buffer.encode(&FromLunasimbot::Drive {
+                left: left as f32,
+                right: right as f32,
+            });
+            lunasim_stdin2.write(bytes);
+        });
+        let mut bitcode_buffer = bitcode::Buffer::new();
 
         run_ai(
             robot_chain.into(),
@@ -399,12 +408,7 @@ impl LunasimbotApp {
                     lunabot_stage.store(stage);
                 }
                 Action::SetSteering(steering) => {
-                    let (left, right) = steering.get_left_and_right();
-                    let bytes = bitcode_buffer.encode(&FromLunasimbot::Drive {
-                        left: left as f32,
-                        right: right as f32,
-                    });
-                    lunasim_stdin.write(bytes);
+                    lerper.set_steering(steering);
                 }
                 Action::CalculatePath { from, to, mut into } => {
                     if pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into) {

@@ -2,26 +2,29 @@
 
 use std::ops::{Add, Mul, Sub};
 
+use common::Steering;
+use crossbeam::atomic::AtomicCell;
 use nalgebra::{
     Quaternion, RealField, SimdRealField, UnitQuaternion, UnitVector3, Vector2, Vector3,
 };
+use spin_sleep::SpinSleeper;
 
 /// named as such to avoid confusion with `nalgebra::distance` and `pathfinding::distance`
 pub fn distance_between_tuples((x1, y1): (usize, usize), (x2, y2): (usize, usize)) -> f32 {
     Vector2::new(x1.abs_diff(x2) as f32, y1.abs_diff(y2) as f32).magnitude()
 }
 
-pub fn lerp_value(delta: f64, speed: f64) -> f64 {
-    0.5f64.powf(speed * delta)
+pub fn lerp_value(delta: f64, weight: f64) -> f64 {
+    0.5f64.powf(weight * delta)
 }
 
 #[allow(dead_code)]
-pub fn lerp<T>(from: T, to: T, delta: f64, speed: f64) -> T
+pub fn lerp<T>(from: T, to: T, delta: f64, weight: f64) -> T
 where
     T: Sub<Output = T> + Add<Output = T> + Mul<f64, Output = T> + Copy,
 {
     let diff = to - from;
-    from + diff * lerp_value(delta, speed)
+    from + diff * lerp_value(delta, weight)
 }
 
 /// Decomposes the `src` quaternion into two quaternions: the `twist` quaternion is the rotation around the `axis` vector, and the `swing` quaternion is the remaining rotation.
@@ -124,6 +127,52 @@ where
         angular_velocity.y * multiplier,
         angular_velocity.z * multiplier,
     ))
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SteeringLerper {
+    steering: &'static AtomicCell<Option<Steering>>,
+}
+
+impl SteeringLerper {
+    pub fn new(mut on_calculated: impl FnMut(f64, f64) + Send + 'static) -> Self {
+        let steering: &AtomicCell<Option<Steering>> = Box::leak(Box::new(AtomicCell::new(None)));
+
+        std::thread::spawn(move || {
+            let mut state = (0.0, 0.0);
+            let mut target_steering = Steering::default();
+            let sleeper = SpinSleeper::default();
+            let mut empty_count = 0usize;
+            loop {
+                sleeper.sleep(std::time::Duration::from_millis(50));
+                let weight = target_steering.get_weight();
+                let (left, right) = target_steering.get_left_and_right();
+                state = (
+                    lerp(state.0, left, 0.05, weight),
+                    lerp(state.1, right, 0.05, weight),
+                );
+                on_calculated(state.0, state.1);
+                let Some(tmp) = steering.take() else {
+                    empty_count += 1;
+                    if empty_count > 4 {
+                        on_calculated(0.0, 0.0);
+                        state = (0.0, 0.0);
+                    }
+                    continue;
+                };
+                target_steering = tmp;
+                empty_count = 0;
+            }
+        });
+
+        Self {
+            steering,
+        }
+    }
+    
+    pub fn set_steering(&self, steering: Steering) {
+        self.steering.store(Some(steering));
+    }
 }
 
 #[cfg(test)]
