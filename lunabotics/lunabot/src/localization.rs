@@ -12,6 +12,7 @@ use tracing::error;
 use crate::apps::LunasimStdin;
 use crate::{teleop::PacketBuilder, utils::{lerp_value, swing_twist_decomposition}};
 
+#[cfg(feature = "production")]
 use imu_calib::*;
 
 const ACCELEROMETER_LERP_SPEED: f64 = 150.0;
@@ -27,6 +28,8 @@ pub struct IMUReading {
 struct LocalizerRefInner {
     april_tag_isometry: AtomicCell<Option<Isometry3<f64>>>,
     imu_readings: Box<[AtomicCell<Option<IMUReading>>]>,
+
+    #[cfg(feature = "production")]
     imu_correction: AtomicCell<Option<CalibrationParameters>>
 }
 
@@ -36,6 +39,8 @@ pub struct LocalizerRef {
 }
 
 impl LocalizerRef {
+
+    #[cfg(feature = "production")]
     pub fn set_imu_correction_parameters(&self, correction: Option<CalibrationParameters>) {
         self.inner.imu_correction.store(correction);
     }
@@ -198,14 +203,21 @@ impl Localizer {
                     #[cfg(feature="calibrate")]
                     calibrator.add_static_sample(acceleration, tmp_angular_velocity);
                     
+                    #[cfg(feature="production")]
                     if let Some(correction) = self.localizer_ref.inner.imu_correction.load() {
                         let corrected = correction.correct_gyroscope(&tmp_angular_velocity);
                         angular_velocity = Some(corrected);
                     } else {
                         angular_velocity = Some(tmp_angular_velocity);
                     }
+
+                    #[cfg(not(feature="production"))]
+                    {
+                        angular_velocity = Some(tmp_angular_velocity);
+                    }
                 }
 
+                #[cfg(feature = "production")]
                 let acceleration = if let Some(correction) = self.localizer_ref.inner.imu_correction.load() {                    
                     let corrected = correction.correct_accelerometer(&acceleration);
                     corrected
