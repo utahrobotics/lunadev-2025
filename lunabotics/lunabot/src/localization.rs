@@ -232,7 +232,7 @@ impl Localizer {
                     };
                 }
 
-                let acceleration = UnitVector3::new_normalize(isometry * acceleration);
+                let acceleration = UnitVector3::new_normalize(isometry.transform_vector(&acceleration));
                 if acceleration.x.is_finite()
                     && acceleration.y.is_finite()
                     && acceleration.z.is_finite()

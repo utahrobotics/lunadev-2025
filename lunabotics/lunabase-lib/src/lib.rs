@@ -13,8 +13,11 @@ use cakap2::{
     Event, PeerStateMachine, RecommendedAction,
 };
 use crossbeam::atomic::AtomicCell;
+#[cfg(feature = "production")]
 use nalgebra::{Isometry3, Quaternion, Vector3, UnitQuaternion};
-use common::{lunabase_sync::ThalassicData, FromLunabase, FromLunabot, LunabotStage, Steering, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
+use common::{FromLunabase, FromLunabot, LunabotStage, Steering, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
+#[cfg(feature = "production")]
+use common::lunabase_sync::ThalassicData;
 use godot::{
     classes::{image::Format, Engine, Image, Os},
     prelude::*,
@@ -534,6 +537,12 @@ impl LunabotConn {
         THALASSIC_CELL_SIZE as f64
     }
 
+    /// There is a bug that prevents const f64 from being used in the godot_api macro
+    #[func]
+    fn get_default_steering_weight() -> f64 {
+        Steering::DEFAULT_WEIGHT
+    }
+
     #[cfg(feature = "production")]
     #[func]
     fn get_camera_transform(&self, stream_index: i64) -> Transform3D {
@@ -577,13 +586,13 @@ impl LunabotConn {
 
     #[cfg(not(feature = "production"))]
     #[func]
-    fn get_camera_transform(&self, stream_index: i64) -> Transform3D {
+    fn get_camera_transform(&self, _stream_index: i64) -> Transform3D {
         Transform3D::default()
     }
 
     #[cfg(not(feature = "production"))]
     #[func]
-    fn does_camera_exist(&self, stream_index: i64) -> bool {
+    fn does_camera_exist(&self, _stream_index: i64) -> bool {
         false
     }
 
@@ -593,15 +602,9 @@ impl LunabotConn {
             inner.stream_corrupted.load(Ordering::Relaxed)
         })
     }
-
     #[func]
-    fn set_steering_drive_steering(&mut self, drive: f64, steering: f64) {
-        self.set_steering(Steering::new(drive, steering));
-    }
-
-    #[func]
-    fn set_steering_left_right(&mut self, left: f64, right: f64) {
-        self.set_steering(Steering::new_left_right(left, right));
+    fn set_steering_left_right(&mut self, left: f64, right: f64, weight: f64) {
+        self.set_steering(Steering::new(left, right, weight));
     }
 
     #[func]

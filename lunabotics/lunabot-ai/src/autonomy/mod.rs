@@ -105,7 +105,7 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
             return Status::Failure; // return failure to restart traverse section of behavior tree
         }
         
-        blackboard.enqueue_action(Action::SetSteering(Steering::new(-1.0, 0.0)));
+        blackboard.enqueue_action(Action::SetSteering(Steering::new(-1.0, 0.0, Steering::DEFAULT_WEIGHT)));
         return Status::Running;
     }
     
@@ -185,10 +185,10 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
             if to_first_point.angle(&Vector2::new(0.0, -1.0)).to_degrees() > 20.0 {
                 if to_first_point.x > 0.0 {
                     blackboard
-                        .enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, -1.0)))
+                        .enqueue_action(Action::SetSteering(Steering::new(1.0, -1.0, Steering::DEFAULT_WEIGHT)))
                 } else {
                     blackboard
-                        .enqueue_action(Action::SetSteering(Steering::new_left_right(-1.0, 1.0)))
+                        .enqueue_action(Action::SetSteering(Steering::new(-1.0, 1.0, Steering::DEFAULT_WEIGHT)))
                 }
             } else {
                 let (l, r) = scaled_clamp(
@@ -196,14 +196,14 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
                     -to_first_point.y - to_first_point.x * 1.2,
                     1.0,
                 );
-                blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(l, r)))
+                blackboard.enqueue_action(Action::SetSteering(Steering::new(l, r, Steering::DEFAULT_WEIGHT)))
             }
         }
         PathInstruction::FaceTowards => {
             if to_first_point.x > 0.0 {
-                blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(1.0, -1.0)))
+                blackboard.enqueue_action(Action::SetSteering(Steering::new(1.0, -1.0, Steering::DEFAULT_WEIGHT)))
             } else {
-                blackboard.enqueue_action(Action::SetSteering(Steering::new_left_right(-1.0, 1.0)))
+                blackboard.enqueue_action(Action::SetSteering(Steering::new(-1.0, 1.0, Steering::DEFAULT_WEIGHT)))
             }
         }
     };

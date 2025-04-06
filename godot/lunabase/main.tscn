@@ -61,9 +61,9 @@ func _input(event: InputEvent) -> void:
 			if length > MAX_DISTANCE:
 				global_position = get_parent().global_position + travel / length * MAX_DISTANCE
 	
-	elif event is InputEventJoypadMotion:
-		var travel := Vector2(Input.get_joy_axis(event.device, JOY_AXIS_RIGHT_X), Input.get_joy_axis(event.device, JOY_AXIS_RIGHT_Y))
-		global_position = get_parent().global_position + travel * MAX_DISTANCE
+	#elif event is InputEventJoypadMotion:
+		#var travel := Vector2(Input.get_joy_axis(event.device, JOY_AXIS_RIGHT_X), Input.get_joy_axis(event.device, JOY_AXIS_RIGHT_Y))
+		#global_position = get_parent().global_position + travel * MAX_DISTANCE
 
 
 func _input_event(_viewport: Viewport, event: InputEvent, _shape_idx: int) -> void:
@@ -94,7 +94,8 @@ func move_smooth(joystick: Vector2):
 	
 	Lunabot.set_steering_left_right(
 		joystick.y + joystick.x, 
-		joystick.y - joystick.x
+		joystick.y - joystick.x,
+		Lunabot.get_default_steering_weight()
 	)
 
 ## move robot with joystick position
