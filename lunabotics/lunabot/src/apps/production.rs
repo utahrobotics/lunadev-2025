@@ -30,7 +30,7 @@ pub use rerun_viz::{RerunViz, RECORDER, ROBOT, ROBOT_STRUCTURE};
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,
-    pipelines::thalassic::ThalassicData,
+    pipelines::thalassic::ThalassicData, utils::SteeringLerper,
 };
 
 use super::create_packet_builder;
@@ -293,6 +293,9 @@ impl LunabotApp {
         }
 
         let motor_ref = enumerate_motors(vesc_ids, self.vesc.speed_multiplier.unwrap_or(1.0));
+        let lerper = SteeringLerper::new(move |left, right| {
+            motor_ref.set_speed(left as f32, right as f32);
+        });
 
         run_ai(
             robot_chain.into(),
@@ -301,8 +304,7 @@ impl LunabotApp {
                     lunabot_stage.store(stage);
                 }
                 Action::SetSteering(steering) => {
-                    let (left, right) = steering.get_left_and_right();
-                    motor_ref.set_speed(left as f32, right as f32);
+                    lerper.set_steering(steering);
                 }
                 Action::CalculatePath { from, to, mut into } => {
                     if pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into) {

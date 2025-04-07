@@ -56,6 +56,7 @@ impl ThalassicData {
     const MAP_WIDTH: usize = THALASSIC_WIDTH as usize;
     const MAP_HEIGHT: usize = THALASSIC_HEIGHT as usize;
 
+    #[cfg(feature="production")]
     fn index_to_xy(index: usize) -> (usize, usize) {
         (index % Self::MAP_WIDTH, index / Self::MAP_WIDTH)
     }
