@@ -1,5 +1,5 @@
-[target.thumbv6m-none-eabi]
-runner = "elf2uf2-rs -d"
+[target.'cfg(all(target_arch = "arm", target_os = "none"))']
+runner = "probe-rs run --chip RP2040"
 
 rustflags = [
   "-C", "linker=flip-link",
@@ -12,7 +12,7 @@ rustflags = [
   #   uncomment the next line if you wish to enable it
   "-Z", "trap-unreachable=no",
   "-C", "no-vectorize-loops",
-]
+]# Cortex-M0 and Cortex-M0+
 
 [build]
 target = "thumbv6m-none-eabi"
