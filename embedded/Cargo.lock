@@ -27,9 +27,12 @@ dependencies = [
  "embassy-sync",
  "embassy-time",
  "embassy-usb",
+ "embedded_common",
  "fixed",
  "fixed-macro",
  "panic-probe",
+ "portable-atomic",
+ "static_cell",
 ]
 
 [[package]]
