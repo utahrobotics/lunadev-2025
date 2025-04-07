@@ -1,6 +1,7 @@
 use embassy_rp::gpio::{Level, Output};
 use embassy_rp::peripherals::{PWM_SLICE0, PWM_SLICE4};
 use embassy_rp::pwm::{Config as PwmConfig, Pwm, PwmError, SetDutyCycle};
+use defmt::{error, info, warn};
 
 pub struct Motor<'d> {
     // m1_slp (active=high)

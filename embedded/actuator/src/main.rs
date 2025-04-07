@@ -8,6 +8,7 @@ use embassy_time::{Duration, Timer};
 use embassy_usb::{class::cdc_acm::{CdcAcmClass, State}, UsbDevice};
 use embedded_common::ActuatorCommand;
 use static_cell::StaticCell;
+use defmt::{info, error};
 use {defmt_rtt as _, panic_probe as _};
 mod motor;
 use motor::*;
@@ -72,7 +73,8 @@ async fn main(spawner: Spawner) {
 
     motor.enable();
 
-    spawner.spawn(motor_test_task(motor)).unwrap();
+    // spawner.spawn(motor_test_task(motor)).unwrap();
+    spawner.spawn(motor_controller_loop(class,motor)).unwrap();
 }
 
 #[embassy_executor::task(pool_size = 1)]
