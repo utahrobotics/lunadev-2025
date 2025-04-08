@@ -8,7 +8,9 @@ script/source = "extends SubViewportContainer
 
 
 func _ready() -> void:
-	if !Lunabot.does_camera_exist(get_index()):
+	if Lunabot.does_camera_exist(get_index()):
+		camera.fov = Lunabot.get_camera_fov(get_index())
+	else:
 		modulate.a = 0
 		set_process(false)
 

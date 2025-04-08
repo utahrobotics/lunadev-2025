@@ -554,17 +554,35 @@ impl LunabotConn {
         let Some(app_config) = &self.app_config else {
             return Transform3D::default();
         };
-        let Some(Some(node)) = app_config.camera_nodes.get(stream_index) else {
+        let Some(Some(data)) = app_config.camera.get(stream_index) else {
             godot_error!("Invalid or nonexistent stream index: {stream_index}");
             return Transform3D::default();
         };
-        let isometry = node.get_global_isometry();
+        let isometry = data.node.get_global_isometry();
         let [x, y, z] = isometry.translation.vector.cast().data.0[0];
         let [i, j, k, w] = isometry.rotation.coords.cast().data.0[0];
         Transform3D {
             basis: Basis::from_quat(godot::prelude::Quaternion { x: i, y: j, z: k, w }),
             origin: godot::prelude::Vector3 { x, y, z },
         }
+    }
+
+    #[cfg(feature = "production")]
+    #[func]
+    fn get_camera_fov(&self, stream_index: i64) -> f64 {
+        if stream_index < 0 {
+            godot_error!("Invalid stream index: {stream_index}");
+            return 75.0f64;
+        }
+        let stream_index = stream_index as usize;
+        let Some(app_config) = &self.app_config else {
+            return 75.0f64;
+        };
+        let Some(Some(data)) = app_config.camera.get(stream_index) else {
+            godot_error!("Invalid or nonexistent stream index: {stream_index}");
+            return 75.0f64;
+        };
+        data.fov
     }
 
     #[cfg(feature = "production")]
@@ -578,7 +596,7 @@ impl LunabotConn {
             return false;
         };
         let stream_index = stream_index as usize;
-        let Some(Some(_)) = app_config.camera_nodes.get(stream_index) else {
+        let Some(Some(_)) = app_config.camera.get(stream_index) else {
             return false;
         };
         true
@@ -592,7 +610,13 @@ impl LunabotConn {
 
     #[cfg(not(feature = "production"))]
     #[func]
-    fn does_camera_exist(&self, _stream_index: i64) -> bool {
+    fn get_camera_fov(&self, stream_index: i64) -> f64 {
+        75.0f
+    }
+
+    #[cfg(not(feature = "production"))]
+    #[func]
+    fn does_camera_exist(&self, stream_index: i64) -> bool {
         false
     }
 
