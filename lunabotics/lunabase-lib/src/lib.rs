@@ -610,13 +610,13 @@ impl LunabotConn {
 
     #[cfg(not(feature = "production"))]
     #[func]
-    fn get_camera_fov(&self, stream_index: i64) -> f64 {
-        75.0f
+    fn get_camera_fov(&self, _stream_index: i64) -> f64 {
+        75.0f64
     }
 
     #[cfg(not(feature = "production"))]
     #[func]
-    fn does_camera_exist(&self, stream_index: i64) -> bool {
+    fn does_camera_exist(&self, _stream_index: i64) -> bool {
         false
     }
 
