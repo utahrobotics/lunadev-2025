@@ -3,6 +3,7 @@
 use std::io::Write;
 
 use bitcode::{Decode, Encode};
+use embedded_common::ActuatorCommand;
 use nalgebra::{distance, Point2, Point3};
 
 // Taken from https://opus-codec.org/docs/opus_api-1.5/group__opus__encoder.html#gad2d6bf6a9ffb6674879d7605ed073e25
@@ -32,6 +33,8 @@ pub enum FromLunabase {
     Pong,
     ContinueMission,
     Steering(Steering),
+    LiftActuators(i8),
+    BucketActuators(i8),
     TraverseObstacles,
     SoftStop,
 }
@@ -53,6 +56,64 @@ impl FromLunabase {
         FromLunabase::TraverseObstacles.write_code(&mut w)?;
         FromLunabase::SoftStop.write_code(&mut w)?;
         Ok(())
+    }
+
+    pub fn set_lift_actuator(mut speed: f64) -> Self {
+        speed = speed.clamp(-1.0, 1.0);
+        let speed = if speed < 0.0 {
+            (-speed * i8::MIN as f64) as i8
+        } else {
+            (speed * i8::MAX as f64) as i8
+        };
+        FromLunabase::LiftActuators(speed)
+    }
+
+    pub fn set_bucket_actuator(mut speed: f64) -> Self {
+        speed = speed.clamp(-1.0, 1.0);
+        let speed = if speed < 0.0 {
+            (-speed * i8::MIN as f64) as i8
+        } else {
+            (speed * i8::MAX as f64) as i8
+        };
+        FromLunabase::BucketActuators(speed)
+    }
+
+    pub fn get_lift_actuator_commands(self) -> Option<[ActuatorCommand; 2]> {
+        match self {
+            FromLunabase::LiftActuators(value) => {
+                Some(if value < 0 {
+                    [
+                        ActuatorCommand::backward(),
+                        ActuatorCommand::set_speed(value as f64 / i8::MIN as f64),
+                    ]
+                } else {
+                    [
+                        ActuatorCommand::forward(),
+                        ActuatorCommand::set_speed(value as f64 / i8::MAX as f64),
+                    ]
+                })
+            }
+            _ => None,
+        }
+    }
+
+    pub fn get_bucket_actuator_commands(self) -> Option<[ActuatorCommand; 2]> {
+        match self {
+            FromLunabase::BucketActuators(value) => {
+                Some(if value < 0 {
+                    [
+                        ActuatorCommand::backward(),
+                        ActuatorCommand::set_speed(value as f64 / i8::MIN as f64),
+                    ]
+                } else {
+                    [
+                        ActuatorCommand::forward(),
+                        ActuatorCommand::set_speed(value as f64 / i8::MAX as f64),
+                    ]
+                })
+            }
+            _ => None,
+        }
     }
 }
 

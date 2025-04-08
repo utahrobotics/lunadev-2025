@@ -87,6 +87,8 @@ struct LunabotConnInner {
     bitcode_buffer: bitcode::Buffer,
     did_reconnection: bool,
     last_steering: Option<(Steering, ReliableIndex)>,
+    last_lift: Option<(f64, ReliableIndex)>,
+    last_bucket: Option<(f64, ReliableIndex)>,
     send_to: Option<IpAddr>,
     stream_lendee: SharedDataReceiver<Vec<u8>>,
     stream_corrupted: &'static AtomicBool,
@@ -217,6 +219,8 @@ impl INode for LunabotConn {
                 bitcode_buffer: bitcode::Buffer::new(),
                 did_reconnection: false,
                 last_steering: None,
+                last_bucket: None,
+                last_lift: None,
                 send_to: lunabot_address,
                 stream_lendee,
                 stream_corrupted,
@@ -489,6 +493,64 @@ impl LunabotConn {
         }
     }
 
+    fn set_lift(&mut self, lift: f64) {
+        if let Some(inner) = &mut self.inner {
+            let mut last_lift_reliable_idx = None;
+            if let Some((old_lift, old_idx)) = inner.last_lift {
+                last_lift_reliable_idx = Some(old_idx);
+                if old_lift == lift {
+                    return;
+                }
+            }
+            let msg = FromLunabase::set_lift_actuator(lift);
+            match inner
+                .cakap_sm
+                .get_packet_builder()
+                .new_reliable(encode(&msg).into())
+            {
+                Ok(packet) => {
+                    if let Some(old_idx) = last_lift_reliable_idx {
+                        inner.to_lunabot.push_back(Action::CancelReliable(old_idx));
+                    }
+                    inner.last_lift = Some((lift, packet.get_index()));
+                    inner.to_lunabot.push_back(Action::SendReliable(packet));
+                }
+                Err(e) => {
+                    godot_error!("Failed to build reliable packet: {e}");
+                }
+            }
+        }
+    }
+
+    fn set_bucket(&mut self, bucket: f64) {
+        if let Some(inner) = &mut self.inner {
+            let mut last_bucket_reliable_idx = None;
+            if let Some((old_bucket, old_idx)) = inner.last_bucket {
+                last_bucket_reliable_idx = Some(old_idx);
+                if old_bucket == bucket {
+                    return;
+                }
+            }
+            let msg = FromLunabase::set_bucket_actuator(bucket);
+            match inner
+                .cakap_sm
+                .get_packet_builder()
+                .new_reliable(encode(&msg).into())
+            {
+                Ok(packet) => {
+                    if let Some(old_idx) = last_bucket_reliable_idx {
+                        inner.to_lunabot.push_back(Action::CancelReliable(old_idx));
+                    }
+                    inner.last_bucket = Some((bucket, packet.get_index()));
+                    inner.to_lunabot.push_back(Action::SendReliable(packet));
+                }
+                Err(e) => {
+                    godot_error!("Failed to build reliable packet: {e}");
+                }
+            }
+        }
+    }
+
     // fn send_unreliable(&mut self, msg: &FromLunabase) {
     //     if let Some(inner) = &mut self.inner {
     //         match inner.cakap_sm.get_packet_builder().new_unreliable(encode(msg).into()) {
@@ -626,9 +688,20 @@ impl LunabotConn {
             inner.stream_corrupted.load(Ordering::Relaxed)
         })
     }
+
     #[func]
     fn set_steering_left_right(&mut self, left: f64, right: f64, weight: f64) {
         self.set_steering(Steering::new(left, right, weight));
+    }
+
+    #[func]
+    fn set_lift_speed(&mut self, speed: f64) {
+        self.set_lift(speed);
+    }
+
+    #[func]
+    fn set_bucket_speed(&mut self, speed: f64) {
+        self.set_bucket(speed);
     }
 
     #[func]

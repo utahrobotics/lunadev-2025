@@ -987,6 +987,7 @@ dependencies = [
  "bitcode",
  "brotli",
  "bytemuck",
+ "embedded_common",
  "nalgebra",
  "tracing",
 ]
