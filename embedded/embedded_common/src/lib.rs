@@ -1,5 +1,7 @@
 #![no_std]
 
+pub const IMU_READING_DELAY_MS: u64 = 10;
+
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(u8)]

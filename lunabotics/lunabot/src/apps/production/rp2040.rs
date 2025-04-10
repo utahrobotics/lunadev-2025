@@ -205,7 +205,7 @@ impl IMUTask {
 
         // let start = Instant::now();
         loop {
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(IMU_READING_DELAY_MS)).await;
             const ACK: [u8; 1] = [1];
             let result = async {
                 imu_port.write(&ACK).await?;

@@ -29,62 +29,20 @@ use embassy_usb::UsbDevice;
 use embedded_common::AccelerationNorm;
 use embedded_common::AngularRate;
 use embedded_common::FromIMU;
+use embedded_common::IMU_READING_DELAY_MS;
 use lsm6dsox::accelerometer::Accelerometer;
 use lsm6dsox::types::Error;
 use lsm6dsox::*;
 use rand::RngCore;
 use static_cell::StaticCell;
+use {defmt_rtt as _, panic_probe as _};
 
-#[inline(never)]
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    error!("{}", info);
-    loop {
-        // core::hint::spin_loop();
-    }
-}
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => usb::InterruptHandler<USB>;
     I2C0_IRQ => i2c::InterruptHandler<I2C0>;
     PIO0_IRQ_0 => pio::InterruptHandler<PIO0>;
 });
-
-static LOGGING_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
-static LOGGING_MUTEX: Mutex<CriticalSectionRawMutex, [u8; 256]> = Mutex::new([0; 256]);
-
-#[defmt::global_logger]
-struct Logger;
-
-unsafe impl defmt::Logger for Logger {
-    fn acquire() {
-    }
-
-    unsafe fn flush() {
-        
-    }
-
-    unsafe fn release() {
-    }
-
-    unsafe fn write(mut bytes: &[u8]) {
-        loop {
-            if LOGGING_SIGNAL.signaled() {
-                // Do nothing
-            } else if let Ok(mut guard) = LOGGING_MUTEX.try_lock() {
-                let buffer_len = guard.len();
-                if buffer_len >= bytes.len() {
-                    guard[..bytes.len()].copy_from_slice(bytes);
-                    break;
-                } else {
-                    guard.copy_from_slice(&bytes[..buffer_len]);
-                    bytes = &bytes[buffer_len..];
-                }
-            }
-            core::hint::spin_loop();
-        }
-    }
-}
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
@@ -130,15 +88,6 @@ async fn main(spawner: Spawner) {
         CdcAcmClass::new(&mut builder, state, 64)
     };
 
-    // // ttyACM1 for logging
-    // let logger_class = {
-    //     static STATE: StaticCell<State> = StaticCell::new();
-    //     let state = STATE.init(State::new());
-    //     CdcAcmClass::new(&mut builder, state, 64)
-    // };
-    // // task for writing logs to ttyACM1
-    // spawner.spawn(logger_task(logger_class)).unwrap();
-
     // Build the builder.
     let usb = builder.build();
 
@@ -154,137 +103,10 @@ async fn main(spawner: Spawner) {
 
     match setup_lsm(lsm) {
         Ok(_id) => {
-            // info!("lsm setup sucessfully, id: {}", id);
-            let _ = spawner.spawn(read_sensors_loop(lsm, 10, class));
+            let _ = spawner.spawn(read_sensors_loop(lsm, IMU_READING_DELAY_MS, class));
         }
         Err(e) => {
             error!("lsm failed to setup: {:?}", e);
-        }
-    }
-    
-    return;
-
-    let fw = include_bytes!("../../cyw43-firmware/43439A0.bin");
-    let clm = include_bytes!("../../cyw43-firmware/43439A0_clm.bin");
-
-    let mut rng = RoscRng;
-
-    let pwr = Output::new(p.PIN_23, Level::Low);
-    let cs = Output::new(p.PIN_25, Level::High);
-    let mut pio = Pio::new(p.PIO0, Irqs);
-    let spi = PioSpi::new(
-        &mut pio.common,
-        pio.sm0,
-        DEFAULT_CLOCK_DIVIDER,
-        pio.irq0,
-        cs,
-        p.PIN_24,
-        p.PIN_29,
-        p.DMA_CH0,
-    );
-
-    static STATE: StaticCell<cyw43::State> = StaticCell::new();
-    let state = STATE.init(cyw43::State::new());
-    let (net_device, mut control, runner) = cyw43::new(state, pwr, spi, fw).await;
-    spawner.spawn(cyw43_task(runner)).unwrap();
-
-    control.init(clm).await;
-    control
-        .set_power_management(cyw43::PowerManagementMode::None)
-        .await;
-
-    macro_rules! enable_led {
-        ($enable: literal) => {
-            control.gpio_set(0, $enable).await
-        };
-    }
-
-    let config = Config::dhcpv4(Default::default());
-
-    // Generate random seed
-    let seed = rng.next_u64();
-
-    // Init network stack
-    static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
-    let (stack, runner) = embassy_net::new(
-        net_device,
-        config,
-        RESOURCES.init(StackResources::new()),
-        seed,
-    );
-
-    spawner.spawn(net_task(runner)).unwrap();
-
-    loop {
-        loop {
-            match control
-                .join(
-                    option_env!("WIFI_NETWORK").unwrap_or("USR-Wifi"),
-                    JoinOptions::new(option_env!("WIFI_PASSWORD").unwrap_or_default().as_bytes()),
-                )
-                .await
-            {
-                Ok(_) => break,
-                Err(_error) => {
-                    enable_led!(true);
-                    Timer::after(Duration::from_secs(1)).await;
-                    enable_led!(false);
-                    Timer::after(Duration::from_secs(1)).await;
-                }
-            }
-        }
-
-        enable_led!(true);
-        // Wait for DHCP, not necessary when using static IP
-        while !stack.is_config_up() {
-            Timer::after_millis(100).await;
-        }
-        enable_led!(false);
-        for _ in 0..5 {
-            enable_led!(true);
-            Timer::after(Duration::from_millis(100)).await;
-            enable_led!(false);
-            Timer::after(Duration::from_millis(100)).await;
-        }
-        let mut rx_buffer = [0; 0];
-        let mut tx_buffer = [0; 4096];
-        loop {
-            let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
-            if let Err(error) = socket
-                .connect(IpEndpoint::new(
-                    embassy_net::IpAddress::Ipv4(Ipv4Addr::new(192, 168, 0, 102)),
-                    30600,
-                ))
-                .await
-            {
-                if error == ConnectError::NoRoute {
-                    break;
-                }
-                enable_led!(true);
-                Timer::after(Duration::from_secs(1)).await;
-                enable_led!(false);
-                Timer::after(Duration::from_secs(1)).await;
-                continue;
-            }
-            'logging: loop {
-                LOGGING_SIGNAL.wait().await;
-                let guard = LOGGING_MUTEX.lock().await;
-                let mut to_send: &[u8] = &*guard;
-                while !to_send.is_empty() {
-                    match socket.write(to_send).await {
-                        Ok(n) => {
-                            to_send = &to_send[n..];
-                        }
-                        Err(_) => {
-                            break 'logging;
-                        }
-                    }
-                }
-                enable_led!(true);
-                Timer::after(Duration::from_millis(100)).await;
-                enable_led!(false);
-                Timer::after(Duration::from_millis(100)).await;
-            }
         }
     }
 }
@@ -302,48 +124,17 @@ fn setup_lsm(lsm: &mut Lsm6dsox<I2c<'_, I2C0, Async>, Delay>) -> Result<u8, lsm6
 }
 
 #[embassy_executor::task]
-async fn cyw43_task(
-    runner: cyw43::Runner<'static, Output<'static>, PioSpi<'static, PIO0, 0, DMA_CH0>>,
-) -> ! {
-    runner.run().await
-}
-
-#[embassy_executor::task]
-async fn net_task(mut runner: embassy_net::Runner<'static, cyw43::NetDriver<'static>>) -> ! {
-    runner.run().await
-}
-
-#[embassy_executor::task]
 async fn okay_task() {
     Timer::after(Duration::from_secs(10)).await;
     info!("IMU is okay");
 }
 
-/// UNTESTED
-// fn initialize_motors(p: Peripherals) {
-//     let m1_slp = Output::new(p.PIN_10, Level::Low);
-//     let m1_dir = Output::new(p.PIN_15, Level::Low);
-//     let m1_pwm = Pwm::new_output_b(p.PWM_SLICE4, p.PIN_9, pwm::Config::default());
-// }
 
 #[embassy_executor::task]
 async fn usb_task(mut usb: UsbDevice<'static, Driver<'static, USB>>) -> ! {
     usb.run().await
 }
 
-// #[embassy_executor::task]
-// async fn logger_task(class: CdcAcmClass<'static, Driver<'static, USB>>) {
-//     embassy_usb_logger::with_class!(1024, LevelFilter::Info, class).await;
-// }
-
-// #[embassy_executor::task]
-// async fn pos_handler() {
-//     let mut ticker = Ticker::every(Duration::from_millis(10));
-//     loop {
-//         // position handling stuff
-//         ticker.next().await;
-//     }
-// }
 
 /// uses lsm to read in sensor data, then sends AngularRate and AccelerationNorm over ttyACM0
 #[embassy_executor::task]
