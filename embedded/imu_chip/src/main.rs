@@ -90,6 +90,7 @@ async fn main(spawner: Spawner) {
     };
 
     // ttyACM1 for writing sensor data over usb to lunabot
+    #[cfg(feature = "actuator")]
     let mut class_actuator = {
         static CLASS_STATE: StaticCell<State> = StaticCell::new();
         let state = CLASS_STATE.init(State::new());
@@ -105,10 +106,14 @@ async fn main(spawner: Spawner) {
     spawner.spawn(okay_task()).unwrap();
 
     class.wait_connection().await;
-    class_actuator.wait_connection().await;
 
-    let mut motor = Motor::new(p.PIN_10, p.PIN_15, p.PIN_9, p.PWM_SLICE4);
-    spawner.spawn(actuator_loop(class_actuator, motor));
+    #[cfg(feature = "actuator")]
+    {
+        class_actuator.wait_connection().await;
+
+        let mut motor = Motor::new(p.PIN_10, p.PIN_15, p.PIN_9, p.PWM_SLICE4);
+        spawner.spawn(actuator_loop(class_actuator, motor));
+    }
 
     let i2c = I2c::new_async(p.I2C0, p.PIN_1, p.PIN_0, Irqs, i2c::Config::default());
     static LSM: StaticCell<Lsm6dsox<I2c<'_, I2C0, Async>, Delay>> = StaticCell::new();

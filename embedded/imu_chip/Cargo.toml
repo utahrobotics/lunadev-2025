@@ -39,3 +39,6 @@ cyw43-pio.workspace = true
 embassy-net.workspace = true
 rand.workspace = true
 embassy-sync.workspace = true
+
+[features]
+actuator = []
