@@ -12,14 +12,31 @@ pub static RECORDER: OnceLock<RecorderData> = OnceLock::new();
 
 pub struct RecorderData {
     pub recorder: RecordingStream,
+    pub level: Level,
 }
 
 #[derive(Deserialize, Default, Debug)]
 pub enum RerunViz {
-    Log,
-    Viz,
+    Log(Level),
+    Viz(Level),
     #[default]
     Disabled,
+}
+
+#[derive(Deserialize, Default, Debug, PartialEq)]
+pub enum Level {
+    /// Only logs robots isometry, expanded obstacle map, and april tags.
+    #[default]
+    Minimal,
+    /// Logs everything including height maps and depth camera point cloud.
+    All
+}
+
+impl Level {
+    /// returns true if the log level is All
+    pub fn is_all(&self) -> bool {
+        *self == Level::All
+    }
 }
 
 pub fn init_rerun(rerun_viz: RerunViz) {
@@ -27,22 +44,22 @@ pub fn init_rerun(rerun_viz: RerunViz) {
         memory_limit: "25%".to_string(),
         ..Default::default()
     };
-    let recorder = match rerun_viz {
-        RerunViz::Viz => match rerun::RecordingStreamBuilder::new("lunabot").spawn_opts(&opts, None) {
+    let (recorder, level) = match rerun_viz {
+        RerunViz::Viz(level) => (match rerun::RecordingStreamBuilder::new("lunabot").spawn_opts(&opts, None) {
             Ok(x) => x,
             Err(e) => {
                 error!("Failed to start rerun process: {e}");
                 return;
             }
-        },
-        RerunViz::Log => {
-            match rerun::RecordingStreamBuilder::new("lunabot").save("recording.rrd") {
+        }, level),
+        RerunViz::Log(level) => {
+            (match rerun::RecordingStreamBuilder::new("lunabot").save("recording.rrd") {
                 Ok(x) => x,
                 Err(e) => {
                     error!("Failed to start rerun file logging: {e}");
                     return;
                 }
-            }
+            }, level)
         }
         RerunViz::Disabled => {
             return;
@@ -60,7 +77,7 @@ pub fn init_rerun(rerun_viz: RerunViz) {
         error!("Failed to setup rerun environment: {e}");
     }
 
-    let _ = RECORDER.set(RecorderData { recorder });
+    let _ = RECORDER.set(RecorderData { recorder , level});
 
     std::thread::spawn(|| {
         let recorder = &RECORDER.get().unwrap().recorder;

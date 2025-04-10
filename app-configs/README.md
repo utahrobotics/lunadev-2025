@@ -4,9 +4,11 @@ Move the appropriate `app-config.toml` into the root directory.
 ## Fields
 
 ### Main.rerun_viz
-* Log
-* Viz
+* Log(Level)
+* Viz(Level)
 * Disabled (default)
+
+Level can be All, or Minimal. Minimal only logs robot isometry, april tags, and expanded obstacle map. All will log height maps and depth image point clouds.
 
 ### Main.lunabase_address
 

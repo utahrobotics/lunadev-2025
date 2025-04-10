@@ -75,19 +75,21 @@ pub fn enumerate_depth_cameras(
                 let isometry = node.get_local_isometry();
 
                 if let Some(recorder) = RECORDER.get() {
-                    let local_x = isometry.rotation * Vector3::x_axis();
-                    let corrected_rotation =
-                        UnitQuaternion::from_axis_angle(&local_x, PI) * isometry.rotation;
-                    if let Err(e) = recorder.recorder.log_static(
-                        format!("{ROBOT_STRUCTURE}/cameras/depth/{serial}"),
-                        &rerun::Transform3D::from_translation_rotation(
-                            isometry.translation.vector.cast::<f32>().data.0[0],
-                            rerun::Quaternion::from_xyzw(
-                                corrected_rotation.as_vector().cast::<f32>().data.0[0],
+                    if recorder.level.is_all() {
+                        let local_x = isometry.rotation * Vector3::x_axis();
+                        let corrected_rotation =
+                            UnitQuaternion::from_axis_angle(&local_x, PI) * isometry.rotation;
+                        if let Err(e) = recorder.recorder.log_static(
+                            format!("{ROBOT_STRUCTURE}/cameras/depth/{serial}"),
+                            &rerun::Transform3D::from_translation_rotation(
+                                isometry.translation.vector.cast::<f32>().data.0[0],
+                                rerun::Quaternion::from_xyzw(
+                                    corrected_rotation.as_vector().cast::<f32>().data.0[0],
+                                ),
                             ),
-                        ),
-                    ) {
-                        error!("Failed to log depth camera transform: {e}");
+                        ) {
+                            error!("Failed to log depth camera transform: {e}");
+                        }
                     }
                 }
 
@@ -421,20 +423,22 @@ impl DepthCameraTask {
             }
 
             if let Some(recorder) = RECORDER.get() {
-                if let Err(e) = recorder.recorder.log(
-                    format!(
-                        "{ROBOT_STRUCTURE}/cameras/depth/{}/depth_image",
-                        self.serial
-                    ),
-                    &rerun::Pinhole::from_focal_length_and_resolution(
-                        [depth_format.fx(), depth_format.fy()],
-                        [depth_format.width() as f32, depth_format.height() as f32],
-                    ),
-                ) {
-                    error!(
-                        "Failed to log depth camera intrinsics for {}: {e}",
-                        self.serial
-                    );
+                if recorder.level.is_all() {
+                    if let Err(e) = recorder.recorder.log(
+                        format!(
+                            "{ROBOT_STRUCTURE}/cameras/depth/{}/depth_image",
+                            self.serial
+                        ),
+                        &rerun::Pinhole::from_focal_length_and_resolution(
+                            [depth_format.fx(), depth_format.fy()],
+                            [depth_format.width() as f32, depth_format.height() as f32],
+                        ),
+                    ) {
+                        error!(
+                            "Failed to log depth camera intrinsics for {}: {e}",
+                            self.serial
+                        );
+                    }
                 }
             }
 
@@ -553,36 +557,39 @@ impl DepthCameraTask {
                 depth_projector.project(slice, &camera_transform, depth_scale, Some(point_cloud));
 
                 if let Some(recorder) = RECORDER.get() {
-                    let result: rerun::RecordingStreamResult<()> = try {
-                        recorder.recorder.log(
-                            format!(
-                                "{ROBOT_STRUCTURE}/cameras/depth/{}/depth_image",
-                                self.serial
-                            ),
-                            &rerun::DepthImage::new(
-                                bytes_slice,
-                                ImageFormat::depth(
-                                    [frame.width() as u32, frame.height() as u32],
-                                    rerun::ChannelDatatype::U16,
+                    if recorder.level.is_all() {
+                        let result: rerun::RecordingStreamResult<()> = try {
+                            recorder.recorder.log(
+                                format!(
+                                    "{ROBOT_STRUCTURE}/cameras/depth/{}/depth_image",
+                                    self.serial
                                 ),
-                            )
-                            .with_meter(1.0 / depth_scale)
-                            .with_depth_range([0.0, 2.0 / depth_scale as f64]),
-                        )?;
-                        recorder.recorder.log(
-                            format!("{ROBOT}/point_clouds/{}", self.serial),
-                            &rerun::Points3D::new(
-                                point_cloud
-                                    .iter()
-                                    .filter(|point| point.w == 1.0)
-                                    .map(|point| [point.x, point.y, point.z]),
-                            )
-                            .with_radii(std::iter::repeat_n(0.003, point_cloud.len())),
-                        )?;
-                    };
-                    if let Err(e) = result {
-                        error!("Failed to log depth for {}: {e}", self.serial);
+                                &rerun::DepthImage::new(
+                                    bytes_slice,
+                                    ImageFormat::depth(
+                                        [frame.width() as u32, frame.height() as u32],
+                                        rerun::ChannelDatatype::U16,
+                                    ),
+                                )
+                                .with_meter(1.0 / depth_scale)
+                                .with_depth_range([0.0, 2.0 / depth_scale as f64]),
+                            )?;
+                            recorder.recorder.log(
+                                format!("{ROBOT}/point_clouds/{}", self.serial),
+                                &rerun::Points3D::new(
+                                    point_cloud
+                                        .iter()
+                                        .filter(|point| point.w == 1.0)
+                                        .map(|point| [point.x, point.y, point.z]),
+                                )
+                                .with_radii(std::iter::repeat_n(0.003, point_cloud.len())),
+                            )?;
+                        };
+                        if let Err(e) = result {
+                            error!("Failed to log depth for {}: {e}", self.serial);
+                        }
                     }
+
                 }
             }
         }

@@ -8,6 +8,10 @@ use common::{THALASSIC_CELL_COUNT, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALAS
 use crossbeam::atomic::AtomicCell;
 use gputter::is_gputter_initialized;
 use nalgebra::Vector2;
+
+#[cfg(feature="production")]
+use rerun::Points3D;
+
 use tasker::shared::OwnedData;
 use thalassic::{Occupancy, ThalassicBuilder, ThalassicPipelineRef};
 
@@ -205,6 +209,26 @@ pub fn spawn_thalassic_pipeline(
         .build();
 
         let reference = pipeline.get_ref();
+        
+        #[cfg(feature = "production")]
+        if let Some(recorder) = crate::apps::RECORDER.get() {
+            let initial_map = Points3D::new((0..THALASSIC_CELL_COUNT).map(|i| {
+                let i = i as usize;
+                rerun::Position3D::new(
+                    (i % THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE, 
+                    0.0, 
+                    (i / THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE
+                )
+            })).with_radii(
+                (0..THALASSIC_CELL_COUNT).map(|_| {
+                    0.01
+                })
+            );
+            if let Err(e) = recorder.recorder.log_static(
+                format!("{}/expanded_obstacle_map",crate::apps::ROBOT), &initial_map) {
+                tracing::error!("Couldnt log expanded obstacle map: {e}");
+            }
+        }
 
         std::thread::spawn(move || loop {
             std::thread::sleep(std::time::Duration::from_millis(100));
@@ -237,17 +261,19 @@ pub fn spawn_thalassic_pipeline(
 
             #[cfg(feature = "production")]
             if let Some(recorder) = crate::apps::RECORDER.get() {
-                if let Err(e) = recorder.recorder.log(
-                    format!("{}/heightmap", crate::apps::ROBOT),
-                    &rerun::Points3D::new(heightmap.iter().enumerate().map(|(i, &height)| {
-                        rerun::Position3D::new(
-                            (i % THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE,
-                            height,
-                            (i / THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE,
-                        )
-                    })),
-                ) {
-                    tracing::error!("Failed to log heightmap: {e}");
+                if recorder.level.is_all() {
+                    if let Err(e) = recorder.recorder.log(
+                        format!("{}/heightmap", crate::apps::ROBOT),
+                        &rerun::Points3D::new(heightmap.iter().enumerate().map(|(i, &height)| {
+                            rerun::Position3D::new(
+                                (i % THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE,
+                                height,
+                                (i / THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE,
+                            )
+                        })),
+                    ) {
+                        tracing::error!("Failed to log heightmap: {e}");
+                    }
                 }
             }
 
@@ -255,14 +281,8 @@ pub fn spawn_thalassic_pipeline(
             if let Some(recorder) = crate::apps::RECORDER.get() {
                 if let Err(e) = recorder.recorder.log(
                     format!("{}/expanded_obstacle_map",crate::apps::ROBOT),
-                    &rerun::Points3D::new((0..THALASSIC_CELL_COUNT).map(|i| {
-                        let i = i as usize;
-                        rerun::Position3D::new(
-                            (i % THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE, 
-                            0.0, 
-                            (i / THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE
-                        )
-                    })).with_colors((0..THALASSIC_CELL_COUNT).map(|i| {
+                    &rerun::Points3D::update_fields()
+                    .with_colors((0..THALASSIC_CELL_COUNT).map(|i| {
                         let pos = ThalassicData::index_to_xy(i as usize);
                         let color = match (&owned).get_cell_state(pos) {
                             CellState::GREEN => {
@@ -276,11 +296,7 @@ pub fn spawn_thalassic_pipeline(
                             }
                         };
                         color
-                    })).with_radii(
-                        (0..THALASSIC_CELL_COUNT).map(|_| {
-                            0.01
-                        })
-                    )
+                    }))
                 ) {
                     tracing::error!("Failed to log expanded obstacle map: {e}");
                 }
