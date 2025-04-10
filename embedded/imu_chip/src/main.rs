@@ -26,10 +26,11 @@ use embassy_time::{Delay, Duration, Ticker, Timer};
 use embassy_usb::class::cdc_acm::CdcAcmClass;
 use embassy_usb::class::cdc_acm::State;
 use embassy_usb::UsbDevice;
-use embedded_common::AccelerationNorm;
-use embedded_common::AngularRate;
-use embedded_common::FromIMU;
-use embedded_common::IMU_READING_DELAY_MS;
+use embedded_common::*;
+
+mod motor;
+use motor::*;
+
 use lsm6dsox::accelerometer::Accelerometer;
 use lsm6dsox::types::Error;
 use lsm6dsox::*;
@@ -88,6 +89,13 @@ async fn main(spawner: Spawner) {
         CdcAcmClass::new(&mut builder, state, 64)
     };
 
+    // ttyACM1 for writing sensor data over usb to lunabot
+    let mut class_actuator = {
+        static CLASS_STATE: StaticCell<State> = StaticCell::new();
+        let state = CLASS_STATE.init(State::new());
+        CdcAcmClass::new(&mut builder, state, 64)
+    };
+
     // Build the builder.
     let usb = builder.build();
 
@@ -97,6 +105,11 @@ async fn main(spawner: Spawner) {
     spawner.spawn(okay_task()).unwrap();
 
     class.wait_connection().await;
+    class_actuator.wait_connection().await;
+
+    let mut motor = Motor::new(p.PIN_10, p.PIN_15, p.PIN_9, p.PWM_SLICE4);
+    spawner.spawn(actuator_loop(class_actuator, motor));
+
     let i2c = I2c::new_async(p.I2C0, p.PIN_1, p.PIN_0, Irqs, i2c::Config::default());
     static LSM: StaticCell<Lsm6dsox<I2c<'_, I2C0, Async>, Delay>> = StaticCell::new();
     let lsm = LSM.init(lsm6dsox::Lsm6dsox::new(i2c, SlaveAddress::High, Delay {}));
@@ -135,6 +148,33 @@ async fn usb_task(mut usb: UsbDevice<'static, Driver<'static, USB>>) -> ! {
     usb.run().await
 }
 
+#[embassy_executor::task]
+async fn actuator_loop(mut class: CdcAcmClass<'static, Driver<'static, USB>>, mut motor: Motor<'static>) {
+    class.write_packet(&DeviceTypeDeclaration::Actuator.serialize()).await; // let the lunabot know that this where to write actuator readings
+    loop {
+        let mut cmd = [0,0,0u8];
+        if let Err(e) = class.read_packet(&mut cmd).await {
+            error!("failed to read packet: {}", e);
+            continue;
+        }
+
+        // deserialize actuator command
+        let Ok(cmd) = embedded_common::ActuatorCommand::deserialize(cmd) else {
+            continue;
+        };
+
+        match cmd {
+            ActuatorCommand::SetSpeed(speed) => {
+                if let Err(e) = motor.set_speed(speed) {
+                    error!("Couldn't set motor speed to {}: Invalid Duty Cycle", speed);
+                }
+            }
+            ActuatorCommand::SetDirection(dir) =>{
+                motor.set_direction(dir as u8 == 0);
+            }
+        }
+    }
+}
 
 /// uses lsm to read in sensor data, then sends AngularRate and AccelerationNorm over ttyACM0
 #[embassy_executor::task]
@@ -144,6 +184,8 @@ async fn read_sensors_loop(
     mut class: CdcAcmClass<'static, Driver<'static, USB>>,
 ) -> ! {
     let mut ticker = Ticker::every(Duration::from_millis(delay_ms));
+    class.write_packet(&DeviceTypeDeclaration::IMU.serialize()).await; // imu stuff goes over this port
+
     loop {
         let mut ack = [0u8];
         if let Err(e) = class.read_packet(&mut ack).await {
@@ -153,7 +195,7 @@ async fn read_sensors_loop(
         let rate = match lsm.angular_rate() {
             Ok(lsm6dsox::AngularRate { x, y, z }) => {
                 // info!("gyro: x: {}, y: {}, z: {} (radians per sec)", x.as_radians_per_second(),y.as_radians_per_second(),z.as_radians_per_second());
-                AngularRate {
+                embedded_common::AngularRate {
                     x: x.as_radians_per_second() as f32,
                     y: y.as_radians_per_second() as f32,
                     z: z.as_radians_per_second() as f32

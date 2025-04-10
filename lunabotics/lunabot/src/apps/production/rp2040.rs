@@ -30,7 +30,6 @@ pub fn enumerate_imus(
     localizer_ref: &LocalizerRef,
     serial_to_chain: impl IntoIterator<Item = (String, IMUInfo)>,
 ) {
-    get_tokio_handle().spawn(imu_wifi_listener());
     // let data_queue: Box<ArrayQueue<IMUReading>> = Box::new(ArrayQueue::new(64));
     // let data_queue_ref:&'static ArrayQueue<IMUReading> = Box::leak(data_queue);
 
@@ -203,7 +202,12 @@ impl IMUTask {
         let mut init_accel_sum = Vector3::zeros();
         let mut init_accel_count = 0usize;
 
-        // let start = Instant::now();
+        //TODO: put this code somewhere else 
+        let mut buf = [100u8; 1];
+        let _ = imu_port.read_exact(&mut buf).await.unwrap(); //TODO: DONT UNWRAP THIS IS JUST FOR TESTING
+        let device_type = DeviceTypeDeclaration::deserialize(buf).unwrap();
+        tracing::info!("Device type: {:?}", device_type);
+
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(IMU_READING_DELAY_MS)).await;
             const ACK: [u8; 1] = [1];
@@ -273,48 +277,5 @@ impl IMUTask {
                 }
             }
         }
-    }
-}
-
-async fn imu_wifi_listener() {
-    let listener = match TcpListener::bind("0.0.0.0:30600").await {
-        Ok(x) => x,
-        Err(e) => {
-            error!("Failed to start IMU Wifi listener: {e}");
-            return;
-        }
-    };
-    loop {
-        let (mut stream, addr) = match listener.accept().await {
-            Ok(x) => x,
-            Err(e) => {
-                error!("Failed to accept IMU Wifi connection: {e}");
-                break;
-            }
-        };
-        debug!("Received connection from {addr}");
-        tokio::spawn(async move {
-            let mut buf = [0u8; 256];
-            let mut line = vec![];
-            loop {
-                match stream.read(&mut buf).await {
-                    Ok(n) => {
-                        line.extend_from_slice(&buf[0..n]);
-                        let Ok(line_str) = std::str::from_utf8(&line) else {
-                            continue;
-                        };
-                        let Some(i) = line_str.find('\n') else {
-                            continue;
-                        };
-                        error!(target = addr.to_string(), "{}", line_str.split_at(i).0);
-                        line.drain(0..=i);
-                    }
-                    Err(e) => {
-                        error!("Failed to read from IMU Wifi {addr} connection: {e}");
-                        break;
-                    }
-                }
-            }
-        });
     }
 }

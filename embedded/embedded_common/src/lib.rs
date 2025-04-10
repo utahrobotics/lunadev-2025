@@ -3,12 +3,22 @@
 pub const IMU_READING_DELAY_MS: u64 = 10;
 
 
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(u8)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Direction {
     Forward = 0,
     Backward = 1,
+}
+
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[repr(u8)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum DeviceTypeDeclaration {
+    IMU = 0,
+    Actuator = 1,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -170,5 +180,26 @@ impl ActuatorCommand {
 
     pub fn backward() -> Self {
         ActuatorCommand::SetDirection(Direction::Backward)
+    }
+}
+
+
+impl DeviceTypeDeclaration {
+    pub fn serialize(&self) -> [u8; 1] {
+        [*self as u8]
+    }
+
+    pub fn deserialize(bytes: [u8; 1]) -> Result<Self, &'static str> {
+        match bytes[0] {
+            0 => {
+                Ok(DeviceTypeDeclaration::IMU)
+            }
+            1 => {
+                Ok(DeviceTypeDeclaration::Actuator)
+            }
+            _ => {
+                Err("Invalid device type")
+            }
+        }
     }
 }
