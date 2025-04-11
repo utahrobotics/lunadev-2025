@@ -20,10 +20,12 @@ bind_interrupts!(struct Irqs {
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
+    
     info!("Initializing peripherals...");
+
     let p = embassy_rp::init(Default::default());
 
-    let mut motor = Motor::new(p.PIN_10, p.PIN_15, p.PIN_9, p.PWM_SLICE4);
+    let mut motor = Motor::new(p.PIN_17, p.PIN_14, p.PIN_16, p.PWM_SLICE0);
 
     info!("Motor initialized. Max duty cycle: {}", motor.get_max_duty());
 
@@ -84,10 +86,13 @@ async fn motor_controller_loop(mut class: CdcAcmClass<'static, Driver<'static, U
         if let Err(e) = class.read_packet(&mut cmd).await {
             error!("failed to read packet: {}", e);
             continue;
+        } else {
+            info!("read packet");
         }
 
         // deserialize actuator command
         let Ok(cmd) = embedded_common::ActuatorCommand::deserialize(cmd) else {
+            warn!("failed to deserialize actuator command: {:?}", cmd);
             continue;
         };
 
@@ -98,6 +103,7 @@ async fn motor_controller_loop(mut class: CdcAcmClass<'static, Driver<'static, U
                 }
             }
             ActuatorCommand::SetDirection(dir) =>{
+                info!("got dir: {:?}", dir);
                 motor.set_direction(dir as u8 == 0);
             }
         }

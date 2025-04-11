@@ -1,5 +1,5 @@
 use embassy_rp::gpio::{Level, Output};
-use embassy_rp::peripherals::{PWM_SLICE0, PWM_SLICE4};
+use embassy_rp::peripherals::{PWM_SLICE0, PWM_SLICE1, PWM_SLICE2, PWM_SLICE3, PWM_SLICE4, PWM_SLICE5, PWM_SLICE6, PWM_SLICE7};
 use embassy_rp::pwm::{Config as PwmConfig, Pwm, PwmError, SetDutyCycle};
 use defmt::{error, info, warn};
 
@@ -15,20 +15,16 @@ pub struct Motor<'d> {
 }
 
 impl<'d> Motor<'d> {
-    /// Hardware Connections:
-    /// - Motor Sleep Pin: GPIO 10
-    /// - Motor Direction Pin: GPIO 15
-    /// - Motor PWM Pin: GPIO 9
     pub fn new(
-        sleep_pin: embassy_rp::peripherals::PIN_10,
-        dir_pin: embassy_rp::peripherals::PIN_15,
-        pwm_pin: embassy_rp::peripherals::PIN_9,
-        pwm_slice: PWM_SLICE4,
+        sleep_pin: embassy_rp::peripherals::PIN_17,
+        dir_pin: embassy_rp::peripherals::PIN_14,
+        pwm_pin: embassy_rp::peripherals::PIN_16,
+        pwm_slice: PWM_SLICE0,
     ) -> Self {
         let sleep = Output::new(sleep_pin, Level::High);
         let dir = Output::new(dir_pin, Level::Low);
 
-        let pwm = Pwm::new_output_b(pwm_slice, pwm_pin, PwmConfig::default());
+        let pwm = Pwm::new_output_a(pwm_slice, pwm_pin, PwmConfig::default());
 
         Motor { sleep, dir, pwm }
     }
