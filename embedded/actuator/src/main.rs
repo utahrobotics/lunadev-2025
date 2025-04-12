@@ -25,7 +25,7 @@ async fn main(spawner: Spawner) {
 
     let p = embassy_rp::init(Default::default());
 
-    let mut motor = Motor::new(p.PIN_17, p.PIN_14, p.PIN_16, p.PWM_SLICE0);
+    let mut motor = Motor::new_m2(p.PIN_17, p.PIN_14, p.PIN_16, p.PWM_SLICE0);
 
     info!("Motor initialized. Max duty cycle: {}", motor.get_max_duty());
 

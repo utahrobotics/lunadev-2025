@@ -15,7 +15,7 @@ pub struct Motor<'d> {
 }
 
 impl<'d> Motor<'d> {
-    pub fn new(
+    pub fn new_m2(
         sleep_pin: embassy_rp::peripherals::PIN_17,
         dir_pin: embassy_rp::peripherals::PIN_14,
         pwm_pin: embassy_rp::peripherals::PIN_16,
@@ -25,6 +25,20 @@ impl<'d> Motor<'d> {
         let dir = Output::new(dir_pin, Level::Low);
 
         let pwm = Pwm::new_output_a(pwm_slice, pwm_pin, PwmConfig::default());
+
+        Motor { sleep, dir, pwm }
+    }
+
+    pub fn new_m1(
+        sleep_pin: embassy_rp::peripherals::PIN_10,
+        dir_pin: embassy_rp::peripherals::PIN_15,
+        pwm_pin: embassy_rp::peripherals::PIN_9,
+        pwm_slice: PWM_SLICE4,
+    ) -> Self {
+        let sleep = Output::new(sleep_pin, Level::High);
+        let dir = Output::new(dir_pin, Level::Low);
+
+        let pwm = Pwm::new_output_b(pwm_slice, pwm_pin, PwmConfig::default());
 
         Motor { sleep, dir, pwm }
     }
