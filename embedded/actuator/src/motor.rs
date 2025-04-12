@@ -2,6 +2,9 @@ use embassy_rp::gpio::{Level, Output};
 use embassy_rp::peripherals::{PWM_SLICE0, PWM_SLICE1, PWM_SLICE2, PWM_SLICE3, PWM_SLICE4, PWM_SLICE5, PWM_SLICE6, PWM_SLICE7};
 use embassy_rp::pwm::{Config as PwmConfig, Pwm, PwmError, SetDutyCycle};
 use defmt::{error, info, warn};
+use embedded_common::ActuatorCommand;
+use embedded_common::Actuator;
+use embedded_common::Direction;
 
 pub struct Motor<'d> {
     // m1_slp (active=high)
@@ -59,13 +62,16 @@ impl<'d> Motor<'d> {
     }
 
     /// set direction
-    pub fn set_direction(&mut self, forward: bool) {
-        if forward {
-            self.dir.set_low();
-            info!("Motor direction set to forward");
-        } else {
-            self.dir.set_high();
-            info!("Motor direction set to backward");
+    pub fn set_direction(&mut self, direction: Direction) {
+        match direction {
+            Direction::Forward => {
+                self.dir.set_low();
+                info!("Motor direction set to forward");
+            }
+            Direction::Backward => {
+                self.dir.set_high();
+                info!("Motor direction set to backward");
+            }
         }
     }
 
