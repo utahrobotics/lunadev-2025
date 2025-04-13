@@ -29,7 +29,3 @@ window/stretch/aspect="expand"
 [dotnet]
 
 project/assembly_name="Lunabase"
-
-[rendering]
-
-environment/defaults/default_clear_color=Color(0.834614, 0.834614, 0.834614, 1)

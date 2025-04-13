@@ -3,7 +3,7 @@
 use std::io::Write;
 
 use bitcode::{Decode, Encode};
-use embedded_common::ActuatorCommand;
+use embedded_common::{Actuator, ActuatorCommand};
 use nalgebra::{distance, Point2, Point3};
 
 // Taken from https://opus-codec.org/docs/opus_api-1.5/group__opus__encoder.html#gad2d6bf6a9ffb6674879d7605ed073e25
@@ -83,13 +83,13 @@ impl FromLunabase {
             FromLunabase::LiftActuators(value) => {
                 Some(if value < 0 {
                     [
-                        ActuatorCommand::backward(),
-                        ActuatorCommand::set_speed(value as f64 / i8::MIN as f64),
+                        ActuatorCommand::backward(Actuator::M2),
+                        ActuatorCommand::set_speed(value as f64 / i8::MIN as f64, Actuator::M2),
                     ]
                 } else {
                     [
-                        ActuatorCommand::forward(),
-                        ActuatorCommand::set_speed(value as f64 / i8::MAX as f64),
+                        ActuatorCommand::forward(Actuator::M2),
+                        ActuatorCommand::set_speed(value as f64 / i8::MAX as f64, Actuator::M2),
                     ]
                 })
             }
@@ -102,13 +102,13 @@ impl FromLunabase {
             FromLunabase::BucketActuators(value) => {
                 Some(if value < 0 {
                     [
-                        ActuatorCommand::backward(),
-                        ActuatorCommand::set_speed(value as f64 / i8::MIN as f64),
+                        ActuatorCommand::backward(Actuator::M1),
+                        ActuatorCommand::set_speed(value as f64 / i8::MIN as f64, Actuator::M1),
                     ]
                 } else {
                     [
-                        ActuatorCommand::forward(),
-                        ActuatorCommand::set_speed(value as f64 / i8::MAX as f64),
+                        ActuatorCommand::forward(Actuator::M1),
+                        ActuatorCommand::set_speed(value as f64 / i8::MAX as f64, Actuator::M1),
                     ]
                 })
             }
