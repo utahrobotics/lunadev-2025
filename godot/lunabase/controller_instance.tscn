@@ -1,0 +1,109 @@
+[gd_scene load_steps=4 format=3 uid="uid://1n6ap26lanax"]
+
+[ext_resource type="Texture2D" uid="uid://pabmv4ko024p" path="res://ps4-controller.png" id="1_vgwp2"]
+
+[sub_resource type="GDScript" id="GDScript_l3ev1"]
+script/source = "extends MarginContainer
+
+
+const MAX_TIME_SINCE_INPUT := 0.5
+
+var device_id: int
+var time_since_input := 0.0
+var steering_weight := LunabotConn.get_default_steering_weight()
+
+@onready var input_received_panel: PanelContainer = $VBoxContainer/PanelContainer
+@onready var control_style: OptionButton = $VBoxContainer/OptionButton
+
+
+func _ready() -> void:
+	$VBoxContainer/Label.text = Input.get_joy_name(device_id)
+
+
+func _input(event: InputEvent) -> void:
+	if not event is InputEventJoypadButton and not event is InputEventJoypadMotion:
+		return
+	
+	if event.device != device_id:
+		return
+	
+	if event is InputEventJoypadButton and event.pressed:
+		time_since_input = 0.0
+	
+	match control_style.selected:
+		0:		# Traditional
+			if event is InputEventJoypadButton:
+				match event.button_index:
+					JOY_BUTTON_DPAD_UP:
+						Lunabot.set_lift_speed(1.0 if event.pressed else 0.0)
+					JOY_BUTTON_DPAD_DOWN:
+						Lunabot.set_lift_speed(-1.0 if event.pressed else 0.0)
+					JOY_BUTTON_Y:
+						Lunabot.set_bucket_speed(1.0 if event.pressed else 0.0)
+					JOY_BUTTON_A:
+						Lunabot.set_bucket_speed(-1.0 if event.pressed else 0.0)
+					JOY_BUTTON_RIGHT_SHOULDER:
+						steering_weight = 0.0 if event.pressed else LunabotConn.get_default_steering_weight()
+			else:
+				match event.axis:
+					JOY_AXIS_LEFT_X, JOY_AXIS_LEFT_Y:
+						var joystick: Vector2 = Vector2(Input.get_joy_axis(device_id, JOY_AXIS_LEFT_X), Input.get_joy_axis(device_id, JOY_AXIS_LEFT_Y))
+						joystick.y *= -1
+							
+						if joystick.y < -0.2:
+							joystick.x *= -1
+						
+						Lunabot.set_steering_left_right(
+							joystick.y + joystick.x, 
+							joystick.y - joystick.x,
+							steering_weight
+						)
+					#JOY_AXIS_RIGHT_X, JOY_AXIS_RIGHT_Y:
+						#pass
+
+
+func _process(delta: float) -> void:
+	time_since_input += delta
+	input_received_panel.self_modulate.a = remap(clampf(time_since_input, 0.0, MAX_TIME_SINCE_INPUT), 0.0, MAX_TIME_SINCE_INPUT, 1.0, 0.0)
+"
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_mg40q"]
+bg_color = Color(0.740163, 0.553428, 0.32228, 1)
+
+[node name="Controllerinstance" type="MarginContainer"]
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+script = SubResource("GDScript_l3ev1")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "PS4 Controller"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PanelContainer" type="PanelContainer" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_mg40q")
+
+[node name="TextureRect" type="TextureRect" parent="VBoxContainer/PanelContainer"]
+custom_minimum_size = Vector2(0, 72.875)
+layout_mode = 2
+texture = ExtResource("1_vgwp2")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="OptionButton" type="OptionButton" parent="VBoxContainer"]
+layout_mode = 2
+focus_mode = 0
+selected = 0
+item_count = 3
+popup/item_0/text = "Traditional"
+popup/item_1/text = "DriveFocus"
+popup/item_1/id = 1
+popup/item_2/text = "ArmFocus"
+popup/item_2/id = 2

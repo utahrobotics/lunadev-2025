@@ -181,4 +181,17 @@ impl ActuatorCommand {
             }
         }
     }
+
+    pub fn set_speed(mut speed: f64, actuator: Actuator) -> Self {
+        speed = speed.clamp(0.0, 1.0);
+        ActuatorCommand::SetSpeed((speed * u16::MAX as f64) as u16, actuator)
+    }
+
+    pub fn forward(actuator: Actuator) -> Self {
+        ActuatorCommand::SetDirection(Direction::Forward, actuator)
+    }
+
+    pub fn backward(actuator: Actuator) -> Self {
+        ActuatorCommand::SetDirection(Direction::Backward, actuator)
+    }
 }

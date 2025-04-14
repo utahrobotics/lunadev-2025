@@ -7,6 +7,7 @@ edition = "2021"
 ares-bt = { workspace = true }
 nalgebra = { workspace = true }
 common = { path = "../common" }
+embedded_common = { path = "../../embedded/embedded_common" }
 tracing = { workspace = true }
 simple-motion.workspace = true
 

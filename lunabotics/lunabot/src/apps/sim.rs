@@ -410,6 +410,7 @@ impl LunasimbotApp {
                 Action::SetSteering(steering) => {
                     lerper.set_steering(steering);
                 }
+                Action::SetActuators(_actuators) => {}
                 Action::CalculatePath { from, to, mut into } => {
                     if pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into) {
                         let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(

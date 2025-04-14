@@ -11,6 +11,7 @@ use ares_bt::{
 use autonomy::autonomy;
 use blackboard::LunabotBlackboard;
 use common::{FromLunabase, LunabotStage, PathPoint, Steering};
+use embedded_common::ActuatorCommand;
 use nalgebra::Point3;
 use simple_motion::StaticImmutableNode;
 use teleop::teleop;
@@ -26,6 +27,7 @@ pub use blackboard::Input;
 #[derive(Debug, Clone)]
 pub enum Action {
     SetSteering(Steering),
+    SetActuators(ActuatorCommand),
     SetStage(LunabotStage),
     CalculatePath {
         from: Point3<f64>,
