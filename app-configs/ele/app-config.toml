@@ -64,3 +64,6 @@ id1 = 4
 id2 = 87
 mask1 = "Left"
 mask2 = "Right"
+
+[Main.actuator_controller_info]
+serial = "1"
