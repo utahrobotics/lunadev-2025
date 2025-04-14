@@ -39,7 +39,9 @@ lumpur::define_configuration! {
             vesc: apps::Vesc,
             #[serde(default)]
             rerun_viz: apps::RerunViz,
-            imu_correction: Option<imu_calib::CalibrationParameters>
+            imu_correction: Option<imu_calib::CalibrationParameters>,
+            #[serde(default)]
+            actuator_controller_info: Option<apps::ActuatorControllerInfo>
         },
     }
 }
@@ -103,6 +105,7 @@ fn main() {
             vesc,
             rerun_viz,
             imu_correction,
+            actuator_controller_info
         } => {
             apps::LunabotApp {
                 lunabase_address,
@@ -115,7 +118,8 @@ fn main() {
                 robot_layout: robot_layout
                     .unwrap_or_else(|| "robot-layout/lunabot.json".to_string()),
                 rerun_viz,
-                imu_correction
+                imu_correction,
+                actuator_controller_info
             }
             .run();
         }

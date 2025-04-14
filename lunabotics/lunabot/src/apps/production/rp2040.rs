@@ -1,6 +1,7 @@
-use std::sync::mpsc::{Receiver, SyncSender};
+use std::sync::mpsc::{Receiver, Sender, SyncSender};
 
 use crate::localization::{IMUReading, LocalizerRef};
+use crossbeam::channel::SendError;
 use embedded_common::*;
 use fxhash::FxHashMap;
 use nalgebra::{UnitQuaternion, UnitVector3, Vector3};
@@ -19,6 +20,8 @@ use tracing::{debug, error, info, warn};
 use udev::{EventType, MonitorBuilder, Udev};
 
 use super::udev_poll;
+
+pub const ACTUATOR_CONTROLLER_DEFAULT_SERIAL: &'static str = "1";
 
 pub struct IMUInfo {
     pub node: StaticImmutableNode,
@@ -271,6 +274,183 @@ impl IMUTask {
                     error!("IMU reported error");
                     break;
                 }
+            }
+        }
+    }
+}
+
+pub struct ActuatorControllerInfo {
+    pub serial: String
+}
+
+impl Default for ActuatorControllerInfo {
+    fn default() -> Self {
+        tracing::warn!("Assuming default actuator serial");
+        Self {
+            serial: String::from(ACTUATOR_CONTROLLER_DEFAULT_SERIAL)
+        }
+    }
+}
+
+struct ActuatorControllerTask {
+    path: Receiver<String>,
+    localizer_ref: LocalizerRef,
+    command_rx: Receiver<ActuatorCommand>
+}
+
+pub struct ActuatorController {
+    command_tx: Sender<ActuatorCommand>
+}
+
+impl ActuatorController {
+    pub fn send_command(&mut self, cmd: ActuatorCommand) -> Result<(), std::sync::mpsc::SendError<ActuatorCommand>> {
+        self.command_tx.send(cmd)?;
+        Ok(())
+    }
+}
+
+pub fn enumerate_actuator_controllers(localizer_ref: &LocalizerRef, actuator_controller_info: ActuatorControllerInfo) -> ActuatorController {
+    let (tx_path, rx_path) = std::sync::mpsc::sync_channel(1);
+    let (tx_commands, rx_commands) = std::sync::mpsc::channel();
+
+    let localizer_ref = localizer_ref.clone();
+    std::thread::spawn(move || {
+        let mut actuator_task = ActuatorControllerTask {
+            path: rx_path,
+            localizer_ref,
+            command_rx: rx_commands
+        };
+        loop {
+            actuator_task.actuator_task().block_on();
+        }
+    });
+
+    let controller_serial = actuator_controller_info.serial;
+    std::thread::spawn(move || {
+        let mut monitor = match MonitorBuilder::new() {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to create udev monitor: {e}");
+                return;
+            }
+        };
+        monitor = match monitor.match_subsystem("tty") {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to set match-subsystem filter: {e}");
+                return;
+            }
+        };
+        let listener = match monitor.listen() {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to listen for udev events: {e}");
+                return;
+            }
+        };
+
+        let mut enumerator = {
+            let udev = match Udev::new() {
+                Ok(x) => x,
+                Err(e) => {
+                    error!("Failed to create udev context: {e}");
+                    return;
+                }
+            };
+            match udev::Enumerator::with_udev(udev) {
+                Ok(x) => x,
+                Err(e) => {
+                    error!("Failed to create udev enumerator: {e}");
+                    return;
+                }
+            }
+        };
+        if let Err(e) = enumerator.match_subsystem("tty") {
+            error!("Failed to set match-subsystem filter: {e}");
+        }
+        let devices = match enumerator.scan_devices() {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to scan devices: {e}");
+                return;
+            }
+        };
+
+        // infinite iterator
+        devices
+            .into_iter()
+            .chain(
+                udev_poll(listener)
+                    .filter(|event| event.event_type() == EventType::Add)
+                    .map(|event| event.device()),
+            )
+            .for_each(|device| {
+                let Some(path) = device.devnode() else {
+                    return;
+                };
+                let Some(path_str) = path.to_str() else {
+                    return;
+                };
+                let Some(serial_cstr) = device.property_value("ID_SERIAL") else {
+                    return;
+                };
+                let Some(mut serial) = serial_cstr.to_str() else {
+                    warn!("Failed to parse serial of device {path_str}");
+                    return;
+                };
+                let Some(tmp) = serial.strip_prefix("USR_ACTUATOR_") else {
+                    if serial == "USR_ACTUATOR" {
+                        warn!("Actuator controller at path {path_str} has no serial number");
+                        return;
+                    }
+                    return;
+                };
+                serial = tmp;
+
+                if serial == controller_serial {
+                    if tx_path.send(path_str.into()).is_err() {
+                        warn!("Couldnt send controller path");
+                    }
+                } else {
+                    warn!("Unexpected actuator with serial {}", serial);
+                }
+            })
+    });
+    ActuatorController { command_tx: tx_commands }
+}
+
+impl ActuatorControllerTask {
+    pub async fn actuator_task(&mut self) {
+        let path_str = match self.path.recv() {
+            Ok(x) => x,
+            Err(_) => loop {
+                std::thread::park();
+            },
+        };
+        let mut actuator_port = match tokio_serial::new(&path_str, 9600)
+            .timeout(std::time::Duration::from_millis(500))
+            .open_native_async()
+        {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Failed to open motor port {path_str}: {e}");
+                return;
+            }
+        };
+        info!("Opened IMU port {path_str}");
+        if let Err(e) = actuator_port.set_exclusive(true) {
+            warn!("Failed to set motor port {path_str} exclusive: {e}");
+        }
+        let mut actuator_port = BufStream::new(actuator_port);
+        loop {
+            let Ok(cmd) = self.command_rx.recv() else {
+                eprintln!("Error receiving actuator command in actuator_task()");
+                continue;
+            };
+
+            println!("Received actuator command: {:?}", cmd);
+            if let Err(e) = actuator_port.write_all(&cmd.serialize()).await {
+                eprintln!("Failed to write to actuator port {e}");
             }
         }
     }

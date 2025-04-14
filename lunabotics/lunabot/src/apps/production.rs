@@ -69,6 +69,11 @@ pub struct IMUInfo {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct ActuatorControllerInfo {
+    serial: String
+}
+
+#[derive(Deserialize, Debug)]
 pub struct VescPair {
     id1: u8,
     id2: u8,
@@ -101,7 +106,8 @@ pub struct LunabotApp {
     pub robot_layout: String,
     pub vesc: Vesc,
     pub rerun_viz: RerunViz,
-    pub imu_correction: Option<CalibrationParameters>
+    pub imu_correction: Option<CalibrationParameters>,
+    pub actuator_controller_info: Option<ActuatorControllerInfo>
 }
 
 impl LunabotApp {
@@ -297,6 +303,14 @@ impl LunabotApp {
             motor_ref.set_speed(left as f32, right as f32);
         });
 
+        let mut actuator_controller = enumerate_actuator_controllers(&localizer_ref, self.actuator_controller_info.map(
+            |inner| {
+                rp2040::ActuatorControllerInfo {
+                    serial: inner.serial
+                }
+            }
+        ).unwrap_or_default());
+
         run_ai(
             robot_chain.into(),
             |action, inputs| match action {
@@ -306,8 +320,8 @@ impl LunabotApp {
                 Action::SetSteering(steering) => {
                     lerper.set_steering(steering);
                 }
-                Action::SetActuators(actuators) => {
-                    // TODO: Implement actuators
+                Action::SetActuators(actuator_cmd) => {
+                    actuator_controller.send_command(actuator_cmd);
                 }
                 Action::CalculatePath { from, to, mut into } => {
                     if pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into) {
