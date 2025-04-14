@@ -129,6 +129,7 @@ impl FromIMU {
         }
     }
 }
+
 impl ActuatorCommand {
     pub fn deserialize(bytes: [u8; 4]) -> Result<Self, &'static str> {
         let actuator = {

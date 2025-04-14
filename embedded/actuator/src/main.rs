@@ -19,7 +19,6 @@ bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => usb::InterruptHandler<USB>;
 });
 
-
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     
@@ -90,8 +89,6 @@ async fn motor_controller_loop(mut class: CdcAcmClass<'static, Driver<'static, U
         if let Err(e) = class.read_packet(&mut cmd).await {
             error!("failed to read packet: {}", e);
             continue;
-        } else {
-            info!("read packet");
         }
 
         // deserialize actuator command
@@ -104,10 +101,16 @@ async fn motor_controller_loop(mut class: CdcAcmClass<'static, Driver<'static, U
             ActuatorCommand::SetSpeed(speed, actuator) => {
                 match actuator {
                     Actuator::M1 => {
-                        m1.set_speed(speed);
+                        info!("Setting M1's speed");
+                        if let Err(_) = m1.set_speed(speed) {
+                            error!("couldnt set m1 speed: Pwm error");
+                        }
                     }
                     Actuator::M2 => {
-                        m2.set_speed(speed);
+                        info!("Setting M2's speed");
+                        if let Err(_) = m2.set_speed(speed) {
+                            error!("couldnt set m1 speed: Pwm error");
+                        }
                     }
                 }
 
@@ -115,9 +118,11 @@ async fn motor_controller_loop(mut class: CdcAcmClass<'static, Driver<'static, U
             ActuatorCommand::SetDirection(dir, actuator) =>{
                 match actuator {
                     Actuator::M1 => {
+                        info!("Setting M1's direction");
                         m1.set_direction(dir);
                     }
                     Actuator::M2 => {
+                        info!("Setting M2's direction");
                         m2.set_direction(dir);
                     }
                 }
