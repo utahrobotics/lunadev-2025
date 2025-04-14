@@ -306,6 +306,9 @@ impl LunabotApp {
                 Action::SetSteering(steering) => {
                     lerper.set_steering(steering);
                 }
+                Action::SetActuators(actuators) => {
+                    // TODO: Implement actuators
+                }
                 Action::CalculatePath { from, to, mut into } => {
                     if pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into) {
                         inputs.push(Input::PathCalculated(into));
