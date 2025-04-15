@@ -58,8 +58,81 @@ func _input(event: InputEvent) -> void:
 							joystick.y - joystick.x,
 							steering_weight
 						)
-					#JOY_AXIS_RIGHT_X, JOY_AXIS_RIGHT_Y:
-						#pass
+		1:		# DriveFocus
+			if event is InputEventJoypadButton:
+				match event.button_index:
+					JOY_BUTTON_DPAD_UP:
+						Lunabot.set_lift_speed(1.0 if event.pressed else 0.0)
+					JOY_BUTTON_DPAD_DOWN:
+						Lunabot.set_lift_speed(-1.0 if event.pressed else 0.0)
+					JOY_BUTTON_Y:
+						Lunabot.set_bucket_speed(1.0 if event.pressed else 0.0)
+					JOY_BUTTON_A:
+						Lunabot.set_bucket_speed(-1.0 if event.pressed else 0.0)
+					JOY_BUTTON_RIGHT_SHOULDER:
+						steering_weight = 0.0 if event.pressed else LunabotConn.get_default_steering_weight()
+			else:
+				match event.axis:
+					JOY_AXIS_LEFT_X, JOY_AXIS_TRIGGER_RIGHT, JOY_AXIS_TRIGGER_LEFT:
+						var speed := Input.get_joy_axis(device_id, JOY_AXIS_TRIGGER_RIGHT) - Input.get_joy_axis(device_id, JOY_AXIS_TRIGGER_LEFT)
+						var horizontal := Input.get_joy_axis(device_id, JOY_AXIS_LEFT_X)
+						
+						if horizontal < 0.0:
+							Lunabot.set_steering_left_right(
+								speed * remap(horizontal, -1.0, 0.0, -1.0, 1.0),
+								speed,
+								steering_weight
+							)
+						else:
+							Lunabot.set_steering_left_right(
+								speed,
+								speed * remap(horizontal, 0.0, 1.0, 1.0, -1.0),
+								steering_weight
+							)
+		2:		# ArmFocus
+			if event is InputEventJoypadButton:
+				match event.button_index:
+					JOY_BUTTON_DPAD_LEFT, JOY_BUTTON_DPAD_RIGHT:
+						pass
+					JOY_BUTTON_RIGHT_SHOULDER:
+						steering_weight = 0.0 if event.pressed else LunabotConn.get_default_steering_weight()
+						return
+					_:
+						return
+			else:
+				match event.axis:
+					JOY_AXIS_TRIGGER_RIGHT, JOY_AXIS_TRIGGER_LEFT:
+						pass
+					JOY_AXIS_LEFT_Y:
+						Lunabot.set_lift_speed(event.axis_value)
+						return
+					JOY_AXIS_RIGHT_Y:
+						Lunabot.set_bucket_speed(event.axis_value)
+						return
+					_:
+						return
+			
+			var speed := Input.get_joy_axis(device_id, JOY_AXIS_TRIGGER_RIGHT) - Input.get_joy_axis(device_id, JOY_AXIS_TRIGGER_LEFT)
+			var horizontal := Input.is_joy_button_pressed(device_id, JOY_BUTTON_DPAD_RIGHT) as int - (Input.is_joy_button_pressed(device_id, JOY_BUTTON_DPAD_LEFT) as int)
+			
+			if horizontal == 0.0:
+				Lunabot.set_steering_left_right(
+					speed,
+					speed,
+					steering_weight
+				)
+			elif horizontal < 0.0:
+				Lunabot.set_steering_left_right(
+					-speed,
+					speed,
+					steering_weight
+				)
+			else:
+				Lunabot.set_steering_left_right(
+					speed,
+					-speed ,
+					steering_weight
+				)
 
 
 func _process(delta: float) -> void:
