@@ -1,7 +1,7 @@
 FROM rust
 
 # Update the package list and install basic packages
-RUN apt-get update && apt-get install -y zip cmake ninja-build kmod libclang-dev
+RUN apt-get update && apt-get install -y zip cmake ninja-build kmod libclang-dev clang mold
 
 RUN apt-get -y install libv4l-dev libudev-dev
 
