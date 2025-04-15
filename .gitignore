@@ -45,3 +45,4 @@ embedded/target/
 /godot/exports/win/
 
 *.blend1
+/3d-models/lunabot.blend
