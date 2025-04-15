@@ -1,7 +1,7 @@
 FROM rust
 
 # Update the package list and install basic packages
-RUN apt-get update && apt-get install -y zip cmake ninja-build kmod libclang-dev clang mold
+RUN apt-get update && apt-get install -y zip cmake ninja-build kmod libclang-dev clang mold libasound-dev
 
 RUN apt-get -y install libv4l-dev libudev-dev
 
@@ -26,7 +26,7 @@ RUN apt-get install -y \
 RUN apt-get -y install ffmpeg
 RUN cargo install --force cargo-make
 
-ENV PKG_CONFIG_PATH=/vcpkg/installed/arm64-linux/lib/pkgconfig/
+ENV PKG_CONFIG_PATH=/vcpkg/installed/x64-linux/lib/pkgconfig/
 
 # RUN apt-get install -y obs-studio
 # RUN apt-get install -y pipx
