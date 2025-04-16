@@ -1,22 +1,19 @@
 use std::sync::mpsc::{Receiver, Sender, SyncSender};
 
 use crate::localization::{IMUReading, LocalizerRef};
-use crossbeam::channel::SendError;
 use embedded_common::*;
 use fxhash::FxHashMap;
 use nalgebra::{UnitQuaternion, UnitVector3, Vector3};
 use simple_motion::StaticImmutableNode;
 use tasker::{
-    get_tokio_handle,
     tokio::{
         self,
         io::{AsyncReadExt, AsyncWriteExt, BufStream},
-        net::TcpListener,
     },
     BlockOn,
 };
 use tokio_serial::SerialPortBuilderExt;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 use udev::{EventType, MonitorBuilder, Udev};
 
 use super::udev_poll;
@@ -304,6 +301,7 @@ pub struct ActuatorController {
 
 impl ActuatorController {
     pub fn send_command(&mut self, cmd: ActuatorCommand) -> Result<(), std::sync::mpsc::SendError<ActuatorCommand>> {
+	//tracing::info!("called send_command on ActuatorController");
         self.command_tx.send(cmd)?;
         Ok(())
     }
@@ -421,6 +419,7 @@ pub fn enumerate_actuator_controllers(localizer_ref: &LocalizerRef, actuator_con
 
 impl ActuatorControllerTask {
     pub async fn actuator_task(&mut self) {
+	tracing::info!("starting actuator task");
         let path_str = match self.path.recv() {
             Ok(x) => x,
             Err(_) => loop {
@@ -433,25 +432,31 @@ impl ActuatorControllerTask {
         {
             Ok(x) => x,
             Err(e) => {
-                error!("Failed to open motor port {path_str}: {e}");
+                error!("Failed to open actuator controller port {path_str}: {e}");
                 return;
             }
         };
-        info!("Opened IMU port {path_str}");
+        info!("Opened Actuator controller port {path_str}");
         if let Err(e) = actuator_port.set_exclusive(true) {
-            warn!("Failed to set motor port {path_str} exclusive: {e}");
+            warn!("Failed to set actuator controller port {path_str} exclusive: {e}");
         }
         let mut actuator_port = BufStream::new(actuator_port);
         loop {
             let Ok(cmd) = self.command_rx.recv() else {
-                eprintln!("Error receiving actuator command in actuator_task()");
+                tracing::error!("Error receiving actuator command in actuator_task()");
                 continue;
             };
 
-            println!("Received actuator command: {:?}", cmd);
+            // tracing::info!("Received actuator command in ActuatorControllerTask: {:?}", cmd);
             if let Err(e) = actuator_port.write_all(&cmd.serialize()).await {
-                eprintln!("Failed to write to actuator port {e}");
+                tracing::error!("Failed to write to actuator port {e}");
+                break;
             }
+	        if let Err(e) = actuator_port.flush().await {
+                tracing::error!("Failed to flush to actuator port {e}");
+                break;
+            }
+            tracing::warn!("Disconnnected from {}", path_str);
         }
     }
 }

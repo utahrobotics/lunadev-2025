@@ -321,7 +321,7 @@ impl LunabotApp {
                     lerper.set_steering(steering);
                 }
                 Action::SetActuators(actuator_cmd) => {
-                    actuator_controller.send_command(actuator_cmd);
+                    let _ = actuator_controller.send_command(actuator_cmd);
                 }
                 Action::CalculatePath { from, to, mut into } => {
                     if pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into) {
@@ -374,11 +374,12 @@ impl LunabotApp {
                         async {
                             tokio::select! {
                                 result = from_lunabase_rx.recv() => {
-                                    let Some(msg) = result else {
+				    let Some(msg) = result else {
                                         error!("Lunabase message channel closed");
                                         std::future::pending::<()>().await;
                                         unreachable!();
                                     };
+				    tracing::info!("msg: {:?}", msg);
                                     inputs.push(Input::FromLunabase(msg));
                                 }
                                 _ = tokio::time::sleep_until(deadline.into()) => {}
