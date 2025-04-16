@@ -3,7 +3,7 @@
 
 use defmt::*;
 use embassy_executor::Spawner;
-use embassy_rp::{adc::{self, Adc, AdcPin, Async, Channel, Config, Mode}, bind_interrupts, gpio::Pull, peripherals::{ADC, PIN_26, USB}, usb::{self, Driver}};
+use embassy_rp::{adc::{self, Adc, AdcPin, Async, Channel, Config, Mode}, bind_interrupts, gpio::Pull, peripherals::{ADC, PIN_26, PIN_27, USB}, usb::{self, Driver}};
 use embassy_time::{Duration, Ticker, Timer};
 use embassy_usb::{class::cdc_acm::{CdcAcmClass, Receiver, Sender, State}, UsbDevice};
 use embedded_common::ActuatorCommand;
@@ -91,7 +91,7 @@ async fn actuator_length_reader(mut class: Sender<'static, Driver<'static, USB>>
     let mut channel = Channel::new_pin(pot, Pull::None);
     let mut adc = Adc::new(adc, Irqs, Config::default());
     const LIN_ACTUATOR_RESIST: f64 = 10.943;
-    let mut ticker = Ticker::every(Duration::from_millis(100));
+    let mut ticker = Ticker::every(Duration::from_millis(500));
     loop {
         let (Ok(l1),Ok(l2),Ok(l3)) = (
             adc.read(&mut channel).await,
@@ -101,9 +101,13 @@ async fn actuator_length_reader(mut class: Sender<'static, Driver<'static, USB>>
             warn!("Failed to read from adc");
             continue;
         };
-        let avg = (l1+l2+l3)/3;
-        let pot_kohms = (avg/65535) as f64 * LIN_ACTUATOR_RESIST;
+        let avg = (l1 as f64 + l2 as f64 + l3 as f64)/3.; // between 100 and 3660
+        info!("avg adc reading: {}", avg);
+        let pot_kohms = (avg/65535.) * LIN_ACTUATOR_RESIST;
+        info!("khoms: {}", pot_kohms);
+
         let inches = pot_kohms/1.25;
+        info!("length: {}", inches);
         let _ = class.write_packet(&inches.to_le_bytes()).await;
         ticker.next().await;
     }
