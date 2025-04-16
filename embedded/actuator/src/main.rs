@@ -3,9 +3,9 @@
 
 use defmt::*;
 use embassy_executor::Spawner;
-use embassy_rp::{bind_interrupts, peripherals::USB, usb::{self, Driver}};
-use embassy_time::{Duration, Timer};
-use embassy_usb::{class::cdc_acm::{CdcAcmClass, State}, UsbDevice};
+use embassy_rp::{adc::{self, Adc, AdcPin, Async, Channel, Config, Mode}, bind_interrupts, gpio::Pull, peripherals::{ADC, PIN_26, USB}, usb::{self, Driver}};
+use embassy_time::{Duration, Ticker, Timer};
+use embassy_usb::{class::cdc_acm::{CdcAcmClass, Receiver, Sender, State}, UsbDevice};
 use embedded_common::ActuatorCommand;
 use embedded_common::Actuator;
 use embedded_common::Direction;
@@ -17,6 +17,7 @@ use motor::*;
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => usb::InterruptHandler<USB>;
+    ADC_IRQ_FIFO => adc::InterruptHandler;
 });
 
 #[embassy_executor::main]
@@ -70,20 +71,46 @@ async fn main(spawner: Spawner) {
         let state = CLASS_STATE.init(State::new());
         CdcAcmClass::new(&mut builder, state, 64)
     };
-    let usb = builder.build();
+    let usb: UsbDevice<'_, Driver<'_, USB>> = builder.build();
     spawner.spawn(usb_task(usb)).unwrap();
 
     class.wait_connection().await;
 
+    let (class_tx, class_rx) = class.split();
+
+
     m1.enable();
     m2.enable();
 
-    // spawner.spawn(motor_test_task(motor)).unwrap();
-    spawner.spawn(motor_controller_loop(class,m1,m2)).unwrap();
+    spawner.spawn(actuator_length_reader(class_tx, p.PIN_26, p.ADC)).unwrap();
+    spawner.spawn(motor_controller_loop(class_rx,m1,m2)).unwrap();
 }
 
 #[embassy_executor::task(pool_size = 1)]
-async fn motor_controller_loop(mut class: CdcAcmClass<'static, Driver<'static, USB>>, mut m1: Motor<'static>, mut m2: Motor<'static>) {
+async fn actuator_length_reader(mut class: Sender<'static, Driver<'static, USB>>, pot: PIN_26, adc: ADC) {
+    let mut channel = Channel::new_pin(pot, Pull::None);
+    let mut adc = Adc::new(adc, Irqs, Config::default());
+    const LIN_ACTUATOR_RESIST: f64 = 10.943;
+    let mut ticker = Ticker::every(Duration::from_millis(100));
+    loop {
+        let (Ok(l1),Ok(l2),Ok(l3)) = (
+            adc.read(&mut channel).await,
+            adc.read(&mut channel).await,
+            adc.read(&mut channel).await
+        ) else {
+            warn!("Failed to read from adc");
+            continue;
+        };
+        let avg = (l1+l2+l3)/3;
+        let pot_kohms = (avg/65535) as f64 * LIN_ACTUATOR_RESIST;
+        let inches = pot_kohms/1.25;
+        let _ = class.write_packet(&inches.to_le_bytes()).await;
+        ticker.next().await;
+    }
+}
+
+#[embassy_executor::task(pool_size = 1)]
+async fn motor_controller_loop(mut class: Receiver<'static, Driver<'static, USB>>, mut m1: Motor<'static>, mut m2: Motor<'static>) {
     loop {
         let mut cmd = [0u8; 4];
         if let Err(e) = class.read_packet(&mut cmd).await {
