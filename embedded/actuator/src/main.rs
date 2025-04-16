@@ -86,29 +86,38 @@ async fn main(spawner: Spawner) {
     spawner.spawn(motor_controller_loop(class_rx,m1,m2)).unwrap();
 }
 
+const ADC_MIN:      f64 = 148.0;   // reading when actuator is fully retracted
+const ADC_MAX:      f64 = 3720.0;  // reading when actuator is fully extended
+const STROKE_IN:    f64 = 8.0;     // full stroke length in inches
+
+fn adc_to_inches(counts: f64) -> f64 {
+    let ratio = ((counts - ADC_MIN) / (ADC_MAX - ADC_MIN))
+        .clamp(0.0, 1.0);
+    ratio * STROKE_IN
+}
+
+
 #[embassy_executor::task(pool_size = 1)]
 async fn actuator_length_reader(mut class: Sender<'static, Driver<'static, USB>>, pot: PIN_26, adc: ADC) {
+    // actuator's max length is 8 in
     let mut channel = Channel::new_pin(pot, Pull::None);
     let mut adc = Adc::new(adc, Irqs, Config::default());
     const LIN_ACTUATOR_RESIST: f64 = 10.943;
     let mut ticker = Ticker::every(Duration::from_millis(500));
     loop {
-        let (Ok(l1),Ok(l2),Ok(l3)) = (
-            adc.read(&mut channel).await,
-            adc.read(&mut channel).await,
-            adc.read(&mut channel).await
-        ) else {
-            warn!("Failed to read from adc");
-            continue;
-        };
-        let avg = (l1 as f64 + l2 as f64 + l3 as f64)/3.; // between 100 and 3660
-        info!("avg adc reading: {}", avg);
-        let pot_kohms = (avg/65535.) * LIN_ACTUATOR_RESIST;
-        info!("khoms: {}", pot_kohms);
+        const AVERAGING: usize = 10;
+        let mut total = 0;
+        for _ in 0..AVERAGING {
+            if let Ok(reading) = adc.read(&mut channel).await {
+                total += reading;
+            }
+        }
+        let reading = (total/AVERAGING as u16) as f64; // 148 ish when fully retracted, 3720 ish when fully extended
 
-        let inches = pot_kohms/1.25;
-        info!("length: {}", inches);
-        let _ = class.write_packet(&inches.to_le_bytes()).await;
+        let len = adc_to_inches(reading)/39.37; // in meters
+        if class.dtr() {
+            let _ = class.write_packet(&len.to_le_bytes()).await;
+        }
         ticker.next().await;
     }
 }
