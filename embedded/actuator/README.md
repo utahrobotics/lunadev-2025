@@ -9,3 +9,7 @@
 4. You should be able to control the actuator using [this.](https://github.com/matthewashton-k/actuator-controller)
 
 All logs are sent over the probe and are displayed by probe-run when you call cargo run.
+
+Lift actuator length in meters is sent over tty every 500 ms as a little endian encoded f64.
+
+to control the bucket or the lift send a serialized ActuatorCommand from embedded common over tty.
