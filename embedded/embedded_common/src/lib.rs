@@ -18,9 +18,9 @@ pub enum Direction {
 /// Used to specify which actuator a command is meant for.
 pub enum Actuator {
     /// the lift
-    M1 = 0,
+    Lift = 0,
     /// the bucket
-    M2 = 1
+    Bucket = 1
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -133,10 +133,10 @@ impl FromIMU {
 impl ActuatorCommand {
     pub fn deserialize(bytes: [u8; 4]) -> Result<Self, &'static str> {
         let actuator = {
-            if bytes[3] == Actuator::M1 as u8 {
-                Actuator::M1
-            } else if bytes[3] == Actuator::M2 as u8{
-                Actuator::M2
+            if bytes[3] == Actuator::Lift as u8 {
+                Actuator::Lift
+            } else if bytes[3] == Actuator::Bucket as u8{
+                Actuator::Bucket
             } else {
                 return Err("Unknown actuator specifier (not m1 or m2)");
             }
