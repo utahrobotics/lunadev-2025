@@ -299,9 +299,6 @@ impl LunabotApp {
         }
 
         let motor_ref = enumerate_motors(vesc_ids, self.vesc.speed_multiplier.unwrap_or(1.0));
-        let lerper = SteeringLerper::new(move |left, right| {
-            motor_ref.set_speed(left as f32, right as f32);
-        });
 
         let mut actuator_controller = enumerate_actuator_controllers(&localizer_ref, self.actuator_controller_info.map(
             |inner| {
@@ -318,7 +315,8 @@ impl LunabotApp {
                     lunabot_stage.store(stage);
                 }
                 Action::SetSteering(steering) => {
-                    lerper.set_steering(steering);
+                    let (left, right) = steering.get_left_and_right();
+                    motor_ref.set_speed(left as f32, right as f32);
                 }
                 Action::SetActuators(actuator_cmd) => {
                     let _ = actuator_controller.send_command(actuator_cmd);

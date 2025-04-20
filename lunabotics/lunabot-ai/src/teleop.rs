@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::atomic::{AtomicBool, Ordering}, time::Duration};
 
 use ares_bt::{sequence::Sequence, Behavior, Status};
 use common::{FromLunabase, LunabotStage, Steering};
@@ -14,16 +14,23 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard> {
     let mut last_steering = Steering::default();
     let mut last_lift_actuator = None;
     let mut last_bucket_actuator = None;
+    let entered: &_ = Box::leak(Box::new(AtomicBool::new(false)));
 
     Sequence::new((
         |blackboard: &mut LunabotBlackboard| {
             blackboard.enqueue_action(Action::SetStage(LunabotStage::TeleOp));
+            entered.store(true, Ordering::Relaxed);
             Status::Success
         },
         move |blackboard: &mut LunabotBlackboard| {
             if *blackboard.lunabase_disconnected() {
                 error!("Lunabase disconnected");
                 return Status::Failure;
+            }
+            if entered.swap(false, Ordering::Relaxed) {
+                last_steering = Steering::default();
+                last_lift_actuator = None;
+                last_bucket_actuator = None;
             }
             macro_rules! handle {
                 ($msg: ident) => {

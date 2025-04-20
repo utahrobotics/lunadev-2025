@@ -83,13 +83,13 @@ impl FromLunabase {
             FromLunabase::LiftActuators(value) => {
                 Some(if value < 0 {
                     [
-                        ActuatorCommand::backward(Actuator::M2),
-                        ActuatorCommand::set_speed(value as f64 / i8::MIN as f64, Actuator::M2),
+                        ActuatorCommand::backward(Actuator::M1),
+                        ActuatorCommand::set_speed(value as f64 / i8::MIN as f64, Actuator::M1),
                     ]
                 } else {
                     [
-                        ActuatorCommand::forward(Actuator::M2),
-                        ActuatorCommand::set_speed(value as f64 / i8::MAX as f64, Actuator::M2),
+                        ActuatorCommand::forward(Actuator::M1),
+                        ActuatorCommand::set_speed(value as f64 / i8::MAX as f64, Actuator::M1),
                     ]
                 })
             }
@@ -102,13 +102,13 @@ impl FromLunabase {
             FromLunabase::BucketActuators(value) => {
                 Some(if value < 0 {
                     [
-                        ActuatorCommand::backward(Actuator::M1),
-                        ActuatorCommand::set_speed(value as f64 / i8::MIN as f64, Actuator::M1),
+                        ActuatorCommand::forward(Actuator::M2),
+                        ActuatorCommand::set_speed(value as f64 / i8::MIN as f64, Actuator::M2),
                     ]
                 } else {
                     [
-                        ActuatorCommand::forward(Actuator::M1),
-                        ActuatorCommand::set_speed(value as f64 / i8::MAX as f64, Actuator::M1),
+                        ActuatorCommand::backward(Actuator::M2),
+                        ActuatorCommand::set_speed(value as f64 / i8::MAX as f64, Actuator::M2),
                     ]
                 })
             }
