@@ -79,6 +79,12 @@ pub struct VescPair {
     id2: u8,
     mask1: MotorMask,
     mask2: MotorMask,
+    #[serde(default = "default_command_both")]
+    command_both: bool
+}
+
+fn default_command_both() -> bool {
+    true
 }
 
 #[derive(Deserialize, Debug)]
@@ -290,9 +296,10 @@ impl LunabotApp {
             id2,
             mask1,
             mask2,
+            command_both
         } in self.vesc.pairs
         {
-            if vesc_ids.add_dual_vesc(id1, id2, mask1, mask2) {
+            if vesc_ids.add_dual_vesc(id1, id2, mask1, mask2, command_both) {
                 error!("Motors {id1} or {id2} have already been added");
                 return;
             }

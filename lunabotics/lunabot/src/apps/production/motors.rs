@@ -36,18 +36,18 @@ impl MotorMask {
 #[derive(Default)]
 pub struct VescIDs {
     /// Map from Can ID to sibling Can ID
-    can_ids: FxHashMap<u8, Option<u8>>,
+    can_ids: FxHashMap<u8, Option<(u8, bool)>>,
     motor_masks: FxHashMap<u8, MotorMask>,
     device_count: usize,
 }
 
 impl VescIDs {
-    pub fn add_dual_vesc(&mut self, id1: u8, id2: u8, mask1: MotorMask, mask2: MotorMask) -> bool {
+    pub fn add_dual_vesc(&mut self, id1: u8, id2: u8, mask1: MotorMask, mask2: MotorMask, command_both: bool) -> bool {
         if self.motor_masks.contains_key(&id1) || self.motor_masks.contains_key(&id2) {
             return true;
         }
-        self.can_ids.insert(id1, Some(id2));
-        self.can_ids.insert(id2, Some(id1));
+        self.can_ids.insert(id1, Some((id2, command_both)));
+        self.can_ids.insert(id2, Some((id1, command_both)));
         self.motor_masks.insert(id1, mask1);
         self.motor_masks.insert(id2, mask2);
         self.device_count += 1;
@@ -275,12 +275,12 @@ impl MotorTask {
             break;
         }
 
-        let Some(&slave_can_id) = self.vesc_ids.can_ids.get(&master_can_id) else {
+        let Some(&slave_can) = self.vesc_ids.can_ids.get(&master_can_id) else {
             error!("Found unknown master Can ID {master_can_id}");
             return;
         };
 
-        if let Some(can_id) = slave_can_id {
+        if let Some((can_id, _)) = slave_can {
             loop {
                 let mut response = vec![];
                 let mut tmp_buf = [0u8; 128];
@@ -338,7 +338,7 @@ impl MotorTask {
 
         let master_mask = *self.vesc_ids.motor_masks.get(&master_can_id).unwrap();
         let slave_mask =
-            slave_can_id.map(|can_id| *self.vesc_ids.motor_masks.get(&can_id).unwrap());
+            slave_can.map(|(can_id, _)| *self.vesc_ids.motor_masks.get(&can_id).unwrap());
 
         let backoff = Backoff::new();
 
@@ -353,7 +353,7 @@ impl MotorTask {
             backoff.reset();
 
             let task = async {
-                if let Some(can_id) = slave_can_id {
+                if let Some((can_id, true)) = slave_can {
                     motor_port
                         .write_all(self.vesc_packer.pack(&CanForwarded {
                             can_id,
@@ -377,7 +377,7 @@ impl MotorTask {
             }
         }
 
-        if let Some(slave_can_id) = slave_can_id {
+        if let Some((slave_can_id, _)) = slave_can {
             error!("Motors {} and {} closed", master_can_id, slave_can_id);
         } else {
             error!("Motor {} closed", master_can_id);
