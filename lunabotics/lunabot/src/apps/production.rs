@@ -30,7 +30,7 @@ pub use rerun_viz::{RerunViz, RECORDER, ROBOT, ROBOT_STRUCTURE};
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,
-    pipelines::thalassic::ThalassicData, utils::SteeringLerper,
+    pipelines::thalassic::ThalassicData,
 };
 
 use super::create_packet_builder;
