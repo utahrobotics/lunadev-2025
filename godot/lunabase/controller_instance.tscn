@@ -39,9 +39,9 @@ func _input(event: InputEvent) -> void:
 					JOY_BUTTON_DPAD_DOWN:
 						Lunabot.set_lift_speed(-1.0 if event.pressed else 0.0)
 					JOY_BUTTON_Y:
-						Lunabot.set_bucket_speed(1.0 if event.pressed else 0.0)
-					JOY_BUTTON_A:
 						Lunabot.set_bucket_speed(-1.0 if event.pressed else 0.0)
+					JOY_BUTTON_A:
+						Lunabot.set_bucket_speed(1.0 if event.pressed else 0.0)
 					JOY_BUTTON_RIGHT_SHOULDER:
 						steering_weight = 0.0 if event.pressed else LunabotConn.get_default_steering_weight()
 			else:
@@ -66,9 +66,9 @@ func _input(event: InputEvent) -> void:
 					JOY_BUTTON_DPAD_DOWN:
 						Lunabot.set_lift_speed(-1.0 if event.pressed else 0.0)
 					JOY_BUTTON_Y:
-						Lunabot.set_bucket_speed(1.0 if event.pressed else 0.0)
-					JOY_BUTTON_A:
 						Lunabot.set_bucket_speed(-1.0 if event.pressed else 0.0)
+					JOY_BUTTON_A:
+						Lunabot.set_bucket_speed(1.0 if event.pressed else 0.0)
 					JOY_BUTTON_RIGHT_SHOULDER:
 						steering_weight = 0.0 if event.pressed else LunabotConn.get_default_steering_weight()
 			else:
@@ -107,7 +107,7 @@ func _input(event: InputEvent) -> void:
 						Lunabot.set_lift_speed(event.axis_value)
 						return
 					JOY_AXIS_RIGHT_Y:
-						Lunabot.set_bucket_speed(event.axis_value)
+						Lunabot.set_bucket_speed(-event.axis_value)
 						return
 					_:
 						return
