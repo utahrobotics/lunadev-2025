@@ -454,7 +454,7 @@ pub fn enumerate_actuator_controllers(
 
 impl ActuatorControllerTask {
     pub async fn actuator_task(&mut self) {
-        tracing::info!("starting actuator task");
+        tracing::info!("Starting actuator task");
         let path_str = match self.path.recv() {
             Ok(x) => x,
             Err(_) => loop {
@@ -476,6 +476,14 @@ impl ActuatorControllerTask {
             warn!("Failed to set actuator controller port {path_str} exclusive: {e}");
         }
         let mut actuator_port = BufStream::new(actuator_port);
+        let (mut reader, mut writer) = tokio::io::split(actuator_port);
+        tasker::get_tokio_handle().spawn(async move {
+            loop {
+                if let Ok(val) = reader.read_f64_le().await {
+                    tracing::info!("actuator_len: {}", val);
+                }
+            }
+        });
         loop {
             let Ok(cmd) = self.command_rx.recv() else {
                 tracing::error!("Error receiving actuator command in actuator_task()");
@@ -483,11 +491,11 @@ impl ActuatorControllerTask {
             };
 
             // tracing::info!("Received actuator command in ActuatorControllerTask: {:?}", cmd);
-            if let Err(e) = actuator_port.write_all(&cmd.serialize()).await {
+            if let Err(e) = writer.write_all(&cmd.serialize()).await {
                 tracing::error!("Failed to write to actuator port {e}");
                 break;
             }
-            if let Err(e) = actuator_port.flush().await {
+            if let Err(e) = writer.flush().await {
                 tracing::error!("Failed to flush to actuator port {e}");
                 break;
             }
