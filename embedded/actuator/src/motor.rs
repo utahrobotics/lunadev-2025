@@ -51,7 +51,7 @@ impl<'d> Motor<'d> {
         let max_duty = self.pwm.max_duty_cycle();
         if speed <= max_duty {
             self.pwm.set_duty_cycle(speed)?;
-            info!("Motor speed set to: speed: {}, max duty: {}", speed, max_duty);
+            // info!("Motor speed set to: speed: {}, max duty: {}", speed, max_duty);
         } else {
             warn!(
                 "Error: Speed {} must be between 0 and {}",
@@ -66,11 +66,11 @@ impl<'d> Motor<'d> {
         match direction {
             Direction::Forward => {
                 self.dir.set_low();
-                info!("Motor direction set to forward");
+                // info!("Motor direction set to forward");
             }
             Direction::Backward => {
                 self.dir.set_high();
-                info!("Motor direction set to backward");
+                // info!("Motor direction set to backward");
             }
         }
     }

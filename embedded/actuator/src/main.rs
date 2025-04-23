@@ -7,6 +7,7 @@ use embassy_rp::{adc::{self, Adc, AdcPin, Async, Channel, Config, Mode}, bind_in
 use embassy_time::{Duration, Ticker, Timer};
 use embassy_usb::{class::cdc_acm::{CdcAcmClass, Receiver, Sender, State}, UsbDevice};
 use embedded_common::ActuatorCommand;
+use embedded_common::ActuatorReading;
 use embedded_common::Actuator;
 use embedded_common::Direction;
 use static_cell::StaticCell;
@@ -22,7 +23,7 @@ bind_interrupts!(struct Irqs {
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    
+
     info!("Initializing peripherals...");
 
     let p = embassy_rp::init(Default::default());
@@ -82,8 +83,8 @@ async fn main(spawner: Spawner) {
     m1.enable();
     m2.enable();
 
-    spawner.spawn(actuator_length_reader(class_tx, p.PIN_26, p.ADC)).unwrap();
-    spawner.spawn(motor_controller_loop(class_rx,m1,m2)).unwrap();
+    spawner.spawn(actuator_length_reader(class_tx, p.PIN_26, p.PIN_27, p.ADC)).unwrap();
+    spawner.spawn(motor_controller_loop(class_rx,m1,m2)).unwrap();    
 }
 
 const ADC_MIN:      f64 = 148.0;   // reading when actuator is fully retracted
@@ -98,25 +99,41 @@ fn adc_to_inches(counts: f64) -> f64 {
 
 
 #[embassy_executor::task(pool_size = 1)]
-async fn actuator_length_reader(mut class: Sender<'static, Driver<'static, USB>>, pot: PIN_26, adc: ADC) {
-    // actuator's max length is 8 in
+async fn actuator_length_reader(mut class: Sender<'static, Driver<'static, USB>>, pot: PIN_26, pot2: PIN_27, adc: ADC) {
     let mut channel = Channel::new_pin(pot, Pull::None);
+    let mut channel2 = Channel::new_pin(pot2, Pull::None);
     let mut adc = Adc::new(adc, Irqs, Config::default());
-    const LIN_ACTUATOR_RESIST: f64 = 10.943;
     let mut ticker = Ticker::every(Duration::from_millis(500));
     loop {
         const AVERAGING: usize = 10;
         let mut total = 0;
+        let mut total2 = 0;
+        let mut t1_count = 0;
+        let mut t2_count = 0;
         for _ in 0..AVERAGING {
+            if let Ok(reading) = adc.read(&mut channel2).await {
+                info!("Raw CH2: {}", reading); // shows same issue
+                t2_count += 1;
+                total2 += reading;
+            }
             if let Ok(reading) = adc.read(&mut channel).await {
+                t1_count += 1;
                 total += reading;
             }
         }
-        let reading = (total/AVERAGING as u16) as f64; // 148 ish when fully retracted, 3720 ish when fully extended
 
-        let len = adc_to_inches(reading)/39.37; // in meters
+        if t1_count == 0 || t2_count == 0 {
+            continue;
+        }
+        let m1_reading = (total/t1_count as u16); 
+        let m2_reading = (total2/t2_count as u16);
+        let combined_readings = ActuatorReading {
+            m1_reading,
+            m2_reading,
+        };
+        info!("{:?}",combined_readings);
         if class.dtr() {
-            let _ = class.write_packet(&len.to_le_bytes()).await;
+            let _ = class.write_packet(&combined_readings.serialize()).await;
         }
         ticker.next().await;
     }
@@ -140,16 +157,14 @@ async fn motor_controller_loop(mut class: Receiver<'static, Driver<'static, USB>
         match cmd {
             ActuatorCommand::SetSpeed(speed, actuator) => {
                 match actuator {
-                    Actuator::M1 => {
-                        info!("Setting M1's speed");
+                    Actuator::Lift => {
                         if let Err(_) = m1.set_speed(speed) {
-                            error!("couldnt set m1 speed: Pwm error");
+                            error!("couldnt set lifts speed: Pwm error");
                         }
                     }
-                    Actuator::M2 => {
-                        info!("Setting M2's speed");
+                    Actuator::Bucket => {
                         if let Err(_) = m2.set_speed(speed) {
-                            error!("couldnt set m1 speed: Pwm error");
+                            error!("couldnt set bucket speed: Pwm error");
                         }
                     }
                 }
@@ -157,12 +172,10 @@ async fn motor_controller_loop(mut class: Receiver<'static, Driver<'static, USB>
             }
             ActuatorCommand::SetDirection(dir, actuator) =>{
                 match actuator {
-                    Actuator::M1 => {
-                        info!("Setting M1's direction");
+                    Actuator::Lift => {
                         m1.set_direction(dir);
                     }
-                    Actuator::M2 => {
-                        info!("Setting M2's direction");
+                    Actuator::Bucket => {
                         m2.set_direction(dir);
                     }
                 }
