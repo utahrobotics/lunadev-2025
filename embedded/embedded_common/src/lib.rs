@@ -2,7 +2,6 @@
 
 pub const IMU_READING_DELAY_MS: u64 = 10;
 
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(u8)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -10,7 +9,6 @@ pub enum Direction {
     Forward = 0,
     Backward = 1,
 }
-
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -20,7 +18,7 @@ pub enum Actuator {
     /// the lift
     Lift = 0,
     /// the bucket
-    Bucket = 1
+    Bucket = 1,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -28,6 +26,14 @@ pub enum Actuator {
 pub enum ActuatorCommand {
     SetSpeed(u16, Actuator),
     SetDirection(Direction, Actuator),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+/// adc readings
+pub struct ActuatorReading {
+    pub m1_reading: u16,
+    pub m2_reading: u16,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -48,14 +54,14 @@ pub struct AngularRate {
 }
 
 /// Negative z = robot accelerating forward
-/// 
+///
 /// In the default orientation, should be [0.0, -9.81, 0.0]
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AccelerationNorm {
     pub x: f32,
     pub y: f32,
-    pub z: f32
+    pub z: f32,
 }
 
 impl AccelerationNorm {
@@ -96,11 +102,10 @@ impl FromIMU {
     pub fn serialize(&self) -> [u8; 25] {
         let mut bytes = [0u8; 25];
         match self {
-            FromIMU::Reading(rate, accel ) => {
+            FromIMU::Reading(rate, accel) => {
                 bytes[0] = 0;
                 bytes[1..=12].copy_from_slice(&rate.serialize());
                 bytes[13..].copy_from_slice(&accel.serialize());
-
             }
             FromIMU::NoDataReady => {
                 bytes[0] = 2;
@@ -113,10 +118,15 @@ impl FromIMU {
     }
 
     pub fn deserialize(bytes: [u8; 25]) -> Result<Self, &'static str> {
-        let rate_bytes: [u8; 12] = bytes[1..=12].as_ref().try_into().map_err(|_|"failed to deserialize FromIMU")?;
-        let accel_bytes: [u8; 12] = bytes[13..].as_ref().try_into().map_err(|_|"failed to deserialize FromIMU")?;
+        let rate_bytes: [u8; 12] = bytes[1..=12]
+            .as_ref()
+            .try_into()
+            .map_err(|_| "failed to deserialize FromIMU")?;
+        let accel_bytes: [u8; 12] = bytes[13..]
+            .as_ref()
+            .try_into()
+            .map_err(|_| "failed to deserialize FromIMU")?;
 
-        
         match bytes[0] {
             0 => {
                 let rate = AngularRate::deserialize(rate_bytes)?;
@@ -125,7 +135,7 @@ impl FromIMU {
             }
             2 => Ok(FromIMU::NoDataReady),
             3 => Ok(FromIMU::Error),
-            _ => Err("Invalid variant tag")
+            _ => Err("Invalid variant tag"),
         }
     }
 }
@@ -135,7 +145,7 @@ impl ActuatorCommand {
         let actuator = {
             if bytes[3] == Actuator::Lift as u8 {
                 Actuator::Lift
-            } else if bytes[3] == Actuator::Bucket as u8{
+            } else if bytes[3] == Actuator::Bucket as u8 {
                 Actuator::Bucket
             } else {
                 return Err("Unknown actuator specifier (not m1 or m2)");
@@ -193,5 +203,25 @@ impl ActuatorCommand {
 
     pub fn backward(actuator: Actuator) -> Self {
         ActuatorCommand::SetDirection(Direction::Backward, actuator)
+    }
+}
+
+impl ActuatorReading {
+    pub fn serialize(&self) -> [u8; 4] {
+        let mut bytes = [0, 0, 0, 0u8];
+        bytes[0..=1].copy_from_slice(&self.m1_reading.to_le_bytes());
+        bytes[2..=3].copy_from_slice(&self.m2_reading.to_le_bytes());
+        bytes
+    }
+    pub fn deserialize(bytes: [u8; 4]) -> Self {
+        // this expect is safe
+        let m1_reading =
+            u16::from_le_bytes(bytes[0..=1].try_into().expect("wrong number of bytes"));
+        let m2_reading =
+            u16::from_le_bytes(bytes[2..=3].try_into().expect("wrong number of bytes"));
+        Self {
+            m1_reading,
+            m2_reading,
+        }
     }
 }
