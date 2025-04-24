@@ -58,6 +58,8 @@ pub fn run_ai(
     let mut b = WhileLoop::new(
         AlwaysSucceed,
         Sequence::new((
+            
+            // reset 
             |blackboard: &mut LunabotBlackboard| {
                 blackboard.enqueue_action(Action::SetStage(LunabotStage::SoftStop));
                 blackboard.enqueue_action(Action::SetActuators(ActuatorCommand::set_speed(0.0, Actuator::Lift)));
@@ -65,6 +67,8 @@ pub fn run_ai(
                 blackboard.enqueue_action(Action::SetSteering(Steering::default()));
                 InfallibleStatus::Success
             },
+            
+            // wait until receive "continue mission" from lunabase
             Invert(WhileLoop::new(
                 AlwaysSucceed,
                 |blackboard: &mut LunabotBlackboard| {
@@ -82,10 +86,12 @@ pub fn run_ai(
                     FallibleStatus::Running
                 },
             )),
+            
+            
             TryCatch::new(
                 WhileLoop::new(
                     AlwaysSucceed,
-                    Sequence::new((CatchPanic(teleop()), CatchPanic(autonomy()))),
+                    Sequence::new(( /*CatchPanic(teleop()),*/ CatchPanic(autonomy()) , )), // TODO enable teleop()
                 ),
                 AlwaysSucceed,
             ),

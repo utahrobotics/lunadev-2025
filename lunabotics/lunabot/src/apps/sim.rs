@@ -38,8 +38,7 @@ use thalassic::DepthProjectorBuilder;
 use tracing::{error, info, warn};
 
 use crate::{
-    localization::{IMUReading, Localizer},
-    pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline}, utils::SteeringLerper,
+    localization::{IMUReading, Localizer}, pathfinding::Obstacle, pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline}, utils::SteeringLerper
 };
 use crate::{pathfinding::DefaultPathfinder, pipelines::thalassic::ThalassicData};
 
@@ -373,11 +372,10 @@ impl LunasimbotApp {
             }
         });
 
-        let grid_to_world = Transform3::from_matrix_unchecked(
-            Scale3::new(0.03125, 1.0, 0.03125).to_homogeneous(),
-        );
-        let world_to_grid = grid_to_world.try_inverse().unwrap();
-        let mut pathfinder = DefaultPathfinder::new(world_to_grid, grid_to_world);
+        let mut pathfinder = DefaultPathfinder::new(vec![
+            // Obstacle::new_rect((3., 1.5), 200., 1.)
+            // Obstacle::new_circle((2., 3.), 1.5)
+        ]);
         pathfinder.cell_grid.enable_diagonal_mode();
         pathfinder.cell_grid.fill();
 
@@ -425,7 +423,6 @@ impl LunasimbotApp {
                     }
                 }
                 Action::AvoidPoint(point) => {
-                    println!("got avoid point action", );
                     pathfinder.avoid_point(point);
                 }
                 Action::ClearPointsToAvoid => {
