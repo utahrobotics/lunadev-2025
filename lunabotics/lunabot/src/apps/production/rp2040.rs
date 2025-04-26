@@ -1,9 +1,8 @@
-use std::{sync::{mpsc::{Receiver, Sender, SyncSender, RecvTimeoutError}, Arc}, ops::Deref, time::Duration};
+use std::{sync::{mpsc::{Receiver, Sender, RecvTimeoutError}, Arc}, time::Duration};
 
 use crate::localization::{IMUReading, LocalizerRef};
 use embedded_common::*;
-use fxhash::FxHashMap;
-use nalgebra::{UnitQuaternion, UnitVector3, Vector3};
+use nalgebra::Vector3;
 use simple_motion::StaticImmutableNode;
 use tasker::{
     get_tokio_handle, tokio::{
