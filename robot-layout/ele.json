@@ -37,6 +37,25 @@
         {
             "name": "imu3",
             "euler": [0.0, 90.0, 0.0]
+        },
+        {
+          "name": "lift_hinge",
+          "start_euler": [0,0,0],
+          "origin": [0,0.33,0],
+          "axis": [1,0,0],
+          "children": [
+            {
+              "name": "lift_arm",
+              "origin": [0,0,0.89],
+              "children": [
+                {
+                  "name": "realsense",
+                  "euler": [0,0,0],
+                  "origin": [0,0.20,0.33]
+                }
+              ]
+            }
+          ]
         }
     ]
 }

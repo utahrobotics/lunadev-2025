@@ -15,7 +15,8 @@ use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use mio::{Events, Interest, Poll, Token};
 use motors::{enumerate_motors, MotorMask, VescIDs};
-use nalgebra::{Scale3, Transform3};
+use nalgebra::{Scale3, Transform3, UnitQuaternion, AbstractRotation};
+use rerun::Points3D;
 use rerun_viz::init_rerun;
 use imu_calib::*;
 use rp2040::*;
@@ -169,7 +170,18 @@ impl LunabotApp {
         )
         .expect("Failed to parse robot chain");
         let robot_chain = ChainBuilder::from(robot_chain).finish_static();
+        let r = robot_chain.get_node_with_name("realsense").unwrap().get_global_isometry().translation;
+        let h = robot_chain.get_node_with_name("lift_hinge").unwrap().get_global_isometry().translation;
+        let a = robot_chain.get_node_with_name("lift_arm").unwrap().get_global_isometry().translation;
 
+        if let Some(rrd) = RECORDER.get() {
+            let r = (r.x as f32,r.y as f32,r.z as f32);
+            let h = (h.x as f32,h.y as f32,h.z as f32);
+            let a = (a.x as f32,a.y as f32,a.z as f32);
+            rrd.recorder.log("realsense_position", &Points3D::new([r,a,h]).with_radii([0.1,0.1,0.1]).with_labels(["r","a","h"])).unwrap();
+        } else {
+            tracing::info!("recorder doesn't exist");
+        }
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
         let (packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
@@ -262,7 +274,9 @@ impl LunabotApp {
             Scale3::new(0.03125, 1.0, 0.03125).to_homogeneous(),
         );
         let world_to_grid = grid_to_world.try_inverse().unwrap();
-        let mut pathfinder = DefaultPathfinder::new(world_to_grid, grid_to_world);
+        // let mut pathfinder = DefaultPathfinder::new(world_to_grid, grid_to_world);
+        let mut pathfinder = DefaultPathfinder::new(vec![]);
+
 
         // correction parameters are defined in app-config.toml
         // corrections are applied in the localizer

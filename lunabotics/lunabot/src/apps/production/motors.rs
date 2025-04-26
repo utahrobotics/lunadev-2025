@@ -271,6 +271,7 @@ impl MotorTask {
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 continue;
             };
+
             master_can_id = values.vesc_id;
             break;
         }
