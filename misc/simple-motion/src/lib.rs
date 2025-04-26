@@ -27,7 +27,7 @@ pub enum RotationRestriction {
     },
     OneAxis {
         start_rotation: UnitQuaternion<f64>,
-        axis: UnitVector3<f64>,
+        rotation_axis: UnitVector3<f64>,
         min_angle: Option<f64>,
         max_angle: Option<f64>,
         current_angle: Option<f64>,
@@ -128,7 +128,7 @@ impl From<RotationRestriction> for RotationRestrictionState {
             RotationRestriction::Fixed { rotation } => RotationRestrictionState::Fixed { rotation },
             RotationRestriction::OneAxis {
                 start_rotation,
-                axis,
+                rotation_axis: axis,
                 min_angle,
                 max_angle,
                 current_angle,
@@ -559,7 +559,7 @@ enum TranslationRestrictionSerde {
         #[serde(default)]
         #[serde(skip_serializing_if = "all_zeros")]
         start_origin: [f64; 3],
-        axis: [f64; 3],
+        linear_translation_axis: [f64; 3],
         #[serde(skip_serializing_if = "Option::is_none")]
         min_length: Option<f64>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -590,7 +590,7 @@ impl From<TranslationRestrictionSerde> for TranslationRestriction {
             },
             TranslationRestrictionSerde::Linear {
                 start_origin,
-                axis,
+                linear_translation_axis: axis,
                 min_length,
                 max_length,
                 current_length,
@@ -669,7 +669,7 @@ impl From<RotationRestrictionSerde> for RotationRestriction {
                     start_euler[1].to_radians(),
                     start_euler[2].to_radians(),
                 ),
-                axis: UnitVector3::try_new(Vector3::from(axis), 0.1).expect("Axis is too short"),
+                rotation_axis: UnitVector3::try_new(Vector3::from(axis), 0.1).expect("Axis is too short"),
                 min_angle,
                 max_angle,
                 current_angle,
