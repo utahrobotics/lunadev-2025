@@ -25,6 +25,37 @@ pub fn world_point_to_cell(point: Point3<f64>) -> (usize, usize) {
     )
 }
 
+#[derive(Debug, Clone)]
+/// a rectangular area on the thalassic cell map
+/// 
+/// larger x = further left, so `left` should have a larger numeric value than `right`
+pub struct CellsRect {
+    pub top: f64,
+    pub bottom: f64,
+    pub left: f64,
+    pub right: f64
+}
+impl CellsRect {
+    pub fn new((left, bottom): (f64, f64), width_meters: f64, height_meters: f64) -> Self {
+        let left = left / THALASSIC_CELL_SIZE as f64;
+        let bottom = bottom / THALASSIC_CELL_SIZE as f64;
+        
+        Self {
+            left,
+            bottom,
+            right: left - (width_meters / THALASSIC_CELL_SIZE as f64),
+            top: bottom + (height_meters / THALASSIC_CELL_SIZE as f64),
+        }
+    }
+    pub fn snap_to_cells(&mut self) {
+        self.top = self.top.round();
+        self.bottom = self.bottom.round();
+        self.left = self.left.round();
+        self.right = self.right.round();
+    }
+}
+
+
 pub mod lunasim;
 pub mod ports;
 #[cfg(feature = "lunabase_sync")]
@@ -226,6 +257,16 @@ impl Default for Steering {
     }
 }
 
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PathKind {
+    /// find a path that will move the robot exactly on top of the target position
+    MoveOntoTarget,
+    
+    /// find a path that will position the robot in preparation to dig/dump at target position
+    ShovelAtTarget
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PathInstruction {
     MoveTo,
@@ -234,7 +275,7 @@ pub enum PathInstruction {
 
 #[derive(Debug, Clone, Copy)]
 pub struct PathPoint {
-    pub point: Point3<f64>,
+    pub cell: (usize, usize),
     pub instruction: PathInstruction,
 }
 impl PathPoint {
@@ -243,15 +284,17 @@ impl PathPoint {
 
     /// min radians gap between robot  for robot to be considered facing towards a point
     const FACING_TOWARDS_THRESHOLD: f64 = 0.2;
-
+    
     pub fn is_finished(&self, robot_pos: &Point2<f64>, robot_heading: &Point2<f64>) -> bool {
+        let world_pos = cell_to_world_point(self.cell, 0.).xz();
+        
         match self.instruction {
             PathInstruction::MoveTo => {
-                distance(&self.point.xz(), robot_pos) < Self::AT_POINT_THRESHOLD
+                distance(&world_pos, robot_pos) < Self::AT_POINT_THRESHOLD
             }
 
             PathInstruction::FaceTowards => {
-                (self.point.xz() - robot_pos).angle(&robot_heading.coords)
+                (world_pos - robot_pos).angle(&robot_heading.coords)
                     < Self::FACING_TOWARDS_THRESHOLD
             }
         }

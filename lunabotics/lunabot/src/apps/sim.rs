@@ -8,8 +8,7 @@ use std::{
 };
 
 use common::{
-    lunasim::{FromLunasim, FromLunasimbot},
-    LunabotStage,
+    cell_to_world_point, lunasim::{FromLunasim, FromLunasimbot}, LunabotStage
 };
 use crossbeam::atomic::AtomicCell;
 use gputter::{
@@ -373,8 +372,9 @@ impl LunasimbotApp {
         });
 
         let mut pathfinder = DefaultPathfinder::new(vec![
-            // Obstacle::new_rect((3., 1.5), 200., 1.)
-            // Obstacle::new_circle((2., 3.), 1.5)
+            // Obstacle::new_rect((3., 1.5), 20., 1.),
+            // Obstacle::new_circle((2., 3.), 1.5),
+            // Obstacle::new_ellipse((2., 3.), 5., 3.)
         ]);
         pathfinder.cell_grid.enable_diagonal_mode();
         pathfinder.cell_grid.fill();
@@ -409,11 +409,11 @@ impl LunasimbotApp {
                     lerper.set_steering(steering);
                 }
                 Action::SetActuators(_actuators) => {}
-                Action::CalculatePath { from, to, mut into } => {
-                    if pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into) {
+                Action::CalculatePath { from, to, mut into, kind } => {
+                    if pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into, kind) {
                         let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
                             into.iter()
-                                .map(|p| p.point.coords.cast::<f32>().data.0[0])
+                                .map(|p|  cell_to_world_point(p.cell, 0.).coords.cast::<f32>().data.0[0]) // if the y value was needed here, sorry
                                 .collect(),
                         ));
                         lunasim_stdin.write(bytes);
@@ -422,11 +422,15 @@ impl LunasimbotApp {
                         inputs.push(Input::FailedToCalculatePath(into));
                     }
                 }
-                Action::AvoidPoint(point) => {
-                    pathfinder.avoid_point(point);
+                Action::AvoidCell(cell) => {
+                    pathfinder.avoid_cell(cell);
                 }
                 Action::ClearPointsToAvoid => {
-                    pathfinder.clear_points_to_avoid();
+                    pathfinder.clear_cells_to_avoid();
+                }
+                
+                Action::CheckIfExplored(area) => {
+                    inputs.push(Input::NotDoneExploring((10, 10)));
                 }
             },
             |poll_when, inputs| {

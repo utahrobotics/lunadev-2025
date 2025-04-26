@@ -1,4 +1,4 @@
-use std::{time::Instant, vec};
+use std::{cell::Cell, time::Instant, vec};
 
 use ares_bt::{
     action::AlwaysSucceed,
@@ -10,7 +10,7 @@ use ares_bt::{
 };
 use autonomy::autonomy;
 use blackboard::LunabotBlackboard;
-use common::{FromLunabase, LunabotStage, PathPoint, Steering};
+use common::{CellsRect, FromLunabase, LunabotStage, PathPoint, PathKind, Steering};
 use embedded_common::{Actuator, ActuatorCommand};
 use nalgebra::Point3;
 use simple_motion::StaticImmutableNode;
@@ -30,13 +30,14 @@ pub enum Action {
     SetActuators(ActuatorCommand),
     SetStage(LunabotStage),
     CalculatePath {
-        from: Point3<f64>,
-        to: Point3<f64>,
+        from: (usize, usize),
+        to: (usize, usize),
         into: Vec<PathPoint>,
+        kind: PathKind
     },
-    
-    AvoidPoint(Point3<f64>),
-    ClearPointsToAvoid
+    AvoidCell((usize, usize)),
+    ClearPointsToAvoid,
+    CheckIfExplored(CellsRect)
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -1,16 +1,20 @@
-use std::{collections::VecDeque, time::Instant};
+use std::{cell::Cell, collections::VecDeque, time::Instant};
 
-use common::{FromLunabase, PathPoint};
+use common::{world_point_to_cell, CellsRect, FromLunabase, PathPoint, PathKind};
 use nalgebra::{Isometry3, Point3, UnitQuaternion};
 use simple_motion::StaticImmutableNode;
 
-use crate::{autonomy::{Autonomy, AutonomyStage}, Action, PollWhen};
+use crate::{autonomy::AutonomyState, Action, PollWhen};
 
 pub enum Input {
     FromLunabase(FromLunabase),
+    LunabaseDisconnected,
+    
     PathCalculated(Vec<PathPoint>),
     FailedToCalculatePath(Vec<PathPoint>),
-    LunabaseDisconnected,
+    
+    DoneExploring,
+    NotDoneExploring((usize, usize)),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -20,43 +24,50 @@ pub(crate) enum PathfindingState {
     Failed,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum CheckIfExploredState {
+    HaveToCheck,
+    Pending,
+    NeedToExplore((usize, usize)),
+    FinishedExploring
+}
+
 pub(crate) struct LunabotBlackboard {
     now: Instant,
     from_lunabase: VecDeque<FromLunabase>,
-    autonomy: Autonomy,
     chain: StaticImmutableNode,
     path: Vec<PathPoint>,
     lunabase_disconnected: bool,
     actions: Vec<Action>,
     poll_when: PollWhen,
     
-    target_position: Point3<f64>, 
-    
+    autonomy_state: AutonomyState,
     pathfinding_state: PathfindingState,
-    
-    backing_away_from: Option<Point3<f64>>,
+    check_if_explored_state: CheckIfExploredState,
     
     /// (position, rotation, timestamp)
     latest_transform: Option<(Point3<f64>, UnitQuaternion<f64>, Instant)>,
+    backing_away_from: Option<Point3<f64>>,
+    
 }
 
 impl LunabotBlackboard {
     pub fn new(chain: StaticImmutableNode) -> Self {
         Self {
             now: Instant::now(),
-            from_lunabase: Default::default(),
-            autonomy: Autonomy::FullAutonomy(AutonomyStage::TraverseObstacles),
-            path: vec![],
-            pathfinding_state: PathfindingState::Idle,
+            from_lunabase: VecDeque::new(),
             chain,
+            path: vec![],
             lunabase_disconnected: true,
             actions: vec![],
             poll_when: PollWhen::NoDelay,
             
-            target_position: Point3::new(2.0, 0.0, 5.0),
+            autonomy_state: AutonomyState::StartAutonomy,
+            pathfinding_state: PathfindingState::Idle,
+            check_if_explored_state: CheckIfExploredState::HaveToCheck,
             
             backing_away_from: None,
-            latest_transform: None
+            latest_transform: None,
         }
     }
 }
@@ -70,8 +81,11 @@ impl LunabotBlackboard {
         self.from_lunabase.pop_front()
     }
 
-    pub fn get_autonomy(&mut self) -> &mut Autonomy {
-        &mut self.autonomy
+    pub fn get_autonomy(&self) -> AutonomyState {
+        self.autonomy_state
+    }
+    pub fn set_autonomy(&mut self, state: AutonomyState) {
+        self.autonomy_state = state;
     }
 
     pub fn get_poll_when(&mut self) -> &mut PollWhen {
@@ -94,8 +108,14 @@ impl LunabotBlackboard {
         &mut self.path
     }
     
-    pub fn get_target_mut(&mut self) -> &mut Point3<f64> {
-        &mut self.target_position
+    // where should `traverse()` pathfind to?
+    pub fn get_pathfinding_target(&self) -> (usize, usize) {
+        match self.get_autonomy() {
+            AutonomyState::Explore(cell) => cell,
+            AutonomyState::MoveToDumpSite(cell) => cell,
+            AutonomyState::MoveToDigSite(cell) => cell,
+            other_state => panic!("tried to get pathfinding target while the autonomy state was {other_state:?}"),
+        }
     }
 
     pub fn lunabase_disconnected(&mut self) -> &mut bool {
@@ -138,21 +158,35 @@ impl LunabotBlackboard {
                 self.pathfinding_state = PathfindingState::Failed;
             }
             Input::LunabaseDisconnected => self.lunabase_disconnected = true,
+            Input::DoneExploring => {
+                self.check_if_explored_state = CheckIfExploredState::FinishedExploring;
+            },
+            Input::NotDoneExploring(cell) => {
+                self.check_if_explored_state = CheckIfExploredState::NeedToExplore(cell);
+            },
         }
     }
 
-    pub fn calculate_path(&mut self, from: Point3<f64>, to: Point3<f64>) {
+    pub fn request_for_path(&mut self, from: (usize, usize), to: (usize, usize), kind: PathKind) {
         let into = std::mem::take(&mut self.path);
         self.pathfinding_state = PathfindingState::Pending;
         
-        
-        self.enqueue_action(Action::CalculatePath { from, to, into });
+        self.enqueue_action(Action::CalculatePath { from, to, into, kind });
     }
 
     pub fn pathfinding_state(&self) -> PathfindingState {
         self.pathfinding_state
     }
-
+    
+    pub fn check_if_explored(&mut self, area: CellsRect) {
+        self.check_if_explored_state = CheckIfExploredState::Pending;
+        self.enqueue_action(Action::CheckIfExplored(area));
+    }
+    
+    pub fn exploring_state(&self) -> CheckIfExploredState {
+        self.check_if_explored_state
+    }
+    
     pub fn enqueue_action(&mut self, action: Action) {
         self.actions.push(action);
     }
