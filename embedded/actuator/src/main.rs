@@ -23,7 +23,6 @@ bind_interrupts!(struct Irqs {
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-
     info!("Initializing peripherals...");
 
     let p = embassy_rp::init(Default::default());

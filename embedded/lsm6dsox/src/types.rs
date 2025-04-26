@@ -12,6 +12,10 @@ use defmt::Format;
 use enumflags2::bitflags;
 use measurements::AngularVelocity;
 use num_enum::TryFromPrimitive;
+use embedded_hal::i2c::I2c;
+use embassy_sync::blocking_mutex::Mutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use core::cell::RefCell;
 
 /// Lsm6dsox errors
 #[derive(Clone, Copy, Debug, Format, PartialEq)]

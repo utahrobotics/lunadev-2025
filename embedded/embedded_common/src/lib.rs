@@ -1,6 +1,6 @@
 #![no_std]
 
-pub const IMU_READING_DELAY_MS: u64 = 10;
+pub const IMU_READING_DELAY_MS: u64 = 500;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(u8)]
@@ -42,6 +42,13 @@ pub enum FromIMU {
     Reading(AngularRate, AccelerationNorm),
     NoDataReady,
     Error,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum FromPicoV3 {
+    Reading([FromIMU; 4], ActuatorReading),
+    Error
 }
 
 /// Radians per second
@@ -99,6 +106,7 @@ impl AngularRate {
 }
 
 impl FromIMU {
+    pub const SIZE: usize = 25;
     pub fn serialize(&self) -> [u8; 25] {
         let mut bytes = [0u8; 25];
         match self {
@@ -222,6 +230,53 @@ impl ActuatorReading {
         Self {
             m1_reading,
             m2_reading,
+        }
+    }
+}
+
+
+impl FromPicoV3 {
+    /// 1 tag + 4 FromImu (4×25) + 1 ActuatorReading (4)  = 105 bytes
+    pub const SIZE: usize = 105;
+
+    pub fn serialize(&self) -> [u8; Self::SIZE] {
+        let mut bytes = [0u8; Self::SIZE];
+
+        match self {
+            FromPicoV3::Reading(readings, act) => {
+                bytes[0] = 0;
+                for (i, r) in readings.iter().enumerate() {
+                    let start = 1 + i * FromIMU::SIZE;
+                    let end   = start + FromIMU::SIZE;
+                    bytes[start..end].copy_from_slice(&r.serialize());
+                }
+                bytes[Self::SIZE - 4..].copy_from_slice(&act.serialize());
+            }
+            FromPicoV3::Error => bytes[0] = 3,
+        }
+        bytes
+    }
+
+    pub fn deserialize(bytes: [u8; Self::SIZE]) -> Result<Self, &'static str> {
+        match bytes[0] {
+            0 => {
+                let mut readings: [FromIMU; 4] = [FromIMU::Error; 4];
+                for i in 0..4 {
+                    let start = 1 + i * FromIMU::SIZE;
+                    let end   = start + FromIMU::SIZE;
+                    let imu_bytes: [u8; FromIMU::SIZE] =
+                        bytes[start..end].try_into().map_err(|_| "slice size")?;
+                    readings[i] = FromIMU::deserialize(imu_bytes)?;
+                }
+                let act_bytes: [u8; 4] = bytes[Self::SIZE - 4..]
+                    .try_into()
+                    .map_err(|_| "act slice")?;
+
+                let act = ActuatorReading::deserialize(act_bytes);
+                Ok(FromPicoV3::Reading(readings, act))
+            }
+            3 => Ok(FromPicoV3::Error),
+            _ => Err("invalid FromPicoV3 tag"),
         }
     }
 }
