@@ -18,12 +18,6 @@ Level can be All, or Minimal. Minimal only logs robot isometry, april tags, and 
 
 ### Main.apriltags
 
-
-### Main.imus
-Set to whatever the serial number of the imu is. Serial number is defined by the IMU_SERIAL environment varible when the firmware is written to the pico.
-* link_name 
-* correction
-
 ### Main.vesc
 
 ### Main.vesc_pairs
@@ -38,3 +32,9 @@ To generate IMU corrections run '''cargo make calibrate''' while the robot is on
 * gyroscope_scale - [f64; 3] - Scaling bias.
 * with_scaling - bool - Weather or not to try calculating scaling bias, included as an option but not needed in most cases.
 * misalignment - [f64; 4] - Quaternion representing orientation misalignment. 
+
+
+### Main.v3pico
+
+* imus: an array of 4 IMUInfo structs
+* serial: serial number to identify pico.
