@@ -3,7 +3,7 @@ extends CharacterBody3D
 
 const TERRAIN_TRANSLATION_LERP_SPEED := 150.0
 const TERRAIN_ROTATION_LERP_SPEED := 150.0
-const SPEED := 0.3
+const SPEED := 0.8
 const WHEEL_SEPARATION := 0.6
 const DELTA := 1.0 / 60
 

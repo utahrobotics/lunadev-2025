@@ -74,7 +74,9 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
                 }
                 Status::Running
             }),
-            Sequence::new(( dig(), dump(), traverse())),
+            
+            traverse(),
+            // Sequence::new(( dig(), dump(), traverse())), // TODO enable dig, dump
         )),
     )
 }
@@ -92,7 +94,6 @@ const MIN_DIST_UNTIL_TRANSFORM_UPDATE: f64 = 0.01;
 const MIN_ANGLE_UNTIL_TRANSFORM_UPDATE: f64 = 0.1;
 
 fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
-    
     let robot = blackboard.get_robot_isometry();
     let pos: Point3<f64> = robot.translation.vector.into();
     
@@ -112,8 +113,9 @@ fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
     let latest_transform = blackboard.get_latest_transform();
     let now = blackboard.get_now();
     let path = blackboard.get_path_mut();
-
+    
     if path.is_empty() {
+        println!("path follower: empty path", );
         blackboard.enqueue_action(Action::SetSteering(Steering::default()));
         return Status::Running;
     }

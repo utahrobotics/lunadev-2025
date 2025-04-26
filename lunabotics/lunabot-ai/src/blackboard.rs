@@ -4,7 +4,7 @@ use common::{FromLunabase, PathPoint};
 use nalgebra::{Isometry3, Point3, UnitQuaternion};
 use simple_motion::StaticImmutableNode;
 
-use crate::{autonomy::Autonomy, Action, PollWhen};
+use crate::{autonomy::{Autonomy, AutonomyStage}, Action, PollWhen};
 
 pub enum Input {
     FromLunabase(FromLunabase),
@@ -45,7 +45,7 @@ impl LunabotBlackboard {
         Self {
             now: Instant::now(),
             from_lunabase: Default::default(),
-            autonomy: Autonomy::None,
+            autonomy: Autonomy::FullAutonomy(AutonomyStage::TraverseObstacles),
             path: vec![],
             pathfinding_state: PathfindingState::Idle,
             chain,
@@ -53,7 +53,7 @@ impl LunabotBlackboard {
             actions: vec![],
             poll_when: PollWhen::NoDelay,
             
-            target_position: Point3::new(1.0, 0.0, 3.0),
+            target_position: Point3::new(2.0, 0.0, 5.0),
             
             backing_away_from: None,
             latest_transform: None

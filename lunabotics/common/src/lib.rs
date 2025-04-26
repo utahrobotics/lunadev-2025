@@ -14,6 +14,17 @@ pub const THALASSIC_WIDTH: u32 = 128;
 pub const THALASSIC_HEIGHT: u32 = 256;
 pub const THALASSIC_CELL_COUNT: u32 = THALASSIC_WIDTH * THALASSIC_HEIGHT;
 
+/// cells don't have a y value but world points do, so please provide one one
+pub fn cell_to_world_point((x, z): (usize, usize), y: f64) -> Point3<f64> {
+    Point3::new(x as f64 * THALASSIC_CELL_SIZE as f64, y, z as f64 * THALASSIC_CELL_SIZE as f64)
+}
+pub fn world_point_to_cell(point: Point3<f64>) -> (usize, usize) {
+    (
+        (point.x / THALASSIC_CELL_SIZE as f64) as usize, 
+        (point.z / THALASSIC_CELL_SIZE as f64) as usize
+    )
+}
+
 pub mod lunasim;
 pub mod ports;
 #[cfg(feature = "lunabase_sync")]
