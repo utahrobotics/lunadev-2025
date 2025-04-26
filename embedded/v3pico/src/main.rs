@@ -202,6 +202,7 @@ async fn read_sensors_loop(
     let mut adc = Adc::new(adc, Irqs, Config::default());
     loop {
         //----- ACTUATORS -----
+        // 148 ish when fully retracted, 3720 ish when fully extended
         const AVERAGING: usize = 10;
         let mut total = 0;
         let mut total2 = 0;
@@ -226,6 +227,7 @@ async fn read_sensors_loop(
             m2_reading,
         };
 
+        // ----- IMU -----
         let mut imu0_readings = [FromIMU::Error; 2];
         for (i,imu) in imu0.iter_mut().enumerate() {
             let mut error_occured = false;

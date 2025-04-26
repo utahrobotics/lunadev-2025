@@ -170,18 +170,7 @@ impl LunabotApp {
         )
         .expect("Failed to parse robot chain");
         let robot_chain = ChainBuilder::from(robot_chain).finish_static();
-        let r = robot_chain.get_node_with_name("realsense").unwrap().get_global_isometry().translation;
-        let h = robot_chain.get_node_with_name("lift_hinge").unwrap().get_global_isometry().translation;
-        let a = robot_chain.get_node_with_name("lift_arm").unwrap().get_global_isometry().translation;
 
-        if let Some(rrd) = RECORDER.get() {
-            let r = (r.x as f32,r.y as f32,r.z as f32);
-            let h = (h.x as f32,h.y as f32,h.z as f32);
-            let a = (a.x as f32,a.y as f32,a.z as f32);
-            rrd.recorder.log("realsense_position", &Points3D::new([r,a,h]).with_radii([0.1,0.1,0.1]).with_labels(["r","a","h"])).unwrap();
-        } else {
-            tracing::info!("recorder doesn't exist");
-        }
         let lunabot_stage = Arc::new(AtomicCell::new(LunabotStage::SoftStop));
 
         let (packet_builder, mut from_lunabase_rx, mut connected) = create_packet_builder(
@@ -306,7 +295,9 @@ impl LunabotApp {
 
         let motor_ref = enumerate_motors(vesc_ids, self.vesc.speed_multiplier.unwrap_or(1.0));
         
-        let mut actuator_controller = enumerate_v3picos(localizer_ref.clone(), {
+        let hinge_node = robot_chain.get_node_with_name("lift_hinge").expect("lift_hinge not defined in robot layout");
+        
+        let mut actuator_controller = enumerate_v3picos(hinge_node, localizer_ref.clone(), {
             rp2040::V3PicoInfo{
                 serial: self.v3pico.serial,
                 imus: [
