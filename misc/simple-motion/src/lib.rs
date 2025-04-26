@@ -559,7 +559,7 @@ enum TranslationRestrictionSerde {
         #[serde(default)]
         #[serde(skip_serializing_if = "all_zeros")]
         start_origin: [f64; 3],
-        axis: [f64; 3],
+        linear_translation_axis: [f64; 3],
         #[serde(skip_serializing_if = "Option::is_none")]
         min_length: Option<f64>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -590,7 +590,7 @@ impl From<TranslationRestrictionSerde> for TranslationRestriction {
             },
             TranslationRestrictionSerde::Linear {
                 start_origin,
-                axis,
+                linear_translation_axis: axis,
                 min_length,
                 max_length,
                 current_length,
@@ -619,7 +619,7 @@ enum RotationRestrictionSerde {
         #[serde(default)]
         #[serde(skip_serializing_if = "all_zeros")]
         start_euler: [f64; 3],
-        axis: [f64; 3],
+        rotation_axis: [f64; 3],
         min_angle: Option<f64>,
         max_angle: Option<f64>,
         current_angle: Option<f64>,
@@ -659,7 +659,7 @@ impl From<RotationRestrictionSerde> for RotationRestriction {
             },
             RotationRestrictionSerde::OneAxis {
                 start_euler,
-                axis,
+                rotation_axis: axis,
                 min_angle,
                 max_angle,
                 current_angle,

@@ -1,5 +1,5 @@
 [package]
-name = "imu_chip"
+name = "v3pico"
 version = "0.1.0"
 edition = "2021"
 
@@ -36,6 +36,5 @@ embedded_common.workspace = true
 
 cyw43.workspace = true
 cyw43-pio.workspace = true
-embassy-net.workspace = true
 rand.workspace = true
 embassy-sync.workspace = true

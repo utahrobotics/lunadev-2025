@@ -14,11 +14,11 @@ use std::io::Write;
 use std::path::PathBuf;
 
 fn main() {
-    if let Err(e) = std::env::var("IMU_SERIAL") {
+    if let Err(e) = std::env::var("PICO_SERIAL") {
         if e == VarError::NotPresent {
-            println!("cargo:warning=IMU_SERIAL environment variable not set");
+            panic!("PICO_SERIAL environment variable not set");
         } else {
-            println!("cargo:warning=IMU_SERIAL environment variable not set to a valid value");
+            panic!("PICO_SERIAL environment variable not set to a valid value");
         }
     }
 

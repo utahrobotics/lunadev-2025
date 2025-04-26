@@ -6,13 +6,16 @@
 
 //! Register definitions and register access
 
+use core::{cell::RefCell, borrow::BorrowMut};
 use crate::types::*;
 
 // use embedded_hal::i2c;
 use embedded_hal::i2c::I2c;
+use embassy_sync::blocking_mutex::{Mutex, raw::CriticalSectionRawMutex};
 
-pub struct RegisterAccess<I2C> {
-    i2c: I2C,
+
+pub struct RegisterAccess<'a, I2C> {
+    i2c: &'a Mutex<CriticalSectionRawMutex, RefCell<I2C>>,
     address: SlaveAddress,
     /// Stores if the FUNC_CFG_ACCESS - which is used to switch between normal registers and
     /// embedded functions registers - is currently configured to access the former or the latter
@@ -34,11 +37,11 @@ pub struct RegisterAccess<I2C> {
 /// learning core configuration. Note, however, that even in these cases the currently selected
 /// register page is properly tracked because all register writes/updates are checked for
 /// changing the `FUNC_CFG_ACCESS` register.
-impl<I2C> RegisterAccess<I2C>
+impl<'a, I2C> RegisterAccess<'a, I2C>
 where
     I2C: I2c,
 {
-    pub fn new(i2c: I2C, address: SlaveAddress) -> Self {
+    pub fn new(i2c: &'a Mutex<CriticalSectionRawMutex, RefCell<I2C>>, address: SlaveAddress) -> Self {
         Self {
             i2c,
             address,
@@ -46,7 +49,7 @@ where
         }
     }
 
-    pub fn destroy(self) -> I2C {
+    pub fn destroy(self) -> &'a Mutex<CriticalSectionRawMutex, RefCell<I2C>> {
         self.i2c
     }
 
@@ -98,9 +101,10 @@ where
     ///
     /// For example, using this method directly may be useful when interfacing with C example code.
     pub fn read_reg_addresses(&mut self, reg_address: u8, buf: &mut [u8]) -> Result<(), Error> {
-        self.i2c
-            .write_read(self.address as u8, &[reg_address], buf)
-            .map_err(|_| Error::I2cReadError)?;
+        self.i2c.lock(|inner| {
+            inner.borrow_mut().write_read(self.address as u8, &[reg_address], buf)
+            .map_err(|_| Error::I2cReadError)
+        })?;
         Ok(())
     }
 
@@ -108,9 +112,10 @@ where
         let reg_address = self.select_register_page(reg)?;
         let update = [reg_address, data];
         self.check_register_page_change(reg_address, data);
-        self.i2c
-            .write(self.address as u8, &update)
+        self.i2c.lock(|inner| {
+            inner.borrow_mut().write(self.address as u8, &update)
             .map_err(|_| Error::I2cWriteError)
+        })
     }
 
     pub fn write_regs(&mut self, reg: impl Into<Register>, data: &[u8]) -> Result<(), Error> {
@@ -134,9 +139,10 @@ where
             // correct
             self.check_register_page_change(reg_address + i as u8, *byte);
         }
-        self.i2c
-            .write(self.address as u8, &update[..data.len() + 1])
+        self.i2c.lock(|inner| {
+            inner.borrow_mut().write(self.address as u8, &update[..data.len() + 1])
             .map_err(|_| Error::I2cWriteError)
+        })
     }
 
     /// Updates the bits in register `reg` specified by `bitmask` with payload `data`.
@@ -147,7 +153,7 @@ where
         bitmask: u8,
     ) -> Result<(), Error> {
         let reg_address = self.select_register_page(reg)?;
-        log::info!("selected register page");
+        defmt::info!("selected register page");
         self.update_reg_address(reg_address, data, bitmask)
     }
 
@@ -173,9 +179,10 @@ where
         // A write takes the register address as first byte, the data as second.
         let update = [reg_address, val];
         self.check_register_page_change(reg_address, val);
-        self.i2c
-            .write(self.address as u8, &update)
+        self.i2c.lock(|inner| {
+            inner.borrow_mut().write(self.address as u8, &update)
             .map_err(|_| Error::I2cWriteError)
+        })
     }
 }
 

@@ -11,6 +11,8 @@ mod gyro;
 pub mod register;
 pub mod types;
 
+use core::cell::RefCell;
+use embassy_sync::blocking_mutex::{raw::CriticalSectionRawMutex, Mutex};
 pub use register::*;
 pub use types::*;
 
@@ -23,24 +25,42 @@ use byteorder::{ByteOrder, LittleEndian};
 use embedded_hal::{delay::DelayNs, i2c::I2c};
 use enumflags2::BitFlags;
 
+
 /// Representation of a LSM6DSOX. Stores the address and device peripherals.
-pub struct Lsm6dsox<I2C, Delay>
+pub struct Lsm6dsox<'a, I2C, Delay>
 where
     I2C: I2c,
     Delay: DelayNs,
 {
     delay: Delay,
     config: Configuration,
-    registers: RegisterAccess<I2C>,
+    registers: RegisterAccess<'a, I2C>,
 }
 
-impl<I2C, Delay> Lsm6dsox<I2C, Delay>
+impl<'a, I2C, Delay> Lsm6dsox<'a, I2C, Delay>
 where
     I2C: I2c,
     Delay: DelayNs,
 {
+    /// added for usb testing purposes so Matthew doesnt need access to the robot to test protocols built on CDC-ACM
+    pub fn dummy_angular_rate(&self) -> Result<AngularRate, Error> {
+        Ok(AngularRate {
+            x: measurements::AngularVelocity::from_rpm(1.1).into(),
+            y: measurements::AngularVelocity::from_rpm(2.2).into(),
+            z: measurements::AngularVelocity::from_rpm(3.3).into(),
+        })
+    }
+    
+    /// added for usb testing purposes so Matthew doesnt need access to the robot to test protocols built on CDC-ACM
+    pub fn dummy_accel_norm(&self) -> Result<F32x3, accelerometer::Error<Error>> {
+        Ok(F32x3 {
+            x: 1.5,
+            y: 2.5,
+            z: 3.5,
+        })
+    }
     /// Create a new instance of this sensor.
-    pub fn new(i2c: I2C, address: SlaveAddress, delay: Delay) -> Self {
+    pub fn new(i2c: &'a Mutex<CriticalSectionRawMutex, RefCell<I2C>>, address: SlaveAddress, delay: Delay) -> Self {
         Self {
             delay,
             config: Configuration {
@@ -54,7 +74,7 @@ where
     }
 
     /// Destroy the sensor and return the hardware peripherals
-    pub fn destroy(self) -> (I2C, Delay) {
+    pub fn destroy(self) -> (&'a Mutex<CriticalSectionRawMutex, RefCell<I2C>>, Delay) {
         (self.registers.destroy(), self.delay)
     }
 
@@ -76,18 +96,15 @@ where
     }
 
     /// Initializes the sensor.
-    ///
+    
     /// A software reset is performed and common settings are applied. The accelerometer and
     /// gyroscope are initialized with [`DataRate::PowerDown`].
     pub fn setup(&mut self) -> Result<(), Error> {
-        log::info!("setup started");
         self.update_reg_command(Command::SwReset)?;
-        log::info!("updated reg");
         // Give it 5 tries
         // A delay is necessary here, otherwise reset may never finish because the lsm is too busy.
         let mut ctrl3_c_val = 0xFF;
         for _ in 0..5 {
-            log::info!("reg read");
             self.delay.delay_ms(10);
             ctrl3_c_val = self.registers.read_reg(PrimaryRegister::CTRL3_C)?;
             if ctrl3_c_val & 1 == 0 {
@@ -177,33 +194,7 @@ where
             .update_reg(command.register(), command.bits(), command.mask())
     }
 
-    /// Gives direct access to the internal sensor registers
-    ///
-    /// # Safety
-    /// Directly accessing the internal registers may misconfigure the sensor or invalidate some
-    /// of the assumptions made in the driver implementation. It is mainly provided to allow
-    /// configuring the machine learning core with a configuration generated from an external tool
-    /// but it may also be useful for testing, debugging, prototyping or to use features which have
-    /// not been implemented on a higher level.
-    pub unsafe fn register_access(&mut self) -> &mut RegisterAccess<I2C> {
-        &mut self.registers
-    }
-}
-
-/// added for usb testing purposes so Matthew doesnt need access to the robot to test protocols built on CDC-ACM
-pub fn dummy_angular_rate() -> Result<AngularRate, Error> {
-    Ok(AngularRate {
-        x: measurements::AngularVelocity::from_rpm(1.1).into(),
-        y: measurements::AngularVelocity::from_rpm(2.2).into(),
-        z: measurements::AngularVelocity::from_rpm(3.3).into(),
-    })
-}
-
-/// added for usb testing purposes so Matthew doesnt need access to the robot to test protocols built on CDC-ACM
-pub fn dummy_accel_norm() -> Result<F32x3, Error> {
-    Ok(F32x3 {
-        x: 1.5,
-        y: 2.5,
-        z: 3.5,
-    })
+    // pub unsafe fn register_access(&mut self) -> &mut RegisterAccess<I2C> {
+    //     &mut self.registers
+    // }
 }

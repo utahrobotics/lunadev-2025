@@ -8,7 +8,7 @@ use core::convert::TryFrom;
 
 use super::*;
 
-impl<I2C, Delay> Accelerometer for Lsm6dsox<I2C, Delay>
+impl<I2C, Delay> Accelerometer for Lsm6dsox<'_, I2C, Delay>
 where
     I2C: I2c,
     Delay: DelayNs,
@@ -55,7 +55,7 @@ where
     }
 }
 
-impl<I2C, Delay> RawAccelerometer<I16x3> for Lsm6dsox<I2C, Delay>
+impl<I2C, Delay> RawAccelerometer<I16x3> for Lsm6dsox<'_, I2C, Delay>
 where
     I2C: I2c,
     Delay: DelayNs,
@@ -89,7 +89,7 @@ where
     }
 }
 
-impl<I2C, Delay> Lsm6dsox<I2C, Delay>
+impl<I2C, Delay> Lsm6dsox<'_, I2C, Delay>
 where
     I2C: I2c,
     Delay: DelayNs,

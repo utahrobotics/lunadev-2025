@@ -32,16 +32,13 @@ lumpur::define_configuration! {
             depth_cameras: fxhash::FxHashMap<String, apps::DepthCameraInfo>,
             #[serde(default)]
             apriltags: fxhash::FxHashMap<String, apps::Apriltag>,
-            #[serde(default)]
-            imus: fxhash::FxHashMap<String, apps::IMUInfo>,
             robot_layout: Option<String>,
             #[serde(default)]
             vesc: apps::Vesc,
             #[serde(default)]
             rerun_viz: apps::RerunViz,
             imu_correction: Option<imu_calib::CalibrationParameters>,
-            #[serde(default)]
-            actuator_controller_info: Option<apps::ActuatorControllerInfo>
+            v3pico: apps::V3PicoInfo
         },
     }
 }
@@ -100,12 +97,11 @@ fn main() {
             cameras,
             depth_cameras,
             apriltags,
-            imus,
             robot_layout,
             vesc,
             rerun_viz,
             imu_correction,
-            actuator_controller_info
+            v3pico
         } => {
             apps::LunabotApp {
                 lunabase_address,
@@ -113,13 +109,12 @@ fn main() {
                 cameras,
                 depth_cameras,
                 apriltags,
-                imus,
                 vesc,
                 robot_layout: robot_layout
                     .unwrap_or_else(|| "robot-layout/lunabot.json".to_string()),
                 rerun_viz,
                 imu_correction,
-                actuator_controller_info
+                v3pico
             }
             .run();
         }

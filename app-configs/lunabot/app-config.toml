@@ -38,11 +38,19 @@ tag_position = [0.65, 0.7, 0.93]
 forward_axis = [-1.0, 0.0, 0.0]
 tag_width = 0.152
 
-[Main.imus."21"]
-link_name = "imu_21"
+[Main.v3pico]
+serial = "1"
+[[Main.v3pico.imus]]
+link_name = "imu0"
 
-[Main.imus."42"]
-link_name = "imu_42"
+[[Main.v3pico.imus]]
+link_name = "imu1"
+
+[[Main.v3pico.imus]]
+link_name = "imu2"
+
+[[Main.v3pico.imus]]
+link_name = "imu3"
 
 [Main.vesc]
 speed_multiplier = 1.0

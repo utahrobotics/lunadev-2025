@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "imu_chip",
+    "v3pico",
     "lsm6dsox",
     "embedded_common"
 , "actuator"]

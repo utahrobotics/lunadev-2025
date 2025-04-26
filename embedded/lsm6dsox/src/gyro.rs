@@ -7,7 +7,7 @@
 use super::*;
 use measurements::AngularVelocity;
 
-impl<I2C, Delay> Lsm6dsox<I2C, Delay>
+impl<I2C, Delay> Lsm6dsox<'_, I2C, Delay>
 where
     I2C: I2c,
     Delay: DelayNs,

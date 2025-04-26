@@ -15,7 +15,7 @@ use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use mio::{Events, Interest, Poll, Token};
 use motors::{enumerate_motors, MotorMask, VescIDs};
-use nalgebra::{Scale3, Transform3, UnitQuaternion};
+use nalgebra::{Scale3, Transform3};
 use rerun_viz::init_rerun;
 use imu_calib::*;
 use rp2040::*;
@@ -64,8 +64,12 @@ pub struct DepthCameraInfo {
 #[derive(Deserialize, Debug)]
 pub struct IMUInfo {
     link_name: String,
-    #[serde(default)]
-    correction: UnitQuaternion<f32>
+}
+
+#[derive(Deserialize, Debug)]
+pub struct V3PicoInfo {
+    serial: String,
+    imus: [IMUInfo; 4]
 }
 
 #[derive(Deserialize, Debug)]
@@ -108,12 +112,11 @@ pub struct LunabotApp {
     pub cameras: FxHashMap<String, CameraInfo>,
     pub depth_cameras: FxHashMap<String, DepthCameraInfo>,
     pub apriltags: FxHashMap<String, Apriltag>,
-    pub imus: FxHashMap<String, IMUInfo>,
     pub robot_layout: String,
     pub vesc: Vesc,
     pub rerun_viz: RerunViz,
     pub imu_correction: Option<CalibrationParameters>,
-    pub actuator_controller_info: Option<ActuatorControllerInfo>
+    pub v3pico: V3PicoInfo
 }
 
 impl LunabotApp {
@@ -176,7 +179,7 @@ impl LunabotApp {
             self.max_pong_delay_ms,
         );
 
-        let localizer = Localizer::new(robot_chain.clone(), self.imus.len(), packet_builder);
+        let localizer = Localizer::new(robot_chain.clone(), self.v3pico.imus.len(), packet_builder);
         let localizer_ref = localizer.get_ref();
         std::thread::spawn(|| localizer.run());
 
@@ -265,24 +268,6 @@ impl LunabotApp {
         // corrections are applied in the localizer
         localizer_ref.set_imu_correction_parameters(self.imu_correction);
 
-        enumerate_imus(
-            &localizer_ref,
-            self.imus.into_iter().map(|(port, IMUInfo { link_name, correction })| {
-                (
-                    port,
-                    rp2040::IMUInfo {
-                        correction,
-                        node: robot_chain
-                            .get_node_with_name(&link_name)
-                            .context("Failed to find IMU link")
-                            .unwrap()
-                            .into(),
-                        link_name,
-                    },
-                )
-            }),
-        );
-
         let mut vesc_ids = VescIDs::default();
 
         for SingleVesc { id, mask } in self.vesc.singles {
@@ -306,14 +291,42 @@ impl LunabotApp {
         }
 
         let motor_ref = enumerate_motors(vesc_ids, self.vesc.speed_multiplier.unwrap_or(1.0));
-
-        let mut actuator_controller = enumerate_actuator_controllers(&localizer_ref, self.actuator_controller_info.map(
-            |inner| {
-                rp2040::ActuatorControllerInfo {
-                    serial: inner.serial
-                }
+        
+        let mut actuator_controller = enumerate_v3picos(localizer_ref.clone(), {
+            rp2040::V3PicoInfo{
+                serial: self.v3pico.serial,
+                imus: [
+                    rp2040::IMUInfo {
+                        node: robot_chain.get_node_with_name(&self.v3pico.imus[0].link_name)
+                            .context("Failed to find IMU link")
+                                .unwrap()
+                                .into(),
+                        link_name: self.v3pico.imus[0].link_name.clone(),
+                    },
+                    rp2040::IMUInfo {
+                        node: robot_chain.get_node_with_name(&self.v3pico.imus[1].link_name)
+                            .context("Failed to find IMU link")
+                                .unwrap()
+                                .into(),
+                        link_name: self.v3pico.imus[1].link_name.clone(),
+                    },
+                    rp2040::IMUInfo {
+                        node: robot_chain.get_node_with_name(&self.v3pico.imus[2].link_name)
+                            .context("Failed to find IMU link")
+                                .unwrap()
+                                .into(),
+                        link_name: self.v3pico.imus[2].link_name.clone(),
+                    },
+                    rp2040::IMUInfo {
+                        node: robot_chain.get_node_with_name(&self.v3pico.imus[3].link_name)
+                            .context("Failed to find IMU link")
+                                .unwrap()
+                                .into(),
+                        link_name: self.v3pico.imus[3].link_name.clone(),
+                    },
+                ]
             }
-        ).unwrap_or_default());
+        });
 
         run_ai(
             robot_chain.into(),
