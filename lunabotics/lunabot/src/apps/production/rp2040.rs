@@ -259,7 +259,7 @@ impl V3PicoTask {
             if *is_fucked_rx.borrow() {
                 break;
             }
-            let cmd_result = self.actuator_command_rx.recv_timeout(Duration::from_secs(2));
+            let cmd_result = self.actuator_command_rx.recv_timeout(Duration::from_secs(1));
             let Ok(cmd) = cmd_result else {
                 if cmd_result.err().unwrap() != RecvTimeoutError::Timeout {
                     tracing::error!("Actuator command thread channel closed");

@@ -101,12 +101,13 @@ async fn main(spawner: Spawner) {
     
     spawner.spawn(okay_task()).unwrap();
     
+    class.wait_connection().await;
+
     let (class_tx, class_rx) = class.split();
     
     m1.enable();
     m2.enable();
-
-    // class.wait_connection().await;
+    
     let mut i2c = I2c::new_async(p.I2C0, p.PIN_1, p.PIN_0, Irqs, i2c::Config::default());
     static I2C: StaticCell<Mutex<CriticalSectionRawMutex,RefCell<I2c<I2C0, Async>>>> = StaticCell::new();
     let i2c = I2C.init(Mutex::new(RefCell::new(i2c)));
