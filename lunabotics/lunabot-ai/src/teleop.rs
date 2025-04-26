@@ -5,7 +5,7 @@ use common::{FromLunabase, LunabotStage, Steering};
 use tracing::{error, warn};
 
 use crate::{
-    autonomy::{Autonomy, AutonomyStage},
+    autonomy::AutonomyState,
     blackboard::LunabotBlackboard,
     Action, PollWhen,
 };
@@ -32,6 +32,7 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard> {
                 last_lift_actuator = None;
                 last_bucket_actuator = None;
             }
+            
             macro_rules! handle {
                 ($msg: ident) => {
                     match $msg {
@@ -49,8 +50,7 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard> {
                             return Status::Failure;
                         }
                         FromLunabase::TraverseObstacles => {
-                            *blackboard.get_autonomy() =
-                                Autonomy::PartialAutonomy(AutonomyStage::TraverseObstacles);
+                            blackboard.set_autonomy(AutonomyState::StartAutonomy);
                             return Status::Success;
                         }
                         _ => {}

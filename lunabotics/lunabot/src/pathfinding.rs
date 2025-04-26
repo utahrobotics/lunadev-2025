@@ -1,5 +1,5 @@
 use crate::utils::distance_between_tuples;
-use common::{cell_to_world_point, world_point_to_cell, PathInstruction, PathPoint, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
+use common::{cell_to_world_point, world_point_to_cell, CellsRect, PathInstruction, PathKind, PathPoint, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
 use nalgebra::{Point3, Scale3, Transform3};
 use pathfinding::{grid::Grid, prelude::astar};
 use tasker::shared::{SharedData, SharedDataReceiver};
@@ -12,15 +12,6 @@ const REACH: usize = 2;
 const MAX_SCAN_ATTEMPTS: usize = 4;
 
 #[derive(Debug)]
-/// larger x = further left, so `left` should have a larger numeric value than `right`
-pub struct Rect {
-    top: f64,
-    bottom: f64,
-    left: f64,
-    right: f64
-}
-
-#[derive(Debug)]
 pub struct Ellipse {
     h: f64,
     k: f64,
@@ -30,20 +21,12 @@ pub struct Ellipse {
 
 /// units are in cells
 #[derive(Debug)]
-pub enum Obstacle { Rect(Rect), Ellipse(Ellipse) }
+pub enum Obstacle { Rect(CellsRect), Ellipse(Ellipse) }
 impl Obstacle {
     
     /// width and height must be positive
-    pub fn new_rect((left, bottom): (f64, f64), width_meters: f64, height_meters: f64) -> Obstacle {
-        let left = left / THALASSIC_CELL_SIZE as f64;
-        let bottom = bottom / THALASSIC_CELL_SIZE as f64;
-        
-        Obstacle::Rect(Rect{
-            left,
-            bottom,
-            right: left - (width_meters / THALASSIC_CELL_SIZE as f64),
-            top: bottom + (height_meters / THALASSIC_CELL_SIZE as f64),
-        })
+    pub fn new_rect(left_bottom: (f64, f64), width_meters: f64, height_meters: f64) -> Obstacle {
+        Obstacle::Rect(CellsRect::new(left_bottom, width_meters, height_meters))
     }
     
     pub fn new_ellipse(center: (f64, f64), radius_x_meters: f64, radius_y_meters: f64) -> Obstacle {
@@ -60,11 +43,12 @@ impl Obstacle {
     }
     
     fn contains_cell(&self, cell: (usize, usize)) -> bool {
+        
         let x = cell.0 as f64;
         let y = cell.1 as f64;
         
         match self {
-            Obstacle::Rect(Rect{top, bottom, left, right}) => {
+            Obstacle::Rect(CellsRect{top, bottom, left, right}) => {
                 *right <= x && x <= *left && *bottom <= y && y <= *top  // larger x = further left
             },
             Obstacle::Ellipse(Ellipse{h, k, radius_x, radius_y}) => {
@@ -116,11 +100,11 @@ impl DefaultPathfinder {
         self.unscannable_cells.iter().chain(self.cells_to_avoid.iter())
     }
     
-    pub fn avoid_point(&mut self, point: Point3<f64>) {
-        self.cells_to_avoid.push(world_point_to_cell(point));
+    pub fn avoid_cell(&mut self, cell: (usize, usize)) {
+        self.cells_to_avoid.push(cell);
     }
     
-    pub fn clear_points_to_avoid(&mut self) {
+    pub fn clear_cells_to_avoid(&mut self) {
         self.cells_to_avoid.clear();
     }
 
@@ -162,6 +146,7 @@ impl DefaultPathfinder {
         end_cell: (usize, usize),
         map_data: &SharedData<ThalassicData>,
     ) -> Option<Vec<(usize, usize)>> {
+        println!("finding path {:?} -> {:?}", start_cell, end_cell);
         
         // allows checking if position is known inside `move || {}` closures without moving `map_data`
         let is_known = |pos: (usize, usize)| map_data.is_known(pos);
@@ -275,16 +260,16 @@ impl DefaultPathfinder {
     pub fn push_path_into(
         &mut self,
         shared_thalassic_data: &SharedDataReceiver<ThalassicData>,
-        from: Point3<f64>,
-        to: Point3<f64>,
+        start_cell: (usize, usize),
+        end_cell: (usize, usize),
         into: &mut Vec<PathPoint>,
+        kind: PathKind
     ) -> bool {
         into.clear();
-        let start_cell = world_point_to_cell(from);
-        let end_cell = world_point_to_cell(to);
 
         loop {
             let map_data = self.get_map_data(shared_thalassic_data, self.current_robot_radius);
+            
 
             let Some(mut path) = self.find_path(start_cell, end_cell, &map_data) else {
                 self.current_robot_radius -= 0.1;
@@ -310,12 +295,6 @@ impl DefaultPathfinder {
                 continue;
             };
             
-            let cell_to_path_pt = |cell: (usize, usize), instruction: PathInstruction| {
-                PathPoint {
-                    point: cell_to_world_point(cell, map_data.get_height(cell) as f64),
-                    instruction,
-                }
-            };
 
             if let Err((i, unknown_cell)) = map_data.is_path_safe_for_robot(start_cell, &mut path) {
                 // path got blocked due to this unknown point again
@@ -339,9 +318,9 @@ impl DefaultPathfinder {
 
                     into.extend(
                         path.iter()
-                            .map(|pos| cell_to_path_pt(*pos, PathInstruction::MoveTo)),
+                            .map(|pos| PathPoint {cell: *pos, instruction: PathInstruction::MoveTo}),
                     );
-                    into.push(cell_to_path_pt(unknown_cell, PathInstruction::FaceTowards));
+                    into.push(PathPoint {cell: unknown_cell, instruction: PathInstruction::FaceTowards});
                     break;
                 }
             }
@@ -350,7 +329,7 @@ impl DefaultPathfinder {
                 self.times_blocked_here_in_a_row = 0;
                 into.extend(
                     path.iter()
-                        .map(|pos| cell_to_path_pt(*pos, PathInstruction::MoveTo)),
+                        .map(|pos| PathPoint {cell: *pos, instruction: PathInstruction::MoveTo}),
                 );
                 break;
             }
