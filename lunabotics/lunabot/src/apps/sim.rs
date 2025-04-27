@@ -432,7 +432,35 @@ impl LunasimbotApp {
                 }
                 
                 Action::CheckIfExplored(area) => {
-                    // TODO check if we've explored all of `area`
+                    let x_lo = area.right as usize;
+                    let x_hi = area.left as usize;
+                    let y_lo = area.bottom as usize;
+                    let y_hi = area.top as usize;
+                    
+                    let map_data = pathfinder.get_map_data(&shared_thalassic_data);
+                    
+                    // start with a quick, wide search 
+                    println!("quick check", );
+                    for x in (x_lo..x_hi).step_by(30) {
+                        for y in (y_lo..y_hi).step_by(30) {
+                            if !map_data.is_known((x, y)) {
+                                inputs.push(Input::NotDoneExploring((x, y)));
+                                return;
+                            }
+                        }
+                    }
+                    
+                    println!("slow check", );
+                    // if no hits, slowly check every cell 
+                    for x in x_lo..x_hi {
+                        for y in y_lo..y_hi {
+                            if !map_data.is_known((x, y)) {
+                                inputs.push(Input::NotDoneExploring((x, y)));
+                                return;
+                            }
+                        }
+                    }
+                    
                     inputs.push(Input::DoneExploring);
                 }
             },

@@ -259,14 +259,6 @@ impl LunabotApp {
             apriltags,
         );
 
-        let grid_to_world = Transform3::from_matrix_unchecked(
-            Scale3::new(0.03125, 1.0, 0.03125).to_homogeneous(),
-        );
-        let world_to_grid = grid_to_world.try_inverse().unwrap();
-        // let mut pathfinder = DefaultPathfinder::new(world_to_grid, grid_to_world);
-        let mut pathfinder = DefaultPathfinder::new(vec![]);
-
-
         // correction parameters are defined in app-config.toml
         // corrections are applied in the localizer
         localizer_ref.set_imu_correction_parameters(self.imu_correction);
@@ -333,6 +325,8 @@ impl LunabotApp {
             }
         });
 
+        let mut pathfinder = DefaultPathfinder::new(vec![]);
+        
         run_ai(
             robot_chain.into(),
             |action, inputs| match action {
@@ -359,6 +353,39 @@ impl LunabotApp {
                 Action::ClearPointsToAvoid => {
                     pathfinder.clear_points_to_avoid();
                 },
+                
+                Action::CheckIfExplored(area) => {
+                    let x_lo = area.right as usize;
+                    let x_hi = area.left as usize;
+                    let y_lo = area.bottom as usize;
+                    let y_hi = area.top as usize;
+                    
+                    let map_data = pathfinder.get_map_data(&shared_thalassic_data);
+                    
+                    // start with a quick, wide search 
+                    println!("quick check", );
+                    for x in (x_lo..x_hi).step_by(30) {
+                        for y in (y_lo..y_hi).step_by(30) {
+                            if !map_data.is_known((x, y)) {
+                                inputs.push(Input::NotDoneExploring((x, y)));
+                                return;
+                            }
+                        }
+                    }
+                    
+                    println!("slow check", );
+                    // if no hits, slowly check every cell 
+                    for x in x_lo..x_hi {
+                        for y in y_lo..y_hi {
+                            if !map_data.is_known((x, y)) {
+                                inputs.push(Input::NotDoneExploring((x, y)));
+                                return;
+                            }
+                        }
+                    }
+                    
+                    inputs.push(Input::DoneExploring);
+                }
             },
             |poll_when, inputs| {
                 let wait_disconnect = async {
@@ -397,12 +424,12 @@ impl LunabotApp {
                         async {
                             tokio::select! {
                                 result = from_lunabase_rx.recv() => {
-				    let Some(msg) = result else {
+                                    let Some(msg) = result else {
                                         error!("Lunabase message channel closed");
                                         std::future::pending::<()>().await;
                                         unreachable!();
                                     };
-				    tracing::info!("msg: {:?}", msg);
+				                    tracing::info!("msg: {:?}", msg);
                                     inputs.push(Input::FromLunabase(msg));
                                 }
                                 _ = tokio::time::sleep_until(deadline.into()) => {}

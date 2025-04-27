@@ -12,7 +12,7 @@ pub(super) fn find_next_target() -> impl Behavior<LunabotBlackboard> + CancelSaf
         
         // start exploration check
         AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-            blackboard.check_if_explored(CellsRect::new((4., 3.), 4., 1.));
+            blackboard.check_if_explored(CellsRect::new((4., 3.), 4., 2.));
             Status::Success
         }),
         

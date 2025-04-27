@@ -108,20 +108,19 @@ impl DefaultPathfinder {
         self.cells_to_avoid.clear();
     }
 
-    fn get_map_data(
+    pub fn get_map_data(
         &mut self,
         shared_thalassic_data: &SharedDataReceiver<ThalassicData>,
-        robot_radius: f32,
     ) -> SharedData<ThalassicData> {
         shared_thalassic_data.try_get(); // clear out a previous observation if it exists
 
         set_observe_depth(true);
         let mut map_data = shared_thalassic_data.get();
         loop {
-            if map_data.current_robot_radius_meters == robot_radius {
+            if map_data.current_robot_radius_meters == self.current_robot_radius {
                 break;
             }
-            map_data.set_robot_radius(robot_radius);
+            map_data.set_robot_radius(self.current_robot_radius);
             drop(map_data);
             map_data = shared_thalassic_data.get();
         }
@@ -266,9 +265,11 @@ impl DefaultPathfinder {
         kind: PathKind
     ) -> bool {
         into.clear();
-
+        
+        // TODO: deal with `kind`
+        
         loop {
-            let map_data = self.get_map_data(shared_thalassic_data, self.current_robot_radius);
+            let map_data = self.get_map_data(shared_thalassic_data);
             
 
             let Some(mut path) = self.find_path(start_cell, end_cell, &map_data) else {
