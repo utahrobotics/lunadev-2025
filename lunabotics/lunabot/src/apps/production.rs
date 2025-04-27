@@ -340,18 +340,17 @@ impl LunabotApp {
                 Action::SetActuators(actuator_cmd) => {
                     let _ = actuator_controller.send_command(actuator_cmd);
                 }
-                Action::CalculatePath { from, to, mut into } => {
-                    if pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into) {
+                Action::CalculatePath { from, to, kind } => {
+                    let mut into = Vec::new();
+                    if pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into, kind) {
                         inputs.push(Input::PathCalculated(into));
                     } else {
-                        inputs.push(Input::FailedToCalculatePath(into));
+                        inputs.push(Input::FailedToCalculatePath);
                     }
                 }
-                Action::AvoidPoint(point) => {
-                    pathfinder.avoid_point(point);
-                }
+                
                 Action::ClearPointsToAvoid => {
-                    pathfinder.clear_points_to_avoid();
+                    pathfinder.clear_cells_to_avoid();
                 },
                 
                 Action::CheckIfExplored(area) => {
@@ -386,6 +385,7 @@ impl LunabotApp {
                     
                     inputs.push(Input::DoneExploring);
                 }
+                Action::AvoidCell(_) => todo!(),
             },
             |poll_when, inputs| {
                 let wait_disconnect = async {
