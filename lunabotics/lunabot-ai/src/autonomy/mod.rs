@@ -2,19 +2,23 @@
 use std::time::Duration;
 
 use ares_bt::{
-    branching::TryCatch, converters::{AssertCancelSafe, Invert}, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, CancelSafe, Status
+    action::AlwaysSucceed, branching::{IfElse, TryCatch}, converters::{AssertCancelSafe, Invert}, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, CancelSafe, Status
 };
 use common::{FromLunabase, LunabotStage};
 use tracing::{error, warn};
 use find_next_target::find_next_target;
 use find_path::find_path;
 use follow_path::follow_path;
+use dig::dig;
+use dump::dump;
 
-use crate::{blackboard::LunabotBlackboard, utils::WaitBehavior, Action};
+use crate::{blackboard::{self, LunabotBlackboard}, utils::WaitBehavior, Action};
 
 mod find_next_target;
 mod find_path;
 mod follow_path;
+mod dig;
+mod dump;
 
 const PAUSE_AFTER_MOVING_DURATION: Duration = Duration::from_secs(2);
 
@@ -32,24 +36,62 @@ pub enum AutonomyState {
 
 
 pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
+    
     WhileLoop::new(
-        |blackboard: &mut LunabotBlackboard| (blackboard.get_autonomy() != AutonomyState::None).into(),
+        autonomy_is_active(),
+        
         ParallelAny::new((
             
-            // exit loop upon interruption
+            // exit autonomy upon interruption
             fail_if_autonomy_interrupted(),
             
-            Sequence::new(( 
-                reset_steering(), 
-                find_next_target(), 
-                find_path(), 
+            WhileLoop::new(
+                autonomy_is_active(),
                 
-                do_then_wait(
-                    AssertCancelSafe(follow_path), 
-                    PAUSE_AFTER_MOVING_DURATION
-                ),
-            )),
+                TryCatch::new(
+                    Sequence::new(( 
+                        reset_steering(), 
+                        find_next_target(), 
+                        
+                        // repeat until body returns success
+                        WhileLoop::new(
+                            AlwaysSucceed,
+                            Invert(
+                                
+                                // find then follow a path - will return success of path target is reached
+                                Sequence::new((
+                                    find_path(), 
+                                    do_then_wait(
+                                        AssertCancelSafe(follow_path), 
+                                        PAUSE_AFTER_MOVING_DURATION
+                                    ),
+                                ))
+                            ),
+                        ),
+                        
+                        // if autonomy state is dig, then `dig()`. otherwise `dump()`
+                        IfElse::new(
+                            AssertCancelSafe(
+                                |blackboard: &mut LunabotBlackboard| {
+                                    (blackboard.get_autonomy() == AutonomyState::Dig).into()
+                                }
+                            ), 
+                            dig(), 
+                            dump()
+                        ),
+                    )),
+                    AlwaysSucceed
+                )
+            ),
         )),
+    )
+}
+
+fn autonomy_is_active() -> impl Behavior<LunabotBlackboard> + CancelSafe {
+    AssertCancelSafe(
+        |blackboard: &mut LunabotBlackboard| {
+            (blackboard.get_autonomy() != AutonomyState::None).into()
+        }
     )
 }
 

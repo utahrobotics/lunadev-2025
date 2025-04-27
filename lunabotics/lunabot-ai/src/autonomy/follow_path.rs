@@ -4,7 +4,7 @@ use ares_bt::Status;
 use common::{cell_to_world_point, world_point_to_cell, PathInstruction, Steering};
 use nalgebra::{distance, Matrix2, Point3, Vector2, Vector3};
 
-use crate::{blackboard::LunabotBlackboard, Action, PollWhen};
+use crate::{autonomy::AutonomyState, blackboard::LunabotBlackboard, Action, PollWhen};
 
 
 /// how far the robot should back up when its stuck in one spot for too long
@@ -38,7 +38,7 @@ pub(super) fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
     
     let latest_transform = blackboard.get_latest_transform();
     let now = blackboard.get_now();
-    let path = blackboard.get_path_mut();
+    let Some(path) = blackboard.get_path_mut() else { return Status::Success };
     
     if path.is_empty() {
         println!("path follower: empty path", );
@@ -57,6 +57,7 @@ pub(super) fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
         let path_complete = path.is_empty();
 
         if path_complete {
+            *blackboard.get_path_mut() = None;
             blackboard.enqueue_action(Action::SetSteering(Steering::default()));
             
             // ensures that time between path follows aren't interpreted as being stuck in one place for a long time
@@ -65,6 +66,14 @@ pub(super) fn follow_path(blackboard: &mut LunabotBlackboard) -> Status {
             return match curr_instr.instruction {
                 PathInstruction::MoveTo => {
                     println!("path follower: done!");
+                    
+                    // advance autonomy stage
+                    blackboard.set_autonomy(
+                        match blackboard.get_autonomy() {
+                            AutonomyState::MoveToDigSite(_) => AutonomyState::Dig,
+                            _ => AutonomyState::Dump
+                        }
+                    );
                     blackboard.enqueue_action(Action::ClearPointsToAvoid);
                     Status::Success
                 }

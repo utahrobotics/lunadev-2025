@@ -32,7 +32,6 @@ pub enum Action {
     CalculatePath {
         from: (usize, usize),
         to: (usize, usize),
-        into: Vec<PathPoint>,
         kind: PathKind
     },
     AvoidCell((usize, usize)),

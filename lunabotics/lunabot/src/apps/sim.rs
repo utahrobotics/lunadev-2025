@@ -8,7 +8,7 @@ use std::{
 };
 
 use common::{
-    cell_to_world_point, lunasim::{FromLunasim, FromLunasimbot}, LunabotStage
+    cell_to_world_point, lunasim::{FromLunasim, FromLunasimbot}, LunabotStage, PathPoint
 };
 use crossbeam::atomic::AtomicCell;
 use gputter::{
@@ -409,7 +409,9 @@ impl LunasimbotApp {
                     lerper.set_steering(steering);
                 }
                 Action::SetActuators(_actuators) => {}
-                Action::CalculatePath { from, to, mut into, kind } => {
+                Action::CalculatePath { from, to, kind } => {
+                    let mut into: Vec<PathPoint> = vec![]; 
+                    
                     if pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into, kind) {
                         let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
                             into.iter()
@@ -419,7 +421,7 @@ impl LunasimbotApp {
                         lunasim_stdin.write(bytes);
                         inputs.push(Input::PathCalculated(into));
                     } else {
-                        inputs.push(Input::FailedToCalculatePath(into));
+                        inputs.push(Input::FailedToCalculatePath);
                     }
                 }
                 Action::AvoidCell(cell) => {
@@ -430,7 +432,8 @@ impl LunasimbotApp {
                 }
                 
                 Action::CheckIfExplored(area) => {
-                    inputs.push(Input::NotDoneExploring((10, 10)));
+                    // TODO check if we've explored all of `area`
+                    inputs.push(Input::DoneExploring);
                 }
             },
             |poll_when, inputs| {

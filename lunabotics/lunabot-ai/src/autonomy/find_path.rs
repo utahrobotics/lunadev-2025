@@ -13,21 +13,20 @@ use nalgebra::Point3;
 use tracing::warn;
 
 use crate::{
-    blackboard::{LunabotBlackboard, PathfindingState},
+    blackboard::{self, LunabotBlackboard, PathfindingState},
     Action,
 };
 
 use super::AutonomyState;
 
 pub(super) fn find_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
+    
     IfElse::new(
         
-        // exit if autonomy state is `None`
-        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-            (blackboard.get_autonomy() != AutonomyState::None).into()
-        }),
+        // only find path if current path is none
+        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| blackboard.get_path().is_none().into()),
         
-        // repeatedly (enqueue pathfind action, then wait for path) until success
+        // repeatedly (enqueue pathfind action, then wait for path) until body returns failure
         Invert(WhileLoop::new(
             AlwaysSucceed,
             Sequence::new((
@@ -35,16 +34,15 @@ pub(super) fn find_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                 AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
                     let robot_pos: Point3<f64> = blackboard.get_robot_isometry().translation.vector.into();
                     
-                    let path_kind = match blackboard.get_autonomy() {
-                        AutonomyState::Explore(_) => PathKind::MoveOntoTarget,
-                        AutonomyState::MoveToDumpSite(_) => PathKind::ShovelAtTarget,
-                        AutonomyState::MoveToDigSite(_) => PathKind::ShovelAtTarget,
+                    let (target, path_kind) = match blackboard.get_autonomy() {
+                        AutonomyState::Explore(cell) => (cell, PathKind::MoveOntoTarget),
+                        AutonomyState::MoveToDumpSite(cell) => (cell, PathKind::ShovelAtTarget),
+                        AutonomyState::MoveToDigSite(cell) => (cell, PathKind::ShovelAtTarget),
                         other_state => panic!("trying to pathfind during autonomy state {other_state:?}")
                     };
-                    
                     blackboard.request_for_path(
                         world_point_to_cell(robot_pos),
-                        blackboard.get_pathfinding_target(),
+                        target,
                         path_kind
                     );
                     Status::Success
@@ -70,6 +68,6 @@ pub(super) fn find_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
             )),
         )),
         
-        AlwaysSucceed,
+        AlwaysSucceed
     )
 }

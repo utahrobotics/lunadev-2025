@@ -11,7 +11,7 @@ pub enum Input {
     LunabaseDisconnected,
     
     PathCalculated(Vec<PathPoint>),
-    FailedToCalculatePath(Vec<PathPoint>),
+    FailedToCalculatePath,
     
     DoneExploring,
     NotDoneExploring((usize, usize)),
@@ -36,7 +36,7 @@ pub(crate) struct LunabotBlackboard {
     now: Instant,
     from_lunabase: VecDeque<FromLunabase>,
     chain: StaticImmutableNode,
-    path: Vec<PathPoint>,
+    path: Option<Vec<PathPoint>>,
     lunabase_disconnected: bool,
     actions: Vec<Action>,
     poll_when: PollWhen,
@@ -57,7 +57,7 @@ impl LunabotBlackboard {
             now: Instant::now(),
             from_lunabase: VecDeque::new(),
             chain,
-            path: vec![],
+            path: None,
             lunabase_disconnected: true,
             actions: vec![],
             poll_when: PollWhen::NoDelay,
@@ -96,28 +96,14 @@ impl LunabotBlackboard {
         self.chain.get_global_isometry()
     }
 
-    pub fn get_path(&self) -> Option<&[PathPoint]> {
-        if self.path.is_empty() {
-            None
-        } else {
-            Some(&self.path)
-        }
+    pub fn get_path(&self) -> &Option<Vec<PathPoint>> {
+        &self.path
     }
 
-    pub fn get_path_mut(&mut self) -> &mut Vec<PathPoint> {
+    pub fn get_path_mut(&mut self) -> &mut Option<Vec<PathPoint>> {
         &mut self.path
     }
     
-    // where should `traverse()` pathfind to?
-    pub fn get_pathfinding_target(&self) -> (usize, usize) {
-        match self.get_autonomy() {
-            AutonomyState::Explore(cell) => cell,
-            AutonomyState::MoveToDumpSite(cell) => cell,
-            AutonomyState::MoveToDigSite(cell) => cell,
-            other_state => panic!("tried to get pathfinding target while the autonomy state was {other_state:?}"),
-        }
-    }
-
     pub fn lunabase_disconnected(&mut self) -> &mut bool {
         &mut self.lunabase_disconnected
     }
@@ -150,11 +136,11 @@ impl LunabotBlackboard {
         match input {
             Input::FromLunabase(msg) => self.from_lunabase.push_back(msg),
             Input::PathCalculated(path) => {
-                self.path = path;
+                self.path = Some(path);
                 self.pathfinding_state = PathfindingState::Idle;
             }
-            Input::FailedToCalculatePath(path) => {
-                self.path = path;
+            Input::FailedToCalculatePath => {
+                self.path = None;
                 self.pathfinding_state = PathfindingState::Failed;
             }
             Input::LunabaseDisconnected => self.lunabase_disconnected = true,
@@ -168,10 +154,8 @@ impl LunabotBlackboard {
     }
 
     pub fn request_for_path(&mut self, from: (usize, usize), to: (usize, usize), kind: PathKind) {
-        let into = std::mem::take(&mut self.path);
         self.pathfinding_state = PathfindingState::Pending;
-        
-        self.enqueue_action(Action::CalculatePath { from, to, into, kind });
+        self.enqueue_action(Action::CalculatePath { from, to, kind });
     }
 
     pub fn pathfinding_state(&self) -> PathfindingState {
