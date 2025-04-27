@@ -3,11 +3,6 @@
     "free_euler": [0.0, 0.0, 0.0],
     "children": [
         {
-            "name": "depth_camera",
-            "origin": [0.0, 0.3, -0.2163],
-            "euler": [0.0, 0.0, 0.0]
-        },
-        {
             "name": "back_camera",
             "origin": [0, 0.33385, 0.025],
             "euler": [0.0, 0.0, 180.0]
@@ -49,7 +44,7 @@
               "origin": [0,0,-0.89],
               "children": [
                 {
-                  "name": "realsense",
+                  "name": "depth_camera",
                   "euler": [0,0,0],
                   "origin": [0,0.20,-0.33]
                 }
