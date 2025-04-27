@@ -3,7 +3,7 @@ use std::{sync::{mpsc::{Receiver, Sender, RecvTimeoutError}, Arc}, time::Duratio
 use crate::localization::{IMUReading, LocalizerRef};
 use embedded_common::*;
 use nalgebra::Vector3;
-use simple_motion::StaticImmutableNode;
+use simple_motion::{StaticImmutableNode, Node, NodeData};
 use tasker::{
     get_tokio_handle, tokio::{
         self,
@@ -27,7 +27,7 @@ pub struct IMUInfo {
 }
 
 /// find pico connected to the v3 pcb.
-pub fn enumerate_v3picos(localizer_ref: LocalizerRef, pico: V3PicoInfo) -> ActuatorController {
+pub fn enumerate_v3picos(hinge_node: Node<&'static [NodeData]>, localizer_ref: LocalizerRef, pico: V3PicoInfo) -> ActuatorController {
     let (path_tx, path_rx) = std::sync::mpsc::sync_channel::<String>(1);
     let (actuator_cmd_tx, actuator_cmd_rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -38,7 +38,8 @@ pub fn enumerate_v3picos(localizer_ref: LocalizerRef, pico: V3PicoInfo) -> Actua
                 pico.imus[1].node,
                 pico.imus[2].node,
                 pico.imus[3].node
-            ]
+            ],
+            hinge_node,
         };
         let mut task = V3PicoTask {
             path: path_rx,
@@ -165,6 +166,7 @@ struct SharedState {
     localizer_ref: LocalizerRef,
     /// imu node
     imus: [StaticImmutableNode; 4],
+    hinge_node: Node<&'static [NodeData]>,
 }
 
 pub struct V3PicoTask {
@@ -215,7 +217,10 @@ impl V3PicoTask {
                     continue;
                 };
                 if let FromPicoV3::Reading(imu_readings,actuators) = reading {
-                    tracing::info!("actuators: {:?}",actuators);
+                    // idk if this works because the actuator readings are going t
+                    let deg_to_rad = 0.0174532925199; // pi/180
+                    let lift_hinge_angle = (actuators.m1_reading as f64 * 0.00743033 - 2.19192)*deg_to_rad;
+                    guard.hinge_node.set_angle_one_axis(lift_hinge_angle);
                     for (i,(msg, node)) in imu_readings.into_iter().zip(guard.imus).enumerate() {
                         match msg {
                             FromIMU::Reading(rate, accel) => {

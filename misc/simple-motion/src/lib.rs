@@ -421,7 +421,7 @@ impl<S: Deref<Target = [NodeData]> + Clone> ImmutableNode<S> {
                 })
             } else {
                 None
-            }
+            }        // let mut pathfinder = DefaultPathfinder::new(world_to_grid, grid_to_world);
         })
     }
 

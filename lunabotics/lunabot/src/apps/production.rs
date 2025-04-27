@@ -15,7 +15,8 @@ use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use mio::{Events, Interest, Poll, Token};
 use motors::{enumerate_motors, MotorMask, VescIDs};
-use nalgebra::{Scale3, Transform3};
+use nalgebra::{Scale3, Transform3, UnitQuaternion, AbstractRotation};
+use rerun::Points3D;
 use rerun_viz::init_rerun;
 use imu_calib::*;
 use rp2040::*;
@@ -262,7 +263,9 @@ impl LunabotApp {
             Scale3::new(0.03125, 1.0, 0.03125).to_homogeneous(),
         );
         let world_to_grid = grid_to_world.try_inverse().unwrap();
-        let mut pathfinder = DefaultPathfinder::new(world_to_grid, grid_to_world);
+        // let mut pathfinder = DefaultPathfinder::new(world_to_grid, grid_to_world);
+        let mut pathfinder = DefaultPathfinder::new(vec![]);
+
 
         // correction parameters are defined in app-config.toml
         // corrections are applied in the localizer
@@ -292,7 +295,9 @@ impl LunabotApp {
 
         let motor_ref = enumerate_motors(vesc_ids, self.vesc.speed_multiplier.unwrap_or(1.0));
         
-        let mut actuator_controller = enumerate_v3picos(localizer_ref.clone(), {
+        let hinge_node = robot_chain.get_node_with_name("lift_hinge").expect("lift_hinge not defined in robot layout");
+        
+        let mut actuator_controller = enumerate_v3picos(hinge_node, localizer_ref.clone(), {
             rp2040::V3PicoInfo{
                 serial: self.v3pico.serial,
                 imus: [
