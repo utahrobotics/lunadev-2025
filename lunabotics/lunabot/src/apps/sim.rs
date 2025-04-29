@@ -1,10 +1,5 @@
 use std::{
-    cmp::Ordering,
-    collections::VecDeque,
-    net::{IpAddr, SocketAddr},
-    num::NonZeroU32,
-    process::Stdio,
-    sync::{Arc, Mutex},
+    cmp::Ordering, collections::VecDeque, net::{IpAddr, SocketAddr}, num::NonZeroU32, path, process::Stdio, sync::{Arc, Mutex}
 };
 
 use common::{
@@ -37,7 +32,7 @@ use thalassic::DepthProjectorBuilder;
 use tracing::{error, info, warn};
 
 use crate::{
-    localization::{IMUReading, Localizer}, pathfinding::Obstacle, pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline}, utils::SteeringLerper
+    localization::{IMUReading, Localizer}, pathfinding::Obstacle, pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline}, utils::{distance_between_tuples, SteeringLerper}
 };
 use crate::{pathfinding::DefaultPathfinder, pipelines::thalassic::ThalassicData};
 
@@ -409,17 +404,24 @@ impl LunasimbotApp {
                     lerper.set_steering(steering);
                 }
                 Action::SetActuators(_actuators) => {}
-                Action::CalculatePath { from, to, kind } => {
-                    let mut into: Vec<PathPoint> = vec![]; 
+                Action::CalculatePath { from, to, kind, fail_if_dest_is_known } => {
                     
-                    if pathfinder.push_path_into(&shared_thalassic_data, from, to, &mut into, kind) {
+                    if 
+                        fail_if_dest_is_known && 
+                        pathfinder.get_map_data(&shared_thalassic_data).is_known(to) 
+                    {
+                        return inputs.push(Input::PathDestIsKnown);
+                    }
+                    
+                    
+                    if let Ok(path) = pathfinder.find_path(&shared_thalassic_data, from, to, kind) {
                         let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
-                            into.iter()
+                            path.iter()
                                 .map(|p|  cell_to_world_point(p.cell, 0.).coords.cast::<f32>().data.0[0]) // if the y value was needed here, sorry
                                 .collect(),
                         ));
                         lunasim_stdin.write(bytes);
-                        inputs.push(Input::PathCalculated(into));
+                        inputs.push(Input::PathCalculated(path));
                     } else {
                         inputs.push(Input::FailedToCalculatePath);
                     }
@@ -431,7 +433,7 @@ impl LunasimbotApp {
                     pathfinder.clear_cells_to_avoid();
                 }
                 
-                Action::CheckIfExplored(area) => {
+                Action::CheckIfExplored { area, robot_cell_pos } => {
                     let x_lo = area.right as usize;
                     let x_hi = area.left as usize;
                     let y_lo = area.bottom as usize;
@@ -439,24 +441,15 @@ impl LunasimbotApp {
                     
                     let map_data = pathfinder.get_map_data(&shared_thalassic_data);
                     
-                    // start with a quick, wide search 
-                    println!("quick check", );
-                    for x in (x_lo..x_hi).step_by(30) {
-                        for y in (y_lo..y_hi).step_by(30) {
-                            if !map_data.is_known((x, y)) {
-                                inputs.push(Input::NotDoneExploring((x, y)));
-                                return;
-                            }
-                        }
-                    }
-                    
-                    println!("slow check", );
-                    // if no hits, slowly check every cell 
                     for x in x_lo..x_hi {
                         for y in y_lo..y_hi {
-                            if !map_data.is_known((x, y)) {
-                                inputs.push(Input::NotDoneExploring((x, y)));
-                                return;
+                            
+                            // cells need to be explored if theyre unknown AND the robot isn't on top of it
+                            if 
+                                !map_data.is_known((x, y)) && 
+                                distance_between_tuples(robot_cell_pos, (x, y)) > pathfinder.current_robot_radius_cells() 
+                            {
+                                return inputs.push(Input::NotDoneExploring((x, y)));
                             }
                         }
                     }

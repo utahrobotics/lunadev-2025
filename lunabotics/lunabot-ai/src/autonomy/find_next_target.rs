@@ -36,7 +36,7 @@ pub(super) fn find_next_target() -> impl Behavior<LunabotBlackboard> + CancelSaf
         AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
             let prev_state = blackboard.get_autonomy();
             match prev_state {
-                AutonomyState::Dump | AutonomyState::StartAutonomy => {
+                AutonomyState::Dump | AutonomyState::Start => {
                     *blackboard.get_path_mut() = None;
                     
                     let site = find_next_dig_site();
@@ -50,7 +50,7 @@ pub(super) fn find_next_target() -> impl Behavior<LunabotBlackboard> + CancelSaf
                     println!("next dump site: {:?}", site);
                     blackboard.set_autonomy(AutonomyState::MoveToDumpSite(site))
                 }
-                state => println!("not time to decide dig/dump site yet: {state:?}")
+                _ => {}
             }
             
             Status::Success

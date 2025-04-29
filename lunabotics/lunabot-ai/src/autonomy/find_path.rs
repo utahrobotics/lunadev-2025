@@ -21,53 +21,54 @@ use super::AutonomyState;
 
 pub(super) fn find_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     
-    IfElse::new(
+    Sequence::new((
         
-        // only find path if current path is none
+        // continue only if current path is none
         AssertCancelSafe(|blackboard: &mut LunabotBlackboard| blackboard.get_path().is_none().into()),
         
-        // repeatedly (enqueue pathfind action, then wait for path) until body returns failure
-        Invert(WhileLoop::new(
-            AlwaysSucceed,
-            Sequence::new((
-                // pathfind
-                AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-                    let robot_pos: Point3<f64> = blackboard.get_robot_isometry().translation.vector.into();
-                    
-                    let (target, path_kind) = match blackboard.get_autonomy() {
-                        AutonomyState::Explore(cell) => (cell, PathKind::MoveOntoTarget),
-                        AutonomyState::MoveToDumpSite(cell) => (cell, PathKind::ShovelAtTarget),
-                        AutonomyState::MoveToDigSite(cell) => (cell, PathKind::ShovelAtTarget),
-                        other_state => panic!("trying to pathfind during autonomy state {other_state:?}")
-                    };
-                    blackboard.request_for_path(
-                        world_point_to_cell(robot_pos),
-                        target,
-                        path_kind
-                    );
-                    Status::Success
-                }),
+        // request for pathfind
+        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+            
+            let (target, path_kind, fail_if_dest_is_known) = match blackboard.get_autonomy() {
                 
-                // wait for path
-                AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-                    match blackboard.pathfinding_state() {
-                        PathfindingState::Idle => {
-                            if blackboard.get_path().is_some() {
-                                // failure breaks the loop
-                                Status::Failure
-                            } else {
-                                Status::Running
-                            }
-                        }
-                        PathfindingState::Pending => {
-                            Status::Running
-                        }
-                        PathfindingState::Failed => Status::Success
-                    }
-                }),
-            )),
-        )),
+                // if in explore state and the destination turns out to be known, 
+                // pathfinder should send `Input::PathDestIsKnown`
+                AutonomyState::Explore(cell) => (cell, PathKind::StopInFrontOfTarget, true),
+                
+                AutonomyState::MoveToDumpSite(cell) => (cell, PathKind::StopInFrontOfTarget, false),
+                AutonomyState::MoveToDigSite(cell) => (cell, PathKind::StopInFrontOfTarget, false),
+                
+                other_state => panic!("trying to pathfind during autonomy state {other_state:?}")
+            };
+            
+            blackboard.request_for_path(
+                world_point_to_cell(blackboard.get_robot_pos()),
+                target,
+                path_kind,
+                fail_if_dest_is_known
+            );
+            Status::Success
+        }),
         
-        AlwaysSucceed
-    )
+        // wait for path
+        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+            match blackboard.pathfinding_state() {
+                PathfindingState::Idle => {
+                    if blackboard.get_path().is_some() {
+                        Status::Success
+                    } else {
+                        Status::Running
+                    }
+                }
+                PathfindingState::Pending => {
+                    Status::Running
+                }
+                PathfindingState::Failed => Status::Failure,
+                PathfindingState::PathDestIsKnown => {
+                    blackboard.set_autonomy(AutonomyState::Start);
+                    Status::Failure 
+                }
+            }
+        }),
+    ))
 }
