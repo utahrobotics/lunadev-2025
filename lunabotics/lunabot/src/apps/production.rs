@@ -356,11 +356,9 @@ impl LunabotApp {
                         inputs.push(Input::FailedToCalculatePath);
                     }
                 }
-                Action::AvoidPoint(point) => {
-                    pathfinder.avoid_point(point);
-                }
+                
                 Action::ClearPointsToAvoid => {
-                    pathfinder.clear_points_to_avoid();
+                    pathfinder.clear_cells_to_avoid();
                 },
                 
                 Action::CheckIfExplored { area, robot_cell_pos } => {
@@ -386,6 +384,7 @@ impl LunabotApp {
                     
                     inputs.push(Input::DoneExploring);
                 }
+                Action::AvoidCell(_) => todo!(),
             },
             |poll_when, inputs| {
                 let wait_disconnect = async {
