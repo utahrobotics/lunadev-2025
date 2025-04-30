@@ -95,7 +95,7 @@ pub fn run_ai(
             TryCatch::new(
                 WhileLoop::new(
                     AlwaysSucceed,
-                    Sequence::new(( /*CatchPanic(teleop()),*/ CatchPanic(autonomy()) , )), // TODO enable teleop()
+                    Sequence::new(( CatchPanic(teleop()), /* CatchPanic(autonomy()), */ )), 
                 ),
                 AlwaysSucceed,
             ),
