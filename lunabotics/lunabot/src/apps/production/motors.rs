@@ -14,7 +14,7 @@ use tasker::{
 use tokio_serial::SerialPortBuilderExt;
 use tracing::{error, info, warn};
 use udev::{EventType, MonitorBuilder, Udev};
-use vesc_translator::{CanForwarded, GetValues, Getter, MinLength, SetDutyCycle, VescPacker};
+use vesc_translator::{Alive, CanForwarded, GetValues, Getter, MinLength, SetRPM, VescPacker};
 
 use crate::apps::production::udev_poll;
 
@@ -358,17 +358,23 @@ impl MotorTask {
                     motor_port
                         .write_all(self.vesc_packer.pack(&CanForwarded {
                             can_id,
-                            payload: SetDutyCycle(
+                            payload: SetRPM(
                                 slave_mask.unwrap().mask(values) * self.speed_multiplier,
                             ),
                         }))
                         .await?;
+                    motor_port
+                        .write_all(self.vesc_packer.pack(&Alive))
+                        .await?;
                 }
                 motor_port
-                    .write_all(self.vesc_packer.pack(&SetDutyCycle(
+                    .write_all(self.vesc_packer.pack(&SetRPM(
                         master_mask.mask(values) * self.speed_multiplier,
                     )))
                     .await?;
+                // motor_port
+                //     .write_all(self.vesc_packer.pack(&Alive))
+                //     .await?;
                 motor_port.flush().await
             };
 

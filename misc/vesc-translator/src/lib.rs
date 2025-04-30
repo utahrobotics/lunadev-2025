@@ -18,6 +18,18 @@ impl Payload for SetDutyCycle {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SetCurrent(pub f32);
+
+impl Payload for SetCurrent {
+    const LEN: usize = 5;
+
+    fn append_to(&self, buffer: &mut impl Extend<u8>) {
+        buffer.extend(once(6u8.to_be()));
+        buffer.extend(scale_and_pack(self.0, 1000f32));
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SetRPM(pub f32);
 
 impl Payload for SetRPM {
