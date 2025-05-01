@@ -11,6 +11,7 @@ const MAX_TIME_SINCE_INPUT := 0.5
 var device_id: int
 var time_since_input := 0.0
 var steering_weight := LunabotConn.get_default_steering_weight()
+var arc_slider: Slider
 
 @onready var input_received_panel: PanelContainer = $VBoxContainer/PanelContainer
 @onready var control_style: OptionButton = $VBoxContainer/OptionButton
@@ -76,6 +77,7 @@ func _input(event: InputEvent) -> void:
 					JOY_AXIS_LEFT_X, JOY_AXIS_TRIGGER_RIGHT, JOY_AXIS_TRIGGER_LEFT:
 						var speed := Input.get_joy_axis(device_id, JOY_AXIS_TRIGGER_RIGHT) - Input.get_joy_axis(device_id, JOY_AXIS_TRIGGER_LEFT)
 						var horizontal := Input.get_joy_axis(device_id, JOY_AXIS_LEFT_X)
+						horizontal = remap_horizontal(horizontal)
 						
 						if horizontal < 0.0:
 							Lunabot.set_steering_left_right(
@@ -114,6 +116,7 @@ func _input(event: InputEvent) -> void:
 			
 			var speed := Input.get_joy_axis(device_id, JOY_AXIS_TRIGGER_RIGHT) - Input.get_joy_axis(device_id, JOY_AXIS_TRIGGER_LEFT)
 			var horizontal := Input.is_joy_button_pressed(device_id, JOY_BUTTON_DPAD_RIGHT) as int - (Input.is_joy_button_pressed(device_id, JOY_BUTTON_DPAD_LEFT) as int)
+			horizontal = remap_horizontal(horizontal)
 			
 			if horizontal == 0.0:
 				Lunabot.set_steering_left_right(
@@ -133,6 +136,15 @@ func _input(event: InputEvent) -> void:
 					-speed ,
 					steering_weight
 				)
+
+
+func remap_horizontal(horizontal: float) -> float:
+	if absf(horizontal) <= arc_slider.value:
+		return remap(horizontal, -arc_slider.value, arc_slider.value, -0.5, 0.5)
+	elif horizontal < 0.0:
+		return remap(horizontal, -1.0, -arc_slider.value, -1.0, -0.5)
+	else:
+		return remap(horizontal, arc_slider.value, 1.0, 0.5, 1.0)
 
 
 func _process(delta: float) -> void:
