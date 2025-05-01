@@ -15,8 +15,6 @@ use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use mio::{Events, Interest, Poll, Token};
 use motors::{enumerate_motors, MotorMask, VescIDs};
-use nalgebra::{Scale3, Transform3, UnitQuaternion, AbstractRotation};
-use rerun::Points3D;
 use rerun_viz::init_rerun;
 use imu_calib::*;
 use rp2040::*;

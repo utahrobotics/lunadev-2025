@@ -104,6 +104,7 @@ async fn main(spawner: Spawner) {
     class.wait_connection().await;
 
     let (class_tx, class_rx) = class.split();
+
     
     m1.enable();
     m2.enable();
@@ -319,14 +320,14 @@ async fn read_sensors_loop(
             actuator_readings
         );
                 
-        if class.dtr() {
+        // if class.dtr() {
             let msg = &msg.serialize();
             for chunk in msg.chunks(64) {
                 if let Err(e) = class.write_packet(chunk).await {
                     error!("{:?}",e);
                 }
             }
-        }
+        // }
         
         ticker.next().await;
     }

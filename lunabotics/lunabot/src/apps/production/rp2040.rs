@@ -226,13 +226,14 @@ impl V3PicoTask {
                             FromIMU::Reading(rate, accel) => {
                                 let local_isometry = node.get_local_isometry().cast();
                                 let angular_velocity = Vector3::new(-rate.x, rate.z, rate.y);
-                                info!("imu{} {:?}",i, angular_velocity);
                                 let transformed_rate = local_isometry.rotation * angular_velocity;
+                                // info!("imu{} {:?}",i, transformed_rate);
 
                                 let accel = Vector3::new(accel.x, -accel.z, -accel.y);
-                                info!("imu{} {:?}",i ,accel);
-
+                                
                                 let transformed_accel = local_isometry.rotation * accel * 9.8;
+                                // info!("imu{} {:?}",i ,transformed_accel);
+
                                 guard.localizer_ref.set_imu_reading(
                                     i,
                                     IMUReading {
@@ -242,11 +243,11 @@ impl V3PicoTask {
                                 );
                             }
                             FromIMU::NoDataReady => {
-                                warn!("No data ready");
+                                // warn!("No data ready");
                                 continue; 
                             }
                             FromIMU::Error => {
-                                error!("IMU reported error");
+                                // error!("IMU reported error");
                                 continue;
                             }
                         }
