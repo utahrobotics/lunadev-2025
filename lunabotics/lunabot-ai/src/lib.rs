@@ -32,11 +32,15 @@ pub enum Action {
     CalculatePath {
         from: (usize, usize),
         to: (usize, usize),
-        kind: PathKind
+        kind: PathKind,
+        fail_if_dest_is_known: bool
     },
     AvoidCell((usize, usize)),
     ClearPointsToAvoid,
-    CheckIfExplored(CellsRect)
+    CheckIfExplored {
+        area: CellsRect,
+        robot_cell_pos: (usize, usize),
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -91,7 +95,7 @@ pub fn run_ai(
             TryCatch::new(
                 WhileLoop::new(
                     AlwaysSucceed,
-                    Sequence::new(( /*CatchPanic(teleop()),*/ CatchPanic(autonomy()) , )), // TODO enable teleop()
+                    Sequence::new(( CatchPanic(teleop()), /* CatchPanic(autonomy()), */ )), 
                 ),
                 AlwaysSucceed,
             ),

@@ -182,6 +182,7 @@ script/source = "extends VFlowContainer
 
 var instances := {}
 
+@onready var arc_slider : Slider = $\"../States/Tele-Operated/ArcTurningRange\"
 
 func _ready() -> void:
 	Input.joy_connection_changed.connect(
@@ -190,6 +191,7 @@ func _ready() -> void:
 				if device_id in instances:
 					return
 				var node := preload(\"res://controller_instance.tscn\").instantiate()
+				node.arc_slider = arc_slider
 				node.device_id = device_id
 				instances[device_id] = node
 				add_child(node)
@@ -250,6 +252,7 @@ theme_override_constants/margin_bottom = 10
 script = SubResource("GDScript_e60wg")
 
 [node name="SoftwareStop" type="Control" parent="VBoxContainer/States"]
+visible = false
 layout_mode = 2
 script = SubResource("GDScript_jmfal")
 
@@ -288,7 +291,6 @@ text = "Continue Mission"
 script = SubResource("GDScript_vk3if")
 
 [node name="Tele-Operated" type="Control" parent="VBoxContainer/States"]
-visible = false
 layout_mode = 2
 mouse_filter = 1
 script = SubResource("GDScript_jyoip")
@@ -354,6 +356,36 @@ theme_override_styles/pressed = SubResource("StyleBoxFlat_pf330")
 theme_override_styles/normal = SubResource("StyleBoxFlat_l3tko")
 text = "Software Stop"
 script = SubResource("GDScript_hiw1g")
+
+[node name="Label2" type="Label" parent="VBoxContainer/States/Tele-Operated"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.621019
+anchor_top = 0.487002
+anchor_right = 0.621019
+anchor_bottom = 0.487002
+offset_right = 142.0
+offset_bottom = 49.0
+text = "Arc Turning Range
+Less - - - More"
+metadata/_edit_use_anchors_ = true
+
+[node name="ArcTurningRange" type="HSlider" parent="VBoxContainer/States/Tele-Operated"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.617834
+anchor_top = 0.606586
+anchor_right = 0.617834
+anchor_bottom = 0.606586
+offset_right = 199.0
+offset_bottom = 16.0
+min_value = 0.5
+max_value = 0.8
+step = 0.1
+value = 0.7
+tick_count = 4
+ticks_on_borders = true
+metadata/_edit_use_anchors_ = true
 
 [node name="VFlowContainer" type="VFlowContainer" parent="VBoxContainer"]
 layout_mode = 2

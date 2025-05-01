@@ -64,7 +64,7 @@ impl Obstacle {
 pub struct DefaultPathfinder {
     pub cell_grid: Grid,
 
-    current_robot_radius: f32,
+    current_robot_radius_meters: f32,
     
     additional_obstacles: Vec<Obstacle>,
     
@@ -83,7 +83,7 @@ impl DefaultPathfinder {
         Self {
             cell_grid: Grid::new(THALASSIC_WIDTH as usize, THALASSIC_HEIGHT as usize),
 
-            current_robot_radius: 0.5,
+            current_robot_radius_meters: 0.5,
             
             additional_obstacles: hardcoded_obstacles,
             
@@ -93,6 +93,10 @@ impl DefaultPathfinder {
             last_unknown_cell: (0, 0),
             times_blocked_here_in_a_row: 0,
         }
+    }
+    
+    pub fn current_robot_radius_cells(&self) -> f32 {
+        self.current_robot_radius_meters / common::THALASSIC_CELL_SIZE
     }
     
     /// iterator of `unscannable_cells` and `cells_to_avoid`
@@ -117,10 +121,10 @@ impl DefaultPathfinder {
         set_observe_depth(true);
         let mut map_data = shared_thalassic_data.get();
         loop {
-            if map_data.current_robot_radius_meters == self.current_robot_radius {
+            if map_data.current_robot_radius_meters == self.current_robot_radius_meters {
                 break;
             }
-            map_data.set_robot_radius(self.current_robot_radius);
+            map_data.set_robot_radius(self.current_robot_radius_meters);
             drop(map_data);
             map_data = shared_thalassic_data.get();
         }
@@ -139,7 +143,7 @@ impl DefaultPathfinder {
         map_data
     }
     
-    fn find_path(
+    fn find_raw_path(
         &self,
         mut start_cell: (usize, usize),
         end_cell: (usize, usize),
@@ -153,11 +157,11 @@ impl DefaultPathfinder {
         // a cell is valid if:
         //  - not red 
         //  - far away from any of the cells in `all_unsafe_cells()`
-        //  - not in any `hardcoded_obstacles`
+        //  - not in any `additional_obstacles`
         let is_valid_path_point = |pos: (usize, usize)| {
             if map_data.get_cell_state(pos) == CellState::RED { return false; }
                         
-            let robot_radius_in_cells = map_data.current_robot_radius_meters / common::THALASSIC_CELL_SIZE;
+            let robot_radius_in_cells = self.current_robot_radius_cells();
             
             for unsafe_cell in self.all_unsafe_cells() {
                 if distance_between_tuples(pos, *unsafe_cell) < robot_radius_in_cells {
@@ -210,8 +214,6 @@ impl DefaultPathfinder {
 
         let mut path = vec![];
         
-        println!("{:?} {:?}", start_cell, self.additional_obstacles);
-
         // prepend a path to safety
         if !is_valid_path_point(start_cell) {
             println!("Current cell is occupied, finding closest safe cell");
@@ -256,48 +258,55 @@ impl DefaultPathfinder {
         Some(path)
     }
 
-    pub fn push_path_into(
+    pub fn find_path(
         &mut self,
         shared_thalassic_data: &SharedDataReceiver<ThalassicData>,
         start_cell: (usize, usize),
         end_cell: (usize, usize),
-        into: &mut Vec<PathPoint>,
-        kind: PathKind
-    ) -> bool {
-        into.clear();
+        path_kind: PathKind
+    ) -> Result<Vec<PathPoint>, ()> {
         
-        // TODO: deal with `kind`
+        let mut res: Vec<PathPoint> = vec![];
         
         loop {
             let map_data = self.get_map_data(shared_thalassic_data);
-            
 
-            let Some(mut path) = self.find_path(start_cell, end_cell, &map_data) else {
-                self.current_robot_radius -= 0.1;
+            let Some(mut raw_path) = self.find_raw_path(start_cell, end_cell, &map_data) else {
+                self.current_robot_radius_meters -= 0.1;
 
-                if self.current_robot_radius <= 0.1 {
-                    into.clear();
+                if self.current_robot_radius_meters <= 0.1 {
                     tracing::error!(
                         "pathfinder: couldnt find a path even with a robot radius of 0.1"
                     );
-                    self.current_robot_radius = 0.5;
-                    map_data.set_robot_radius(self.current_robot_radius);
+                    self.current_robot_radius_meters = 0.5;
+                    map_data.set_robot_radius(self.current_robot_radius_meters);
                     map_data.queue_reset_heightmap();
-                    return false;
+                    return Err(());
                 }
 
-                map_data.set_robot_radius(self.current_robot_radius);
+                map_data.set_robot_radius(self.current_robot_radius_meters);
 
                 tracing::warn!(
                     "pathfinder: couldnt find a path, shrinking radius to {}",
-                    self.current_robot_radius
+                    self.current_robot_radius_meters
                 );
 
                 continue;
             };
             
+            if path_kind == PathKind::StopInFrontOfTarget {
+                let mut i = raw_path.len()-1;
+                for cell in raw_path.iter().rev() {
+                    if distance_between_tuples(end_cell, *cell) > self.current_robot_radius_cells() {
+                        break;
+                    }
+                    i -= 1;
+                }
+                raw_path.truncate(i+1);
+            }
+            
 
-            if let Err((i, unknown_cell)) = map_data.is_path_safe_for_robot(start_cell, &mut path) {
+            if let Err((i, unknown_cell)) = map_data.is_path_safe_for_robot(start_cell, &mut raw_path) {
                 // path got blocked due to this unknown point again
                 if self.last_unknown_cell == unknown_cell {
                     self.times_blocked_here_in_a_row += 1;
@@ -315,27 +324,32 @@ impl DefaultPathfinder {
                     self.last_unknown_cell = unknown_cell;
                     self.times_blocked_here_in_a_row = 1;
 
-                    path.truncate(i);
+                    raw_path.truncate(i);
 
-                    into.extend(
-                        path.iter()
+                    res.extend(
+                        raw_path.iter()
                             .map(|pos| PathPoint {cell: *pos, instruction: PathInstruction::MoveTo}),
                     );
-                    into.push(PathPoint {cell: unknown_cell, instruction: PathInstruction::FaceTowards});
+                    res.push(PathPoint {cell: unknown_cell, instruction: PathInstruction::FaceTowards});
                     break;
                 }
             }
             // path is safe
             else {
                 self.times_blocked_here_in_a_row = 0;
-                into.extend(
-                    path.iter()
+                res.extend(
+                    raw_path.iter()
                         .map(|pos| PathPoint {cell: *pos, instruction: PathInstruction::MoveTo}),
                 );
+                
+                if path_kind == PathKind::StopInFrontOfTarget {
+                    res.push(PathPoint {cell: end_cell, instruction: PathInstruction::FaceTowards});
+                }
+                
                 break;
             }
         }
-
-        true
+        
+        Ok(res)
     }
 }

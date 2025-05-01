@@ -53,7 +53,7 @@ link_name = "imu2"
 link_name = "imu3"
 
 [Main.vesc]
-speed_multiplier = 1.0
+speed_multiplier = 2250.0
 
 [[Main.vesc.pairs]]
 id1 = 75

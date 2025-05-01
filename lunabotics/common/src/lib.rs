@@ -260,11 +260,8 @@ impl Default for Steering {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PathKind {
-    /// find a path that will move the robot exactly on top of the target position
     MoveOntoTarget,
-    
-    /// find a path that will position the robot in preparation to dig/dump at target position
-    ShovelAtTarget
+    StopInFrontOfTarget
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
