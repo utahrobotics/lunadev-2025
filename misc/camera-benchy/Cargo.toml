@@ -1,0 +1,9 @@
+[package]
+name = "camera-benchy"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+udev = { version = "0.9.1", features = ["mio10"] }
+v4l = { version = "0.14.0" }
+mio = { version = "1" }
