@@ -3,14 +3,44 @@
     "free_euler": [0.0, 0.0, 0.0],
     "children": [
         {
-            "name": "depth_camera",
+            "name": "front_camera",
             "origin": [0.0, 0.573, -0.298],
             "euler": [-30.0, 0.0, 0.0]
         },
         {
-            "name": "front_camera",
-            "origin": [0.0, 0.573, -0.298],
-            "euler": [-30.0, 0.0, 0.0]
+            "name": "imu0",
+            "euler": [0.0, 0.0, 180.0]
+        },
+        {
+            "name": "imu1",
+            "euler": [0.0, 0, 180.0]
+        },
+        {
+            "name": "imu2",
+            "euler": [0.0, 0.0, 0.0]
+        },
+        {
+            "name": "imu3",
+            "euler": [0.0, 0.0, 0.0]
+        },
+        {
+          "name": "lift_hinge",
+          "start_euler": [0,0,0],
+          "origin": [0.20,0.20,0],
+          "rotation_axis": [1,0,0],
+          "children": [
+            {
+              "name": "lift_arm",
+              "origin": [0,0,-0.89],
+              "children": [
+                {
+                  "name": "depth_camera",
+                  "euler": [0,0,0],
+                  "origin": [0,0.20,-0.33]
+                }
+              ]
+            }
+          ]
         }
     ]
 }
