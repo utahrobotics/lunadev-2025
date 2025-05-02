@@ -185,6 +185,7 @@ impl V3PicoTask {
         };
         let mut port = match tokio_serial::new(&path_str, 9600)
             .timeout(std::time::Duration::from_millis(500))
+            .flow_control(tokio_serial::FlowControl::Hardware)
             .open_native_async()
         {
             Ok(x) => x,
