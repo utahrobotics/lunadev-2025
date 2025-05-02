@@ -177,7 +177,6 @@ pub struct V3PicoTask {
 
 impl V3PicoTask {
     pub async fn v3pico_task(&mut self) {
-        tracing::info!("Starting V3Pico task");
         let path_str = match self.path.recv() {
             Ok(x) => x,
             Err(_) => loop {
@@ -201,7 +200,7 @@ impl V3PicoTask {
         let port = BufStream::new(port);
         let (mut reader, mut writer) = tokio::io::split(port);
         let shared = Arc::clone(&self.shared);
-        let (is_fucked_tx, is_fucked_rx) = tokio::sync::watch::channel(false);
+        let (is_broken_tx, is_broken_rx) = tokio::sync::watch::channel(false);
         get_tokio_handle().spawn(async move {
             let guard = shared.lock().await;
             loop {
@@ -209,7 +208,7 @@ impl V3PicoTask {
                 let mut reading = [0u8; FromPicoV3::SIZE];
                 if let Err(e) = reader.read_exact(&mut reading).await {
                     error!("Failed to read message from picov3 serial port: {}",e);
-                    let _ = is_fucked_tx.send(true);
+                    let _ = is_broken_tx.send(true);
                     break;
                 };
                 let Ok(reading) = FromPicoV3::deserialize(reading) else {
@@ -217,12 +216,10 @@ impl V3PicoTask {
                     continue;
                 };
                 if let FromPicoV3::Reading(imu_readings,actuators) = reading {
-                    // idk if this works because the actuator readings are going t
-		    // tracing::info!("actuators: {:?}", actuators);
                     let deg_to_rad = 0.0174532925199; // pi/180
                     let lift_hinge_angle = (actuators.m1_reading as f64 * 0.00743033 - 2.19192);
                     tracing::info!("lift angle: {}", lift_hinge_angle);
-		    guard.hinge_node.set_angle_one_axis(lift_hinge_angle*deg_to_rad);
+		            guard.hinge_node.set_angle_one_axis(lift_hinge_angle*deg_to_rad);
                     for (i,(msg, node)) in imu_readings.into_iter().zip(guard.imus).enumerate() {
                         match msg {
                             FromIMU::Reading(rate, accel) => {
@@ -256,14 +253,14 @@ impl V3PicoTask {
                     }
                 } else {
                     error!("V3 pico reported an error");
-                    let _ = is_fucked_tx.send(true);
+                    let _ = is_broken_tx.send(true);
                     break;
                 }
             }
         });
 
         loop {
-            if *is_fucked_rx.borrow() {
+            if *is_broken_rx.borrow() {
                 break;
             }
             let cmd_result = self.actuator_command_rx.recv_timeout(Duration::from_secs(1));

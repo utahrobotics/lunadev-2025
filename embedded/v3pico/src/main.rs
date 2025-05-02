@@ -81,7 +81,7 @@ async fn main(spawner: Spawner) {
             CONFIG_DESCRIPTOR.init([0; 256]),
             BOS_DESCRIPTOR.init([0; 256]),
             &mut [], // no msos descriptors
-            CONTROL_BUF.init([0; 64]),
+            CONTROL_BUF.init([0; 128]),
         );
         builder
     };
