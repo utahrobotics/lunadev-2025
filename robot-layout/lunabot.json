@@ -50,6 +50,16 @@
                     "euler": [43.0, 0.0, 0.0],
                     "children": [
                         {
+                            "name": "left_arm_camera",
+                            "origin": [-0.23, 0.0, -0.28],
+                            "euler": [-70.0, 0.0, 0.0]
+                        },
+                        {
+                            "name": "right_arm_camera",
+                            "origin": [-0.23, 0.0, -0.28],
+                            "euler": [-70.0, 0.0, 0.0]
+                        },
+                        {
                             "name": "upper_camera_joint",
                             "origin": [0.0, 0.0, -0.383],
                             "euler": [-40.0, 0.0, 0.0],
