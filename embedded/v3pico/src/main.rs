@@ -81,7 +81,7 @@ async fn main(spawner: Spawner) {
             CONFIG_DESCRIPTOR.init([0; 256]),
             BOS_DESCRIPTOR.init([0; 256]),
             &mut [], // no msos descriptors
-            CONTROL_BUF.init([0; 128]),
+            CONTROL_BUF.init([0; 64]),
         );
         builder
     };
@@ -319,16 +319,18 @@ async fn read_sensors_loop(
             [imu0_readings[0], imu0_readings[1], imu1_readings[0],imu1_readings[1]],
             actuator_readings
         );
-                
-        // if class.dtr() {
+
+        if class.dtr() {
             let msg = &msg.serialize();
             for chunk in msg.chunks(64) {
                 if let Err(e) = class.write_packet(chunk).await {
                     error!("{:?}",e);
                 }
             }
-        // }
-        
+        } else {
+            warn!("data terminal not ready");
+        }
+        info!("{}", msg);
         ticker.next().await;
     }
 }

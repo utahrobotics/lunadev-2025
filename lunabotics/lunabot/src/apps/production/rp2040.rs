@@ -194,6 +194,9 @@ impl V3PicoTask {
                 return;
             }
         };
+        let mut junk = [0u8; FromPicoV3::SIZE];
+
+        let count = port.try_read(&mut junk);
         info!("Opened V3Pico controller port {path_str}");
         if let Err(e) = port.set_exclusive(true) {
             warn!("Failed to set V3Pico controller port {path_str} exclusive: {e}");
