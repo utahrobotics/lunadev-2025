@@ -49,7 +49,7 @@ pub struct CameraInfo {
     link_name: String,
     focal_length_x_px: f64,
     focal_length_y_px: f64,
-    stream_index: usize,
+    stream_index: Option<usize>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -57,7 +57,7 @@ pub struct DepthCameraInfo {
     link_name: String,
     #[serde(default)]
     ignore_apriltags: bool,
-    stream_index: usize,
+    stream_index: Option<usize>,
 }
 
 #[derive(Deserialize, Debug)]

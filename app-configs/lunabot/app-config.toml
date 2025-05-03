@@ -1,27 +1,38 @@
 [Main]
 robot_layout = "robot-layout/lunabot.json"
 
-[Main.cameras."pci-0000:35:00.0-usb-0:1:1.0"]
-link_name = "right_camera"
-focal_length_x_px = 805
-focal_length_y_px = 805
-stream_index = 2
+[Main.cameras."0"]
+link_name = "left_arm_camera"
+focal_length_x_px = 440
+focal_length_y_px = 440
 
-[Main.cameras."pci-0000:34:00.3-usb-0:4:1.0"]
-link_name = "back_camera"
-focal_length_x_px = 805
-focal_length_y_px = 805
-stream_index = 4
+[Main.cameras."1"]
+link_name = "right_arm_camera"
+focal_length_x_px = 685
+focal_length_y_px = 685
 
-[Main.depth_cameras."044422250424"]
-link_name = "depth_camera"
+[Main.depth_cameras."309622300683"]
+link_name = "upper_depth_camera"
 stream_index = 1
 
-[Main.cameras."pci-0000:34:00.4-usb-0:2.4.4:1.0"]
-link_name = "left_camera"
-focal_length_x_px = 805
-focal_length_y_px = 805
-stream_index = 0
+[Main.depth_cameras."044422250424"]
+link_name = "lower_depth_camera"
+stream_index = 4
+
+[Main.cameras."2"]
+link_name = "back_camera"
+focal_length_x_px = 440
+focal_length_y_px = 440
+
+[Main.cameras."3"]
+link_name = "low_left_camera"
+focal_length_x_px = 440
+focal_length_y_px = 440
+
+[Main.cameras."4"]
+link_name = "low_right_camera"
+focal_length_x_px = 685
+focal_length_y_px = 685
 
 [Main.apriltags."1"]
 tag_position = [0.0, 0.6477, 0.0]

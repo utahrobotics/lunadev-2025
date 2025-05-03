@@ -41,7 +41,7 @@ use crate::{
 pub struct DepthCameraInfo {
     pub node: StaticImmutableNode,
     pub ignore_apriltags: bool,
-    pub stream_index: usize,
+    pub stream_index: Option<usize>,
 }
 
 const ESTIMATED_MAX_POINT_COUNT: u32 = 1024 * 812;
@@ -65,9 +65,13 @@ pub fn enumerate_depth_cameras(
                     stream_index,
                 },
             )| {
-                let Some(camera_stream) = CameraStream::new(stream_index) else {
-                    return None;
-                };
+                let mut camera_stream = None;
+                if let Some(stream_index) = stream_index {
+                    let Some(tmp) = CameraStream::new(stream_index) else {
+                        return None;
+                    };
+                    camera_stream = Some(tmp);
+                }
                 let serial: &_ = Box::leak(serial.into_boxed_str());
                 let localizer_ref = localizer_ref.clone();
                 let (tx, rx) = std::sync::mpsc::sync_channel(1);
@@ -277,7 +281,7 @@ struct DepthCameraState {
 struct DepthCameraTask {
     pipeline: Receiver<(Device, ActivePipeline)>,
     serial: &'static str,
-    camera_stream: CameraStream,
+    camera_stream: Option<CameraStream>,
     state: OnceCell<DepthCameraState>,
     apriltags: &'static [(usize, Apriltag)],
     localizer_ref: LocalizerRef,
@@ -508,13 +512,15 @@ impl DepthCameraTask {
                     image.share();
                 }
 
-                self.camera_stream
-                    .write(DownscaleRgbImageReader::new(
-                        &bytes,
-                        frame.width() as u32,
-                        frame.height() as u32,
-                    ))
-                    .unwrap();
+                if let Some(camera_stream) = &mut self.camera_stream {
+                    camera_stream
+                        .write(DownscaleRgbImageReader::new(
+                            &bytes,
+                            frame.width() as u32,
+                            frame.height() as u32,
+                        ))
+                        .unwrap();
+                }
             }
 
             let observe_depth = get_observe_depth();
