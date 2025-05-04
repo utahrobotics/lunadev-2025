@@ -252,7 +252,6 @@ theme_override_constants/margin_bottom = 10
 script = SubResource("GDScript_e60wg")
 
 [node name="SoftwareStop" type="Control" parent="VBoxContainer/States"]
-visible = false
 layout_mode = 2
 script = SubResource("GDScript_jmfal")
 
@@ -291,6 +290,7 @@ text = "Continue Mission"
 script = SubResource("GDScript_vk3if")
 
 [node name="Tele-Operated" type="Control" parent="VBoxContainer/States"]
+visible = false
 layout_mode = 2
 mouse_filter = 1
 script = SubResource("GDScript_jyoip")
