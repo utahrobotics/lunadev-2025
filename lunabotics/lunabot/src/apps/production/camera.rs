@@ -237,7 +237,7 @@ impl CameraTask {
                 det.add_tag(tag.tag_position, tag.get_quat(), tag.tag_width, *tag_id);
             }
             let localizer_ref = self.localizer_ref.clone();
-            let mut inverse_local = self.node.get_local_isometry();
+            let mut inverse_local = self.node.get_isometry_from_base();
             // println!(
             //     "pos: [{:.2}, {:.2}, {:.2}] angle: {}deg axis: [{:.2}, {:.2}, {:.2}]",
             //     inverse_local.translation.x,

@@ -5,17 +5,17 @@
         {
             "name": "low_left_camera",
             "origin": [-0.231, 0.0, -0.055],
-            "euler": [0.0, 90.0, 0.0]
+            "euler": [0.0, 0.0, 90.0]
         },
         {
             "name": "low_right_camera",
             "origin": [0.231, 0.0, -0.055],
-            "euler": [0.0, -90.0, 0.0]
+            "euler": [0.0, 0.0, -90.0]
         },
         {
             "name": "back_camera",
             "origin": [0.0, 0.0, 0.475],
-            "euler": [0.0, 180.0, 0.0]
+            "euler": [0.0, 0.0, 180.0]
         },
         {
             "name": "middle_camera",
@@ -54,22 +54,22 @@
                 {
                     "name": "split",
                     "origin": [0.0, 0.0, -0.615],
-                    "euler": [43.0, 0.0, 0.0],
+                    "euler": [0.0, 43.0, 0.0],
                     "children": [
                         {
                             "name": "left_arm_camera",
                             "origin": [-0.23, 0.0, -0.28],
-                            "euler": [-70.0, 0.0, 0.0]
+                            "euler": [0.0, -70.0, 0.0]
                         },
                         {
                             "name": "right_arm_camera",
                             "origin": [-0.23, 0.0, -0.28],
-                            "euler": [-70.0, 0.0, 0.0]
+                            "euler": [0.0, -70.0, 0.0]
                         },
                         {
                             "name": "upper_camera_joint",
                             "origin": [0.0, 0.0, -0.383],
-                            "euler": [-40.0, 0.0, 0.0],
+                            "euler": [0.0, -40.0, 0.0],
                             "children": [
                                 {
                                     "name": "upper_camera_wrist",

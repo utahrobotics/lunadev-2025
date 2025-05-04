@@ -76,7 +76,7 @@ pub fn enumerate_depth_cameras(
                 let localizer_ref = localizer_ref.clone();
                 let (tx, rx) = std::sync::mpsc::sync_channel(1);
                 let init_tx = init_tx.clone();
-                let isometry = node.get_local_isometry();
+                let isometry = node.get_isometry_from_base();
 
                 if let Some(recorder) = RECORDER.get() {
                     if recorder.level.is_all() {
@@ -382,7 +382,7 @@ impl DepthCameraTask {
                     det.add_tag(tag.tag_position, tag.get_quat(), tag.tag_width, *tag_id);
                 }
                 let localizer_ref = self.localizer_ref.clone();
-                let mut inverse_local = self.node.get_local_isometry();
+                let mut inverse_local = self.node.get_isometry_from_base();
                 inverse_local.inverse_mut();
                 det.detection_callbacks_ref().add_fn(move |observation| {
                     if let Some(rec) = crate::apps::RECORDER.get() {
