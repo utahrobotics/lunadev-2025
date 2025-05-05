@@ -299,15 +299,9 @@ impl INode for LunabotConn {
                                 LunabotStage::SoftStop => {
                                     self.base_mut().emit_signal("entered_soft_stop", &[])
                                 }
-                                LunabotStage::TraverseObstacles => self
+                                LunabotStage::Autonomy => self
                                     .base_mut()
-                                    .emit_signal("entered_traverse_obstacles", &[]),
-                                LunabotStage::Dig => {
-                                    self.base_mut().emit_signal("entered_dig", &[])
-                                }
-                                LunabotStage::Dump => {
-                                    self.base_mut().emit_signal("entered_dump", &[])
-                                }
+                                    .emit_signal("entered_autonomy", &[]),
                             };
                             inner = self.inner.as_mut().unwrap();
 
@@ -625,11 +619,7 @@ impl LunabotConn {
     #[signal]
     fn entered_soft_stop(&self);
     #[signal]
-    fn entered_traverse_obstacles(&self);
-    #[signal]
-    fn entered_dig(&self);
-    #[signal]
-    fn entered_dump(&self);
+    fn entered_autonomy(&self);
     #[signal]
     fn heightmap_received(&self, heightmap: PackedFloat32Array);
 
@@ -761,8 +751,8 @@ impl LunabotConn {
     }
 
     #[func]
-    fn traverse_obstacles(&mut self) {
-        self.send_reliable(&FromLunabase::TraverseObstacles);
+    fn start_autonomy(&mut self) {
+        self.send_reliable(&FromLunabase::StartAutonomy);
     }
 
     #[func]

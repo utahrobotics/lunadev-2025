@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3 uid="uid://53po1wtuhcem"]
+[gd_scene load_steps=23 format=3 uid="uid://53po1wtuhcem"]
 
 [ext_resource type="PackedScene" uid="uid://bteyw33qt0xtm" path="res://camera_feed.tscn" id="1_qoli6"]
 
@@ -174,6 +174,32 @@ script/source = "extends Button
 
 func _on_pressed() -> void:
 	Lunabot.soft_stop()
+"
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1ys6w"]
+bg_color = Color(0.109019, 0.305537, 0, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_cdi8o"]
+bg_color = Color(0.34135, 0.658473, 1.92523e-07, 1)
+
+[sub_resource type="GDScript" id="GDScript_o6wu6"]
+script/source = "extends Button
+
+
+func _on_pressed() -> void:
+	Lunabot.start_autonomy()
+"
+
+[sub_resource type="GDScript" id="GDScript_76vp5"]
+script/source = "extends Control
+
+
+func _ready() -> void:
+	Lunabot.entered_autonomy.connect(
+		func():
+			get_parent().hide_all_states()
+			show()
+	)
 "
 
 [sub_resource type="GDScript" id="GDScript_aq37h"]
@@ -357,6 +383,26 @@ theme_override_styles/normal = SubResource("StyleBoxFlat_l3tko")
 text = "Software Stop"
 script = SubResource("GDScript_hiw1g")
 
+[node name="Autonomy Button" type="Button" parent="VBoxContainer/States/Tele-Operated"]
+custom_minimum_size = Vector2(200, 50)
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -240.0
+offset_top = 65.0
+offset_right = -40.0
+offset_bottom = 115.0
+grow_horizontal = 0
+size_flags_vertical = 3
+focus_mode = 0
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 25
+theme_override_styles/pressed = SubResource("StyleBoxFlat_1ys6w")
+theme_override_styles/normal = SubResource("StyleBoxFlat_cdi8o")
+text = "Autonomy"
+script = SubResource("GDScript_o6wu6")
+
 [node name="Label2" type="Label" parent="VBoxContainer/States/Tele-Operated"]
 layout_mode = 1
 anchors_preset = -1
@@ -387,6 +433,46 @@ tick_count = 4
 ticks_on_borders = true
 metadata/_edit_use_anchors_ = true
 
+[node name="Autonomy" type="Control" parent="VBoxContainer/States"]
+visible = false
+layout_mode = 2
+mouse_filter = 1
+script = SubResource("GDScript_76vp5")
+
+[node name="Label" type="Label" parent="VBoxContainer/States/Autonomy"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -236.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = 65.0
+grow_horizontal = 0
+text = "Autonomy"
+label_settings = SubResource("LabelSettings_wrpx5")
+horizontal_alignment = 2
+
+[node name="Software Stop Button" type="Button" parent="VBoxContainer/States/Autonomy"]
+custom_minimum_size = Vector2(200, 50)
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -169.0
+offset_top = 125.0
+offset_right = -40.0
+offset_bottom = 35.0
+grow_horizontal = 0
+size_flags_vertical = 3
+focus_mode = 0
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 25
+theme_override_styles/pressed = SubResource("StyleBoxFlat_pf330")
+theme_override_styles/normal = SubResource("StyleBoxFlat_l3tko")
+text = "Software Stop"
+script = SubResource("GDScript_hiw1g")
+
 [node name="VFlowContainer" type="VFlowContainer" parent="VBoxContainer"]
 layout_mode = 2
 script = SubResource("GDScript_aq37h")
@@ -394,3 +480,5 @@ script = SubResource("GDScript_aq37h")
 [connection signal="pressed" from="VBoxContainer/States/SoftwareStop/CenterContainer/Continue Mission Button" to="VBoxContainer/States/SoftwareStop/CenterContainer/Continue Mission Button" method="_on_pressed"]
 [connection signal="resized" from="VBoxContainer/States/Tele-Operated/CenterContainer2" to="VBoxContainer/States/Tele-Operated/CenterContainer2" method="_on_resized"]
 [connection signal="pressed" from="VBoxContainer/States/Tele-Operated/Software Stop Button" to="VBoxContainer/States/Tele-Operated/Software Stop Button" method="_on_pressed"]
+[connection signal="pressed" from="VBoxContainer/States/Tele-Operated/Autonomy Button" to="VBoxContainer/States/Tele-Operated/Autonomy Button" method="_on_pressed"]
+[connection signal="pressed" from="VBoxContainer/States/Autonomy/Software Stop Button" to="VBoxContainer/States/Autonomy/Software Stop Button" method="_on_pressed"]

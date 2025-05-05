@@ -1,8 +1,5 @@
-
-use std::time::Duration;
-
 use ares_bt::{
-    action::{AlwaysRunning, AlwaysSucceed}, branching::{IfElse, TryCatch}, converters::{AssertCancelSafe, Invert}, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, CancelSafe, Status
+    action::AlwaysSucceed, branching::{IfElse, TryCatch}, converters::{AssertCancelSafe, Invert}, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, CancelSafe, Status
 };
 use common::{FromLunabase, LunabotStage};
 use tracing::{error, warn};
@@ -12,7 +9,7 @@ use follow_path::follow_path;
 use dig::dig;
 use dump::dump;
 
-use crate::{blackboard::{self, LunabotBlackboard}, utils::WaitBehavior, Action};
+use crate::{blackboard::LunabotBlackboard, Action};
 
 mod find_next_target;
 mod find_path;
@@ -123,7 +120,7 @@ fn reset_steering() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
         warn!("Traversing obstacles");
         blackboard.enqueue_action(Action::SetSteering(Default::default()));
-        blackboard.enqueue_action(Action::SetStage(LunabotStage::TraverseObstacles));
+        blackboard.enqueue_action(Action::SetStage(LunabotStage::Autonomy));
         Status::Success
     })
 }

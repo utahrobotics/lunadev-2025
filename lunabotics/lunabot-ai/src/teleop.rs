@@ -49,7 +49,7 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard> {
                             warn!("Received SoftStop");
                             return Status::Failure;
                         }
-                        FromLunabase::TraverseObstacles => {
+                        FromLunabase::StartAutonomy => {
                             blackboard.set_autonomy(AutonomyState::Start);
                             return Status::Success;
                         }

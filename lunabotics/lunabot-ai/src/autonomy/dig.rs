@@ -3,8 +3,6 @@ use ares_bt::{converters::AssertCancelSafe, sequence::Sequence, Behavior, Cancel
 use crate::LunabotBlackboard;
 
 
-
-
 pub(super) fn dig() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     
     Sequence::new((
