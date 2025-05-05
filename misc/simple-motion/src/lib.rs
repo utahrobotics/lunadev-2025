@@ -431,6 +431,13 @@ impl<S: Deref<Target = [NodeData]> + Clone> ImmutableNode<S> {
         };
         parent.get_global_isometry() * self.arena[self.index].transformable.get_local_isometry()
     }
+    
+    pub fn get_isometry_from_base(&self) -> Isometry3<f64> {
+        let Some(parent) = self.get_parent() else {
+            return Isometry3::identity();
+        };
+        parent.get_isometry_from_base() * self.arena[self.index].transformable.get_local_isometry()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -461,6 +468,9 @@ impl<S: Deref<Target = [NodeData]> + Clone> Node<S> {
 
     pub fn get_global_isometry(&self) -> Isometry3<f64> {
         self.0.get_global_isometry()
+    }
+    pub fn get_isometry_from_base(&self) -> Isometry3<f64> {
+        self.0.get_isometry_from_base()
     }
 }
 

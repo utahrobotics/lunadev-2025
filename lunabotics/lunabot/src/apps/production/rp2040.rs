@@ -14,6 +14,7 @@ use tokio_serial::SerialPortBuilderExt;
 use tokio_serial::SerialPort;
 use tracing::{error, info, warn};
 use udev::{EventType, MonitorBuilder, Udev};
+use std::{fs, io, path::{Path, PathBuf}, thread};
 
 use super::udev_poll;
 
@@ -203,6 +204,7 @@ impl V3PicoTask {
         if let Err(e) = port.set_exclusive(true) {
             warn!("Failed to set V3Pico controller port {path_str} exclusive: {e}");
         }
+
         let port = BufStream::new(port);
         let (mut reader, mut writer) = tokio::io::split(port);
         let shared = Arc::clone(&self.shared);
@@ -238,8 +240,6 @@ impl V3PicoTask {
                                 let rotation = node.get_isometry_from_base().rotation.cast();
                                 let angular_velocity = Vector3::new(-rate.x, rate.z, rate.y);
                                 let transformed_rate = (rotation * angular_velocity);
-                                // info!("rotation: {}", local_isometry.rotation);
-                                // info!("imu{} {:?}",i, transformed_rate);
 
                                 let accel = Vector3::new(accel.x, -accel.z, -accel.y);
 
@@ -292,11 +292,17 @@ impl V3PicoTask {
                 break;
             }
         }
+        // if let Ok(exists) = fs::exists(&path_str) {
+        //     if exists {
+        //         // if the port still exists try power cycling it
+        //         warn!("trying to power cycle device...");
+        //         if let Err(e) = power_cycle(&path_str) {
+        //             warn!("failed to power cycle: {}", e);
+        //         }
+        //     }
+        // }
     }
 }
-
-
-use std::{fs, io, path::{Path, PathBuf}, thread};
 
 /// gets the "…/authorized" for `/dev/ttyACM*`.
 fn authorized_path(tty: &str) -> io::Result<PathBuf> {
