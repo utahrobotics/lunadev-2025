@@ -152,9 +152,9 @@ async fn main(spawner: Spawner) {
 
 fn setup_lsm_i2c0(lsm: &mut Lsm6dsox<I2c<'_, I2C0, Async>, Delay>) -> Result<u8, lsm6dsox::Error> {
     lsm.setup()?;
-    lsm.set_gyro_sample_rate(DataRate::Freq52Hz)?;
+    lsm.set_gyro_sample_rate(DataRate::Freq104Hz)?;
     lsm.set_gyro_scale(GyroscopeScale::Dps2000)?;
-    lsm.set_accel_sample_rate(DataRate::Freq52Hz)?;
+    lsm.set_accel_sample_rate(DataRate::Freq104Hz)?;
     lsm.set_accel_scale(AccelerometerScale::Accel4g)?;
     lsm.check_id().map_err(|e| {
         error!("error checking id of lsm6dsox: {:?}", e);
