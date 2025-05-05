@@ -84,6 +84,9 @@ struct LunabotConnInner {
     cakap_sm: PeerStateMachine,
     udp: UdpSocket,
     to_lunabot: VecDeque<Action>,
+    steering_to_lunabot: Option<(Action, Option<Action>)>,
+    lift_to_lunabot: Option<(Action, Option<Action>)>,
+    tilt_to_lunabot: Option<(Action, Option<Action>)>,
     bitcode_buffer: bitcode::Buffer,
     did_reconnection: bool,
     last_steering: Option<(Steering, ReliableIndex)>,
@@ -216,6 +219,9 @@ impl INode for LunabotConn {
                 udp,
                 cakap_sm,
                 to_lunabot: VecDeque::new(),
+                steering_to_lunabot: None,
+                lift_to_lunabot: None,
+                tilt_to_lunabot: None,
                 bitcode_buffer: bitcode::Buffer::new(),
                 did_reconnection: false,
                 last_steering: None,
@@ -367,6 +373,31 @@ impl INode for LunabotConn {
                 handle!(action);
             }
 
+            if let Some((action1, action2)) = inner.steering_to_lunabot.take() {
+                let mut action = inner.cakap_sm.poll(Event::Action(action1), now);
+                handle!(action);
+                if let Some(action2) = action2 {
+                    action = inner.cakap_sm.poll(Event::Action(action2), now);
+                    handle!(action);
+                }
+            }
+            if let Some((action1, action2)) = inner.lift_to_lunabot.take() {
+                let mut action = inner.cakap_sm.poll(Event::Action(action1), now);
+                handle!(action);
+                if let Some(action2) = action2 {
+                    action = inner.cakap_sm.poll(Event::Action(action2), now);
+                    handle!(action);
+                }
+            }
+            if let Some((action1, action2)) = inner.tilt_to_lunabot.take() {
+                let mut action = inner.cakap_sm.poll(Event::Action(action1), now);
+                handle!(action);
+                if let Some(action2) = action2 {
+                    action = inner.cakap_sm.poll(Event::Action(action2), now);
+                    handle!(action);
+                }
+            }
+
             let mut buf = [0u8; 1408];
             loop {
                 match inner.udp.recv_from(&mut buf) {
@@ -480,11 +511,12 @@ impl LunabotConn {
                 .new_reliable(encode(&msg).into())
             {
                 Ok(packet) => {
-                    if let Some(old_idx) = last_steering_reliable_idx {
-                        inner.to_lunabot.push_back(Action::CancelReliable(old_idx));
-                    }
                     inner.last_steering = Some((new_steering, packet.get_index()));
-                    inner.to_lunabot.push_back(Action::SendReliable(packet));
+                    inner.steering_to_lunabot = if let Some(old_idx) = last_steering_reliable_idx {
+                        Some((Action::CancelReliable(old_idx), Some(Action::SendReliable(packet))))
+                    } else {
+                        Some((Action::SendReliable(packet), None))
+                    };
                 }
                 Err(e) => {
                     godot_error!("Failed to build reliable packet: {e}");
@@ -509,11 +541,12 @@ impl LunabotConn {
                 .new_reliable(encode(&msg).into())
             {
                 Ok(packet) => {
-                    if let Some(old_idx) = last_lift_reliable_idx {
-                        inner.to_lunabot.push_back(Action::CancelReliable(old_idx));
-                    }
                     inner.last_lift = Some((lift, packet.get_index()));
-                    inner.to_lunabot.push_back(Action::SendReliable(packet));
+                    inner.lift_to_lunabot = if let Some(old_idx) = last_lift_reliable_idx {
+                        Some((Action::CancelReliable(old_idx), Some(Action::SendReliable(packet))))
+                    } else {
+                        Some((Action::SendReliable(packet), None))
+                    };
                 }
                 Err(e) => {
                     godot_error!("Failed to build reliable packet: {e}");
@@ -538,11 +571,12 @@ impl LunabotConn {
                 .new_reliable(encode(&msg).into())
             {
                 Ok(packet) => {
-                    if let Some(old_idx) = last_bucket_reliable_idx {
-                        inner.to_lunabot.push_back(Action::CancelReliable(old_idx));
-                    }
                     inner.last_bucket = Some((bucket, packet.get_index()));
-                    inner.to_lunabot.push_back(Action::SendReliable(packet));
+                    inner.tilt_to_lunabot = if let Some(old_idx) = last_bucket_reliable_idx {
+                        Some((Action::CancelReliable(old_idx), Some(Action::SendReliable(packet))))
+                    } else {
+                        Some((Action::SendReliable(packet), None))
+                    };
                 }
                 Err(e) => {
                     godot_error!("Failed to build reliable packet: {e}");
