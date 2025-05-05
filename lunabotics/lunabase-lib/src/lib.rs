@@ -80,12 +80,17 @@ pub fn init_panic_hook() {
     });
 }
 
+const MIN_CONTROLS_DELAY: Duration = Duration::from_millis(60);
+
 struct LunabotConnInner {
     cakap_sm: PeerStateMachine,
     udp: UdpSocket,
     to_lunabot: VecDeque<Action>,
+    last_steering_to_lunabot_instant: Instant,
     steering_to_lunabot: Option<(Action, Option<Action>)>,
+    last_lift_to_lunabot_instant: Instant,
     lift_to_lunabot: Option<(Action, Option<Action>)>,
+    last_tilt_to_lunabot_instant: Instant,
     tilt_to_lunabot: Option<(Action, Option<Action>)>,
     bitcode_buffer: bitcode::Buffer,
     did_reconnection: bool,
@@ -219,8 +224,11 @@ impl INode for LunabotConn {
                 udp,
                 cakap_sm,
                 to_lunabot: VecDeque::new(),
+                last_steering_to_lunabot_instant: Instant::now(),
                 steering_to_lunabot: None,
+                last_lift_to_lunabot_instant: Instant::now(),
                 lift_to_lunabot: None,
+                last_tilt_to_lunabot_instant: Instant::now(),
                 tilt_to_lunabot: None,
                 bitcode_buffer: bitcode::Buffer::new(),
                 did_reconnection: false,
@@ -373,28 +381,37 @@ impl INode for LunabotConn {
                 handle!(action);
             }
 
-            if let Some((action1, action2)) = inner.steering_to_lunabot.take() {
-                let mut action = inner.cakap_sm.poll(Event::Action(action1), now);
-                handle!(action);
-                if let Some(action2) = action2 {
-                    action = inner.cakap_sm.poll(Event::Action(action2), now);
+            if inner.last_steering_to_lunabot_instant.elapsed() >= MIN_CONTROLS_DELAY {
+                if let Some((action1, action2)) = inner.steering_to_lunabot.take() {
+                    inner.last_steering_to_lunabot_instant = now;
+                    let mut action = inner.cakap_sm.poll(Event::Action(action1), now);
                     handle!(action);
+                    if let Some(action2) = action2 {
+                        action = inner.cakap_sm.poll(Event::Action(action2), now);
+                        handle!(action);
+                    }
                 }
             }
-            if let Some((action1, action2)) = inner.lift_to_lunabot.take() {
-                let mut action = inner.cakap_sm.poll(Event::Action(action1), now);
-                handle!(action);
-                if let Some(action2) = action2 {
-                    action = inner.cakap_sm.poll(Event::Action(action2), now);
+            if inner.last_lift_to_lunabot_instant.elapsed() >= MIN_CONTROLS_DELAY {
+                if let Some((action1, action2)) = inner.lift_to_lunabot.take() {
+                    inner.last_lift_to_lunabot_instant = now;
+                    let mut action = inner.cakap_sm.poll(Event::Action(action1), now);
                     handle!(action);
+                    if let Some(action2) = action2 {
+                        action = inner.cakap_sm.poll(Event::Action(action2), now);
+                        handle!(action);
+                    }
                 }
             }
-            if let Some((action1, action2)) = inner.tilt_to_lunabot.take() {
-                let mut action = inner.cakap_sm.poll(Event::Action(action1), now);
-                handle!(action);
-                if let Some(action2) = action2 {
-                    action = inner.cakap_sm.poll(Event::Action(action2), now);
+            if inner.last_tilt_to_lunabot_instant.elapsed() >= MIN_CONTROLS_DELAY {
+                if let Some((action1, action2)) = inner.tilt_to_lunabot.take() {
+                    inner.last_tilt_to_lunabot_instant = now;
+                    let mut action = inner.cakap_sm.poll(Event::Action(action1), now);
                     handle!(action);
+                    if let Some(action2) = action2 {
+                        action = inner.cakap_sm.poll(Event::Action(action2), now);
+                        handle!(action);
+                    }
                 }
             }
 
