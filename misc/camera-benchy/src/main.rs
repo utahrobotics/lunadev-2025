@@ -92,6 +92,7 @@ fn main() {
                 return;
             };
             let path = path.to_path_buf();
+            let path_str = path_str.to_string();
             let port = port.to_string();
 
             std::thread::spawn(move || {

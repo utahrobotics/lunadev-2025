@@ -81,12 +81,12 @@
                         {
                             "name": "lower_camera_joint",
                             "origin": [0.0, -0.054, -0.328],
-                            "euler": [-50.0, 0.0, 0.0],
+                            "euler": [-48.0, 0.0, 0.0],
                             "children": [
                                 {
                                     "name": "lower_camera_wrist",
                                     "origin": [0.0, 0.0, -0.316],
-                                    "euler": [-70.0, 0.0, 0.0],
+                                    "euler": [-81.0, 0.0, 0.0],
                                     "children": [
                                         {
                                             "name": "lower_depth_camera",
