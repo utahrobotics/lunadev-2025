@@ -15,6 +15,7 @@ members = [
     "misc/lumpur",
     "misc/simple-motion",
     "misc/vesc-translator", "misc/imu-calib", "misc/camera-benchy",
+    "misc/usb-reset"
 ]
 resolver = "2"
 exclude = ["output/", "embedded/", "lunaserver-web/"]

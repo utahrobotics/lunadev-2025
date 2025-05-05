@@ -105,3 +105,19 @@ dependencies = [
 workspace = false
 command = "cargo"
 args = ["run", "--features=production,calibrate", "-p", "lunabot", "--profile", "optdebug", "--", "main"]
+
+# builds the usb reset tool
+[tasks.build_usbreset]
+workspace=false
+command = "cargo"
+args = ["build", "-p", "usb-reset"]
+
+[tasks.usbreset]
+workspace=false
+dependencies = [
+    "build_usbreset"
+]
+script = '''
+#!/bin/sh
+sudo ./target/debug/usb-reset
+'''
