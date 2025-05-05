@@ -152,9 +152,9 @@ async fn main(spawner: Spawner) {
 
 fn setup_lsm_i2c0(lsm: &mut Lsm6dsox<I2c<'_, I2C0, Async>, Delay>) -> Result<u8, lsm6dsox::Error> {
     lsm.setup()?;
-    lsm.set_gyro_sample_rate(DataRate::Freq104Hz)?;
+    lsm.set_gyro_sample_rate(DataRate::Freq52Hz)?;
     lsm.set_gyro_scale(GyroscopeScale::Dps2000)?;
-    lsm.set_accel_sample_rate(DataRate::Freq104Hz)?;
+    lsm.set_accel_sample_rate(DataRate::Freq52Hz)?;
     lsm.set_accel_scale(AccelerometerScale::Accel4g)?;
     lsm.check_id().map_err(|e| {
         error!("error checking id of lsm6dsox: {:?}", e);
@@ -327,10 +327,12 @@ async fn read_sensors_loop(
                     error!("{:?}",e);
                 }
             }
+            class.write_packet(&[]).await.unwrap(); 
+            // you dont want to know how long it took me to figure out you need to write a 0 length packet after a bulk transmission.
+            info!("{}", msg);
         } else {
             warn!("data terminal not ready");
         }
-        info!("{}", msg);
         ticker.next().await;
     }
 }
