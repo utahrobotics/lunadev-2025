@@ -189,7 +189,7 @@ impl V3PicoTask {
         };
         let mut port = match tokio_serial::new(&path_str, 150000)
             // .timeout(std::time::Duration::from_millis(100))
-            .flow_control(tokio_serial::FlowControl::None)
+            .flow_control(tokio_serial::FlowControl::Hardware)
             .open_native_async()
         {
             Ok(x) => x,
@@ -198,8 +198,6 @@ impl V3PicoTask {
                 return;
             }
         };
-        let _ = port.write_data_terminal_ready(true);
-
         info!("Opened V3Pico controller port {path_str}");
         if let Err(e) = port.set_exclusive(true) {
             warn!("Failed to set V3Pico controller port {path_str} exclusive: {e}");
@@ -207,6 +205,7 @@ impl V3PicoTask {
 
         let port = BufStream::new(port);
         let (mut reader, mut writer) = tokio::io::split(port);
+
         let shared = Arc::clone(&self.shared);
         let (is_broken_tx, is_broken_rx) = tokio::sync::watch::channel(false);
         let path_str_clone = path_str.clone();
