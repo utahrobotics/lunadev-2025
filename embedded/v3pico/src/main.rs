@@ -202,6 +202,9 @@ async fn read_sensors_loop(
     let mut channel2 = Channel::new_pin(pot2, Pull::None);
     let mut adc = Adc::new(adc, Irqs, Config::default());
     loop {
+        if !class.dtr() {
+            class.wait_connection().await;
+        }
         //----- ACTUATORS -----
         // 148 ish when fully retracted, 3720 ish when fully extended
         const AVERAGING: usize = 10;
@@ -323,11 +326,11 @@ async fn read_sensors_loop(
         if class.dtr() {
             let msg = &msg.serialize();
             for chunk in msg.chunks(64) {
+                class.write_packet(&[]).await.unwrap(); 
                 if let Err(e) = class.write_packet(chunk).await {
                     error!("{:?}",e);
                 }
             }
-            class.write_packet(&[]).await.unwrap(); 
             // you dont want to know how long it took me to figure out you need to write a 0 length packet after a bulk transmission.
             info!("{}", msg);
         } else {
