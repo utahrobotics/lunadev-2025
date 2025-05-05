@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, time::Instant};
 
 use common::{world_point_to_cell, CellsRect, FromLunabase, PathPoint, PathKind};
-use nalgebra::{Isometry3, Point3, UnitQuaternion};
+use nalgebra::{Isometry3, Point3, UnitQuaternion, Vector2, Vector3};
 use simple_motion::StaticImmutableNode;
 
 use crate::{autonomy::AutonomyState, Action, PollWhen};
@@ -16,6 +16,9 @@ pub enum Input {
     
     DoneExploring,
     NotDoneExploring((usize, usize)),
+    
+    NextActionSite((usize, usize)),
+    NoActionSite,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -34,6 +37,16 @@ pub(crate) enum CheckIfExploredState {
     FinishedExploring
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum FindActionSiteState {
+    Start,
+    Pending,
+    FoundSite((usize, usize)),
+    NotFound
+}
+
+
+
 pub(crate) struct LunabotBlackboard {
     now: Instant,
     from_lunabase: VecDeque<FromLunabase>,
@@ -46,6 +59,8 @@ pub(crate) struct LunabotBlackboard {
     autonomy_state: AutonomyState,
     pathfinding_state: PathfindingState,
     check_if_explored_state: CheckIfExploredState,
+    find_action_site_state: FindActionSiteState,
+    finished_post_explore_pause: bool,
     
     /// (position, rotation, timestamp)
     latest_transform: Option<(Point3<f64>, UnitQuaternion<f64>, Instant)>,
@@ -67,6 +82,8 @@ impl LunabotBlackboard {
             autonomy_state: AutonomyState::Start,
             pathfinding_state: PathfindingState::Idle,
             check_if_explored_state: CheckIfExploredState::HaveToCheck,
+            find_action_site_state: FindActionSiteState::Start,
+            finished_post_explore_pause: false,
             
             backing_away_from: None,
             latest_transform: None,
@@ -99,6 +116,13 @@ impl LunabotBlackboard {
     }
     pub fn get_robot_pos(&self) -> Point3<f64> {
         self.get_robot_isometry().translation.vector.into()
+    }
+    /// returns a unit vector of the direction the robot is facing
+    pub fn get_robot_heading(&self) -> Vector2<f64> {
+        self.get_robot_isometry()
+            .rotation
+            .transform_vector(&Vector3::new(0.0, 0.0, -1.0))
+            .xz()
     }
 
     pub fn get_path(&self) -> &Option<Vec<PathPoint>> {
@@ -155,10 +179,17 @@ impl LunabotBlackboard {
             Input::LunabaseDisconnected => self.lunabase_disconnected = true,
             Input::DoneExploring => {
                 self.check_if_explored_state = CheckIfExploredState::FinishedExploring;
-            },
+            }
             Input::NotDoneExploring(cell) => {
                 self.check_if_explored_state = CheckIfExploredState::NeedToExplore(cell);
-            },
+                self.finished_post_explore_pause = false;
+            }
+            Input::NextActionSite(cell) => {
+                self.find_action_site_state = FindActionSiteState::FoundSite(cell);
+            }
+            Input::NoActionSite => {
+                self.find_action_site_state = FindActionSiteState::NotFound;
+            }
         }
     }
     
@@ -191,6 +222,27 @@ impl LunabotBlackboard {
     pub fn exploring_state(&self) -> CheckIfExploredState {
         self.check_if_explored_state
     }
+    
+    pub fn finished_post_explore_pause(&self) -> bool {
+        self.finished_post_explore_pause
+    }
+    pub fn set_finished_post_explore_pause(&mut self, value: bool) {
+        self.finished_post_explore_pause = true;
+    }
+    
+    pub fn find_next_dig_site(&mut self) {
+        self.find_action_site_state = FindActionSiteState::Pending;
+        self.enqueue_action(Action::FindNextDigSite);
+    }
+    pub fn find_next_dump_site(&mut self) {
+        self.find_action_site_state = FindActionSiteState::Pending;
+        self.enqueue_action(Action::FindNextDumpSite);
+    }
+    
+    pub fn next_action_site_state(&self) -> FindActionSiteState {
+        self.find_action_site_state
+    }
+    
     
     pub fn enqueue_action(&mut self, action: Action) {
         self.actions.push(action);

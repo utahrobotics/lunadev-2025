@@ -18,6 +18,6 @@
         }
     },
     "hostRequirements": {
-        "gpu": true
+        "gpu": false
     }
 }

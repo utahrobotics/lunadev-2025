@@ -30,7 +30,11 @@ pub(super) fn find_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                 AutonomyState::MoveToDumpSite(cell) => (cell, PathKind::StopInFrontOfTarget, false),
                 AutonomyState::MoveToDigSite(cell) => (cell, PathKind::StopInFrontOfTarget, false),
                 
-                other_state => panic!("trying to pathfind during autonomy state {other_state:?}")
+                other_state => {
+                    warn!("trying to pathfind during autonomy state {other_state:?}. reset autonomy to Start");
+                    blackboard.set_autonomy(AutonomyState::Start);
+                    return Status::Failure
+                }
             };
             
             blackboard.request_for_path(

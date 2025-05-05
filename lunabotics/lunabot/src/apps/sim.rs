@@ -1,9 +1,9 @@
 use std::{
-    cmp::Ordering, collections::VecDeque, net::{IpAddr, SocketAddr}, num::NonZeroU32, path, process::Stdio, sync::{Arc, Mutex}
+    cmp::Ordering, collections::VecDeque, fmt::DebugMap, net::{IpAddr, SocketAddr}, num::NonZeroU32, path, process::Stdio, sync::{Arc, Mutex}
 };
 
 use common::{
-    cell_to_world_point, lunasim::{FromLunasim, FromLunasimbot}, LunabotStage, PathPoint
+    cell_to_world_point, lunasim::{FromLunasim, FromLunasimbot}, CellsRect, LunabotStage, PathPoint, THALASSIC_HEIGHT, THALASSIC_WIDTH
 };
 use crossbeam::atomic::AtomicCell;
 use gputter::{
@@ -13,10 +13,10 @@ use gputter::{
 use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{
-    Isometry3, Scale3, Transform3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4,
+    ComplexField, Isometry3, Scale3, Transform3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4
 };
 use simple_motion::{ChainBuilder, NodeSerde};
-use tasker::shared::OwnedData;
+use tasker::shared::{OwnedData, SharedData};
 use tasker::tokio;
 use tasker::{
     callbacks::caller::CallbacksStorage,
@@ -32,7 +32,7 @@ use thalassic::DepthProjectorBuilder;
 use tracing::{error, info, warn};
 
 use crate::{
-    localization::{IMUReading, Localizer}, pathfinding::Obstacle, pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline}, utils::{distance_between_tuples, SteeringLerper}
+    localization::{IMUReading, Localizer}, pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline}, utils::{distance_between_tuples, SteeringLerper}
 };
 use crate::{pathfinding::DefaultPathfinder, pipelines::thalassic::ThalassicData};
 
@@ -393,6 +393,16 @@ impl LunasimbotApp {
             lunasim_stdin2.write(bytes);
         });
         let mut bitcode_buffer = bitcode::Buffer::new();
+        
+        
+        
+        let gap = 16;
+        
+        let dig_area = CellsRect::new((4., 2.), 4., 2.).pad_from_world_border(gap);   // TODO set as actual dig area
+        let mut next_dig_site = Some((dig_area.right + gap / 2, dig_area.top - gap / 2));
+        
+        let dump_area = CellsRect::new((4., 0.), 4., 2.).pad_from_world_border(gap);   // TODO set as actual dig area
+        let mut next_dump_site = Some((dump_area.right + gap / 2, dump_area.bottom + gap / 2));
 
         run_ai(
             robot_chain.into(),
@@ -435,17 +445,11 @@ impl LunasimbotApp {
                 Action::ClearPointsToAvoid => {
                     pathfinder.clear_cells_to_avoid();
                 }
-                
                 Action::CheckIfExplored { area, robot_cell_pos } => {
-                    let x_lo = area.right as usize;
-                    let x_hi = area.left as usize;
-                    let y_lo = area.bottom as usize;
-                    let y_hi = area.top as usize;
-                    
                     let map_data = pathfinder.get_map_data(&shared_thalassic_data);
                     
-                    for x in x_lo..x_hi {
-                        for y in y_lo..y_hi {
+                    for x in area.right..=area.left {
+                        for y in area.bottom..=area.top {
                             
                             // cells need to be explored if theyre unknown AND the robot isn't on top of it
                             if 
@@ -458,6 +462,60 @@ impl LunasimbotApp {
                     }
                     
                     inputs.push(Input::DoneExploring);
+                }
+                Action::FindNextDigSite => {
+                    let map_data = pathfinder.get_map_data(&shared_thalassic_data);
+                    
+                    loop {
+                        match next_dig_site {
+                            Some(curr_site) => {
+                                next_dig_site = next_dig_site_candidate(curr_site, dig_area, gap);
+                                
+                                if 
+                                    map_data.is_safe_for_robot(None, curr_site).is_ok() &&
+                                    !pathfinder.within_additional_obstacle(curr_site)
+                                {
+                                    println!("next dig site {:?}", curr_site);
+                                    inputs.push(Input::NextActionSite(curr_site));
+                                    break;
+                                }
+                                
+                            },
+                            None => {
+                                inputs.push(Input::NoActionSite);
+                                break;
+                            }
+                        }
+                    }
+                }
+                Action::FindNextDumpSite => {
+                    let map_data = pathfinder.get_map_data(&shared_thalassic_data);
+                    
+                    loop {
+                        match next_dump_site {
+                            Some(curr_site) => {
+                                next_dump_site = next_dump_site_candidate(curr_site, dump_area, gap);
+                                
+                                if 
+                                    map_data.is_safe_for_robot(None, curr_site).is_ok() &&
+                                    !pathfinder.within_additional_obstacle(curr_site)
+                                {
+                                    println!("next dump site {:?}", curr_site);
+                                    inputs.push(Input::NextActionSite(curr_site));
+                                    break;
+                                }
+                                
+                            },
+                            None => {
+                                inputs.push(Input::NoActionSite);
+                                break;
+                            },
+                        }
+                    }
+                }
+                
+                Action::AvoidObstacle(obstacle) => {
+                    pathfinder.add_additional_obstacle(obstacle);
                 }
             },
             |poll_when, inputs| {
@@ -520,4 +578,45 @@ impl LunasimbotApp {
             },
         );
     }
+}
+
+pub fn next_dig_site_candidate(prev_site: (usize, usize), dig_area: CellsRect, gap: usize) -> Option<(usize, usize)> {
+    let (x, y) = prev_site;
+    
+    // no more room in this row
+    let res = if x + gap > dig_area.left  { 
+    
+        // no more rows!
+        if y - gap < dig_area.bottom { None }
+        
+        // start next row
+        else { Some((dig_area.right + gap / 2, y - gap)) }
+    }
+
+    // continue with this row
+    else { Some((x + gap, y)) };
+    
+    println!("candidate {:?} -> {:?}", (x, y), res);
+    
+    res
+}
+pub fn next_dump_site_candidate(prev_site: (usize, usize), dump_area: CellsRect, gap: usize) -> Option<(usize, usize)> {
+    let (x, y) = prev_site;
+    
+    // no more room in this row
+    let res = if x + gap > dump_area.left  { 
+    
+        // no more rows!
+        if y + gap > dump_area.top { None }
+        
+        // start next row
+        else { Some((dump_area.right + gap / 2, y + gap)) }
+    }
+
+    // continue with this row
+    else { Some((x + gap, y)) };
+    
+    println!("candidate {:?} -> {:?}", (x, y), res);
+    
+    res
 }

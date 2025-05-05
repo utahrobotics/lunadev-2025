@@ -6,16 +6,14 @@ use tracing::{error, warn};
 use find_next_target::find_next_target;
 use find_path::find_path;
 use follow_path::follow_path;
-use dig::dig;
-use dump::dump;
+use actions::{dig, dump};
 
-use crate::{blackboard::LunabotBlackboard, Action};
+use crate::{blackboard::{self, CheckIfExploredState, LunabotBlackboard}, utils::WaitBehavior, Action};
 
 mod find_next_target;
 mod find_path;
 mod follow_path;
-mod dig;
-mod dump;
+mod actions;
 
 
 
@@ -47,7 +45,7 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
                 TryCatch::new(
                     Sequence::new((
                         
-                        // repeat until body returns success
+                        // repeat until successfully moved to target position
                         Invert(WhileLoop::new(
                             AlwaysSucceed,
                             Invert(
@@ -63,10 +61,14 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
                         )),
                         
                         IfElse::new(
-                            autonomy_state_is_dig(), 
-                            dig(), 
-                            dump()
-                        ),
+                            finished_exploring(),
+                            IfElse::new(
+                                autonomy_state_is_dig(), 
+                                dig(), 
+                                dump()
+                            ),
+                            AlwaysSucceed
+                        )
                     )),
                     AlwaysSucceed
                 )
@@ -75,6 +77,13 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
     )
 }
 
+pub fn finished_exploring() -> impl Behavior<LunabotBlackboard> + CancelSafe {
+    AssertCancelSafe(
+        |blackboard: &mut LunabotBlackboard| {
+            (blackboard.exploring_state() == CheckIfExploredState::FinishedExploring).into()
+        }
+    )
+}
 fn autonomy_state_is_dig() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     AssertCancelSafe(
         |blackboard: &mut LunabotBlackboard| {
@@ -119,6 +128,7 @@ fn fail_if_autonomy_interrupted() -> impl Behavior<LunabotBlackboard> + CancelSa
 fn reset_steering() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     // reset
     AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+        println!("reset steering!!!", );
         warn!("Traversing obstacles");
         blackboard.enqueue_action(Action::SetSteering(Default::default()));
         blackboard.enqueue_action(Action::SetStage(LunabotStage::Autonomy));

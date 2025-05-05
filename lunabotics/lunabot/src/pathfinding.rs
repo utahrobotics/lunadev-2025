@@ -1,5 +1,5 @@
 use crate::utils::distance_between_tuples;
-use common::{cell_to_world_point, world_point_to_cell, CellsRect, PathInstruction, PathKind, PathPoint, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
+use common::{cell_to_world_point, world_point_to_cell, CellsRect, Obstacle, PathInstruction, PathKind, PathPoint, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
 use nalgebra::{Point3, Scale3, Transform3};
 use pathfinding::{grid::Grid, prelude::astar};
 use tasker::shared::{SharedData, SharedDataReceiver};
@@ -10,56 +10,6 @@ use crate::pipelines::thalassic::{set_observe_depth, CellState, ThalassicData};
 const REACH: usize = 2;
 
 const MAX_SCAN_ATTEMPTS: usize = 4;
-
-#[derive(Debug)]
-pub struct Ellipse {
-    h: f64,
-    k: f64,
-    radius_x: f64,
-    radius_y: f64
-}
-
-/// units are in cells
-#[derive(Debug)]
-pub enum Obstacle { Rect(CellsRect), Ellipse(Ellipse) }
-impl Obstacle {
-    
-    /// width and height must be positive
-    pub fn new_rect(left_bottom: (f64, f64), width_meters: f64, height_meters: f64) -> Obstacle {
-        Obstacle::Rect(CellsRect::new(left_bottom, width_meters, height_meters))
-    }
-    
-    pub fn new_ellipse(center: (f64, f64), radius_x_meters: f64, radius_y_meters: f64) -> Obstacle {
-        Obstacle::Ellipse(Ellipse { 
-            h: center.0 / THALASSIC_CELL_SIZE as f64, 
-            k: center.1 / THALASSIC_CELL_SIZE as f64, 
-            radius_x: radius_x_meters / THALASSIC_CELL_SIZE as f64, 
-            radius_y: radius_y_meters / THALASSIC_CELL_SIZE as f64, 
-        })
-    }
-    
-    pub fn new_circle(center: (f64, f64), radius_meters: f64) -> Obstacle {
-        Self::new_ellipse(center, radius_meters, radius_meters)
-    }
-    
-    fn contains_cell(&self, cell: (usize, usize)) -> bool {
-        
-        let x = cell.0 as f64;
-        let y = cell.1 as f64;
-        
-        match self {
-            Obstacle::Rect(CellsRect{top, bottom, left, right}) => {
-                *right <= x && x <= *left && *bottom <= y && y <= *top  // larger x = further left
-            },
-            Obstacle::Ellipse(Ellipse{h, k, radius_x, radius_y}) => {
-                ( ((x - h) * (x - h))  / (radius_x * radius_x) ) + 
-                ( ((y - k) * (y - k))  / (radius_y * radius_y) )
-                <= 1.0
-            },
-        }
-    }
-}
-
 
 pub struct DefaultPathfinder {
     pub cell_grid: Grid,
@@ -110,6 +60,20 @@ impl DefaultPathfinder {
     
     pub fn clear_cells_to_avoid(&mut self) {
         self.cells_to_avoid.clear();
+    }
+    
+    pub fn add_additional_obstacle(&mut self, obstacle: Obstacle) {
+        self.additional_obstacles.push(obstacle);
+        println!("{:?}", self.additional_obstacles);
+    }
+    
+    pub fn within_additional_obstacle(&self, cell: (usize, usize)) -> bool {
+        for obstacle in &self.additional_obstacles {
+            if obstacle.contains_cell(cell) {
+                return true
+            }
+        }
+        false
     }
 
     pub fn get_map_data(
@@ -169,11 +133,7 @@ impl DefaultPathfinder {
                 }
             }
             
-            for obstacle in &self.additional_obstacles {
-                if obstacle.contains_cell(pos) {
-                    return false;
-                }
-            }
+            if self.within_additional_obstacle(pos) { return false }
             
             true
         };
@@ -295,14 +255,14 @@ impl DefaultPathfinder {
             };
             
             if path_kind == PathKind::StopInFrontOfTarget {
-                let mut i = raw_path.len()-1;
+                let mut i = raw_path.len();
                 for cell in raw_path.iter().rev() {
                     if distance_between_tuples(end_cell, *cell) > self.current_robot_radius_cells() {
                         break;
                     }
                     i -= 1;
                 }
-                raw_path.truncate(i+1);
+                raw_path.truncate(i);
             }
             
 
