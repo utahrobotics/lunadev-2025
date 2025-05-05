@@ -384,7 +384,9 @@ impl LunabotApp {
                     
                     inputs.push(Input::DoneExploring);
                 }
-                Action::AvoidCell(_) => todo!(),
+                Action::AvoidCell(cell) => {
+                    pathfinder.avoid_cell(cell);
+                },
             },
             |poll_when, inputs| {
                 let wait_disconnect = async {

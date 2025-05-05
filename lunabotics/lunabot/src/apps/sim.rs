@@ -429,6 +429,9 @@ impl LunasimbotApp {
                 Action::AvoidCell(cell) => {
                     pathfinder.avoid_cell(cell);
                 }
+                Action::LiftShake => {
+                    
+                }
                 Action::ClearPointsToAvoid => {
                     pathfinder.clear_cells_to_avoid();
                 }
