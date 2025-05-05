@@ -49,6 +49,8 @@ fn follow_path_inner(blackboard: &mut LunabotBlackboard) -> Status {
     let latest_transform = blackboard.get_latest_transform();
     let now = blackboard.get_now();
     let target_cell = blackboard.get_target_cell();
+    let heading = blackboard.get_robot_heading();
+    
     let Some(path) = blackboard.get_path_mut() else { return Status::Success };
     
     if path.is_empty() {
@@ -58,10 +60,6 @@ fn follow_path_inner(blackboard: &mut LunabotBlackboard) -> Status {
     }
 
     let curr_instr = path[0];
-    let heading = robot
-        .rotation
-        .transform_vector(&Vector3::new(0.0, 0.0, -1.0))
-        .xz();
 
     if curr_instr.is_finished(&pos.xz(), &heading.into()) {
         
@@ -82,13 +80,13 @@ fn follow_path_inner(blackboard: &mut LunabotBlackboard) -> Status {
             
             return match path_leads_to_goal {
                 true => {
-                    println!("path follower: done!");
+                    println!("path follower: done! {:?}", blackboard.get_autonomy());
                     
                     // advance autonomy stage
                     blackboard.set_autonomy(
                         match blackboard.get_autonomy() {
-                            AutonomyState::MoveToDumpSite(_) => AutonomyState::Dump,
-                            _ => AutonomyState::Dig
+                            AutonomyState::MoveToDigSite(_) => AutonomyState::Dig,
+                            _ => AutonomyState::Dump
                         }
                     );
                     blackboard.enqueue_action(Action::ClearPointsToAvoid);

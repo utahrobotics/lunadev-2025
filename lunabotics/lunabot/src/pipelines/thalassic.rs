@@ -90,23 +90,25 @@ impl ThalassicData {
     /// if unsafe, returns `Err(closest unknown cell that makes the target unsafe)`
     pub fn is_safe_for_robot(
         &self,
-        robot_cell_pos: (usize, usize),
+        robot_cell_pos: Option<(usize, usize)>,
         target_cell_pos: (usize, usize),
     ) -> Result<(), (usize, usize)> {
-        if robot_cell_pos == target_cell_pos {
+        if robot_cell_pos == Some(target_cell_pos) {
             return Ok(());
         }
 
         let robot_cell_radius = (self.current_robot_radius_meters / THALASSIC_CELL_SIZE).ceil();
-
-        if distance_between_tuples(robot_cell_pos, target_cell_pos) <= robot_cell_radius {
-            return Ok(());
-        }
-
-        // if the target cell is near the robot, its okay if its not green
-        if self.get_cell_state(target_cell_pos) != CellState::GREEN
-            && distance_between_tuples(target_cell_pos, robot_cell_pos) > robot_cell_radius
-        {
+        
+        let robot_is_standing_on = |cell: (usize, usize)| {
+            match robot_cell_pos {
+                Some(robot_cell_pos) => distance_between_tuples(robot_cell_pos, cell) <= robot_cell_radius,
+                None => false,
+            }
+        };
+        
+        if robot_is_standing_on(target_cell_pos) { return Ok(()) }
+        
+        if self.get_cell_state(target_cell_pos) != CellState::GREEN {
             return Err(target_cell_pos);
         }
 
@@ -142,8 +144,7 @@ impl ThalassicData {
                 q.push_back((x, y - 1));
 
                 // if a cell is not inside the robot AND and unknown then target cell is dangerous
-                if distance_between_tuples(nearby_cell_usize, robot_cell_pos) > robot_cell_radius
-                    && !self.is_known(nearby_cell_usize)
+                if !robot_is_standing_on(nearby_cell_usize) && !self.is_known(nearby_cell_usize)
                 {
                     return Err(nearby_cell_usize);
                 }
@@ -162,7 +163,7 @@ impl ThalassicData {
         path: &Vec<(usize, usize)>,
     ) -> Result<(), (usize, (usize, usize))> {
         for (i, pt) in path.iter().enumerate() {
-            if let Err(unknown_cell) = self.is_safe_for_robot(robot_cell_pos, *pt) {
+            if let Err(unknown_cell) = self.is_safe_for_robot(Some(robot_cell_pos), *pt) {
                 return Err((i, unknown_cell));
             }
         }

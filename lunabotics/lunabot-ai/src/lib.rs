@@ -10,7 +10,7 @@ use ares_bt::{
 };
 use autonomy::autonomy;
 use blackboard::LunabotBlackboard;
-use common::{CellsRect, FromLunabase, LunabotStage, PathPoint, PathKind, Steering};
+use common::{CellsRect, FromLunabase, LunabotStage, Obstacle, PathKind, PathPoint, Steering};
 use embedded_common::{Actuator, ActuatorCommand};
 use nalgebra::Point3;
 use simple_motion::StaticImmutableNode;
@@ -40,7 +40,10 @@ pub enum Action {
     CheckIfExplored {
         area: CellsRect,
         robot_cell_pos: (usize, usize),
-    }
+    },
+    FindNextDigSite, 
+    FindNextDumpSite,
+    AvoidObstacle(Obstacle)
 }
 
 #[derive(Debug, Clone, Copy)]

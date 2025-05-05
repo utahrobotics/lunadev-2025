@@ -1,8 +1,13 @@
-use ares_bt::{action::{AlwaysFail, AlwaysSucceed}, branching::IfElse, converters::{AssertCancelSafe, Invert}, looping::WhileLoop, sequence::Sequence, Behavior, CancelSafe, Status};
-use common::{world_point_to_cell, CellsRect};
-use nalgebra::{distance, Point3};
+use std::time::Duration;
 
-use crate::{autonomy::AutonomyState, blackboard::{self, CheckIfExploredState, PathfindingState}, LunabotBlackboard};
+use ares_bt::{action::{AlwaysFail, AlwaysSucceed}, branching::IfElse, converters::{AssertCancelSafe, Invert}, looping::WhileLoop, sequence::Sequence, Behavior, CancelSafe, Status};
+use common::{world_point_to_cell, CellsRect, LunabotStage};
+use nalgebra::{distance, Point3};
+use tracing::warn;
+
+use crate::{autonomy::AutonomyState, blackboard::{self, CheckIfExploredState, FindActionSiteState, PathfindingState}, utils::WaitBehavior, Action, LunabotBlackboard};
+
+use super::finished_exploring;
 
 
 
@@ -10,62 +15,105 @@ pub(super) fn find_next_target() -> impl Behavior<LunabotBlackboard> + CancelSaf
     
     Invert(Sequence::new((
         
-        // start exploration check
-        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-            blackboard.check_if_explored(CellsRect::new((4., 3.), 4., 2.));
-            Status::Success
-        }),
+        // start exploration check if exploration hasnt finished
+        IfElse::new(
+            finished_exploring(),
+            AlwaysSucceed, 
+            Sequence::new((
+                AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+                    blackboard.check_if_explored(CellsRect::new((4., 0.), 4., 4.)); // TODO set as actual exploration area
+                    Status::Success
+                }),
+                
+                // wait for exploration check to finish
+                AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+                    match blackboard.exploring_state() {
+                        CheckIfExploredState::FinishedExploring => {
+                            println!("done exploring! {:?}", blackboard.get_autonomy());
+                            Status::Success
+                        },
+                        CheckIfExploredState::HaveToCheck => panic!("waiting for exploration check to finish when it hasn't started yet"),
+                        CheckIfExploredState::Pending => Status::Running,
+                        CheckIfExploredState::NeedToExplore(unexplored_cell) => {
+                            println!("still need to explore {unexplored_cell:?}", );
+                            blackboard.set_autonomy(AutonomyState::Explore(unexplored_cell));
+                            
+                            // if theres a cell that must be explored, don't go on to decide a dig/dump point
+                            Status::Failure
+                        }, 
+                    }
+                }),
+            ))
+        ),
         
-        // wait for exploration check to finish
-        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-            match blackboard.exploring_state() {
-                CheckIfExploredState::FinishedExploring => Status::Success,
-                CheckIfExploredState::HaveToCheck => panic!("waiting for exploration check to finish when it hasn't started yet"),
-                CheckIfExploredState::Pending => Status::Running,
-                CheckIfExploredState::NeedToExplore(unexplored_cell) => {
-                    println!("still need to explore {unexplored_cell:?}", );
-                    blackboard.set_autonomy(AutonomyState::Explore(unexplored_cell));
-                    
-                    // if theres a cell that must be explored, don't go on to decide a dig/dump point
-                    Status::Failure
-                }, 
-            }
-        }),
+        // pause for 10 seconds if haven't already
+        IfElse::new(
+            AssertCancelSafe(|blackboard: &mut LunabotBlackboard| blackboard.finished_post_explore_pause().into()),
+            AlwaysSucceed,
+            Sequence::new((
+                WaitBehavior::from(Duration::from_secs(10)),
+                AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+                    blackboard.set_finished_post_explore_pause(true);
+                    Status::Success
+                }),
+            ))
+        ),
         
-        // decide next dig/dump site
+        
+        // start deciding next dig/dump site
         AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+            *blackboard.get_path_mut() = None;
+            
             let prev_state = blackboard.get_autonomy();
             match prev_state {
                 AutonomyState::Dump | AutonomyState::Start => {
-                    *blackboard.get_path_mut() = None;
-                    
-                    let site = find_next_dig_site();
-                    println!("next dig site: {:?}", site);
-                    blackboard.set_autonomy(AutonomyState::MoveToDigSite(site))
+                    blackboard.find_next_dig_site();
+                    Status::Success
                 }
                 AutonomyState::Dig => {
-                    *blackboard.get_path_mut() = None;
-                    
-                    let site = find_next_dump_site();
-                    println!("next dump site: {:?}", site);
-                    blackboard.set_autonomy(AutonomyState::MoveToDumpSite(site))
+                    blackboard.find_next_dump_site();
+                    Status::Success
                 }
-                _ => {}
+                _ => Status::Failure
             }
-            
-            Status::Success
+        }),
+        
+        // wait for finding next dig/dump site to finish
+        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+            match blackboard.next_action_site_state() {
+                FindActionSiteState::Start => panic!("waiting for finding action site to finish before its started"),
+                FindActionSiteState::Pending => Status::Running,
+                FindActionSiteState::FoundSite(cell) => {
+                    let prev_state = blackboard.get_autonomy();
+                    match prev_state {
+                        AutonomyState::Dump | AutonomyState::Start => {
+                            blackboard.set_autonomy(AutonomyState::MoveToDigSite(cell));
+                        }
+                        AutonomyState::Dig => {
+                            println!("move to dump site", );
+                            blackboard.set_autonomy(AutonomyState::MoveToDumpSite(cell));
+                        }
+                        _ => {}
+                    }
+                    Status::Success
+                },
+                FindActionSiteState::NotFound => {
+                    let prev_state = blackboard.get_autonomy();
+                    match prev_state {
+                        AutonomyState::Dump | AutonomyState::Start => {
+                            warn!("couldn't find a place to dig")
+                        }
+                        AutonomyState::Dig => {
+                            warn!("couldn't find a place to dump")
+                        }
+                        _ => {}
+                    }
+                    blackboard.enqueue_action(Action::SetStage(LunabotStage::SoftStop));
+                    Status::Failure
+                }
+            }
         }),
         
         AlwaysFail // fail so that outer `Invert()` returns success
     )))
-}
-
-// TODO
-fn find_next_dig_site() -> (usize, usize) {
-    world_point_to_cell(Point3::new(2., 0., 2.))
-}
-
-// TODO
-fn find_next_dump_site() -> (usize, usize) {
-    world_point_to_cell(Point3::new(2., 0., 5.))
 }
