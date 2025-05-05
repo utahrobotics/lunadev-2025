@@ -1,8 +1,5 @@
-
-use std::time::Duration;
-
 use ares_bt::{
-    action::{AlwaysRunning, AlwaysSucceed}, branching::{IfElse, TryCatch}, converters::{AssertCancelSafe, Invert}, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, CancelSafe, Status
+    action::AlwaysSucceed, branching::{IfElse, TryCatch}, converters::{AssertCancelSafe, Invert}, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, CancelSafe, Status
 };
 use common::{FromLunabase, LunabotStage};
 use tracing::{error, warn};
@@ -133,7 +130,7 @@ fn reset_steering() -> impl Behavior<LunabotBlackboard> + CancelSafe {
         println!("reset steering!!!", );
         warn!("Traversing obstacles");
         blackboard.enqueue_action(Action::SetSteering(Default::default()));
-        blackboard.enqueue_action(Action::SetStage(LunabotStage::TraverseObstacles));
+        blackboard.enqueue_action(Action::SetStage(LunabotStage::Autonomy));
         Status::Success
     })
 }

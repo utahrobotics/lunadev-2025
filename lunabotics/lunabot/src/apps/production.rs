@@ -15,8 +15,6 @@ use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use mio::{Events, Interest, Poll, Token};
 use motors::{enumerate_motors, MotorMask, VescIDs};
-use nalgebra::{Scale3, Transform3, UnitQuaternion, AbstractRotation};
-use rerun::Points3D;
 use rerun_viz::init_rerun;
 use imu_calib::*;
 use rp2040::*;
@@ -51,7 +49,7 @@ pub struct CameraInfo {
     link_name: String,
     focal_length_x_px: f64,
     focal_length_y_px: f64,
-    stream_index: usize,
+    stream_index: Option<usize>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -59,7 +57,7 @@ pub struct DepthCameraInfo {
     link_name: String,
     #[serde(default)]
     ignore_apriltags: bool,
-    stream_index: usize,
+    stream_index: Option<usize>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -375,7 +373,7 @@ impl LunabotApp {
                             // cells need to be explored if theyre unknown AND the robot isn't on top of it
                             if 
                                 !map_data.is_known((x, y)) && 
-                                distance_between_tuples(robot_cell_pos, (x, y)) > pathfinder.current_robot_radius_cells() 
+                                crate::utils::distance_between_tuples(robot_cell_pos, (x, y)) > pathfinder.current_robot_radius_cells() 
                             {
                                 return inputs.push(Input::NotDoneExploring((x, y)));
                             }
@@ -428,7 +426,6 @@ impl LunabotApp {
                                         std::future::pending::<()>().await;
                                         unreachable!();
                                     };
-				                    tracing::info!("msg: {:?}", msg);
                                     inputs.push(Input::FromLunabase(msg));
                                 }
                                 _ = tokio::time::sleep_until(deadline.into()) => {}

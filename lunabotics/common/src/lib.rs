@@ -70,9 +70,7 @@ pub mod lunabase_sync;
 pub enum LunabotStage {
     TeleOp,
     SoftStop,
-    TraverseObstacles,
-    Dig,
-    Dump,
+    Autonomy,
 }
 
 #[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]
@@ -82,7 +80,7 @@ pub enum FromLunabase {
     Steering(Steering),
     LiftActuators(i8),
     BucketActuators(i8),
-    TraverseObstacles,
+    StartAutonomy,
     SoftStop,
 }
 
@@ -100,7 +98,7 @@ impl FromLunabase {
         // FromLunabase::Pong.write_code(&mut w)?;
         FromLunabase::ContinueMission.write_code(&mut w)?;
         FromLunabase::Steering(Steering::default()).write_code(&mut w)?;
-        FromLunabase::TraverseObstacles.write_code(&mut w)?;
+        FromLunabase::StartAutonomy.write_code(&mut w)?;
         FromLunabase::SoftStop.write_code(&mut w)?;
         Ok(())
     }
@@ -186,9 +184,7 @@ impl FromLunabot {
     pub fn write_code_sheet(mut w: impl Write) -> std::io::Result<()> {
         FromLunabot::Ping(LunabotStage::TeleOp).write_code(&mut w)?;
         FromLunabot::Ping(LunabotStage::SoftStop).write_code(&mut w)?;
-        FromLunabot::Ping(LunabotStage::TraverseObstacles).write_code(&mut w)?;
-        FromLunabot::Ping(LunabotStage::Dig).write_code(&mut w)?;
-        FromLunabot::Ping(LunabotStage::Dump).write_code(&mut w)?;
+        FromLunabot::Ping(LunabotStage::Autonomy).write_code(&mut w)?;
         Ok(())
     }
 }

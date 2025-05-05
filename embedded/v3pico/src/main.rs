@@ -104,6 +104,7 @@ async fn main(spawner: Spawner) {
     class.wait_connection().await;
 
     let (class_tx, class_rx) = class.split();
+
     
     m1.enable();
     m2.enable();
@@ -151,9 +152,9 @@ async fn main(spawner: Spawner) {
 
 fn setup_lsm_i2c0(lsm: &mut Lsm6dsox<I2c<'_, I2C0, Async>, Delay>) -> Result<u8, lsm6dsox::Error> {
     lsm.setup()?;
-    lsm.set_gyro_sample_rate(DataRate::Freq104Hz)?;
+    lsm.set_gyro_sample_rate(DataRate::Freq52Hz)?;
     lsm.set_gyro_scale(GyroscopeScale::Dps2000)?;
-    lsm.set_accel_sample_rate(DataRate::Freq104Hz)?;
+    lsm.set_accel_sample_rate(DataRate::Freq52Hz)?;
     lsm.set_accel_scale(AccelerometerScale::Accel4g)?;
     lsm.check_id().map_err(|e| {
         error!("error checking id of lsm6dsox: {:?}", e);
@@ -201,6 +202,9 @@ async fn read_sensors_loop(
     let mut channel2 = Channel::new_pin(pot2, Pull::None);
     let mut adc = Adc::new(adc, Irqs, Config::default());
     loop {
+        if !class.dtr() {
+            class.wait_connection().await;
+        }
         //----- ACTUATORS -----
         // 148 ish when fully retracted, 3720 ish when fully extended
         const AVERAGING: usize = 10;
@@ -318,16 +322,20 @@ async fn read_sensors_loop(
             [imu0_readings[0], imu0_readings[1], imu1_readings[0],imu1_readings[1]],
             actuator_readings
         );
-                
+
         if class.dtr() {
             let msg = &msg.serialize();
             for chunk in msg.chunks(64) {
+                class.write_packet(&[]).await.unwrap(); 
                 if let Err(e) = class.write_packet(chunk).await {
                     error!("{:?}",e);
                 }
             }
+            // you dont want to know how long it took me to figure out you need to write a 0 length packet after a bulk transmission.
+            info!("{}", msg);
+        } else {
+            warn!("data terminal not ready");
         }
-        
         ticker.next().await;
     }
 }

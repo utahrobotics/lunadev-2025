@@ -10,7 +10,6 @@ use crate::{autonomy::AutonomyState, blackboard::{self, CheckIfExploredState, Fi
 use super::finished_exploring;
 
 
-
 pub(super) fn find_next_target() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     
     Invert(Sequence::new((

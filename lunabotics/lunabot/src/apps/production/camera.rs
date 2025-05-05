@@ -29,7 +29,7 @@ pub struct CameraInfo {
     pub node: StaticImmutableNode,
     pub focal_length_x_px: f64,
     pub focal_length_y_px: f64,
-    pub stream_index: usize,
+    pub stream_index: Option<usize>,
 }
 
 pub fn enumerate_cameras(
@@ -49,9 +49,13 @@ pub fn enumerate_cameras(
                     stream_index,
                 },
             )| {
-                let Some(camera_stream) = CameraStream::new(stream_index) else {
-                    return None;
-                };
+                let mut camera_stream = None;
+                if let Some(stream_index) = stream_index {
+                    let Some(tmp) = CameraStream::new(stream_index) else {
+                        return None;
+                    };
+                    camera_stream = Some(tmp);
+                }
                 let port2 = port.clone();
                 let localizer_ref = localizer_ref.clone();
                 let (tx, rx) = std::sync::mpsc::sync_channel(1);
@@ -179,7 +183,7 @@ pub fn enumerate_cameras(
 struct CameraTask {
     path: Receiver<PathBuf>,
     port: String,
-    camera_stream: CameraStream,
+    camera_stream: Option<CameraStream>,
     image: OnceCell<MaybeOwned<ImageBuffer<Luma<u8>, Vec<u8>>>>,
     focal_length_x_px: f64,
     focal_length_y_px: f64,
@@ -333,13 +337,15 @@ impl CameraTask {
                 }
             }
 
-            self.camera_stream
-                .write(DownscaleRgbImageReader::new(
-                    &rgb_img,
-                    format.width,
-                    format.height,
-                ))
-                .unwrap();
+            if let Some(camera_stream) = &mut self.camera_stream {
+                camera_stream
+                    .write(DownscaleRgbImageReader::new(
+                        &rgb_img,
+                        format.width,
+                        format.height,
+                    ))
+                    .unwrap();
+            }
 
             if image.try_recall() {
                 let owned_image: &mut ImageBuffer<Luma<u8>, Vec<u8>> = image.get_mut().unwrap();

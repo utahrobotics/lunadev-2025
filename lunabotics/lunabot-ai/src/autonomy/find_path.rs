@@ -1,21 +1,14 @@
-use std::time::Duration;
-
 use ares_bt::{
-    action::AlwaysSucceed,
-    branching::IfElse,
-    converters::{AssertCancelSafe, Invert},
-    looping::WhileLoop,
+    converters::AssertCancelSafe,
     sequence::Sequence,
     Behavior, CancelSafe, Status,
 };
-use common::{world_point_to_cell, LunabotStage, PathKind};
-use nalgebra::Point3;
+use common::{world_point_to_cell, PathKind};
 use tracing::warn;
 
-use crate::{
-    blackboard::{self, LunabotBlackboard, PathfindingState},
-    Action,
-};
+use crate::
+    blackboard::{LunabotBlackboard, PathfindingState}
+;
 
 use super::AutonomyState;
 

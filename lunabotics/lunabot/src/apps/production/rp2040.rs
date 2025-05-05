@@ -11,8 +11,10 @@ use tasker::{
     }, BlockOn
 };
 use tokio_serial::SerialPortBuilderExt;
+use tokio_serial::SerialPort;
 use tracing::{error, info, warn};
 use udev::{EventType, MonitorBuilder, Udev};
+use std::{fs, io, path::{Path, PathBuf}, thread};
 
 use super::udev_poll;
 
@@ -40,6 +42,7 @@ pub fn enumerate_v3picos(hinge_node: Node<&'static [NodeData]>, localizer_ref: L
                 pico.imus[3].node
             ],
             hinge_node,
+            first_startup: true
         };
         let mut task = V3PicoTask {
             path: path_rx,
@@ -167,6 +170,7 @@ struct SharedState {
     /// imu node
     imus: [StaticImmutableNode; 4],
     hinge_node: Node<&'static [NodeData]>,
+    first_startup: bool
 }
 
 pub struct V3PicoTask {
@@ -177,15 +181,15 @@ pub struct V3PicoTask {
 
 impl V3PicoTask {
     pub async fn v3pico_task(&mut self) {
-        tracing::info!("Starting V3Pico task");
         let path_str = match self.path.recv() {
             Ok(x) => x,
             Err(_) => loop {
                 std::thread::park();
             },
         };
-        let mut port = match tokio_serial::new(&path_str, 9600)
-            .timeout(std::time::Duration::from_millis(500))
+        let mut port = match tokio_serial::new(&path_str, 150000)
+            // .timeout(std::time::Duration::from_millis(100))
+            .flow_control(tokio_serial::FlowControl::None)
             .open_native_async()
         {
             Ok(x) => x,
@@ -194,45 +198,54 @@ impl V3PicoTask {
                 return;
             }
         };
+        let _ = port.write_data_terminal_ready(true);
+
         info!("Opened V3Pico controller port {path_str}");
         if let Err(e) = port.set_exclusive(true) {
             warn!("Failed to set V3Pico controller port {path_str} exclusive: {e}");
         }
+
         let port = BufStream::new(port);
         let (mut reader, mut writer) = tokio::io::split(port);
         let shared = Arc::clone(&self.shared);
-        let (is_fucked_tx, is_fucked_rx) = tokio::sync::watch::channel(false);
+        let (is_broken_tx, is_broken_rx) = tokio::sync::watch::channel(false);
+        let path_str_clone = path_str.clone();
         get_tokio_handle().spawn(async move {
-            let guard = shared.lock().await;
+            let mut guard = shared.lock().await;
+            if guard.first_startup {
+                guard.first_startup = false;
+                // power_cycle(&path_str_clone).unwrap();
+            }
             loop {
                 tokio::time::sleep(std::time::Duration::from_millis(IMU_READING_DELAY_MS)).await;
                 let mut reading = [0u8; FromPicoV3::SIZE];
                 if let Err(e) = reader.read_exact(&mut reading).await {
-                    error!("Failed to read message from picov3 serial port: {}",e);
-                    let _ = is_fucked_tx.send(true);
+                    let _ = is_broken_tx.send(true);
+                    error!("failed to read from pico: {}", e);
                     break;
-                };
+                }
                 let Ok(reading) = FromPicoV3::deserialize(reading) else {
                     error!("Failed to deserialize message from picov3 serial port");
-                    continue;
+                    let _ = is_broken_tx.send(true);
+                    break;
                 };
                 if let FromPicoV3::Reading(imu_readings,actuators) = reading {
-                    // idk if this works because the actuator readings are going t
                     let deg_to_rad = 0.0174532925199; // pi/180
-                    let lift_hinge_angle = (actuators.m1_reading as f64 * 0.00743033 - 2.19192)*deg_to_rad;
-                    guard.hinge_node.set_angle_one_axis(lift_hinge_angle);
+                    let lift_hinge_angle = (actuators.m1_reading as f64 * 0.00743033 - 2.19192);
+                    tracing::info!("lift angle: {}", lift_hinge_angle);
+		            guard.hinge_node.set_angle_one_axis(lift_hinge_angle*deg_to_rad);
                     for (i,(msg, node)) in imu_readings.into_iter().zip(guard.imus).enumerate() {
                         match msg {
                             FromIMU::Reading(rate, accel) => {
-                                let local_isometry = node.get_local_isometry().cast();
+                                let rotation = node.get_isometry_from_base().rotation.cast();
                                 let angular_velocity = Vector3::new(-rate.x, rate.z, rate.y);
-                                info!("imu{} {:?}",i, angular_velocity);
-                                let transformed_rate = local_isometry.rotation * angular_velocity;
+                                let transformed_rate = (rotation * angular_velocity);
 
                                 let accel = Vector3::new(accel.x, -accel.z, -accel.y);
-                                info!("imu{} {:?}",i ,accel);
 
-                                let transformed_accel = local_isometry.rotation * accel * 9.8;
+                                let transformed_accel = rotation * accel * 9.8;
+                                // info!("imu{} {:?}",i ,transformed_accel);
+
                                 guard.localizer_ref.set_imu_reading(
                                     i,
                                     IMUReading {
@@ -242,25 +255,25 @@ impl V3PicoTask {
                                 );
                             }
                             FromIMU::NoDataReady => {
-                                warn!("No data ready");
-                                continue; 
+                                // warn!("No data ready");
+                                continue;
                             }
                             FromIMU::Error => {
-                                error!("IMU reported error");
+                                // error!("IMU reported error");
                                 continue;
                             }
                         }
                     }
                 } else {
                     error!("V3 pico reported an error");
-                    let _ = is_fucked_tx.send(true);
+                    let _ = is_broken_tx.send(true);
                     break;
                 }
             }
         });
 
         loop {
-            if *is_fucked_rx.borrow() {
+            if *is_broken_rx.borrow() {
                 break;
             }
             let cmd_result = self.actuator_command_rx.recv_timeout(Duration::from_secs(1));
@@ -279,5 +292,42 @@ impl V3PicoTask {
                 break;
             }
         }
+        // if let Ok(exists) = fs::exists(&path_str) {
+        //     if exists {
+        //         // if the port still exists try power cycling it
+        //         warn!("trying to power cycle device...");
+        //         if let Err(e) = power_cycle(&path_str) {
+        //             warn!("failed to power cycle: {}", e);
+        //         }
+        //     }
+        // }
     }
+}
+
+/// gets the "…/authorized" for `/dev/ttyACM*`.
+fn authorized_path(tty: &str) -> io::Result<PathBuf> {
+    let path = Path::new("/sys/class/tty")
+        .join(Path::new(tty).file_name().unwrap())
+        .join("device");
+    let iface_path = fs::canonicalize(path)?;
+    info!("canonicalized: {:?}", iface_path);
+    let dev_path: PathBuf = match iface_path.file_name().and_then(|n| n.to_str()) {
+        Some(name) if name.contains(":") => iface_path
+            .parent()
+            .ok_or_else(||{ io::Error::new(io::ErrorKind::Other, "no parent dir")})?
+            .to_path_buf(),
+        _ => iface_path,
+    };
+    info!("authorized_path: {:?}", dev_path.join("authorized"));
+    Ok(dev_path.join("authorized"))
+}
+
+pub fn power_cycle(tty: &str) -> io::Result<()> {
+    let auth = authorized_path(tty)?;
+
+    fs::write(&auth, b"0")?;
+    info!("disabled port");
+    thread::sleep(Duration::from_millis(500));
+    fs::write(&auth, b"1")?;
+    Ok(())
 }
