@@ -358,7 +358,9 @@ impl LunabotApp {
                 Action::ClearPointsToAvoid => {
                     pathfinder.clear_cells_to_avoid();
                 },
-                
+                Action::LiftShake => {
+                    let _ = actuator_controller.send_command(embedded_common::ActuatorCommand::Shake);
+                }
                 Action::CheckIfExplored { area, robot_cell_pos } => {
                     let x_lo = area.right as usize;
                     let x_hi = area.left as usize;

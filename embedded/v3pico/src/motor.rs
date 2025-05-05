@@ -2,6 +2,7 @@ use embassy_rp::gpio::{Level, Output};
 use embassy_rp::peripherals::{PWM_SLICE0, PWM_SLICE1, PWM_SLICE2, PWM_SLICE3, PWM_SLICE4, PWM_SLICE5, PWM_SLICE6, PWM_SLICE7};
 use embassy_rp::pwm::{Config as PwmConfig, Pwm, PwmError, SetDutyCycle};
 use defmt::{error, info, warn};
+use embassy_time::Timer;
 use embedded_common::ActuatorCommand;
 use embedded_common::Actuator;
 use embedded_common::Direction;
@@ -31,7 +32,6 @@ impl<'d> Motor<'d> {
 
         Motor { sleep, dir, pwm }
     }
-
     pub fn new_m1(
         sleep_pin: embassy_rp::peripherals::PIN_10,
         dir_pin: embassy_rp::peripherals::PIN_15,
@@ -58,6 +58,18 @@ impl<'d> Motor<'d> {
                 speed, max_duty
             );
         }
+        Ok(())
+    }
+    
+    pub async fn shake(&mut self) -> Result<(), PwmError> {
+        let mut dir = Direction::Forward;
+        for _ in 0..30 {
+            self.pwm.set_duty_cycle(30000)?;
+            self.set_direction(dir);
+            dir = !dir;
+            Timer::after_millis(20).await;
+        }
+        
         Ok(())
     }
 

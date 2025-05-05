@@ -1,5 +1,7 @@
 #![no_std]
 
+use core::ops::Not;
+
 pub const IMU_READING_DELAY_MS: u64 = 10;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -26,6 +28,7 @@ pub enum Actuator {
 pub enum ActuatorCommand {
     SetSpeed(u16, Actuator),
     SetDirection(Direction, Actuator),
+    Shake
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -149,12 +152,14 @@ impl FromIMU {
 }
 
 impl ActuatorCommand {
-    pub fn deserialize(bytes: [u8; 4]) -> Result<Self, &'static str> {
+    pub fn deserialize(bytes: [u8; 5]) -> Result<Self, &'static str> {
         let actuator = {
             if bytes[3] == Actuator::Lift as u8 {
                 Actuator::Lift
             } else if bytes[3] == Actuator::Bucket as u8 {
                 Actuator::Bucket
+            } else if bytes[0] == 2 { // shake command
+                Actuator::Lift           
             } else {
                 return Err("Unknown actuator specifier (not m1 or m2)");
             }
@@ -176,25 +181,33 @@ impl ActuatorCommand {
                 };
                 Ok(ActuatorCommand::SetDirection(dir, actuator))
             }
+            tag if tag == 2 => {
+                Ok(ActuatorCommand::Shake)
+            } 
             _ => Err("Invalid variant tag"),
         }
     }
 
-    pub fn serialize(&self) -> [u8; 4] {
+    pub fn serialize(&self) -> [u8; 5] {
         match self {
             ActuatorCommand::SetSpeed(speed, actuator) => {
-                let mut bytes = [0u8; 4];
+                let mut bytes = [0u8; 5];
                 bytes[0] = 0;
                 bytes[1..=2].copy_from_slice(&speed.to_le_bytes());
                 bytes[3] = *actuator as u8;
                 bytes
             }
             ActuatorCommand::SetDirection(dir, actuator) => {
-                let mut bytes = [0u8; 4];
+                let mut bytes = [0u8; 5];
                 bytes[0] = 1;
                 bytes[1] = *dir as u8;
                 bytes[2] = 0;
                 bytes[3] = *actuator as u8;
+                bytes
+            }
+            ActuatorCommand::Shake => {
+                let mut bytes = [0u8; 5];
+                bytes[0] = 2;
                 bytes
             }
         }
@@ -211,6 +224,18 @@ impl ActuatorCommand {
 
     pub fn backward(actuator: Actuator) -> Self {
         ActuatorCommand::SetDirection(Direction::Backward, actuator)
+    }
+}
+
+impl Not for Direction {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        if self == Self::Forward {
+            return Self::Backward
+        } else {
+            return Self::Forward
+        }
     }
 }
 

@@ -741,6 +741,11 @@ impl LunabotConn {
     }
 
     #[func]
+    fn set_lift_shake(&mut self) {
+        self.send_reliable(&FromLunabase::LiftShake);
+    }
+
+    #[func]
     fn set_bucket_speed(&mut self, speed: f64) {
         self.set_bucket(speed);
     }

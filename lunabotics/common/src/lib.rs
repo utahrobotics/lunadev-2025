@@ -75,6 +75,7 @@ pub enum FromLunabase {
     Steering(Steering),
     LiftActuators(i8),
     BucketActuators(i8),
+    LiftShake,    
     StartAutonomy,
     SoftStop,
 }
@@ -96,6 +97,10 @@ impl FromLunabase {
         FromLunabase::StartAutonomy.write_code(&mut w)?;
         FromLunabase::SoftStop.write_code(&mut w)?;
         Ok(())
+    }
+
+    pub fn lift_shake() -> Self {
+        FromLunabase::LiftShake
     }
 
     pub fn set_lift_actuator(mut speed: f64) -> Self {

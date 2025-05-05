@@ -152,9 +152,9 @@ async fn main(spawner: Spawner) {
 
 fn setup_lsm_i2c0(lsm: &mut Lsm6dsox<I2c<'_, I2C0, Async>, Delay>) -> Result<u8, lsm6dsox::Error> {
     lsm.setup()?;
-    lsm.set_gyro_sample_rate(DataRate::Freq104Hz)?;
+    lsm.set_gyro_sample_rate(DataRate::Freq52Hz)?;
     lsm.set_gyro_scale(GyroscopeScale::Dps2000)?;
-    lsm.set_accel_sample_rate(DataRate::Freq104Hz)?;
+    lsm.set_accel_sample_rate(DataRate::Freq52Hz)?;
     lsm.set_accel_scale(AccelerometerScale::Accel4g)?;
     lsm.check_id().map_err(|e| {
         error!("error checking id of lsm6dsox: {:?}", e);
@@ -164,9 +164,9 @@ fn setup_lsm_i2c0(lsm: &mut Lsm6dsox<I2c<'_, I2C0, Async>, Delay>) -> Result<u8,
 
 fn setup_lsm_i2c1(lsm: &mut Lsm6dsox<I2c<'_, I2C1, Async>, Delay>) -> Result<u8, lsm6dsox::Error> {
     lsm.setup()?;
-    lsm.set_gyro_sample_rate(DataRate::Freq104Hz)?;
+    lsm.set_gyro_sample_rate(DataRate::Freq52Hz)?;
     lsm.set_gyro_scale(GyroscopeScale::Dps2000)?;
-    lsm.set_accel_sample_rate(DataRate::Freq104Hz)?;
+    lsm.set_accel_sample_rate(DataRate::Freq52Hz)?;
     lsm.set_accel_scale(AccelerometerScale::Accel4g)?;
     lsm.check_id().map_err(|e| {
         error!("error checking id of lsm6dsox: {:?}", e);
@@ -325,7 +325,7 @@ async fn read_sensors_loop(
 
         if class.dtr() {
             let msg = &msg.serialize();
-            for chunk in msg.chunks(64) {
+            for chunk in msg.chunks(63) {
                 class.write_packet(&[]).await.unwrap(); 
                 if let Err(e) = class.write_packet(chunk).await {
                     error!("{:?}",e);
@@ -344,7 +344,7 @@ async fn read_sensors_loop(
 #[embassy_executor::task(pool_size = 1)]
 async fn motor_controller_loop(mut class: Receiver<'static, Driver<'static, USB>>, mut m1: Motor<'static>, mut m2: Motor<'static>) {
     loop {
-        let mut cmd = [0u8; 4];
+        let mut cmd = [0u8; 5];
         if let Err(e) = class.read_packet(&mut cmd).await {
             error!("failed to read packet: {}", e);
             continue;
@@ -381,6 +381,9 @@ async fn motor_controller_loop(mut class: Receiver<'static, Driver<'static, USB>
                         m2.set_direction(dir);
                     }
                 }
+            }
+            ActuatorCommand::Shake => {
+                m1.shake().await;
             }
         }
     }

@@ -34,6 +34,7 @@ pub enum Action {
         kind: PathKind,
         fail_if_dest_is_known: bool
     },
+    LiftShake,
     AvoidCell((usize, usize)),
     ClearPointsToAvoid,
     CheckIfExplored {
