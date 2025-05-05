@@ -1,4 +1,4 @@
-use std::{cell::Cell, collections::VecDeque, time::Instant};
+use std::{collections::VecDeque, time::Instant};
 
 use common::{world_point_to_cell, CellsRect, FromLunabase, PathPoint, PathKind};
 use nalgebra::{Isometry3, Point3, UnitQuaternion};

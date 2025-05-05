@@ -80,10 +80,18 @@ pub fn init_panic_hook() {
     });
 }
 
+const MIN_CONTROLS_DELAY: Duration = Duration::from_millis(60);
+
 struct LunabotConnInner {
     cakap_sm: PeerStateMachine,
     udp: UdpSocket,
     to_lunabot: VecDeque<Action>,
+    last_steering_to_lunabot_instant: Instant,
+    steering_to_lunabot: Option<(Action, Option<Action>)>,
+    last_lift_to_lunabot_instant: Instant,
+    lift_to_lunabot: Option<(Action, Option<Action>)>,
+    last_tilt_to_lunabot_instant: Instant,
+    tilt_to_lunabot: Option<(Action, Option<Action>)>,
     bitcode_buffer: bitcode::Buffer,
     did_reconnection: bool,
     last_steering: Option<(Steering, ReliableIndex)>,
@@ -216,6 +224,12 @@ impl INode for LunabotConn {
                 udp,
                 cakap_sm,
                 to_lunabot: VecDeque::new(),
+                last_steering_to_lunabot_instant: Instant::now(),
+                steering_to_lunabot: None,
+                last_lift_to_lunabot_instant: Instant::now(),
+                lift_to_lunabot: None,
+                last_tilt_to_lunabot_instant: Instant::now(),
+                tilt_to_lunabot: None,
                 bitcode_buffer: bitcode::Buffer::new(),
                 did_reconnection: false,
                 last_steering: None,
@@ -285,15 +299,9 @@ impl INode for LunabotConn {
                                 LunabotStage::SoftStop => {
                                     self.base_mut().emit_signal("entered_soft_stop", &[])
                                 }
-                                LunabotStage::TraverseObstacles => self
+                                LunabotStage::Autonomy => self
                                     .base_mut()
-                                    .emit_signal("entered_traverse_obstacles", &[]),
-                                LunabotStage::Dig => {
-                                    self.base_mut().emit_signal("entered_dig", &[])
-                                }
-                                LunabotStage::Dump => {
-                                    self.base_mut().emit_signal("entered_dump", &[])
-                                }
+                                    .emit_signal("entered_autonomy", &[]),
                             };
                             inner = self.inner.as_mut().unwrap();
 
@@ -365,6 +373,40 @@ impl INode for LunabotConn {
             while let Some(to_lunabot) = inner.to_lunabot.pop_front() {
                 let action = inner.cakap_sm.poll(Event::Action(to_lunabot), now);
                 handle!(action);
+            }
+
+            if inner.last_steering_to_lunabot_instant.elapsed() >= MIN_CONTROLS_DELAY {
+                if let Some((action1, action2)) = inner.steering_to_lunabot.take() {
+                    inner.last_steering_to_lunabot_instant = now;
+                    let mut action = inner.cakap_sm.poll(Event::Action(action1), now);
+                    handle!(action);
+                    if let Some(action2) = action2 {
+                        action = inner.cakap_sm.poll(Event::Action(action2), now);
+                        handle!(action);
+                    }
+                }
+            }
+            if inner.last_lift_to_lunabot_instant.elapsed() >= MIN_CONTROLS_DELAY {
+                if let Some((action1, action2)) = inner.lift_to_lunabot.take() {
+                    inner.last_lift_to_lunabot_instant = now;
+                    let mut action = inner.cakap_sm.poll(Event::Action(action1), now);
+                    handle!(action);
+                    if let Some(action2) = action2 {
+                        action = inner.cakap_sm.poll(Event::Action(action2), now);
+                        handle!(action);
+                    }
+                }
+            }
+            if inner.last_tilt_to_lunabot_instant.elapsed() >= MIN_CONTROLS_DELAY {
+                if let Some((action1, action2)) = inner.tilt_to_lunabot.take() {
+                    inner.last_tilt_to_lunabot_instant = now;
+                    let mut action = inner.cakap_sm.poll(Event::Action(action1), now);
+                    handle!(action);
+                    if let Some(action2) = action2 {
+                        action = inner.cakap_sm.poll(Event::Action(action2), now);
+                        handle!(action);
+                    }
+                }
             }
 
             let mut buf = [0u8; 1408];
@@ -480,11 +522,12 @@ impl LunabotConn {
                 .new_reliable(encode(&msg).into())
             {
                 Ok(packet) => {
-                    if let Some(old_idx) = last_steering_reliable_idx {
-                        inner.to_lunabot.push_back(Action::CancelReliable(old_idx));
-                    }
                     inner.last_steering = Some((new_steering, packet.get_index()));
-                    inner.to_lunabot.push_back(Action::SendReliable(packet));
+                    inner.steering_to_lunabot = if let Some(old_idx) = last_steering_reliable_idx {
+                        Some((Action::CancelReliable(old_idx), Some(Action::SendReliable(packet))))
+                    } else {
+                        Some((Action::SendReliable(packet), None))
+                    };
                 }
                 Err(e) => {
                     godot_error!("Failed to build reliable packet: {e}");
@@ -509,11 +552,12 @@ impl LunabotConn {
                 .new_reliable(encode(&msg).into())
             {
                 Ok(packet) => {
-                    if let Some(old_idx) = last_lift_reliable_idx {
-                        inner.to_lunabot.push_back(Action::CancelReliable(old_idx));
-                    }
                     inner.last_lift = Some((lift, packet.get_index()));
-                    inner.to_lunabot.push_back(Action::SendReliable(packet));
+                    inner.lift_to_lunabot = if let Some(old_idx) = last_lift_reliable_idx {
+                        Some((Action::CancelReliable(old_idx), Some(Action::SendReliable(packet))))
+                    } else {
+                        Some((Action::SendReliable(packet), None))
+                    };
                 }
                 Err(e) => {
                     godot_error!("Failed to build reliable packet: {e}");
@@ -538,11 +582,12 @@ impl LunabotConn {
                 .new_reliable(encode(&msg).into())
             {
                 Ok(packet) => {
-                    if let Some(old_idx) = last_bucket_reliable_idx {
-                        inner.to_lunabot.push_back(Action::CancelReliable(old_idx));
-                    }
                     inner.last_bucket = Some((bucket, packet.get_index()));
-                    inner.to_lunabot.push_back(Action::SendReliable(packet));
+                    inner.tilt_to_lunabot = if let Some(old_idx) = last_bucket_reliable_idx {
+                        Some((Action::CancelReliable(old_idx), Some(Action::SendReliable(packet))))
+                    } else {
+                        Some((Action::SendReliable(packet), None))
+                    };
                 }
                 Err(e) => {
                     godot_error!("Failed to build reliable packet: {e}");
@@ -574,11 +619,7 @@ impl LunabotConn {
     #[signal]
     fn entered_soft_stop(&self);
     #[signal]
-    fn entered_traverse_obstacles(&self);
-    #[signal]
-    fn entered_dig(&self);
-    #[signal]
-    fn entered_dump(&self);
+    fn entered_autonomy(&self);
     #[signal]
     fn heightmap_received(&self, heightmap: PackedFloat32Array);
 
@@ -710,8 +751,8 @@ impl LunabotConn {
     }
 
     #[func]
-    fn traverse_obstacles(&mut self) {
-        self.send_reliable(&FromLunabase::TraverseObstacles);
+    fn start_autonomy(&mut self) {
+        self.send_reliable(&FromLunabase::StartAutonomy);
     }
 
     #[func]

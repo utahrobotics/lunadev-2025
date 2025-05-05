@@ -1,8 +1,8 @@
-use ares_bt::{action::{AlwaysFail, AlwaysSucceed}, branching::IfElse, converters::{AssertCancelSafe, Invert}, looping::WhileLoop, sequence::Sequence, Behavior, CancelSafe, Status};
+use ares_bt::{action::AlwaysFail, converters::{AssertCancelSafe, Invert}, sequence::Sequence, Behavior, CancelSafe, Status};
 use common::{world_point_to_cell, CellsRect};
-use nalgebra::{distance, Point3};
+use nalgebra::Point3;
 
-use crate::{autonomy::AutonomyState, blackboard::{self, CheckIfExploredState, PathfindingState}, LunabotBlackboard};
+use crate::{autonomy::AutonomyState, blackboard::CheckIfExploredState, LunabotBlackboard};
 
 
 

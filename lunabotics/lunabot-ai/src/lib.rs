@@ -1,4 +1,4 @@
-use std::{cell::Cell, time::Instant, vec};
+use std::{time::Instant, vec};
 
 use ares_bt::{
     action::AlwaysSucceed,
@@ -10,9 +10,8 @@ use ares_bt::{
 };
 use autonomy::autonomy;
 use blackboard::LunabotBlackboard;
-use common::{CellsRect, FromLunabase, LunabotStage, PathPoint, PathKind, Steering};
+use common::{CellsRect, FromLunabase, LunabotStage, PathKind, Steering};
 use embedded_common::{Actuator, ActuatorCommand};
-use nalgebra::Point3;
 use simple_motion::StaticImmutableNode;
 use teleop::teleop;
 use tracing::warn;
@@ -95,7 +94,7 @@ pub fn run_ai(
             TryCatch::new(
                 WhileLoop::new(
                     AlwaysSucceed,
-                    Sequence::new(( CatchPanic(teleop()), /* CatchPanic(autonomy()), */ )), 
+                    Sequence::new(( CatchPanic(teleop()), CatchPanic(autonomy()), )), 
                 ),
                 AlwaysSucceed,
             ),
