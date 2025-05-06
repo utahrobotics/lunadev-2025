@@ -87,14 +87,14 @@ pub fn finished_exploring() -> impl Behavior<LunabotBlackboard> + CancelSafe {
 fn autonomy_state_is_dig() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     AssertCancelSafe(
         |blackboard: &mut LunabotBlackboard| {
-            (blackboard.get_autonomy() == AutonomyState::Dig).into()
+            (blackboard.get_autonomy_state() == AutonomyState::Dig).into()
         }
     )
 }
 fn autonomy_is_active() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     AssertCancelSafe(
         |blackboard: &mut LunabotBlackboard| {
-            (blackboard.get_autonomy() != AutonomyState::None).into()
+            (blackboard.get_autonomy_state() != AutonomyState::None).into()
         }
     )
 }
@@ -110,7 +110,7 @@ fn fail_if_autonomy_interrupted() -> impl Behavior<LunabotBlackboard> + CancelSa
             match msg {
                 FromLunabase::Steering(steering) => {
                     let (left, right) = steering.get_left_and_right();
-                    blackboard.set_autonomy(AutonomyState::None);
+                    blackboard.set_autonomy_state(AutonomyState::None);
                     warn!("Received steering message while in autonomy mode {left} {right}");
                     return Status::Success;
                 }

@@ -4,7 +4,7 @@ use ares_bt::{branching::TryCatch, converters::{AssertCancelSafe, Invert}, seque
 use common::{cell_to_world_point, world_point_to_cell, PathInstruction, Steering};
 use nalgebra::{distance, Matrix2, Point3, Vector2, Vector3};
 
-use crate::{autonomy::AutonomyState, blackboard::LunabotBlackboard, utils::WaitBehavior, Action, PollWhen};
+use crate::{autonomy::AutonomyState, blackboard::{self, LunabotBlackboard}, utils::WaitBehavior, Action, PollWhen};
 
 
 /// how far the robot should back up when its stuck in one spot for too long
@@ -23,10 +23,27 @@ const MIN_ANGLE_UNTIL_TRANSFORM_UPDATE: f64 = 0.1;
 const PAUSE_AFTER_MOVING_DURATION: Duration = Duration::from_secs(2);
 
 pub(super) fn follow_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
-    do_then_wait(
-        AssertCancelSafe(follow_path_inner), 
-        PAUSE_AFTER_MOVING_DURATION
-    )
+    
+    Sequence::new((
+        // only continue if autonomy state is Explore, MoveToDigSite, or MoveToDumpSite
+        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+            println!("follow_path {:?}", blackboard.get_autonomy_state());
+            match blackboard.get_autonomy_state() {
+                AutonomyState::Explore(_) | 
+                AutonomyState::MoveToDigSite(_) | 
+                AutonomyState::MoveToDumpSite(_) => Status::Success,
+                _ => {
+                    println!("failing", );
+                    Status::Failure
+                }
+            }
+        }),
+        
+        do_then_wait(
+            AssertCancelSafe(follow_path_inner), 
+            PAUSE_AFTER_MOVING_DURATION
+        )
+    ))
 }
 
 fn follow_path_inner(blackboard: &mut LunabotBlackboard) -> Status {
@@ -49,7 +66,7 @@ fn follow_path_inner(blackboard: &mut LunabotBlackboard) -> Status {
     let latest_transform = blackboard.get_latest_transform();
     let now = blackboard.get_now();
     let target_cell = blackboard.get_target_cell();
-    let heading = blackboard.get_robot_heading();
+    let mut heading: Vector2<f64> = blackboard.get_robot_heading();
     
     let Some(path) = blackboard.get_path_mut() else { return Status::Success };
     
@@ -80,11 +97,11 @@ fn follow_path_inner(blackboard: &mut LunabotBlackboard) -> Status {
             
             return match path_leads_to_goal {
                 true => {
-                    println!("path follower: done! {:?}", blackboard.get_autonomy());
+                    println!("path follower: done! {:?}", blackboard.get_autonomy_state());
                     
                     // advance autonomy stage
-                    blackboard.set_autonomy(
-                        match blackboard.get_autonomy() {
+                    blackboard.set_autonomy_state(
+                        match blackboard.get_autonomy_state() {
                             AutonomyState::MoveToDigSite(_) => AutonomyState::Dig,
                             _ => AutonomyState::Dump
                         }
@@ -122,6 +139,10 @@ fn follow_path_inner(blackboard: &mut LunabotBlackboard) -> Status {
         },
     };
     
+    if curr_instr.instruction == PathInstruction::MoveToBackwards {
+        heading *= -1.0;
+    }
+    
     let heading_angle = heading.angle(&Vector2::new(0.0, -1.0));
     let to_first_point = (cell_to_world_point(curr_instr.cell, 0.).xz() - pos.xz()).normalize();
 
@@ -133,7 +154,7 @@ fn follow_path_inner(blackboard: &mut LunabotBlackboard) -> Status {
     };
 
     match curr_instr.instruction {
-        PathInstruction::MoveTo => {
+        PathInstruction::MoveTo | PathInstruction::MoveToBackwards => {
             if to_first_point.angle(&Vector2::new(0.0, -1.0)).to_degrees() > 20.0 {
                 if to_first_point.x > 0.0 {
                     blackboard
@@ -143,11 +164,15 @@ fn follow_path_inner(blackboard: &mut LunabotBlackboard) -> Status {
                         .enqueue_action(Action::SetSteering(Steering::new(-1.0, 1.0, Steering::DEFAULT_WEIGHT)))
                 }
             } else {
-                let (l, r) = scaled_clamp(
+                let (mut l, mut r) = scaled_clamp(
                     -to_first_point.y + to_first_point.x * 1.2,
                     -to_first_point.y - to_first_point.x * 1.2,
                     1.0,
                 );
+                if curr_instr.instruction == PathInstruction::MoveToBackwards {
+                    l *= -1.0;
+                    r *= -1.0;
+                }
                 blackboard.enqueue_action(Action::SetSteering(Steering::new(l, r, Steering::DEFAULT_WEIGHT)))
             }
         }

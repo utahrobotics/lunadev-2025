@@ -20,6 +20,18 @@ pub(super) fn find_next_target() -> impl Behavior<LunabotBlackboard> + CancelSaf
     
     Invert(Sequence::new((
         
+        // only continue if autonomy state is Start, Dump, or Dig 
+        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+            println!("find_next_target {:?}", blackboard.get_autonomy_state());
+            match blackboard.get_autonomy_state() {
+                AutonomyState::Start | AutonomyState::Dump | AutonomyState::Dig => Status::Success,
+                _ => {
+                    println!("failing");
+                    Status::Failure
+                }
+            }
+        }),
+        
         // start exploration check if exploration hasnt finished
         IfElse::new(
             finished_exploring(),
@@ -34,14 +46,14 @@ pub(super) fn find_next_target() -> impl Behavior<LunabotBlackboard> + CancelSaf
                 AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
                     match blackboard.exploring_state() {
                         CheckIfExploredState::FinishedExploring => {
-                            println!("done exploring! {:?}", blackboard.get_autonomy());
+                            println!("done exploring! {:?}", blackboard.get_autonomy_state());
                             Status::Success
                         },
                         CheckIfExploredState::HaveToCheck => panic!("waiting for exploration check to finish when it hasn't started yet"),
                         CheckIfExploredState::Pending => Status::Running,
                         CheckIfExploredState::NeedToExplore(unexplored_cell) => {
                             println!("still need to explore {unexplored_cell:?}", );
-                            blackboard.set_autonomy(AutonomyState::Explore(unexplored_cell));
+                            blackboard.set_autonomy_state(AutonomyState::Explore(unexplored_cell));
                             
                             // if theres a cell that must be explored, don't go on to decide a dig/dump point
                             Status::Failure
@@ -58,6 +70,7 @@ pub(super) fn find_next_target() -> impl Behavior<LunabotBlackboard> + CancelSaf
             Sequence::new((
                 WaitBehavior::from(Duration::from_secs(10)),
                 AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+                    println!("finished 10 sec pause", );
                     blackboard.set_finished_post_explore_pause(true);
                     Status::Success
                 }),
@@ -69,7 +82,7 @@ pub(super) fn find_next_target() -> impl Behavior<LunabotBlackboard> + CancelSaf
         AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
             *blackboard.get_path_mut() = None;
             
-            let prev_state = blackboard.get_autonomy();
+            let prev_state = blackboard.get_autonomy_state();
             match prev_state {
                 AutonomyState::Dump | AutonomyState::Start => {
                     blackboard.find_next_dig_site();
@@ -89,21 +102,20 @@ pub(super) fn find_next_target() -> impl Behavior<LunabotBlackboard> + CancelSaf
                 FindActionSiteState::Start => panic!("waiting for finding action site to finish before its started"),
                 FindActionSiteState::Pending => Status::Running,
                 FindActionSiteState::FoundSite(cell) => {
-                    let prev_state = blackboard.get_autonomy();
+                    let prev_state = blackboard.get_autonomy_state();
                     match prev_state {
                         AutonomyState::Dump | AutonomyState::Start => {
-                            blackboard.set_autonomy(AutonomyState::MoveToDigSite(cell));
+                            blackboard.set_autonomy_state(AutonomyState::MoveToDigSite(cell));
                         }
                         AutonomyState::Dig => {
-                            println!("move to dump site", );
-                            blackboard.set_autonomy(AutonomyState::MoveToDumpSite(cell));
+                            blackboard.set_autonomy_state(AutonomyState::MoveToDumpSite(cell));
                         }
                         _ => {}
                     }
                     Status::Success
                 },
                 FindActionSiteState::NotFound => {
-                    let prev_state = blackboard.get_autonomy();
+                    let prev_state = blackboard.get_autonomy_state();
                     match prev_state {
                         AutonomyState::Dump | AutonomyState::Start => {
                             warn!("couldn't find a place to dig")

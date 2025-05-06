@@ -15,13 +15,27 @@ pub(super) fn find_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     
     Sequence::new((
         
-        // continue only if current path is none
+        // only continue if autonomy state is Explore, MoveToDigSite, or MoveToDumpSite
+        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+            println!("find_path {:?}", blackboard.get_autonomy_state());
+            match blackboard.get_autonomy_state() {
+                AutonomyState::Explore(_) | 
+                AutonomyState::MoveToDigSite(_) | 
+                AutonomyState::MoveToDumpSite(_) => Status::Success,
+                _ => {
+                    println!("failing", );
+                    Status::Failure
+                }
+            }
+        }),
+        
+        // only continue if current path is none
         AssertCancelSafe(|blackboard: &mut LunabotBlackboard| blackboard.get_path().is_none().into()),
         
         // request for pathfind
         AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
             
-            let (target, path_kind, fail_if_dest_is_known) = match blackboard.get_autonomy() {
+            let (target, path_kind, fail_if_dest_is_known) = match blackboard.get_autonomy_state() {
                 
                 // if in explore state and the destination turns out to be known, 
                 // pathfinder should send `Input::PathDestIsKnown`
@@ -32,7 +46,7 @@ pub(super) fn find_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                 
                 other_state => {
                     warn!("trying to pathfind during autonomy state {other_state:?}. reset autonomy to Start");
-                    blackboard.set_autonomy(AutonomyState::Start);
+                    blackboard.set_autonomy_state(AutonomyState::Start);
                     return Status::Failure
                 }
             };
@@ -41,7 +55,8 @@ pub(super) fn find_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                 world_point_to_cell(blackboard.get_robot_pos()),
                 target,
                 path_kind,
-                fail_if_dest_is_known
+                fail_if_dest_is_known,
+                true
             );
             Status::Success
         }),
@@ -61,7 +76,7 @@ pub(super) fn find_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
                 }
                 PathfindingState::Failed => Status::Failure,
                 PathfindingState::PathDestIsKnown => {
-                    blackboard.set_autonomy(AutonomyState::Start);
+                    blackboard.set_autonomy_state(AutonomyState::Start);
                     Status::Failure 
                 }
             }
