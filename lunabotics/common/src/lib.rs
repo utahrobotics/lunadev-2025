@@ -269,6 +269,7 @@ pub enum PathKind {
 pub enum PathInstruction {
     MoveTo,
     FaceTowards,
+    MoveToBackwards
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -287,7 +288,7 @@ impl PathPoint {
         let world_pos = cell_to_world_point(self.cell, 0.).xz();
         
         match self.instruction {
-            PathInstruction::MoveTo => {
+            PathInstruction::MoveTo | PathInstruction::MoveToBackwards => {
                 distance(&world_pos, robot_pos) < Self::AT_POINT_THRESHOLD
             }
 

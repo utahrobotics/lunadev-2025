@@ -223,8 +223,13 @@ impl DefaultPathfinder {
         shared_thalassic_data: &SharedDataReceiver<ThalassicData>,
         start_cell: (usize, usize),
         end_cell: (usize, usize),
-        path_kind: PathKind
+        path_kind: PathKind,
+        backwards: bool
     ) -> Result<Vec<PathPoint>, ()> {
+        let move_to_instr = match backwards {
+            false => PathInstruction::MoveTo,
+            true => PathInstruction::MoveToBackwards,
+        };
         
         let mut res: Vec<PathPoint> = vec![];
         
@@ -288,7 +293,7 @@ impl DefaultPathfinder {
 
                     res.extend(
                         raw_path.iter()
-                            .map(|pos| PathPoint {cell: *pos, instruction: PathInstruction::MoveTo}),
+                            .map(|pos| PathPoint {cell: *pos, instruction: move_to_instr}),
                     );
                     res.push(PathPoint {cell: unknown_cell, instruction: PathInstruction::FaceTowards});
                     break;
@@ -299,7 +304,7 @@ impl DefaultPathfinder {
                 self.times_blocked_here_in_a_row = 0;
                 res.extend(
                     raw_path.iter()
-                        .map(|pos| PathPoint {cell: *pos, instruction: PathInstruction::MoveTo}),
+                        .map(|pos| PathPoint {cell: *pos, instruction: move_to_instr}),
                 );
                 
                 if path_kind == PathKind::StopInFrontOfTarget {

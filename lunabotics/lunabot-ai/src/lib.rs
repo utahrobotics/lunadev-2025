@@ -32,7 +32,8 @@ pub enum Action {
         from: (usize, usize),
         to: (usize, usize),
         kind: PathKind,
-        fail_if_dest_is_known: bool
+        fail_if_dest_is_known: bool,
+        backwards: bool,
     },
     AvoidCell((usize, usize)),
     ClearPointsToAvoid,

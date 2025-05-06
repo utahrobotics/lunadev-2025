@@ -414,7 +414,7 @@ impl LunasimbotApp {
                     lerper.set_steering(steering);
                 }
                 Action::SetActuators(_actuators) => {}
-                Action::CalculatePath { from, to, kind, fail_if_dest_is_known } => {
+                Action::CalculatePath { from, to, kind, fail_if_dest_is_known, backwards } => {
                     
                     if 
                         fail_if_dest_is_known && 
@@ -423,8 +423,7 @@ impl LunasimbotApp {
                         return inputs.push(Input::PathDestIsKnown);
                     }
                     
-                    
-                    if let Ok(path) = pathfinder.find_path(&shared_thalassic_data, from, to, kind) {
+                    if let Ok(path) = pathfinder.find_path(&shared_thalassic_data, from, to, kind, backwards) {
                         let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
                             path.iter()
                                 .map(|p|  cell_to_world_point(p.cell, 0.).coords.cast::<f32>().data.0[0]) // if the y value was needed here, sorry

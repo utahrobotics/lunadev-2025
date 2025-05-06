@@ -100,10 +100,10 @@ impl LunabotBlackboard {
         self.from_lunabase.pop_front()
     }
 
-    pub fn get_autonomy(&self) -> AutonomyState {
+    pub fn get_autonomy_state(&self) -> AutonomyState {
         self.autonomy_state
     }
-    pub fn set_autonomy(&mut self, state: AutonomyState) {
+    pub fn set_autonomy_state(&mut self, state: AutonomyState) {
         self.autonomy_state = state;
     }
 
@@ -194,7 +194,7 @@ impl LunabotBlackboard {
     }
     
     pub fn get_target_cell(&self) -> Option<(usize, usize)> {
-        match self.get_autonomy() {
+        match self.get_autonomy_state() {
             AutonomyState::Explore(cell) => Some(cell),
             AutonomyState::MoveToDumpSite(cell) => Some(cell),
             AutonomyState::MoveToDigSite(cell) => Some(cell),
@@ -202,9 +202,9 @@ impl LunabotBlackboard {
         }
     }
 
-    pub fn request_for_path(&mut self, from: (usize, usize), to: (usize, usize), kind: PathKind, fail_if_dest_is_known: bool) {
+    pub fn request_for_path(&mut self, from: (usize, usize), to: (usize, usize), kind: PathKind, fail_if_dest_is_known: bool, backwards: bool,) {
         self.pathfinding_state = PathfindingState::Pending;
-        self.enqueue_action(Action::CalculatePath { from, to, kind, fail_if_dest_is_known });
+        self.enqueue_action(Action::CalculatePath { from, to, kind, fail_if_dest_is_known, backwards });
     }
 
     pub fn pathfinding_state(&self) -> PathfindingState {
