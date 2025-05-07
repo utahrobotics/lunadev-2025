@@ -58,6 +58,12 @@ pub struct DepthCameraInfo {
     #[serde(default)]
     ignore_apriltags: bool,
     stream_index: Option<usize>,
+    #[serde(default = "default_depth_enabled")]
+    depth_enabled: bool
+}
+
+fn default_depth_enabled() -> bool {
+    true
 }
 
 #[derive(Deserialize, Debug)]
@@ -238,6 +244,7 @@ impl LunabotApp {
                         link_name,
                         ignore_apriltags: observe_apriltags,
                         stream_index,
+                        depth_enabled
                     },
                 )| {
                     (
@@ -248,6 +255,7 @@ impl LunabotApp {
                                 .context("Failed to find camera link")
                                 .unwrap()
                                 .into(),
+                            depth_enabled,
                             ignore_apriltags: observe_apriltags,
                             stream_index,
                         },

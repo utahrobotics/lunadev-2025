@@ -22,7 +22,7 @@ use tracing::{error, info};
 mod audio;
 
 const CAMERA_COL_COUNT: usize = 3;
-const CAMERA_ROW_COUNT: usize = 2;
+const CAMERA_ROW_COUNT: usize = 3;
 pub const CAMERA_RESOLUTION: Vector2<u32> = Vector2::new(640, 360);
 const KEYFRAME_INTERVAL: usize = 60;
 

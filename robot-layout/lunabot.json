@@ -1,6 +1,6 @@
 {
     "free_origin": [0.0, 0.0, 0.0],
-    "free_euler": [0.0, 0.0, 0.0],
+    "free_euler": [0.0, 0.0, 180.0],
     "children": [
         {
             "name": "low_left_camera",
@@ -25,15 +25,15 @@
         {
           "name": "v3_board",
           "origin": [0,0,0],
-          "euler": [90,0,0],
-          "children":[
+          "euler": [90.0, 0.0, 0.0],
+          "children": [
             {
                 "name": "imu0",
                 "euler": [0.0, 0.0, 90.0]
             },
             {
                 "name": "imu1",
-                "euler": [0.0, 0, 90.0]
+                "euler": [0.0, 0.0, 90.0]
             },
             {
                 "name": "imu2",
@@ -54,7 +54,7 @@
                 {
                     "name": "split",
                     "origin": [0.0, 0.0, -0.615],
-                    "euler": [0.0, 43.0, 0.0],
+                    "euler": [0.0, 45.0, 0.0],
                     "children": [
                         {
                             "name": "left_arm_camera",
@@ -63,18 +63,18 @@
                         },
                         {
                             "name": "right_arm_camera",
-                            "origin": [-0.23, 0.0, -0.28],
+                            "origin": [0.23, 0.0, -0.28],
                             "euler": [0.0, -70.0, 0.0]
                         },
                         {
                             "name": "upper_camera_joint",
                             "origin": [0.0, 0.0, -0.383],
-                            "euler": [0.0, -40.0, 0.0],
+                            "euler": [0.0, -16.0, 0.0],
                             "children": [
                                 {
                                     "name": "upper_camera_wrist",
                                     "origin": [0.0, 0.0, -0.316],
-                                    "euler": [-40.0, 0.0, 0.0],
+                                    "euler": [0.0, -60.0, 0.0],
                                     "children": [
                                         {
                                             "name": "upper_depth_camera",
@@ -88,12 +88,12 @@
                         {
                             "name": "lower_camera_joint",
                             "origin": [0.0, -0.054, -0.328],
-                            "euler": [-48.0, 0.0, 0.0],
+                            "euler": [0.0, -48.0, 0.0],
                             "children": [
                                 {
                                     "name": "lower_camera_wrist",
                                     "origin": [0.0, 0.0, -0.316],
-                                    "euler": [-81.0, 0.0, 0.0],
+                                    "euler": [0.0, -81.0, 0.0],
                                     "children": [
                                         {
                                             "name": "lower_depth_camera",

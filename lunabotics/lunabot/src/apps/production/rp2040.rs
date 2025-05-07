@@ -229,10 +229,9 @@ impl V3PicoTask {
                     break;
                 };
                 if let FromPicoV3::Reading(imu_readings,actuators) = reading {
-                    let deg_to_rad = 0.0174532925199; // pi/180
                     let lift_hinge_angle = (actuators.m1_reading as f64 * 0.00743033 - 2.19192);
                     // tracing::info!("lift angle: {}", lift_hinge_angle);
-		            guard.hinge_node.set_angle_one_axis(lift_hinge_angle*deg_to_rad);
+		            guard.hinge_node.set_angle_one_axis(lift_hinge_angle.to_radians());
                     for (i,(msg, node)) in imu_readings.into_iter().zip(guard.imus).enumerate() {
                         match msg {
                             FromIMU::Reading(rate, accel) => {

@@ -40,6 +40,7 @@ use crate::{
 
 pub struct DepthCameraInfo {
     pub node: StaticImmutableNode,
+    pub depth_enabled: bool,
     pub ignore_apriltags: bool,
     pub stream_index: Option<usize>,
 }
@@ -63,6 +64,7 @@ pub fn enumerate_depth_cameras(
                     node,
                     ignore_apriltags,
                     stream_index,
+                    depth_enabled
                 },
             )| {
                 let mut camera_stream = None;
@@ -77,6 +79,8 @@ pub fn enumerate_depth_cameras(
                 let (tx, rx) = std::sync::mpsc::sync_channel(1);
                 let init_tx = init_tx.clone();
                 let isometry = node.get_isometry_from_base();
+                // let (r, p, y) = isometry.rotation.euler_angles();
+                // tracing::info!("{} ({:.0}, {:.0}, {:.0})", isometry.translation, r.to_degrees(), p.to_degrees(), y.to_degrees());
 
                 if let Some(recorder) = RECORDER.get() {
                     if recorder.level.is_all() {
@@ -111,6 +115,7 @@ pub fn enumerate_depth_cameras(
                         ignore_apriltags,
                         thalassic_ref,
                         init_tx,
+                        depth_enabled
                     };
                     loop {
                         camera_task.depth_camera_task();
@@ -289,6 +294,7 @@ struct DepthCameraTask {
     ignore_apriltags: bool,
     thalassic_ref: ThalassicPipelineRef,
     init_tx: Sender<&'static str>,
+    depth_enabled: bool
 }
 
 impl DepthCameraTask {
@@ -411,7 +417,7 @@ impl DepthCameraTask {
                         }
                     }
                     localizer_ref.set_april_tag_isometry(
-                        inverse_local * observation.get_isometry_of_observer(),
+                        observation.get_isometry_of_observer() * inverse_local,
                     );
                 });
                 std::thread::spawn(move || det.run());
@@ -525,6 +531,9 @@ impl DepthCameraTask {
 
             let observe_depth = get_observe_depth();
             for frame in frames.frames_of_type::<DepthFrame>() {
+                if !self.depth_enabled {
+                    break;
+                }
                 if !observe_depth && RECORDER.get().is_none() {
                     continue;
                 }
