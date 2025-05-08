@@ -1,4 +1,4 @@
-[gd_scene load_steps=23 format=3 uid="uid://53po1wtuhcem"]
+[gd_scene load_steps=24 format=3 uid="uid://53po1wtuhcem"]
 
 [ext_resource type="PackedScene" uid="uid://bteyw33qt0xtm" path="res://camera_feed.tscn" id="1_qoli6"]
 
@@ -186,8 +186,42 @@ bg_color = Color(0.34135, 0.658473, 1.92523e-07, 1)
 script/source = "extends Button
 
 
+@onready var x_input: LineEdit = $\"../HBoxContainer/X\"
+@onready var y_input: LineEdit = $\"../HBoxContainer/Y\"
+
 func _on_pressed() -> void:
-	Lunabot.start_autonomy()
+	if !x_input.text.is_valid_float():
+		push_error(\"Not a valid X float\")
+		return
+	if !y_input.text.is_valid_float():
+		push_error(\"Not a valid Y float\")
+		return
+	
+	Lunabot.move_to_dig_site(Vector2(
+		float(x_input.text),
+		float(y_input.text)
+	))
+"
+
+[sub_resource type="GDScript" id="GDScript_4qn4a"]
+script/source = "extends Button
+
+
+@onready var x_input: LineEdit = $\"../HBoxContainer/X\"
+@onready var y_input: LineEdit = $\"../HBoxContainer/Y\"
+
+func _on_pressed() -> void:
+	if !x_input.text.is_valid_float():
+		push_error(\"Not a valid X float\")
+		return
+	if !y_input.text.is_valid_float():
+		push_error(\"Not a valid Y float\")
+		return
+	
+	Lunabot.move_to_dump_site(Vector2(
+		float(x_input.text),
+		float(y_input.text)
+	))
 "
 
 [sub_resource type="GDScript" id="GDScript_76vp5"]
@@ -383,26 +417,6 @@ theme_override_styles/normal = SubResource("StyleBoxFlat_l3tko")
 text = "Software Stop"
 script = SubResource("GDScript_hiw1g")
 
-[node name="Autonomy Button" type="Button" parent="VBoxContainer/States/Tele-Operated"]
-custom_minimum_size = Vector2(200, 50)
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -240.0
-offset_top = 65.0
-offset_right = -40.0
-offset_bottom = 115.0
-grow_horizontal = 0
-size_flags_vertical = 3
-focus_mode = 0
-theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_font_sizes/font_size = 25
-theme_override_styles/pressed = SubResource("StyleBoxFlat_1ys6w")
-theme_override_styles/normal = SubResource("StyleBoxFlat_cdi8o")
-text = "Autonomy"
-script = SubResource("GDScript_o6wu6")
-
 [node name="Label2" type="Label" parent="VBoxContainer/States/Tele-Operated"]
 layout_mode = 1
 anchors_preset = -1
@@ -432,6 +446,84 @@ value = 0.7
 tick_count = 4
 ticks_on_borders = true
 metadata/_edit_use_anchors_ = true
+
+[node name="VBoxContainer2" type="VBoxContainer" parent="VBoxContainer/States/Tele-Operated"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.113057
+anchor_top = 0.840555
+anchor_right = 0.393312
+anchor_bottom = 0.925477
+offset_left = -10.0
+offset_top = -57.0
+offset_right = 30.0
+offset_bottom = -17.0
+metadata/_edit_use_anchors_ = true
+
+[node name="Move To Dig Button" type="Button" parent="VBoxContainer/States/Tele-Operated/VBoxContainer2"]
+custom_minimum_size = Vector2(200, 50)
+layout_mode = 2
+size_flags_vertical = 3
+focus_mode = 0
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 25
+theme_override_styles/pressed = SubResource("StyleBoxFlat_1ys6w")
+theme_override_styles/normal = SubResource("StyleBoxFlat_cdi8o")
+text = "Move To Dig Site"
+script = SubResource("GDScript_o6wu6")
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/States/Tele-Operated/VBoxContainer2"]
+layout_mode = 2
+metadata/_edit_use_anchors_ = true
+
+[node name="X" type="LineEdit" parent="VBoxContainer/States/Tele-Operated/VBoxContainer2/HBoxContainer"]
+layout_mode = 2
+text = "4.0"
+placeholder_text = "X"
+
+[node name="Y" type="LineEdit" parent="VBoxContainer/States/Tele-Operated/VBoxContainer2/HBoxContainer"]
+layout_mode = 2
+text = "6.0"
+placeholder_text = "Y"
+
+[node name="VBoxContainer3" type="VBoxContainer" parent="VBoxContainer/States/Tele-Operated"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.542994
+anchor_top = 0.842288
+anchor_right = 0.880573
+anchor_bottom = 0.925477
+offset_left = -10.0
+offset_top = -57.0
+offset_right = 30.0
+offset_bottom = -17.0
+metadata/_edit_use_anchors_ = true
+
+[node name="Move To Dump Button" type="Button" parent="VBoxContainer/States/Tele-Operated/VBoxContainer3"]
+custom_minimum_size = Vector2(200, 50)
+layout_mode = 2
+size_flags_vertical = 3
+focus_mode = 0
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 25
+theme_override_styles/pressed = SubResource("StyleBoxFlat_1ys6w")
+theme_override_styles/normal = SubResource("StyleBoxFlat_cdi8o")
+text = "Move To Dump Site"
+script = SubResource("GDScript_4qn4a")
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/States/Tele-Operated/VBoxContainer3"]
+layout_mode = 2
+metadata/_edit_use_anchors_ = true
+
+[node name="X" type="LineEdit" parent="VBoxContainer/States/Tele-Operated/VBoxContainer3/HBoxContainer"]
+layout_mode = 2
+text = "2.0"
+placeholder_text = "X"
+
+[node name="Y" type="LineEdit" parent="VBoxContainer/States/Tele-Operated/VBoxContainer3/HBoxContainer"]
+layout_mode = 2
+text = "6.0"
+placeholder_text = "Y"
 
 [node name="Autonomy" type="Control" parent="VBoxContainer/States"]
 visible = false
@@ -480,5 +572,6 @@ script = SubResource("GDScript_aq37h")
 [connection signal="pressed" from="VBoxContainer/States/SoftwareStop/CenterContainer/Continue Mission Button" to="VBoxContainer/States/SoftwareStop/CenterContainer/Continue Mission Button" method="_on_pressed"]
 [connection signal="resized" from="VBoxContainer/States/Tele-Operated/CenterContainer2" to="VBoxContainer/States/Tele-Operated/CenterContainer2" method="_on_resized"]
 [connection signal="pressed" from="VBoxContainer/States/Tele-Operated/Software Stop Button" to="VBoxContainer/States/Tele-Operated/Software Stop Button" method="_on_pressed"]
-[connection signal="pressed" from="VBoxContainer/States/Tele-Operated/Autonomy Button" to="VBoxContainer/States/Tele-Operated/Autonomy Button" method="_on_pressed"]
+[connection signal="pressed" from="VBoxContainer/States/Tele-Operated/VBoxContainer2/Move To Dig Button" to="VBoxContainer/States/Tele-Operated/VBoxContainer2/Move To Dig Button" method="_on_pressed"]
+[connection signal="pressed" from="VBoxContainer/States/Tele-Operated/VBoxContainer3/Move To Dump Button" to="VBoxContainer/States/Tele-Operated/VBoxContainer3/Move To Dump Button" method="_on_pressed"]
 [connection signal="pressed" from="VBoxContainer/States/Autonomy/Software Stop Button" to="VBoxContainer/States/Autonomy/Software Stop Button" method="_on_pressed"]

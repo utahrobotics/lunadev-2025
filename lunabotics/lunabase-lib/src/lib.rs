@@ -766,12 +766,12 @@ impl LunabotConn {
 
     #[func]
     fn move_to_dig_site(&mut self, coords: Vector2) {
-        self.send_reliable(&FromLunabase::MoveToDigSite(world_point_to_cell(nalgebra::Point3::new(coords.x, 0.0, coords.y))));
+        self.send_reliable(&FromLunabase::MoveToDigSite(world_point_to_cell(nalgebra::Point3::new(coords.x as f64, 0.0, coords.y as f64))));
     }
 
     #[func]
     fn move_to_dump_site(&mut self, coords: Vector2) {
-        self.send_reliable(&FromLunabase::MoveToDumpSite(world_point_to_cell(nalgebra::Point3::new(coords.x, 0.0, coords.y))));
+        self.send_reliable(&FromLunabase::MoveToDumpSite(world_point_to_cell(nalgebra::Point3::new(coords.x as f64, 0.0, coords.y as f64))));
     }
 
     #[func]
