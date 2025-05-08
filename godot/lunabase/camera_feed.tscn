@@ -175,12 +175,12 @@ text = "Terrain Viz"
 [node name="CheckButton" type="CheckButton" parent="HBoxContainer"]
 layout_mode = 2
 focus_mode = 0
-button_pressed = true
 script = SubResource("GDScript_10njw")
 
 [node name="Arena" type="Node3D" parent="."]
 
 [node name="Terrain" type="MultiMeshInstance3D" parent="Arena"]
+visible = false
 multimesh = SubResource("MultiMesh_o4dpg")
 script = SubResource("GDScript_n8i4y")
 

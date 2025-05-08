@@ -28,7 +28,9 @@ pub enum Actuator {
 pub enum ActuatorCommand {
     SetSpeed(u16, Actuator),
     SetDirection(Direction, Actuator),
-    Shake
+    Shake,
+    StartPercuss,
+    StopPercuss
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -208,6 +210,16 @@ impl ActuatorCommand {
             ActuatorCommand::Shake => {
                 let mut bytes = [0u8; 5];
                 bytes[0] = 2;
+                bytes
+            }
+            ActuatorCommand::StartPercuss => {
+                let mut bytes = [0u8; 5];
+                bytes[0] = 3;
+                bytes
+            }
+            ActuatorCommand::StopPercuss => {
+                let mut bytes = [0u8; 5];
+                bytes[0] = 3;
                 bytes
             }
         }

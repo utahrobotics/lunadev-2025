@@ -54,6 +54,7 @@ async fn main(spawner: Spawner) {
     
     let mut m2 = Motor::new_m2(p.PIN_17, p.PIN_14, p.PIN_16, p.PWM_SLICE0);
     let mut m1 = Motor::new_m1(p.PIN_10, p.PIN_15, p.PIN_9, p.PWM_SLICE4);
+    let mut percussor = Output::new(p.PIN_16, Level::Low);
 
     const SERIAL_NUMBER: Option<&str> = option_env!("PICO_SERIAL");
 
@@ -337,7 +338,7 @@ async fn read_sensors_loop(
 
 
 #[embassy_executor::task(pool_size = 1)]
-async fn motor_controller_loop(mut class: Receiver<'static, Driver<'static, USB>>, mut m1: Motor<'static>, mut m2: Motor<'static>) {
+async fn motor_controller_loop(mut class: Receiver<'static, Driver<'static, USB>>, mut m1: Motor<'static>, mut m2: Motor<'static>, mut percussor: Output<'static>) {
     loop {
         let mut cmd = [0u8; 5];
         if let Err(e) = class.read_packet(&mut cmd).await {
@@ -379,6 +380,12 @@ async fn motor_controller_loop(mut class: Receiver<'static, Driver<'static, USB>
             }
             ActuatorCommand::Shake => {
                 m1.shake().await;
+            }
+            ActuatorCommand::StartPercuss => {
+                percussor.set_high();
+            }
+            ActuatorCommand::StopPercuss => {
+                percussor.set_high();
             }
         }
     }

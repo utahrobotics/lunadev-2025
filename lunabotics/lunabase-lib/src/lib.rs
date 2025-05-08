@@ -32,7 +32,7 @@ mod stream;
 mod config;
 
 const STREAM_WIDTH: u32 = 1920;
-const STREAM_HEIGHT: u32 = 720;
+const STREAM_HEIGHT: u32 = 1080;
 
 struct LunabaseLib;
 
@@ -737,7 +737,7 @@ impl LunabotConn {
 
     #[func]
     fn set_lift_speed(&mut self, speed: f64) {
-        self.set_lift(speed);
+        self.set_lift(-speed);
     }
 
     #[func]
