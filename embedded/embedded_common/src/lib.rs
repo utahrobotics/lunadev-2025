@@ -186,6 +186,12 @@ impl ActuatorCommand {
             tag if tag == 2 => {
                 Ok(ActuatorCommand::Shake)
             } 
+            tag if tag == 3 => {
+                Ok(ActuatorCommand::StartPercuss)
+            } 
+            tag if tag == 4 => {
+                Ok(ActuatorCommand::StopPercuss)
+            } 
             _ => Err("Invalid variant tag"),
         }
     }
@@ -219,7 +225,7 @@ impl ActuatorCommand {
             }
             ActuatorCommand::StopPercuss => {
                 let mut bytes = [0u8; 5];
-                bytes[0] = 3;
+                bytes[0] = 4;
                 bytes
             }
         }

@@ -382,9 +382,11 @@ async fn motor_controller_loop(mut class: Receiver<'static, Driver<'static, USB>
                 m1.shake().await;
             }
             ActuatorCommand::StartPercuss => {
+                info!("starting percussor");
                 percussor.set_high();
             }
             ActuatorCommand::StopPercuss => {
+                info!("stopping percussor");
                 percussor.set_high();
             }
         }
