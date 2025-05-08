@@ -54,7 +54,7 @@ async fn main(spawner: Spawner) {
     
     let mut m2 = Motor::new_m2(p.PIN_17, p.PIN_14, p.PIN_16, p.PWM_SLICE0);
     let mut m1 = Motor::new_m1(p.PIN_10, p.PIN_15, p.PIN_9, p.PWM_SLICE4);
-    let mut percussor = Output::new(p.PIN_16, Level::Low);
+    let mut percussor = Output::new(p.PIN_21, Level::Low);
 
     const SERIAL_NUMBER: Option<&str> = option_env!("PICO_SERIAL");
 
@@ -387,7 +387,7 @@ async fn motor_controller_loop(mut class: Receiver<'static, Driver<'static, USB>
             }
             ActuatorCommand::StopPercuss => {
                 info!("stopping percussor");
-                percussor.set_high();
+                percussor.set_low();
             }
         }
     }
