@@ -394,16 +394,6 @@ impl LunasimbotApp {
         });
         let mut bitcode_buffer = bitcode::Buffer::new();
         
-        
-        
-        let gap = 16;
-        
-        let dig_area = CellsRect::new((4., 2.), 4., 2.).pad_from_world_border(gap);   // TODO set as actual dig area
-        let mut next_dig_site = Some((dig_area.right + gap / 2, dig_area.top - gap / 2));
-        
-        let dump_area = CellsRect::new((4., 0.), 4., 2.).pad_from_world_border(gap);   // TODO set as actual dig area
-        let mut next_dump_site = Some((dump_area.right + gap / 2, dump_area.bottom + gap / 2));
-
         run_ai(
             robot_chain.into(),
             |action, inputs| match action {

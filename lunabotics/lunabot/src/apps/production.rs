@@ -346,23 +346,16 @@ impl LunabotApp {
                 Action::SetActuators(actuator_cmd) => {
                     let _ = actuator_controller.send_command(actuator_cmd);
                 }
-                Action::CalculatePath { from, to, kind, fail_if_dest_is_known } => {
-                    
-                    if 
-                        fail_if_dest_is_known && 
-                        pathfinder.get_map_data(&shared_thalassic_data).is_known(to) 
-                    {
-                        return inputs.push(Input::PathDestIsKnown);
-                    }
-                    
-                    
+                Action::CalculatePath { from, to, kind } => {
                     if let Ok(path) = pathfinder.find_path(&shared_thalassic_data, from, to, kind) {
                         inputs.push(Input::PathCalculated(path));
                     } else {
                         inputs.push(Input::FailedToCalculatePath);
                     }
                 }
-                
+                Action::AvoidCell(cell) => {
+                    pathfinder.avoid_cell(cell);
+                }
                 Action::ClearPointsToAvoid => {
                     pathfinder.clear_cells_to_avoid();
                 },
@@ -394,7 +387,10 @@ impl LunabotApp {
                 }
                 Action::AvoidCell(cell) => {
                     pathfinder.avoid_cell(cell);
-                },
+                }
+                Action::AvoidObstacle(obstacle) => {
+                    pathfinder.add_additional_obstacle(obstacle);
+                }
             },
             |poll_when, inputs| {
                 let wait_disconnect = async {

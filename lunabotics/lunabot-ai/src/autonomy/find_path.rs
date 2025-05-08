@@ -14,11 +14,10 @@ pub(super) fn find_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     
     Sequence::new((
         
-        // only continue if current path is none
-        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| blackboard.get_path().is_none().into()),
-        
         // request for pathfind
         AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+            
+            println!("requesting pathfind", );
             
             let pathkind = match blackboard.get_autonomy_state() {
                 AutonomyState::ToExcavationZone => PathKind::MoveOntoTarget,
@@ -37,10 +36,10 @@ pub(super) fn find_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
         AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
             match blackboard.pathfinding_state() {
                 PathfindingState::Idle => {
-                    if blackboard.get_path().is_some() {
-                        Status::Success
-                    } else {
+                    if blackboard.get_path().is_empty() {
                         Status::Running
+                    } else {
+                        Status::Success
                     }
                 }
                 PathfindingState::Pending => {

@@ -38,7 +38,7 @@ pub(crate) struct LunabotBlackboard {
     now: Instant,
     from_lunabase: VecDeque<FromLunabase>,
     chain: StaticImmutableNode,
-    path: Option<Vec<PathPoint>>,
+    path: Vec<PathPoint>,
     lunabase_disconnected: bool,
     actions: Vec<Action>,
     poll_when: PollWhen,
@@ -59,7 +59,7 @@ impl LunabotBlackboard {
             now: Instant::now(),
             from_lunabase: VecDeque::new(),
             chain,
-            path: None,
+            path: vec![],
             lunabase_disconnected: true,
             actions: vec![],
             poll_when: PollWhen::NoDelay,
@@ -108,11 +108,11 @@ impl LunabotBlackboard {
             .xz()
     }
 
-    pub fn get_path(&self) -> &Option<Vec<PathPoint>> {
+    pub fn get_path(&self) -> &Vec<PathPoint> {
         &self.path
     }
 
-    pub fn get_path_mut(&mut self) -> &mut Option<Vec<PathPoint>> {
+    pub fn get_path_mut(&mut self) -> &mut Vec<PathPoint> {
         &mut self.path
     }
     
@@ -148,11 +148,11 @@ impl LunabotBlackboard {
         match input {
             Input::FromLunabase(msg) => self.from_lunabase.push_back(msg),
             Input::PathCalculated(path) => {
-                self.path = Some(path);
+                self.path = path;
                 self.pathfinding_state = PathfindingState::Idle;
             }
             Input::FailedToCalculatePath => {
-                self.path = None;
+                self.path = vec![];
                 self.pathfinding_state = PathfindingState::Failed;
             }
             Input::LunabaseDisconnected => self.lunabase_disconnected = true,

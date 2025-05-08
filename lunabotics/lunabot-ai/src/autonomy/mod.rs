@@ -44,15 +44,11 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
                         AlwaysSucceed,
                         Invert(
                             
-                            Sequence::new((
-                                reset_steering(), 
-                                
-                                IfElse::new(
-                                    going_to_excavation_zone(),
-                                    traverse(),
-                                    dump()
-                                )
-                            ))
+                            IfElse::new(
+                                going_to_excavation_zone(),
+                                traverse(),
+                                dump()
+                            )
                             
                         ),
                     )),
