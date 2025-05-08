@@ -76,7 +76,8 @@ pub enum FromLunabase {
     LiftActuators(i8),
     BucketActuators(i8),
     LiftShake,
-    StartAutonomy,
+    MoveToDigSite((usize, usize)),
+    MoveToDumpSite((usize, usize)),
     SoftStop,
     StartPercuss,
     StopPercuss
@@ -96,7 +97,6 @@ impl FromLunabase {
         // FromLunabase::Pong.write_code(&mut w)?;
         FromLunabase::ContinueMission.write_code(&mut w)?;
         FromLunabase::Steering(Steering::default()).write_code(&mut w)?;
-        FromLunabase::StartAutonomy.write_code(&mut w)?;
         FromLunabase::SoftStop.write_code(&mut w)?;
         Ok(())
     }
