@@ -2,9 +2,9 @@ use std::time::{Duration, Instant};
 
 use ares_bt::{branching::TryCatch, converters::{AssertCancelSafe, Invert}, sequence::Sequence, Behavior, CancelSafe, Status};
 use common::{cell_to_world_point, world_point_to_cell, PathInstruction, Steering};
-use nalgebra::{distance, Matrix2, Point3, Vector2, Vector3};
+use nalgebra::{distance, Matrix2, Point3, Vector2};
 
-use crate::{autonomy::AutonomyState, blackboard::{self, LunabotBlackboard}, utils::WaitBehavior, Action, PollWhen};
+use crate::{blackboard::LunabotBlackboard, utils::WaitBehavior, Action, PollWhen};
 
 
 /// how far the robot should back up when its stuck in one spot for too long
@@ -24,26 +24,10 @@ const PAUSE_AFTER_MOVING_DURATION: Duration = Duration::from_secs(2);
 
 pub(super) fn follow_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     
-    Sequence::new((
-        // only continue if autonomy state is Explore, MoveToDigSite, or MoveToDumpSite
-        AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-            println!("follow_path {:?}", blackboard.get_autonomy_state());
-            match blackboard.get_autonomy_state() {
-                AutonomyState::Explore(_) | 
-                AutonomyState::MoveToDigSite(_) | 
-                AutonomyState::MoveToDumpSite(_) => Status::Success,
-                _ => {
-                    println!("failing", );
-                    Status::Failure
-                }
-            }
-        }),
-        
-        do_then_wait(
-            AssertCancelSafe(follow_path_inner), 
-            PAUSE_AFTER_MOVING_DURATION
-        )
-    ))
+    do_then_wait(
+        AssertCancelSafe(follow_path_inner), 
+        PAUSE_AFTER_MOVING_DURATION
+    )
 }
 
 fn follow_path_inner(blackboard: &mut LunabotBlackboard) -> Status {
@@ -99,13 +83,6 @@ fn follow_path_inner(blackboard: &mut LunabotBlackboard) -> Status {
                 true => {
                     println!("path follower: done! {:?}", blackboard.get_autonomy_state());
                     
-                    // advance autonomy stage
-                    blackboard.set_autonomy_state(
-                        match blackboard.get_autonomy_state() {
-                            AutonomyState::MoveToDigSite(_) => AutonomyState::Dig,
-                            _ => AutonomyState::Dump
-                        }
-                    );
                     blackboard.enqueue_action(Action::ClearPointsToAvoid);
                     Status::Success
                 }

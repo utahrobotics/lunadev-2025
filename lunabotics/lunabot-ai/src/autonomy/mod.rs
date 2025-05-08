@@ -1,93 +1,81 @@
 use ares_bt::{
     action::AlwaysSucceed, branching::{IfElse, TryCatch}, converters::{AssertCancelSafe, Invert}, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, CancelSafe, Status
 };
-use common::{FromLunabase, LunabotStage};
+use common::{FromLunabase, LunabotStage, Steering};
 use tracing::{error, warn};
-use find_next_target::find_next_target;
 use find_path::find_path;
 use follow_path::follow_path;
-use actions::{dig, dump};
+use actions::dump;
+use traverse::traverse;
 
-use crate::{blackboard::{self, CheckIfExploredState, LunabotBlackboard}, utils::WaitBehavior, Action};
+use crate::{blackboard::{self, LunabotBlackboard}, utils::WaitBehavior, Action};
 
-mod find_next_target;
 mod find_path;
 mod follow_path;
 mod actions;
+mod traverse;
 
 
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum AutonomyState {
-    Start,
-    Explore((usize, usize)),
-    MoveToDumpSite((usize, usize)),
-    MoveToDigSite((usize, usize)),
+    ToExcavationZone,
     Dump,
-    Dig,
     None,
 }
 
 
 pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
     
-    WhileLoop::new(
-        autonomy_is_active(),
         
-        ParallelAny::new((
+    ParallelAny::new((
+        
+        // exit autonomy upon interruption
+        fail_if_autonomy_interrupted(),
+        
+        IfElse::new(
+            autonomy_is_active(),
             
-            // exit autonomy upon interruption
-            fail_if_autonomy_interrupted(),
-            
-            WhileLoop::new(
-                autonomy_is_active(),
-                
-                TryCatch::new(
-                    Sequence::new((
-                        
-                        // repeat until successfully moved to target position
-                        Invert(WhileLoop::new(
-                            AlwaysSucceed,
-                            Invert(
+            TryCatch::new(
+                Sequence::new((
+                    
+                    // repeat until success
+                    Invert(WhileLoop::new(
+                        AlwaysSucceed,
+                        Invert(
+                            
+                            Sequence::new((
+                                reset_steering(), 
                                 
-                                Sequence::new((
-                                    reset_steering(), 
-                                    find_next_target(), 
-                                    find_path(), 
-                                    follow_path(),
-                                ))
-                                
-                            ),
-                        )),
-                        
-                        IfElse::new(
-                            finished_exploring(),
-                            IfElse::new(
-                                autonomy_state_is_dig(), 
-                                dig(), 
-                                dump()
-                            ),
-                            AlwaysSucceed
-                        )
+                                IfElse::new(
+                                    going_to_excavation_zone(),
+                                    traverse(),
+                                    dump()
+                                )
+                            ))
+                            
+                        ),
                     )),
-                    AlwaysSucceed
-                )
+                    
+                    AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+                        warn!("finished {:?}", blackboard.get_autonomy_state());
+                        blackboard.set_autonomy_state(AutonomyState::None);
+                        Status::Success
+                    })
+                    
+                )),
+                AlwaysSucceed
             ),
-        )),
-    )
+            
+            AlwaysSucceed
+        ),
+    ))
 }
 
-pub fn finished_exploring() -> impl Behavior<LunabotBlackboard> + CancelSafe {
+fn going_to_excavation_zone() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     AssertCancelSafe(
         |blackboard: &mut LunabotBlackboard| {
-            (blackboard.exploring_state() == CheckIfExploredState::FinishedExploring).into()
-        }
-    )
-}
-fn autonomy_state_is_dig() -> impl Behavior<LunabotBlackboard> + CancelSafe {
-    AssertCancelSafe(
-        |blackboard: &mut LunabotBlackboard| {
-            (blackboard.get_autonomy_state() == AutonomyState::Dig).into()
+            (blackboard.get_autonomy_state() == AutonomyState::ToExcavationZone).into()
         }
     )
 }
@@ -128,7 +116,6 @@ fn fail_if_autonomy_interrupted() -> impl Behavior<LunabotBlackboard> + CancelSa
 fn reset_steering() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     // reset
     AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
-        println!("reset steering!!!", );
         warn!("Traversing obstacles");
         blackboard.enqueue_action(Action::SetSteering(Default::default()));
         blackboard.enqueue_action(Action::SetStage(LunabotStage::Autonomy));

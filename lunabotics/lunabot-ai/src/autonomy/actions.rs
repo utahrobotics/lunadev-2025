@@ -3,6 +3,8 @@ use common::{world_point_to_cell, Obstacle};
 
 use crate::{blackboard, Action, LunabotBlackboard};
 
+use super::{find_path, follow_path, traverse};
+
 /// distance between shovel and center of robot 
 const SHOVEL_DISTANCE_METERS: f64 = 0.3; // TODO set this to the actual value
 
@@ -39,9 +41,12 @@ pub(super) fn dig() -> impl Behavior<LunabotBlackboard> + CancelSafe {
 pub(super) fn dump() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     
     Sequence::new((
+        
+        traverse(),     // knows to go to dump spot due to autonomy state
+        
         AssertCancelSafe(
             |blackboard: &mut LunabotBlackboard| {
-                // TODO
+                // TODO move arms to dump 
                 
                 println!("dumping!!", );
                 

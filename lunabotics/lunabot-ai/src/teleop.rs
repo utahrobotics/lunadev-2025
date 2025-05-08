@@ -57,11 +57,11 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard> {
                             blackboard.enqueue_action(Action::SetActuators(ActuatorCommand::StopPercuss));
                         }
                         FromLunabase::MoveToDigSite(x) => {
-                            blackboard.set_autonomy(AutonomyState::MoveToDigSite(x));
+                            blackboard.set_autonomy_state(AutonomyState::MoveToDigSite(x));
                             return Status::Success;
                         }
                         FromLunabase::MoveToDumpSite(x) => {
-                            blackboard.set_autonomy(AutonomyState::MoveToDumpSite(x));
+                            blackboard.set_autonomy_state(AutonomyState::MoveToDumpSite(x));
                             return Status::Success;
                         }
                         _ => {}
