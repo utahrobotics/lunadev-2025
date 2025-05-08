@@ -27,6 +27,7 @@ pub(crate) enum PathfindingState {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum FindActionSiteState {
     Start,
+    #[allow(dead_code)]
     Pending,
     FoundSite((usize, usize)),
     NotFound
