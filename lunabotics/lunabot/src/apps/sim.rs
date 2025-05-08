@@ -414,16 +414,9 @@ impl LunasimbotApp {
                     lerper.set_steering(steering);
                 }
                 Action::SetActuators(_actuators) => {}
-                Action::CalculatePath { from, to, kind, fail_if_dest_is_known, backwards } => {
+                Action::CalculatePath { from, to, kind } => {
                     
-                    if 
-                        fail_if_dest_is_known && 
-                        pathfinder.get_map_data(&shared_thalassic_data).is_known(to) 
-                    {
-                        return inputs.push(Input::PathDestIsKnown);
-                    }
-                    
-                    if let Ok(path) = pathfinder.find_path(&shared_thalassic_data, from, to, kind, backwards) {
+                    if let Ok(path) = pathfinder.find_path(&shared_thalassic_data, from, to, kind) {
                         let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
                             path.iter()
                                 .map(|p|  cell_to_world_point(p.cell, 0.).coords.cast::<f32>().data.0[0]) // if the y value was needed here, sorry
@@ -441,75 +434,6 @@ impl LunasimbotApp {
                 Action::ClearPointsToAvoid => {
                     pathfinder.clear_cells_to_avoid();
                 }
-                Action::CheckIfExplored { area, robot_cell_pos } => {
-                    let map_data = pathfinder.get_map_data(&shared_thalassic_data);
-                    
-                    for x in area.right..=area.left {
-                        for y in area.bottom..=area.top {
-                            
-                            // cells need to be explored if theyre unknown AND the robot isn't on top of it
-                            if 
-                                !map_data.is_known((x, y)) && 
-                                distance_between_tuples(robot_cell_pos, (x, y)) > pathfinder.current_robot_radius_cells() 
-                            {
-                                return inputs.push(Input::NotDoneExploring((x, y)));
-                            }
-                        }
-                    }
-                    
-                    inputs.push(Input::DoneExploring);
-                }
-                Action::FindNextDigSite => {
-                    let map_data = pathfinder.get_map_data(&shared_thalassic_data);
-                    
-                    loop {
-                        match next_dig_site {
-                            Some(curr_site) => {
-                                next_dig_site = next_dig_site_candidate(curr_site, dig_area, gap);
-                                
-                                if 
-                                    map_data.is_safe_for_robot(None, curr_site).is_ok() &&
-                                    !pathfinder.within_additional_obstacle(curr_site)
-                                {
-                                    println!("next dig site {:?}", curr_site);
-                                    inputs.push(Input::NextActionSite(curr_site));
-                                    break;
-                                }
-                                
-                            },
-                            None => {
-                                inputs.push(Input::NoActionSite);
-                                break;
-                            }
-                        }
-                    }
-                }
-                Action::FindNextDumpSite => {
-                    let map_data = pathfinder.get_map_data(&shared_thalassic_data);
-                    
-                    loop {
-                        match next_dump_site {
-                            Some(curr_site) => {
-                                next_dump_site = next_dump_site_candidate(curr_site, dump_area, gap);
-                                
-                                if 
-                                    map_data.is_safe_for_robot(None, curr_site).is_ok() &&
-                                    !pathfinder.within_additional_obstacle(curr_site)
-                                {
-                                    println!("next dump site {:?}", curr_site);
-                                    inputs.push(Input::NextActionSite(curr_site));
-                                    break;
-                                }
-                                
-                            },
-                            None => {
-                                inputs.push(Input::NoActionSite);
-                                break;
-                            },
-                        }
-                    }
-                }
-                
                 Action::AvoidObstacle(obstacle) => {
                     pathfinder.add_additional_obstacle(obstacle);
                 }
@@ -592,8 +516,6 @@ pub fn next_dig_site_candidate(prev_site: (usize, usize), dig_area: CellsRect, g
     // continue with this row
     else { Some((x + gap, y)) };
     
-    println!("candidate {:?} -> {:?}", (x, y), res);
-    
     res
 }
 pub fn next_dump_site_candidate(prev_site: (usize, usize), dump_area: CellsRect, gap: usize) -> Option<(usize, usize)> {
@@ -611,8 +533,6 @@ pub fn next_dump_site_candidate(prev_site: (usize, usize), dump_area: CellsRect,
 
     // continue with this row
     else { Some((x + gap, y)) };
-    
-    println!("candidate {:?} -> {:?}", (x, y), res);
     
     res
 }

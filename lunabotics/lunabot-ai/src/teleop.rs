@@ -50,7 +50,7 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard> {
                             return Status::Failure;
                         }
                         FromLunabase::StartAutonomy => {
-                            blackboard.set_autonomy_state(AutonomyState::Start);
+                            blackboard.set_autonomy_state(AutonomyState::Dump);
                             return Status::Success;
                         }
                         _ => {}

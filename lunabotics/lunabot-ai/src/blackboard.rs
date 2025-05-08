@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, time::Instant};
+use std::{collections::VecDeque, path::Path, time::Instant};
 
 use common::{world_point_to_cell, CellsRect, FromLunabase, PathPoint, PathKind};
 use nalgebra::{Isometry3, Point3, UnitQuaternion, Vector2, Vector3};
@@ -12,10 +12,6 @@ pub enum Input {
     
     PathCalculated(Vec<PathPoint>),
     FailedToCalculatePath,
-    PathDestIsKnown,
-    
-    DoneExploring,
-    NotDoneExploring((usize, usize)),
     
     NextActionSite((usize, usize)),
     NoActionSite,
@@ -26,15 +22,6 @@ pub(crate) enum PathfindingState {
     Idle,
     Pending,
     Failed,
-    PathDestIsKnown,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) enum CheckIfExploredState {
-    HaveToCheck,
-    Pending,
-    NeedToExplore((usize, usize)),
-    FinishedExploring
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -58,9 +45,7 @@ pub(crate) struct LunabotBlackboard {
     
     autonomy_state: AutonomyState,
     pathfinding_state: PathfindingState,
-    check_if_explored_state: CheckIfExploredState,
     find_action_site_state: FindActionSiteState,
-    finished_post_explore_pause: bool,
     
     /// (position, rotation, timestamp)
     latest_transform: Option<(Point3<f64>, UnitQuaternion<f64>, Instant)>,
@@ -79,11 +64,9 @@ impl LunabotBlackboard {
             actions: vec![],
             poll_when: PollWhen::NoDelay,
             
-            autonomy_state: AutonomyState::Start,
+            autonomy_state: AutonomyState::None,
             pathfinding_state: PathfindingState::Idle,
-            check_if_explored_state: CheckIfExploredState::HaveToCheck,
             find_action_site_state: FindActionSiteState::Start,
-            finished_post_explore_pause: false,
             
             backing_away_from: None,
             latest_transform: None,
@@ -172,18 +155,7 @@ impl LunabotBlackboard {
                 self.path = None;
                 self.pathfinding_state = PathfindingState::Failed;
             }
-            Input::PathDestIsKnown => {
-                self.path = None;
-                self.pathfinding_state = PathfindingState::PathDestIsKnown;
-            }
             Input::LunabaseDisconnected => self.lunabase_disconnected = true,
-            Input::DoneExploring => {
-                self.check_if_explored_state = CheckIfExploredState::FinishedExploring;
-            }
-            Input::NotDoneExploring(cell) => {
-                self.check_if_explored_state = CheckIfExploredState::NeedToExplore(cell);
-                self.finished_post_explore_pause = false;
-            }
             Input::NextActionSite(cell) => {
                 self.find_action_site_state = FindActionSiteState::FoundSite(cell);
             }
@@ -194,55 +166,23 @@ impl LunabotBlackboard {
     }
     
     pub fn get_target_cell(&self) -> Option<(usize, usize)> {
+        
+        // TODO set hardcoded traverse/dump positions
         match self.get_autonomy_state() {
-            AutonomyState::Explore(cell) => Some(cell),
-            AutonomyState::MoveToDumpSite(cell) => Some(cell),
-            AutonomyState::MoveToDigSite(cell) => Some(cell),
-            _ => None,
+            AutonomyState::ToExcavationZone => Some(world_point_to_cell(Point3::new(2.0, 0.0, 4.0))),
+            AutonomyState::Dump => Some(world_point_to_cell(Point3::new(2.0, 0.0, 7.0))),
+            AutonomyState::None => None,
         }
     }
 
-    pub fn request_for_path(&mut self, from: (usize, usize), to: (usize, usize), kind: PathKind, fail_if_dest_is_known: bool, backwards: bool,) {
+    pub fn request_for_path(&mut self, from: (usize, usize), to: (usize, usize), kind: PathKind) {
         self.pathfinding_state = PathfindingState::Pending;
-        self.enqueue_action(Action::CalculatePath { from, to, kind, fail_if_dest_is_known, backwards });
+        self.enqueue_action(Action::CalculatePath { from, to, kind });
     }
 
     pub fn pathfinding_state(&self) -> PathfindingState {
         self.pathfinding_state
     }
-    
-    pub fn check_if_explored(&mut self, area: CellsRect) {
-        self.check_if_explored_state = CheckIfExploredState::Pending;
-        self.enqueue_action(Action::CheckIfExplored {
-            area,
-            robot_cell_pos: world_point_to_cell(self.get_robot_pos()),
-        });
-    }
-    
-    pub fn exploring_state(&self) -> CheckIfExploredState {
-        self.check_if_explored_state
-    }
-    
-    pub fn finished_post_explore_pause(&self) -> bool {
-        self.finished_post_explore_pause
-    }
-    pub fn set_finished_post_explore_pause(&mut self, value: bool) {
-        self.finished_post_explore_pause = true;
-    }
-    
-    pub fn find_next_dig_site(&mut self) {
-        self.find_action_site_state = FindActionSiteState::Pending;
-        self.enqueue_action(Action::FindNextDigSite);
-    }
-    pub fn find_next_dump_site(&mut self) {
-        self.find_action_site_state = FindActionSiteState::Pending;
-        self.enqueue_action(Action::FindNextDumpSite);
-    }
-    
-    pub fn next_action_site_state(&self) -> FindActionSiteState {
-        self.find_action_site_state
-    }
-    
     
     pub fn enqueue_action(&mut self, action: Action) {
         self.actions.push(action);

@@ -31,18 +31,10 @@ pub enum Action {
     CalculatePath {
         from: (usize, usize),
         to: (usize, usize),
-        kind: PathKind,
-        fail_if_dest_is_known: bool,
-        backwards: bool,
+        kind: PathKind
     },
     AvoidCell((usize, usize)),
     ClearPointsToAvoid,
-    CheckIfExplored {
-        area: CellsRect,
-        robot_cell_pos: (usize, usize),
-    },
-    FindNextDigSite, 
-    FindNextDumpSite,
     AvoidObstacle(Obstacle)
 }
 
