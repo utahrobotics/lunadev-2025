@@ -68,6 +68,7 @@ pub fn run_ai(
                 blackboard.enqueue_action(Action::SetStage(LunabotStage::SoftStop));
                 blackboard.enqueue_action(Action::SetActuators(ActuatorCommand::set_speed(0.0, Actuator::Lift)));
                 blackboard.enqueue_action(Action::SetActuators(ActuatorCommand::set_speed(0.0, Actuator::Bucket)));
+                blackboard.enqueue_action(Action::SetActuators(ActuatorCommand::StopPercuss));
                 blackboard.enqueue_action(Action::SetSteering(Steering::default()));
                 InfallibleStatus::Success
             },

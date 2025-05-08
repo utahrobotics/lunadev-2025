@@ -764,15 +764,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "camera-benchy"
-version = "0.1.0"
-dependencies = [
- "mio",
- "udev",
- "v4l",
-]
-
-[[package]]
 name = "camino"
 version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5672,13 +5663,6 @@ name = "unindent"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7de7d73e1754487cb58364ee906a499937a0dfabd86bcb980fa99ec8c8fa2ce"
-
-[[package]]
-name = "usb-reset"
-version = "0.1.0"
-dependencies = [
- "udev",
-]
 
 [[package]]
 name = "uuid"

@@ -99,9 +99,10 @@ fn fail_if_autonomy_interrupted() -> impl Behavior<LunabotBlackboard> + CancelSa
         }
         while let Some(msg) = blackboard.peek_from_lunabase() {
             match msg {
-                FromLunabase::Steering(_) => {
+                FromLunabase::Steering(steering) => {
+                    let (left, right) = steering.get_left_and_right();
                     blackboard.set_autonomy(AutonomyState::None);
-                    warn!("Received steering message while in autonomy mode");
+                    warn!("Received steering message while in autonomy mode {left} {right}");
                     return Status::Success;
                 }
                 FromLunabase::SoftStop => {
