@@ -20,7 +20,7 @@ pub(super) fn find_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
             println!("requesting pathfind", );
             
             let pathkind = match blackboard.get_autonomy_state() {
-                AutonomyState::ToExcavationZone => PathKind::MoveOntoTarget,
+                AutonomyState::ToExcavationZone(_) => PathKind::MoveOntoTarget,
                 _ => PathKind::StopInFrontOfTarget,
             };
             

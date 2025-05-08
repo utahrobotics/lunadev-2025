@@ -1,14 +1,15 @@
 use ares_bt::{
     action::AlwaysSucceed, branching::{IfElse, TryCatch}, converters::{AssertCancelSafe, Invert}, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, CancelSafe, Status
 };
-use common::{FromLunabase, LunabotStage, Steering};
+use common::{FromLunabase, LunabotStage};
+use nalgebra::Point2;
 use tracing::{error, warn};
 use find_path::find_path;
 use follow_path::follow_path;
 use actions::dump;
 use traverse::traverse;
 
-use crate::{blackboard::{self, LunabotBlackboard}, utils::WaitBehavior, Action};
+use crate::{blackboard::LunabotBlackboard, Action};
 
 mod find_path;
 mod follow_path;
@@ -17,10 +18,10 @@ mod traverse;
 
 
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum AutonomyState {
-    ToExcavationZone,
-    Dump,
+    ToExcavationZone(Point2<f64>),
+    Dump(Point2<f64>),
     None,
 }
 
@@ -71,7 +72,7 @@ pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
 fn going_to_excavation_zone() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     AssertCancelSafe(
         |blackboard: &mut LunabotBlackboard| {
-            (blackboard.get_autonomy_state() == AutonomyState::ToExcavationZone).into()
+            (matches!(blackboard.get_autonomy_state(), AutonomyState::ToExcavationZone(_))).into()
         }
     )
 }

@@ -10,7 +10,7 @@ use ares_bt::{
 };
 use autonomy::autonomy;
 use blackboard::LunabotBlackboard;
-use common::{CellsRect, FromLunabase, LunabotStage, Obstacle, PathKind, PathPoint, Steering};
+use common::{FromLunabase, LunabotStage, Obstacle, PathKind, Steering};
 use embedded_common::{Actuator, ActuatorCommand};
 use simple_motion::StaticImmutableNode;
 use teleop::teleop;

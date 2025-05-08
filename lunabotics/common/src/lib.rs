@@ -73,7 +73,7 @@ pub enum LunabotStage {
     Autonomy,
 }
 
-#[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Encode, Decode, Clone, Copy, PartialEq)]
 pub enum FromLunabase {
     Pong,
     ContinueMission,
@@ -81,8 +81,8 @@ pub enum FromLunabase {
     LiftActuators(i8),
     BucketActuators(i8),
     LiftShake,
-    MoveToDigSite((usize, usize)),
-    MoveToDumpSite((usize, usize)),
+    ToExcavationZone((f32, f32)),
+    Dump((f32, f32)),
     SoftStop,
     StartPercuss,
     StopPercuss

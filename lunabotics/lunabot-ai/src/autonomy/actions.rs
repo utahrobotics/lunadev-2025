@@ -1,9 +1,10 @@
 use ares_bt::{converters::AssertCancelSafe, sequence::Sequence, Behavior, CancelSafe, Status};
-use common::{world_point_to_cell, Obstacle};
+use common::Obstacle;
 
-use crate::{blackboard, Action, LunabotBlackboard};
+use crate::{Action, LunabotBlackboard};
 
-use super::{find_path, follow_path, traverse};
+use super::traverse;
+
 
 /// distance between shovel and center of robot 
 const SHOVEL_DISTANCE_METERS: f64 = 0.3; // TODO set this to the actual value
@@ -17,25 +18,25 @@ fn add_hole_or_mound_obstacle(blackboard: &mut LunabotBlackboard) {
     blackboard.enqueue_action(Action::AvoidObstacle(Obstacle::new_circle((shovel_pos.x, shovel_pos.y), 0.3)));
 }
 
-pub(super) fn dig() -> impl Behavior<LunabotBlackboard> + CancelSafe {
+// pub(super) fn dig() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     
-    Sequence::new((
-        AssertCancelSafe(
-            |blackboard: &mut LunabotBlackboard| {
-                // TODO
+//     Sequence::new((
+//         AssertCancelSafe(
+//             |blackboard: &mut LunabotBlackboard| {
+//                 // TODO
                 
-                println!("digging!!"); 
+//                 println!("digging!!"); 
                 
                 
                 
-                // add the hole we just dug to `additional_obstacles` to prevent digging or moving over that spot again
-                add_hole_or_mound_obstacle(blackboard);
+//                 // add the hole we just dug to `additional_obstacles` to prevent digging or moving over that spot again
+//                 add_hole_or_mound_obstacle(blackboard);
                 
-                Status::Success
-            }
-        ),
-    ))
-}
+//                 Status::Success
+//             }
+//         ),
+//     ))
+// }
 
 
 pub(super) fn dump() -> impl Behavior<LunabotBlackboard> + CancelSafe {

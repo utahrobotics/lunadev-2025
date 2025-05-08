@@ -15,7 +15,7 @@ use cakap2::{
 use crossbeam::atomic::AtomicCell;
 #[cfg(feature = "production")]
 use nalgebra::{Isometry3, Quaternion, Vector3, UnitQuaternion};
-use common::{world_point_to_cell, FromLunabase, FromLunabot, LunabotStage, Steering, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
+use common::{FromLunabase, FromLunabot, LunabotStage, Steering, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
 #[cfg(feature = "production")]
 use common::lunabase_sync::ThalassicData;
 use godot::{
@@ -766,12 +766,12 @@ impl LunabotConn {
 
     #[func]
     fn move_to_dig_site(&mut self, coords: Vector2) {
-        self.send_reliable(&FromLunabase::MoveToDigSite(world_point_to_cell(nalgebra::Point3::new(coords.x as f64, 0.0, coords.y as f64))));
+        self.send_reliable(&FromLunabase::ToExcavationZone((coords.x, coords.y)));
     }
 
     #[func]
     fn move_to_dump_site(&mut self, coords: Vector2) {
-        self.send_reliable(&FromLunabase::MoveToDumpSite(world_point_to_cell(nalgebra::Point3::new(coords.x as f64, 0.0, coords.y as f64))));
+        self.send_reliable(&FromLunabase::Dump((coords.x, coords.y)));
     }
 
     #[func]

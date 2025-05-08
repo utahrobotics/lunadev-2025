@@ -1,6 +1,6 @@
-use std::{collections::VecDeque, path::Path, time::Instant};
+use std::{collections::VecDeque, time::Instant};
 
-use common::{world_point_to_cell, CellsRect, FromLunabase, PathPoint, PathKind};
+use common::{world_point_to_cell, FromLunabase, PathPoint, PathKind};
 use nalgebra::{Isometry3, Point3, UnitQuaternion, Vector2, Vector3};
 use simple_motion::StaticImmutableNode;
 
@@ -169,8 +169,8 @@ impl LunabotBlackboard {
         
         // TODO set hardcoded traverse/dump positions
         match self.get_autonomy_state() {
-            AutonomyState::ToExcavationZone => Some(world_point_to_cell(Point3::new(2.0, 0.0, 4.0))),
-            AutonomyState::Dump => Some(world_point_to_cell(Point3::new(2.0, 0.0, 7.0))),
+            AutonomyState::ToExcavationZone(p) => Some(world_point_to_cell(Point3::new(p.x, 0.0, p.y))),
+            AutonomyState::Dump(p) => Some(world_point_to_cell(Point3::new(p.x, 0.0, p.y))),
             AutonomyState::None => None,
         }
     }
