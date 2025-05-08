@@ -31,6 +31,7 @@ pub(super) fn follow_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
 }
 
 fn follow_path_inner(blackboard: &mut LunabotBlackboard) -> Status {
+    println!("following path", );
     let robot = blackboard.get_robot_isometry();
     let pos: Point3<f64> = robot.translation.vector.into();
     
@@ -52,7 +53,7 @@ fn follow_path_inner(blackboard: &mut LunabotBlackboard) -> Status {
     let target_cell = blackboard.get_target_cell();
     let mut heading: Vector2<f64> = blackboard.get_robot_heading();
     
-    let Some(path) = blackboard.get_path_mut() else { return Status::Success };
+    let path = blackboard.get_path_mut();
     
     if path.is_empty() {
         println!("path follower: empty path", );
@@ -73,7 +74,7 @@ fn follow_path_inner(blackboard: &mut LunabotBlackboard) -> Status {
         if path_complete {
             
             
-            *blackboard.get_path_mut() = None;
+            *blackboard.get_path_mut() = vec![];
             blackboard.enqueue_action(Action::SetSteering(Steering::default()));
             
             // ensures that time between path follows aren't interpreted as being stuck in one place for a long time
