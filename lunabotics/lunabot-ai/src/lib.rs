@@ -40,7 +40,7 @@ pub enum Action {
     CheckIfExplored {
         area: CellsRect,
         robot_cell_pos: (usize, usize),
-    }
+    },
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -75,9 +75,11 @@ pub enum FromLunabase {
     Steering(Steering),
     LiftActuators(i8),
     BucketActuators(i8),
-    LiftShake,    
+    LiftShake,
     StartAutonomy,
     SoftStop,
+    StartPercuss,
+    StopPercuss
 }
 
 impl FromLunabase {

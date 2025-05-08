@@ -746,6 +746,15 @@ impl LunabotConn {
     }
 
     #[func]
+    fn set_percuss(&mut self, enabled: bool) {
+        if enabled {
+            self.send_reliable(&FromLunabase::StartPercuss);
+        } else {
+            self.send_reliable(&FromLunabase::StopPercuss);
+        }
+    }
+
+    #[func]
     fn set_bucket_speed(&mut self, speed: f64) {
         self.set_bucket(speed);
     }

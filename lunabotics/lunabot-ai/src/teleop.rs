@@ -2,6 +2,7 @@ use std::{sync::atomic::{AtomicBool, Ordering}, time::Duration};
 
 use ares_bt::{sequence::Sequence, Behavior, Status};
 use common::{FromLunabase, LunabotStage, Steering};
+use embedded_common::ActuatorCommand;
 use tracing::{error, warn};
 
 use crate::{
@@ -48,6 +49,14 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard> {
                         FromLunabase::SoftStop => {
                             warn!("Received SoftStop");
                             return Status::Failure;
+                        }
+                        FromLunabase::StartPercuss => {
+                            warn!("Started percussor");
+                            blackboard.enqueue_action(Action::SetActuators(ActuatorCommand::StartPercuss));
+                        }
+                        FromLunabase::StopPercuss => {
+                            warn!("Stopped percussor");
+                            blackboard.enqueue_action(Action::SetActuators(ActuatorCommand::StopPercuss));
                         }
                         FromLunabase::StartAutonomy => {
                             blackboard.set_autonomy(AutonomyState::Start);

@@ -148,7 +148,7 @@ async fn main(spawner: Spawner) {
         }
     }
     spawner.spawn(read_sensors_loop(imu0, imu1, IMU_READING_DELAY_MS, class_tx, p.PIN_26, p.PIN_27, p.ADC));
-    spawner.spawn(motor_controller_loop(class_rx, m1, m2));
+    spawner.spawn(motor_controller_loop(class_rx, m1, m2, percussor));
 }
 
 fn setup_lsm_i2c0(lsm: &mut Lsm6dsox<I2c<'_, I2C0, Async>, Delay>) -> Result<u8, lsm6dsox::Error> {
