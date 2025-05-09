@@ -1,6 +1,5 @@
 use gputter::build_shader;
 
-// Generates a list of gradient magnitudes from a given heightmap
 build_shader!(
     pub(crate) Grad2Obstacle,
     r#"

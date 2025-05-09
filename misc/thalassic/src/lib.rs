@@ -27,6 +27,7 @@ mod height2grad;
 mod obstaclefilter;
 mod pcl2sum;
 mod sum2height;
+mod pcl2obstacle;
 // pub use clustering::Clusterer;
 
 mod expand_obstacles;
