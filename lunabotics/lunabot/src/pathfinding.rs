@@ -112,7 +112,7 @@ impl DefaultPathfinder {
         end_cell: (usize, usize),
         map_data: &SharedData<ThalassicData>,
     ) -> Option<Vec<(usize, usize)>> {
-        println!("finding path {:?} -> {:?}", start_cell, end_cell);
+        tracing::info!("finding path {:?} -> {:?}", start_cell, end_cell);
         
         // allows checking if position is known inside `move || {}` closures without moving `map_data`
         let is_known = |pos: (usize, usize)| map_data.is_known(pos);

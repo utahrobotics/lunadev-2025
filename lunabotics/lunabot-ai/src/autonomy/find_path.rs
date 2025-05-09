@@ -17,7 +17,7 @@ pub(super) fn find_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
         // request for pathfind
         AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
             
-            println!("requesting pathfind", );
+            tracing::info!("requesting pathfind", );
             
             let pathkind = match blackboard.get_autonomy_state() {
                 AutonomyState::ToExcavationZone(_) => PathKind::MoveOntoTarget,

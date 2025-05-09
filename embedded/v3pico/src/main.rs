@@ -13,7 +13,7 @@ use embassy_rp::clocks::RoscRng;
 use embassy_rp::gpio::{Level, Output, Pull};
 use embassy_rp::i2c::{Async, I2c};
 use embassy_rp::peripherals::{DMA_CH0, PIO0};
-use embassy_rp::peripherals::{I2C0, USB, I2C1, ADC, PIN_27, PIN_26};
+use embassy_rp::peripherals::{I2C0, USB, I2C1, ADC, PIN_28, PIN_26};
 use embassy_rp::pio::{self, Pio};
 use embassy_rp::adc::{Adc, Channel, Config};
 use embassy_rp::adc;
@@ -147,7 +147,7 @@ async fn main(spawner: Spawner) {
             }
         }
     }
-    spawner.spawn(read_sensors_loop(imu0, imu1, IMU_READING_DELAY_MS, class_tx, p.PIN_26, p.PIN_27, p.ADC));
+    spawner.spawn(read_sensors_loop(imu0, imu1, IMU_READING_DELAY_MS, class_tx, p.PIN_26, p.PIN_28, p.ADC));
     spawner.spawn(motor_controller_loop(class_rx, m1, m2, percussor));
 }
 
@@ -196,7 +196,7 @@ async fn read_sensors_loop(
     mut imu1: [&'static mut Lsm6dsox<'static, I2c<'static, I2C1, Async>, Delay>; 2],
     delay_ms: u64,
     mut class: Sender<'static, Driver<'static, USB>>,
-    pot: PIN_26, pot2: PIN_27, adc: ADC
+    pot: PIN_26, pot2: PIN_28, adc: ADC
 ) -> ! {
     let mut ticker = Ticker::every(Duration::from_millis(delay_ms));
     let mut channel = Channel::new_pin(pot, Pull::None);

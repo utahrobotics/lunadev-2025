@@ -216,6 +216,7 @@ impl V3PicoTask {
         let shared = Arc::clone(&self.shared);
         let (is_broken_tx, is_broken_rx) = tokio::sync::watch::channel(false);
         let path_str_clone = path_str.clone();
+        let actuator_readings = self.actuator_readings;
         get_tokio_handle().spawn(async move {
             let mut guard = shared.lock().await;
             if guard.first_startup {
@@ -237,7 +238,7 @@ impl V3PicoTask {
                 };
                 if let FromPicoV3::Reading(imu_readings, actuators) = reading {
                     let lift_hinge_angle = (actuators.m1_reading as f64 * 0.00743033 - 2.19192);
-                    self.actuator_readings.store(Some(actuators));
+                    actuator_readings.store(Some(actuators));
                     // tracing::info!("lift angle: {}", lift_hinge_angle);
 		            guard.hinge_node.set_angle_one_axis(lift_hinge_angle.to_radians());
                     for (i,(msg, node)) in imu_readings.into_iter().zip(guard.imus).enumerate() {
