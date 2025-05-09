@@ -3,26 +3,25 @@ use gputter::build_shader;
 build_shader!(
     pub(crate) Pcl2Obstacle,
     r#"
-    const IMAGE_WIDTH: NonZeroU32 = {{image_width}};
     const HEIGHTMAP_WIDTH: NonZeroU32 = {{heightmap_width}};
     const CELL_COUNT: NonZeroU32 = {{cell_count}};
     const CELL_SIZE: f32 = {{cell_size}};
-    const PIXEL_COUNT: NonZeroU32 = {{pixel_count}};
 
     // Shader is read_write as it is written to in another shader
-    #[buffer] var<storage, read_write> obstacle_map: array<u32, CELL_COUNT>;
+    #[buffer] var<storage, read_write> obstacle_map: array<atomic<u32>, CELL_COUNT>;
     #[buffer] var<storage, read_write> points: array<vec4f>;
     #[buffer] var<uniform> max_safe_gradient: f32;
+    #[buffer] var<uniform> image_dimensions: vec2u;
 
     @compute
     @workgroup_size(8, 8, 1)
     fn grad(
         @builtin(global_invocation_id) global_invocation_id : vec3u,
     ) {
-        if (global_invocation_id.x >= IMAGE_WIDTH - 1 || global_invocation_id.x == 0 || global_invocation_id.y == 0 || global_invocation_id.y >= PIXEL_COUNT / IMAGE_WIDTH - 1) {
+        if (global_invocation_id.x >= image_dimensions.x - 1 || global_invocation_id.x == 0 || global_invocation_id.y == 0 || global_invocation_id.y >= image_dimensions.y - 1) {
             return;
         }
-        let index = global_invocation_id.x + global_invocation_id.y * IMAGE_WIDTH;
+        let index = global_invocation_id.x + global_invocation_id.y * image_dimensions.x;
         let origin = points[index];
 
         if (origin.x < 0.0 || origin.z < 0.0) {
@@ -32,19 +31,19 @@ build_shader!(
         let x_index = u32(origin.x / CELL_SIZE);
         let z_index = u32(origin.z / CELL_SIZE);
 
-        if (x_index >= IMAGE_WIDTH || z_index >= CELL_COUNT / IMAGE_WIDTH) {
+        if (x_index >= image_dimensions.x || z_index >= CELL_COUNT / image_dimensions.x) {
             return;
         }
 
         let points = array<vec4f, 8>(
             points[index + 1],
-            points[index + 1 - IMAGE_WIDTH],
-            points[index - IMAGE_WIDTH],
-            points[index - 1 - IMAGE_WIDTH],
+            points[index + 1 - image_dimensions.x],
+            points[index - image_dimensions.x],
+            points[index - 1 - image_dimensions.x],
             points[index - 1],
-            points[index - 1 + IMAGE_WIDTH],
-            points[index + IMAGE_WIDTH],
-            points[index + 1 + IMAGE_WIDTH],
+            points[index - 1 + image_dimensions.x],
+            points[index + image_dimensions.x],
+            points[index + 1 + image_dimensions.x],
         );
         var sum = vec3f(0.0, 0.0, 0.0);
         var count = 0;
@@ -74,9 +73,9 @@ build_shader!(
         }
         let obstacle_index = z_index * HEIGHTMAP_WIDTH + x_index;
         if (max_gradient > max_safe_gradient) {
-            obstacle_map[obstacle_index] = 1u;
+            atomicStore(&obstacle_map[obstacle_index], 2u);
         } else {
-            obstacle_map[obstacle_index] = 0u;
+            atomicStore(&obstacle_map[obstacle_index], 1u);
         }
     }
     "#
