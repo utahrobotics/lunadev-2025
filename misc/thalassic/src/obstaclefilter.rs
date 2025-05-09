@@ -22,12 +22,12 @@ fn compute_main(@builtin(global_invocation_id) cell: vec3u) {
     let this_index = xy_to_index(pos);
 
     if (in_obstacles[this_index] == 0) {
-        filtered_obstacles[this_index] = 0;
+        filtered_obstacles[this_index] = 1u;
         return;
     }
 
     if (cell.x >= GRID_WIDTH - 1 || cell.x == 0 || cell.y == 0 || cell.y >= GRID_HEIGHT - 1) {
-        filtered_obstacles[this_index] = 1u;
+        filtered_obstacles[this_index] = 2u;
         return;
     }
 
@@ -49,14 +49,14 @@ fn compute_main(@builtin(global_invocation_id) cell: vec3u) {
                 count += 1;
 
                 if (count >= MIN_COUNT) {
-                    filtered_obstacles[this_index] = 1;
+                    filtered_obstacles[this_index] = 2;
                     return;
                 }
             }
         }
     }
 
-    filtered_obstacles[this_index] = 0;
+    filtered_obstacles[this_index] = 1;
 }
 
 

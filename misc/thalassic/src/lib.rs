@@ -184,7 +184,7 @@ pub struct ThalassicBuilder {
     pub max_point_count: NonZeroU32,
     pub feature_size_cells: u32,
     pub min_feature_count: u32,
-    pub image_dimensions: Vector2<NonZeroU32>,
+    // pub image_dimensions: Vector2<NonZeroU32>,
 }
 
 impl ThalassicBuilder {
@@ -215,9 +215,9 @@ impl ThalassicBuilder {
         .compile();
 
         let [expand_fn] = ExpandObstacles {
-            obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<3, 0>(),
-            radius: BufferGroupBinding::<_, BetaBindGroups>::get::<4, 0>(),
-            cell_size: self.cell_size,
+            unfiltered_obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<2, 0>(),
+            filtered_obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<3, 0>(),
+            radius_in_cells: BufferGroupBinding::<_, BetaBindGroups>::get::<4, 0>(),
             grid_width: self.heightmap_dimensions.x,
             grid_height: self.heightmap_dimensions.y,
         }
