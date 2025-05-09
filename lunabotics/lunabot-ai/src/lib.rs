@@ -10,7 +10,7 @@ use ares_bt::{
 };
 use autonomy::autonomy;
 use blackboard::LunabotBlackboard;
-use common::{CellsRect, FromLunabase, LunabotStage, PathKind, Steering};
+use common::{FromLunabase, LunabotStage, Obstacle, PathKind, Steering};
 use embedded_common::{Actuator, ActuatorCommand};
 use simple_motion::StaticImmutableNode;
 use teleop::teleop;
@@ -31,16 +31,12 @@ pub enum Action {
     CalculatePath {
         from: (usize, usize),
         to: (usize, usize),
-        kind: PathKind,
-        fail_if_dest_is_known: bool
+        kind: PathKind
     },
     LiftShake,
     AvoidCell((usize, usize)),
     ClearPointsToAvoid,
-    CheckIfExplored {
-        area: CellsRect,
-        robot_cell_pos: (usize, usize),
-    },
+    AvoidObstacle(Obstacle)
 }
 
 #[derive(Debug, Clone, Copy)]

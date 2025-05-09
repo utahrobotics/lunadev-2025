@@ -784,4 +784,16 @@ mod tests {
         data.recall();
         assert_eq!(counter.load(std::sync::atomic::Ordering::Relaxed), 2);
     }
+    
+    #[test]
+    fn test02() {
+        let mut data: MaybeOwned<i32> = 5.into();
+        let user1 = data.create_lendee();
+        let user2 = data.create_lendee();
+        
+        data.share();
+        assert_eq!(user1.get().abs(), 5);
+        assert_eq!(user2.get().abs(), 5);
+        
+    }
 }

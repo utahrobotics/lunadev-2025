@@ -765,8 +765,13 @@ impl LunabotConn {
     }
 
     #[func]
-    fn start_autonomy(&mut self) {
-        self.send_reliable(&FromLunabase::StartAutonomy);
+    fn move_to_dig_site(&mut self, coords: Vector2) {
+        self.send_reliable(&FromLunabase::ToExcavationZone((coords.x, coords.y)));
+    }
+
+    #[func]
+    fn move_to_dump_site(&mut self, coords: Vector2) {
+        self.send_reliable(&FromLunabase::Dump((coords.x, coords.y)));
     }
 
     #[func]

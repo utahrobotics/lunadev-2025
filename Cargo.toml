@@ -18,7 +18,7 @@ members = [
     "misc/imu-calib",
 ]
 resolver = "2"
-exclude = ["output/", "embedded/", "lunaserver-web/"]
+exclude = ["output/", "embedded/", "lunaserver-web/", "misc/camera-benchy", "misc/usb-reset"]
 
 [workspace.dependencies]
 fxhash = "0.2"
