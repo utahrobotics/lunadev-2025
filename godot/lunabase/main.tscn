@@ -38,6 +38,8 @@ script/source = "extends Control
 func _ready() -> void:
 	Lunabot.entered_soft_stop.connect(
 		func():
+			if visible:
+				return
 			get_parent().hide_all_states()
 			show()
 	)
@@ -67,6 +69,8 @@ script/source = "extends Control
 func _ready() -> void:
 	Lunabot.entered_manual.connect(
 		func():
+			if visible:
+				return
 			get_parent().hide_all_states()
 			show()
 	)
@@ -197,6 +201,8 @@ script/source = "extends Control
 func _ready() -> void:
 	Lunabot.entered_autonomy.connect(
 		func():
+			if visible:
+				return
 			get_parent().hide_all_states()
 			show()
 	)
