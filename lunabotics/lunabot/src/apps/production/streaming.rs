@@ -156,7 +156,7 @@ pub fn start_streaming(mut lunabase_address: Option<IpAddr>) {
         let mut h264_enc = match Encoder::with_api_config(
             OpenH264API::from_source(),
             EncoderConfig::new()
-                .set_bitrate_bps(1_000_000)
+                .set_bitrate_bps(600_000)
                 // .enable_skip_frame(true)
                 .max_frame_rate(24.0)
                 // .rate_control_mode(RateControlMode::Timestamp)
