@@ -15,6 +15,11 @@ pub enum Input {
     
     NextActionSite((usize, usize)),
     NoActionSite,
+
+    ActuatorReadings {
+        lift: u16,
+        tilt: u16
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -51,6 +56,15 @@ pub(crate) struct LunabotBlackboard {
     /// (position, rotation, timestamp)
     latest_transform: Option<(Point3<f64>, UnitQuaternion<f64>, Instant)>,
     backing_away_from: Option<Point3<f64>>,
+
+    actual_lift: u16,
+    actual_tilt: u16,
+
+    lift_travel_positive: bool,
+    tilt_travel_positive: bool,
+
+    target_lift: u16,
+    target_tilt: u16
     
 }
 
@@ -71,11 +85,38 @@ impl LunabotBlackboard {
             
             backing_away_from: None,
             latest_transform: None,
+
+            actual_lift: 0,
+            actual_tilt: 0,
+
+            lift_travel_positive: false,
+            tilt_travel_positive: false,
+
+            target_lift: 0,
+            target_tilt: 0,
         }
     }
 }
 
 impl LunabotBlackboard {
+    pub fn get_actual_lift(&self) -> u16 {
+        self.actual_lift
+    }
+    pub fn get_actual_tilt(&self) -> u16 {
+        self.actual_tilt
+    }
+    pub fn get_target_lift(&mut self) -> &mut u16 {
+        &mut self.target_lift
+    }
+    pub fn get_target_tilt(&mut self) -> &mut u16 {
+        &mut self.target_tilt
+    }
+    pub fn get_lift_travel_positive(&mut self) -> &mut bool {
+        &mut self.lift_travel_positive
+    }
+    pub fn get_tilt_travel_positive(&mut self) -> &mut bool {
+        &mut self.tilt_travel_positive
+    }
     pub fn peek_from_lunabase(&self) -> Option<&FromLunabase> {
         self.from_lunabase.front()
     }
@@ -162,6 +203,10 @@ impl LunabotBlackboard {
             }
             Input::NoActionSite => {
                 self.find_action_site_state = FindActionSiteState::NotFound;
+            }
+            Input::ActuatorReadings { lift, tilt } => {
+                self.actual_lift = lift;
+                self.actual_tilt = tilt;
             }
         }
     }

@@ -15,7 +15,7 @@ mod find_path;
 mod follow_path;
 mod actions;
 mod traverse;
-
+mod move_actuator;
 
 
 #[derive(Clone, Copy, PartialEq, Debug)]

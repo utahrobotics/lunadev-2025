@@ -37,6 +37,10 @@ stream_index = 7
 link_name = "upper_depth_camera"
 stream_index = 1
 
+[Main.depth_cameras."044422250424"]
+link_name = "lower_depth_camera"
+stream_index = 4
+
 [Main.apriltags."1"]
 tag_position = [0.0, 0.6477, 0.0]
 forward_axis = [0.0, 0.0, 1.0]

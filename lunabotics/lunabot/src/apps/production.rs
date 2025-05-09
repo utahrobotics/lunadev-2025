@@ -332,6 +332,7 @@ impl LunabotApp {
         });
 
         let mut pathfinder = DefaultPathfinder::new(vec![]);
+        let readings = actuator_controller.actuator_readings;
         
         run_ai(
             robot_chain.into(),
@@ -362,29 +363,29 @@ impl LunabotApp {
                 Action::LiftShake => {
                     let _ = actuator_controller.send_command(embedded_common::ActuatorCommand::Shake);
                 }
-                Action::CheckIfExplored { area, robot_cell_pos } => {
-                    let x_lo = area.right as usize;
-                    let x_hi = area.left as usize;
-                    let y_lo = area.bottom as usize;
-                    let y_hi = area.top as usize;
+                // Action::CheckIfExplored { area, robot_cell_pos } => {
+                //     let x_lo = area.right as usize;
+                //     let x_hi = area.left as usize;
+                //     let y_lo = area.bottom as usize;
+                //     let y_hi = area.top as usize;
                     
-                    let map_data = pathfinder.get_map_data(&shared_thalassic_data);
+                //     let map_data = pathfinder.get_map_data(&shared_thalassic_data);
                     
-                    for x in x_lo..x_hi {
-                        for y in y_lo..y_hi {
+                //     for x in x_lo..x_hi {
+                //         for y in y_lo..y_hi {
                             
-                            // cells need to be explored if theyre unknown AND the robot isn't on top of it
-                            if 
-                                !map_data.is_known((x, y)) && 
-                                crate::utils::distance_between_tuples(robot_cell_pos, (x, y)) > pathfinder.current_robot_radius_cells() 
-                            {
-                                return inputs.push(Input::NotDoneExploring((x, y)));
-                            }
-                        }
-                    }
+                //             // cells need to be explored if theyre unknown AND the robot isn't on top of it
+                //             if 
+                //                 !map_data.is_known((x, y)) && 
+                //                 crate::utils::distance_between_tuples(robot_cell_pos, (x, y)) > pathfinder.current_robot_radius_cells() 
+                //             {
+                //                 return inputs.push(Input::NotDoneExploring((x, y)));
+                //             }
+                //         }
+                //     }
                     
-                    inputs.push(Input::DoneExploring);
-                }
+                //     inputs.push(Input::DoneExploring);
+                // }
                 Action::AvoidCell(cell) => {
                     pathfinder.avoid_cell(cell);
                 }
@@ -400,6 +401,10 @@ impl LunabotApp {
                         connected.wait_disconnect().await;
                     }
                 };
+
+                if let Some(reading) = readings.take() {
+                    inputs.push(Input::ActuatorReadings { lift: reading.m1_reading, tilt: reading.m2_reading })
+                }
 
                 match poll_when {
                     PollWhen::ReceivedLunabase => {

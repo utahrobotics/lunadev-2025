@@ -1,6 +1,7 @@
 use std::{sync::{mpsc::{Receiver, Sender, RecvTimeoutError}, Arc}, time::Duration};
 
 use crate::localization::{IMUReading, LocalizerRef};
+use crossbeam::atomic::AtomicCell;
 use embedded_common::*;
 use nalgebra::Vector3;
 use simple_motion::{StaticImmutableNode, Node, NodeData};
@@ -32,6 +33,7 @@ pub struct IMUInfo {
 pub fn enumerate_v3picos(hinge_node: Node<&'static [NodeData]>, localizer_ref: LocalizerRef, pico: V3PicoInfo) -> ActuatorController {
     let (path_tx, path_rx) = std::sync::mpsc::sync_channel::<String>(1);
     let (actuator_cmd_tx, actuator_cmd_rx) = std::sync::mpsc::channel();
+    let actuator_readings: &_ = Box::leak(Box::new(AtomicCell::new(None)));
     std::thread::spawn(move || {
         let shared = SharedState {
             localizer_ref,
@@ -44,10 +46,12 @@ pub fn enumerate_v3picos(hinge_node: Node<&'static [NodeData]>, localizer_ref: L
             hinge_node,
             first_startup: true
         };
+        
         let mut task = V3PicoTask {
             path: path_rx,
             actuator_command_rx: actuator_cmd_rx,
-            shared: Arc::new(Mutex::new(shared))
+            shared: Arc::new(Mutex::new(shared)),
+            actuator_readings
         };
         loop {
             task.v3pico_task().block_on();
@@ -145,12 +149,14 @@ pub fn enumerate_v3picos(hinge_node: Node<&'static [NodeData]>, localizer_ref: L
             })
     });
     ActuatorController {
-        command_tx: actuator_cmd_tx
+        command_tx: actuator_cmd_tx,
+        actuator_readings
     }
 }
 
 pub struct ActuatorController {
     command_tx: Sender<ActuatorCommand>,
+    pub actuator_readings: &'static AtomicCell<Option<ActuatorReading>>
 }
 
 impl ActuatorController {
@@ -177,6 +183,7 @@ pub struct V3PicoTask {
     path: Receiver<String>,
     actuator_command_rx: std::sync::mpsc::Receiver<ActuatorCommand>,
     shared: Arc<tokio::sync::Mutex<SharedState>>,
+    actuator_readings: &'static AtomicCell<Option<ActuatorReading>>
 }
 
 impl V3PicoTask {
@@ -228,8 +235,9 @@ impl V3PicoTask {
                     let _ = is_broken_tx.send(true);
                     break;
                 };
-                if let FromPicoV3::Reading(imu_readings,actuators) = reading {
+                if let FromPicoV3::Reading(imu_readings, actuators) = reading {
                     let lift_hinge_angle = (actuators.m1_reading as f64 * 0.00743033 - 2.19192);
+                    self.actuator_readings.store(Some(actuators));
                     // tracing::info!("lift angle: {}", lift_hinge_angle);
 		            guard.hinge_node.set_angle_one_axis(lift_hinge_angle.to_radians());
                     for (i,(msg, node)) in imu_readings.into_iter().zip(guard.imus).enumerate() {

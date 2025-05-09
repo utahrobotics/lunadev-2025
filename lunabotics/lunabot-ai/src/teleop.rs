@@ -51,9 +51,11 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard> {
                             return Status::Failure;
                         }
                         FromLunabase::StartPercuss => {
+                            // warn!("Start percussor");
                             blackboard.enqueue_action(Action::SetActuators(ActuatorCommand::StartPercuss));
                         }
                         FromLunabase::StopPercuss => {
+                            // warn!("Stop percussor");
                             blackboard.enqueue_action(Action::SetActuators(ActuatorCommand::StopPercuss));
                         }
                         FromLunabase::ToExcavationZone(x) => {
