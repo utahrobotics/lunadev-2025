@@ -405,7 +405,6 @@ impl LunasimbotApp {
                 }
                 Action::SetActuators(_actuators) => {}
                 Action::CalculatePath { from, to, kind } => {
-                    
                     if let Ok(path) = pathfinder.find_path(&shared_thalassic_data, from, to, kind) {
                         let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
                             path.iter()

@@ -203,7 +203,7 @@ pub fn spawn_thalassic_pipeline(
             cell_size: THALASSIC_CELL_SIZE,
             max_point_count: NonZeroU32::new(max_point_count).unwrap(),
             feature_size_cells: 8,
-            min_feature_count: 50,
+            min_feature_count: 10,
         }
         .build();
 

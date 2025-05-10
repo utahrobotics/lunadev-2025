@@ -1,5 +1,7 @@
 #![feature(unboxed_closures, fn_traits)]
 
+use std::marker::PhantomData;
+
 pub mod action;
 pub mod branching;
 pub mod converters;
@@ -185,6 +187,38 @@ impl From<EternalStatus> for Status {
         }
     }
 }
+
+
+pub struct RunningOnce<B> {
+    ran_already: bool,
+    phantom: PhantomData<fn() -> B>
+}
+
+
+impl<B> Default for RunningOnce<B> {
+    fn default() -> Self {
+        Self { ran_already: false, phantom: PhantomData }
+    }
+}
+
+impl<B> Behavior<B> for RunningOnce<B> {
+    fn run(&mut self, _blackboard: &mut B) -> Status {
+        if self.ran_already {
+            self.ran_already = false;
+            Status::Success
+        } else {
+            self.ran_already = true;
+            Status::Running
+        }
+    }
+}
+
+impl<B> CancelSafe for RunningOnce<B> {
+    fn reset(&mut self) {
+        self.ran_already = false;
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

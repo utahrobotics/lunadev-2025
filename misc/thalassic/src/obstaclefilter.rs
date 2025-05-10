@@ -22,7 +22,7 @@ fn compute_main(@builtin(global_invocation_id) cell: vec3u) {
     let this_index = xy_to_index(pos);
 
     if (in_obstacles[this_index] == 0) {
-        filtered_obstacles[this_index] = 1u;
+        filtered_obstacles[this_index] = 0;
         return;
     }
 
@@ -45,7 +45,7 @@ fn compute_main(@builtin(global_invocation_id) cell: vec3u) {
             let nearby_pos = vec2(x, y);
             let nearby_i = xy_to_index(nearby_pos);
 
-            if (in_obstacles[nearby_i] == 1) {
+            if (in_obstacles[nearby_i] == 2) {
                 count += 1;
 
                 if (count >= MIN_COUNT) {

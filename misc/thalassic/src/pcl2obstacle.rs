@@ -24,14 +24,14 @@ build_shader!(
         let index = global_invocation_id.x + global_invocation_id.y * image_dimensions.x;
         let origin = points[index];
 
-        if (origin.x < 0.0 || origin.z < 0.0) {
+        if (origin.x < 0.0 || origin.z < 0.0 || origin.w == 0.0) {
             return;
         }
 
         let x_index = u32(origin.x / CELL_SIZE);
         let z_index = u32(origin.z / CELL_SIZE);
 
-        if (x_index >= image_dimensions.x || z_index >= CELL_COUNT / image_dimensions.x) {
+        if (x_index >= HEIGHTMAP_WIDTH || z_index >= CELL_COUNT / HEIGHTMAP_WIDTH) {
             return;
         }
 
@@ -60,7 +60,7 @@ build_shader!(
             sum += cross;
             count += 1;
         }
-        if (count == 0) {
+        if (count < 6) {
             return;
         }
         let normal = normalize(sum);

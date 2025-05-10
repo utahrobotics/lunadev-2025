@@ -58,7 +58,7 @@ type FilteredObstacleMapBindGrp = (StorageBuffer<[u32], HostReadOnly, ShaderRead
 /// 1. The radius of the robot in meters
 ///
 /// This bind group is the input to the expander.
-type ExpanderBindGrp = (UniformBuffer<f32>,);
+type ExpanderBindGrp = (StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>, UniformBuffer<u32>,);
 
 /// The set of bind groups used by the rest of the thalassic pipeline
 type BetaBindGroups = (
@@ -215,9 +215,9 @@ impl ThalassicBuilder {
         .compile();
 
         let [expand_fn] = ExpandObstacles {
-            unfiltered_obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<2, 0>(),
             filtered_obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<3, 0>(),
-            radius_in_cells: BufferGroupBinding::<_, BetaBindGroups>::get::<4, 0>(),
+            expanded_obstacles: BufferGroupBinding::<_, BetaBindGroups>::get::<4, 0>(),
+            radius_in_cells: BufferGroupBinding::<_, BetaBindGroups>::get::<4, 1>(),
             grid_width: self.heightmap_dimensions.x,
             grid_height: self.heightmap_dimensions.y,
         }
@@ -238,11 +238,12 @@ impl ThalassicBuilder {
             GpuBufferSet::from((UniformBuffer::new(), UniformBuffer::new())),
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
-            GpuBufferSet::from((UniformBuffer::new(),)),
+            GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(), UniformBuffer::new(),)),
         );
 
         ThalassicPipeline {
             pipeline,
+            cell_size: self.cell_size,
             bind_grps: Some(bind_grps),
             new_radius: Some(0.25),
             new_max_gradient: Some(45.0f32.to_radians()),
@@ -299,6 +300,7 @@ pub struct ThalassicPipeline {
         GpuBufferSet<ExpanderBindGrp>,
     )>,
     new_radius: Option<f32>,
+    cell_size: f32,
     new_max_gradient: Option<f32>,
     thalassic_ref: ThalassicPipelineRef,
     cell_count: NonZeroU32,
@@ -335,12 +337,17 @@ impl ThalassicPipeline {
             filtered_obstacle_map,
             expander_input_grp,
         );
+        self.pipeline.workgroups[0] = Vector3::new(
+            shared.image_dimensions.x / 8,
+            shared.image_dimensions.y / 8,
+            1,
+        );
 
         self.pipeline
             .new_pass(|mut lock| {
                 bind_grps.1.write::<0, _>(&shared.image_dimensions.into(), &mut lock);
                 if let Some(new_radius) = self.new_radius.take() {
-                    bind_grps.4.write::<0, _>(&new_radius, &mut lock);
+                    bind_grps.4.write::<1, _>(&((new_radius / self.cell_size).ceil() as u32), &mut lock);
                 }
                 if let Some(new_max_gradient) = self.new_max_gradient.take() {
                     bind_grps.1.write::<1, _>(&new_max_gradient, &mut lock);
@@ -357,7 +364,7 @@ impl ThalassicPipeline {
             expander_input_grp
         ) = bind_grps;
 
-        filtered_obstacle_map
+        expander_input_grp
             .buffers
             .0
             .read(bytemuck::cast_slice_mut(out_expanded_obstacles));
