@@ -13,3 +13,9 @@
 
 1. Actuator control
 2. Actuator length reading
+
+
+### Pre-reqs
+
+1. install probe-rs
+2. flip link linker ```cargo install flip-link```

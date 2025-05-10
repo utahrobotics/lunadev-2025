@@ -234,6 +234,14 @@ impl V3PicoTask {
                 let Ok(reading) = FromPicoV3::deserialize(reading) else {
                     error!("Failed to deserialize message from picov3 serial port");
                     let _ = is_broken_tx.send(true);
+                    match powercycle_ioctl() {
+                        Ok(output) => {
+                            info!("{}", output);
+                        }
+                        Err(e) => {
+                            error!("ioctl failed: {}", e);
+                        }
+                    }
                     break;
                 };
                 if let FromPicoV3::Reading(imu_readings, actuators) = reading {
@@ -337,4 +345,10 @@ pub fn power_cycle(tty: &str) -> io::Result<()> {
     thread::sleep(Duration::from_millis(500));
     fs::write(&auth, b"1")?;
     Ok(())
+}
+
+
+pub fn powercycle_ioctl() -> Result<String, std::io::Error> {
+    let output = std::process::Command::new("./usb-reset").output()?;
+    return Ok(format!("stdout: {}, stderr: {}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr)));
 }

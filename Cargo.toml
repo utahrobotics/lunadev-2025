@@ -16,9 +16,10 @@ members = [
     "misc/simple-motion",
     "misc/vesc-translator",
     "misc/imu-calib",
+    "misc/usb-reset",
 ]
 resolver = "2"
-exclude = ["output/", "embedded/", "lunaserver-web/", "misc/camera-benchy", "misc/usb-reset"]
+exclude = ["output/", "embedded/", "lunaserver-web/", "misc/camera-benchy"]
 
 [workspace.dependencies]
 fxhash = "0.2"
