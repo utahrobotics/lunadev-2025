@@ -19,3 +19,20 @@
 
 1. install probe-rs
 2. flip link linker ```cargo install flip-link```
+3. add the thumbv6m-none-eabi toolchain
+
+
+### Udev Rules for resets:
+
+# /etc/udev/rules.d/99-usb-reset.rules
+# Allow ioctl-based resets on the C0DE:CAFE device
+SUBSYSTEM=="usb", ATTR{idVendor}=="c0de", ATTR{idProduct}=="cafe", MODE="0666"
+
+
+### Trouble Shooting
+Occasionally the pico becomes unresponsive and the only way to fix it is unplug and replug. I have no idea why this is.
+
+
+### Installing reset tool
+1. run ```cargo make usbreset```
+2. copy that binary to /usr/local/bin
