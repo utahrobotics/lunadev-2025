@@ -235,8 +235,7 @@ impl V3PicoTask {
                     error!("Failed to deserialize message from picov3 serial port");
                     let _ = is_broken_tx.send(true);
                     match powercycle_ioctl() {
-                        Ok(output) => {
-                            info!("{}", output);
+                        Ok(_) => {
                         }
                         Err(e) => {
                             error!("ioctl failed: {}", e);
@@ -348,7 +347,8 @@ pub fn power_cycle(tty: &str) -> io::Result<()> {
 }
 
 
-pub fn powercycle_ioctl() -> Result<String, std::io::Error> {
-    let output = std::process::Command::new("./usb-reset").output()?;
-    return Ok(format!("stdout: {}, stderr: {}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr)));
+pub fn powercycle_ioctl() -> Result<(), std::io::Error> {
+    let output = std::process::Command::new("usb-reset").spawn()?;
+    std::thread::sleep(Duration::from_secs_f32(0.02));
+    Ok(())
 }
