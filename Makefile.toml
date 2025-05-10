@@ -119,5 +119,5 @@ dependencies = [
 ]
 script = '''
 #!/bin/sh
-sudo ./target/debug/usb-reset
+./target/debug/usb-reset
 '''
