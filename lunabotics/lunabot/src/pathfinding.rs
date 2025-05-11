@@ -1,6 +1,5 @@
 use crate::utils::distance_between_tuples;
-use common::{cell_to_world_point, world_point_to_cell, CellsRect, Obstacle, PathInstruction, PathKind, PathPoint, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
-use nalgebra::{Point3, Scale3, Transform3};
+use common::{Obstacle, PathInstruction, PathKind, PathPoint, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
 use pathfinding::{grid::Grid, prelude::astar};
 use tasker::shared::{SharedData, SharedDataReceiver};
 use tracing::error;
@@ -136,8 +135,6 @@ impl DefaultPathfinder {
             
             true
         };
-        
-        
         
         macro_rules! neighbours {
             ($p: ident) => {

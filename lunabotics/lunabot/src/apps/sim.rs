@@ -1,9 +1,9 @@
 use std::{
-    cmp::Ordering, collections::VecDeque, fmt::DebugMap, net::{IpAddr, SocketAddr}, num::NonZeroU32, path, process::Stdio, sync::{Arc, Mutex}
+    cmp::Ordering, collections::VecDeque, net::{IpAddr, SocketAddr}, num::NonZeroU32, process::Stdio, sync::{Arc, Mutex}
 };
 
 use common::{
-    cell_to_world_point, lunasim::{FromLunasim, FromLunasimbot}, CellsRect, LunabotStage, PathPoint, THALASSIC_HEIGHT, THALASSIC_WIDTH
+    cell_to_world_point, lunasim::{FromLunasim, FromLunasimbot}, CellsRect, LunabotStage
 };
 use crossbeam::atomic::AtomicCell;
 use gputter::{
@@ -13,10 +13,10 @@ use gputter::{
 use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use nalgebra::{
-    ComplexField, Isometry3, Scale3, Transform3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4
+    Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4
 };
 use simple_motion::{ChainBuilder, NodeSerde};
-use tasker::shared::{OwnedData, SharedData};
+use tasker::shared::OwnedData;
 use tasker::tokio;
 use tasker::{
     callbacks::caller::CallbacksStorage,
@@ -32,7 +32,7 @@ use thalassic::DepthProjectorBuilder;
 use tracing::{error, info, warn};
 
 use crate::{
-    localization::{IMUReading, Localizer}, pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline}, utils::{distance_between_tuples, SteeringLerper}
+    localization::{IMUReading, Localizer}, pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline}, utils::SteeringLerper
 };
 use crate::{pathfinding::DefaultPathfinder, pipelines::thalassic::ThalassicData};
 
@@ -405,7 +405,6 @@ impl LunasimbotApp {
                 }
                 Action::SetActuators(_actuators) => {}
                 Action::CalculatePath { from, to, kind } => {
-                    
                     if let Ok(path) = pathfinder.find_path(&shared_thalassic_data, from, to, kind) {
                         let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
                             path.iter()

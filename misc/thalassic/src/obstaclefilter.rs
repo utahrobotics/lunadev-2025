@@ -27,7 +27,7 @@ fn compute_main(@builtin(global_invocation_id) cell: vec3u) {
     }
 
     if (cell.x >= GRID_WIDTH - 1 || cell.x == 0 || cell.y == 0 || cell.y >= GRID_HEIGHT - 1) {
-        filtered_obstacles[this_index] = 1u;
+        filtered_obstacles[this_index] = 2u;
         return;
     }
 
@@ -45,18 +45,18 @@ fn compute_main(@builtin(global_invocation_id) cell: vec3u) {
             let nearby_pos = vec2(x, y);
             let nearby_i = xy_to_index(nearby_pos);
 
-            if (in_obstacles[nearby_i] == 1) {
+            if (in_obstacles[nearby_i] == 2) {
                 count += 1;
 
                 if (count >= MIN_COUNT) {
-                    filtered_obstacles[this_index] = 1;
+                    filtered_obstacles[this_index] = 2;
                     return;
                 }
             }
         }
     }
 
-    filtered_obstacles[this_index] = 0;
+    filtered_obstacles[this_index] = 1;
 }
 
 

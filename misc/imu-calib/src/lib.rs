@@ -353,7 +353,7 @@ mod tests {
         println!("Gyroscope Bias: {}", true_gyro_bias);
         println!("Accelerometer Scale: {}", true_accel_scale);
         println!("Gyroscope Scale: {}", true_gyro_scale);
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let ideal_accel = Vector3::new(0.0, -G_ACCEL, 0.0);
         let ideal_gyro = Vector3::new(0.0, 0.0, 0.0);
         let num_samples = 2000;

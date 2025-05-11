@@ -31,7 +31,6 @@ pub(super) fn follow_path() -> impl Behavior<LunabotBlackboard> + CancelSafe {
 }
 
 fn follow_path_inner(blackboard: &mut LunabotBlackboard) -> Status {
-    println!("following path", );
     let robot = blackboard.get_robot_isometry();
     let pos: Point3<f64> = robot.translation.vector.into();
     

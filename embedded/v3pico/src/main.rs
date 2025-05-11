@@ -133,7 +133,7 @@ async fn main(spawner: Spawner) {
                 info!("[SUCCESS] setup imu0");
             }
             Err(e) => {
-                error!("lsm failed to setup: {:?}", e);
+                //error!("lsm failed to setup: {:?}", e);
             }
         }
     }
@@ -143,7 +143,7 @@ async fn main(spawner: Spawner) {
                 info!("[SUCCESS] setup imu1");
             }
             Err(e) => {
-                error!("lsm failed to setup: {:?}", e);
+                //error!("lsm failed to setup: {:?}", e);
             }
         }
     }
@@ -158,7 +158,7 @@ fn setup_lsm_i2c0(lsm: &mut Lsm6dsox<I2c<'_, I2C0, Async>, Delay>) -> Result<u8,
     lsm.set_accel_sample_rate(DataRate::Freq52Hz)?;
     lsm.set_accel_scale(AccelerometerScale::Accel4g)?;
     lsm.check_id().map_err(|e| {
-        error!("error checking id of lsm6dsox: {:?}", e);
+        //error!("error checking id of lsm6dsox: {:?}", e);
         lsm6dsox::Error::NotSupported
     })
 }
@@ -170,7 +170,7 @@ fn setup_lsm_i2c1(lsm: &mut Lsm6dsox<I2c<'_, I2C1, Async>, Delay>) -> Result<u8,
     lsm.set_accel_sample_rate(DataRate::Freq52Hz)?;
     lsm.set_accel_scale(AccelerometerScale::Accel4g)?;
     lsm.check_id().map_err(|e| {
-        error!("error checking id of lsm6dsox: {:?}", e);
+        //error!("error checking id of lsm6dsox: {:?}", e);
         lsm6dsox::Error::NotSupported
     })
 }
@@ -244,7 +244,7 @@ async fn read_sensors_loop(
                 Err(e) => {
                     if Error::NoDataReady == e {
                     } else {
-                        error!("failed to read gyro from imu0_{}",i);
+                        // //error!("failed to read gyro from imu0_{}",i);
                         error_occured = true;
                     }
                     None
@@ -258,7 +258,7 @@ async fn read_sensors_loop(
                 Err(e) => {
                     if Some(&Error::NoDataReady) == e.cause() {
                     } else {
-                        error!("failed to read accel: {:?}", e.cause());
+                        // //error!("failed to read accel: {:?}", e.cause());
                         error_occured = true;
                     }
                     None
@@ -289,7 +289,7 @@ async fn read_sensors_loop(
                 Err(e) => {
                     if Error::NoDataReady == e {
                     } else {
-                        error!("failed to read gyro from imu1_{}",i);
+                        //error!("failed to read gyro from imu1_{}",i);
                         error_occured = true;
                     }
                     None
@@ -302,7 +302,7 @@ async fn read_sensors_loop(
                 Err(e) => {
                     if Some(&Error::NoDataReady) == e.cause() {
                     } else {
-                        error!("failed to read accel: {:?}", e.cause());
+                        //error!("failed to read accel: {:?}", e.cause());
                         error_occured = true;
                     }
                     None
@@ -329,10 +329,10 @@ async fn read_sensors_loop(
             let len = cobs::encode(&serialized, &mut stuffed);
             for chunk in stuffed[..len+1].chunks(16) {
                 if let Err(e) = class.write_packet(chunk).await {
-                    error!("{:?}",e);
+                    //error!("{:?}",e);
                 }
             }
-            info!("{}", msg);
+            // info!("{}", msg);
         } else {
             warn!("data terminal not ready");
         }
@@ -346,7 +346,7 @@ async fn motor_controller_loop(mut class: Receiver<'static, Driver<'static, USB>
     loop {
         let mut cmd = [0u8; 5];
         if let Err(e) = class.read_packet(&mut cmd).await {
-            error!("failed to read packet: {}", e);
+            //error!("failed to read packet: {}", e);
             continue;
         }
 
@@ -355,7 +355,6 @@ async fn motor_controller_loop(mut class: Receiver<'static, Driver<'static, USB>
             warn!("failed to deserialize actuator command: {:?}", cmd);
             continue;
         };
-
         match cmd {
             ActuatorCommand::SetSpeed(speed, actuator) => {
                 match actuator {
@@ -363,6 +362,7 @@ async fn motor_controller_loop(mut class: Receiver<'static, Driver<'static, USB>
                         if let Err(_) = m1.set_speed(speed) {
                             error!("couldnt set lifts speed: Pwm error");
                         }
+                        info!("cmd: {:?}", cmd);
                     }
                     Actuator::Bucket => {
                         if let Err(_) = m2.set_speed(speed) {
@@ -375,6 +375,7 @@ async fn motor_controller_loop(mut class: Receiver<'static, Driver<'static, USB>
             ActuatorCommand::SetDirection(dir, actuator) =>{
                 match actuator {
                     Actuator::Lift => {
+                        info!("cmd: {:?}", cmd);
                         m1.set_direction(dir);
                     }
                     Actuator::Bucket => {
