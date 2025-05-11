@@ -750,9 +750,9 @@ checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "bytes"
-version = "1.9.0"
+version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "325918d6fe32f23b19878fe4b34794ae41fc19ddbe53b10571a4874d44ffd39b"
+checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 
 [[package]]
 name = "cakap2"
@@ -925,6 +925,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c682c223677e0e5b6b7f63a64b9351844c3f1b1678a68b7ee617e30fb082620e"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "cobs"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fa961b519f0b462e3a3b4a34b64d119eeaca1d59af726fe450bbba07a9fc0a1"
+dependencies = [
+ "thiserror 2.0.11",
 ]
 
 [[package]]
@@ -2683,12 +2692,15 @@ dependencies = [
  "apriltag-image",
  "apriltag-nalgebra",
  "bitcode",
+ "bytes",
  "cakap2",
  "chrono",
+ "cobs",
  "common",
  "crossbeam",
  "embedded_common",
  "file-lock",
+ "futures-util",
  "fxhash",
  "gputter",
  "imu-calib",
@@ -2709,6 +2721,7 @@ dependencies = [
  "tasker",
  "thalassic",
  "tokio-serial",
+ "tokio-util",
  "tracing",
  "udev",
  "v4l",
@@ -5337,9 +5350,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.13"
+version = "0.7.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7fcaa8d55a2bdd6b83ace262b016eca0d79ee02818c5c1bcdf0305114081078"
+checksum = "66a539a9ad6d5d281510d5bd368c973d636c02dbf8a67300bfb6b950696ad7df"
 dependencies = [
  "bytes",
  "futures-core",
@@ -5663,6 +5676,13 @@ name = "unindent"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7de7d73e1754487cb58364ee906a499937a0dfabd86bcb980fa99ec8c8fa2ce"
+
+[[package]]
+name = "usb-reset"
+version = "0.1.0"
+dependencies = [
+ "udev",
+]
 
 [[package]]
 name = "uuid"
