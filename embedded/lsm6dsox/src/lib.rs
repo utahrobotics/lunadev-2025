@@ -44,9 +44,9 @@ where
 {
     pub fn dummy_angular_rate(&self) -> Result<AngularRate, Error> {
         let mut x = 0;
-        while x <= 100000 {
+        black_box(while x <= 90000 {
             black_box(x += 1);
-        }
+        });
         Ok(AngularRate {
             x: measurements::AngularVelocity::from_rpm(1.1).into(),
             y: measurements::AngularVelocity::from_rpm(2.2).into(),
@@ -56,9 +56,9 @@ where
     
     pub fn dummy_accel_norm(&self) -> Result<F32x3, accelerometer::Error<Error>> {
         let mut x = 0;
-        while x <= 100000 {
+        black_box(while x <= 90000 {
             black_box(x += 1);
-        }
+        });
         Ok(F32x3 {
             x: 1.5,
             y: 2.5,
