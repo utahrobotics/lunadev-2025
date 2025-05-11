@@ -1,23 +1,85 @@
 use gputter::build_shader;
 
-pub(crate)struct Pcl2Obstacle<S>{
-    pub obstacle_map:gputter::shader::BufferGroupBinding<gputter::buffers::storage::StorageBuffer<[u32],gputter::buffers::storage::HostHidden,gputter::buffers::storage::ShaderReadWrite>,S> ,pub points:gputter::shader::BufferGroupBinding<gputter::buffers::storage::StorageBuffer<[gputter::types::AlignedVec4<f32>],gputter::buffers::storage::HostHidden,gputter::buffers::storage::ShaderReadWrite>,S> ,pub max_safe_gradient:gputter::shader::BufferGroupBinding<gputter::buffers::uniform::UniformBuffer<f32>,S> ,pub image_dimensions:gputter::shader::BufferGroupBinding<gputter::buffers::uniform::UniformBuffer<gputter::types::AlignedVec2<u32>>,S> ,pub heightmap_width:std::num::NonZeroU32,pub cell_count:std::num::NonZeroU32,pub cell_size:f32,
-}
-impl <S>Pcl2Obstacle<S>{
-    pub(crate)fn compile(&self) -> [gputter::shader::ComputeFn<S> ;
-    1usize]{
-        let mut bind_group_indices = vec![self.obstacle_map.group_index(),self.points.group_index(),self.max_safe_gradient.group_index(),self.image_dimensions.group_index(),];
-        bind_group_indices.sort();
-        bind_group_indices.dedup();
-        let heightmap_width =  &self.heightmap_width;
-        let cell_count =  &self.cell_count;
-        let cell_size =  &self.cell_size;
-        let shader = format!("alias NonZeroU32 = u32;\nalias NonZeroI32 = i32;\n\n    const HEIGHTMAP_WIDTH: NonZeroU32 = {heightmap_width};\n    const CELL_COUNT: NonZeroU32 = {cell_count};\n    const CELL_SIZE: f32 = {cell_size};\n\n    \n    @group({}) @binding({}) var<storage, read_write> obstacle_map: array<atomic<u32>, CELL_COUNT>;\n    @group({}) @binding({}) var<storage, read_write> points: array<vec4f>;\n    @group({}) @binding({}) var<uniform> max_safe_gradient: f32;\n    @group({}) @binding({}) var<uniform> image_dimensions: vec2u;\n\n    @compute\n    @workgroup_size(8, 8, 1)\n    fn grad(\n        @builtin(global_invocation_id) global_invocation_id : vec3u,\n    ) {{\n        if (global_invocation_id.x >= image_dimensions.x - 1 || global_invocation_id.x == 0 || global_invocation_id.y == 0 || global_invocation_id.y >= image_dimensions.y - 1) {{\n            return;\n        }}\n        let index = global_invocation_id.x + global_invocation_id.y * image_dimensions.x;\n        let origin = points[index];\n\n        if (origin.x < 0.0 || origin.z < 0.0 || origin.w == 0.0) {{\n            return;\n        }}\n\n        let x_index = u32(origin.x / CELL_SIZE);\n        let z_index = u32(origin.z / CELL_SIZE);\n\n        if (x_index >= HEIGHTMAP_WIDTH || z_index >= CELL_COUNT / HEIGHTMAP_WIDTH) {{\n            return;\n        }}\n\n        let points = array<vec4f, 8>(\n            points[index + 1],\n            points[index + 1 - image_dimensions.x],\n            points[index - image_dimensions.x],\n            points[index - 1 - image_dimensions.x],\n            points[index - 1],\n            points[index - 1 + image_dimensions.x],\n            points[index + image_dimensions.x],\n            points[index + 1 + image_dimensions.x],\n        );\n        var sum = vec3f(0.0, 0.0, 0.0);\n        var count = 0;\n        var crosses = array<vec4f, 8>();\n        for (var i = 0; i < 8; i++) {{\n            let next_i = (i + 1) % 8;\n            if (points[i].w == 0.0 || points[next_i].w == 0.0) {{\n                continue;\n            }}\n            let v1 = points[i].xyz - origin.xyz;\n            let v2 = points[next_i].xyz - origin.xyz;\n            let cross = normalize(cross(v1, v2));\n            crosses[i] = vec4f(cross, 1.0);\n            sum += cross;\n            count += 1;\n        }}\n        if (count < 3) {{\n            return;\n        }}\n        let normal = normalize(sum);\n        var max_gradient = -1.0;\n        for (var i = 0; i < 8; i++) {{\n            if (crosses[i].w == 0.0) {{\n                continue;\n            }}\n            let gradient = acos(dot(crosses[i].xyz, normal));\n            if (gradient > max_gradient) {{\n                max_gradient = gradient;\n            }}\n        }}\n        let obstacle_index = z_index * HEIGHTMAP_WIDTH + x_index;\n        if (max_gradient > max_safe_gradient) {{\n            atomicStore(&obstacle_map[obstacle_index], 2u);\n        }} else {{\n            atomicStore(&obstacle_map[obstacle_index], 1u);\n        }}\n    }}\n    ",bind_group_indices.binary_search(&self.obstacle_map.group_index()).unwrap(),self.obstacle_map.binding_index(),bind_group_indices.binary_search(&self.points.group_index()).unwrap(),self.points.binding_index(),bind_group_indices.binary_search(&self.max_safe_gradient.group_index()).unwrap(),self.max_safe_gradient.binding_index(),bind_group_indices.binary_search(&self.image_dimensions.group_index()).unwrap(),self.image_dimensions.binding_index(),);
-        let shader = gputter::get_device().device.create_shader_module(gputter::wgpu::ShaderModuleDescriptor {
-            label:Some(stringify!(Pcl2Obstacle)),source:gputter::wgpu::ShaderSource::Wgsl(shader.into()),
-        });
-        let shader = std::sync::Arc::new(shader);
-        [gputter::shader::ComputeFn::new_unchecked(shader.clone(),"grad",bind_group_indices.into_boxed_slice()),]
-    }
+build_shader!(
+    pub(crate) Pcl2Obstacle,
+    r#"
+    const HEIGHTMAP_WIDTH: NonZeroU32 = {{heightmap_width}};
+    const CELL_COUNT: NonZeroU32 = {{cell_count}};
+    const CELL_SIZE: f32 = {{cell_size}};
 
+    // Shader is read_write as it is written to in another shader
+    #[buffer] var<storage, read_write> obstacle_map: array<atomic<u32>, CELL_COUNT>;
+    #[buffer] var<storage, read_write> points: array<vec4f>;
+    #[buffer] var<uniform> max_safe_gradient: f32;
+    #[buffer] var<uniform> image_dimensions: vec2u;
+
+    @compute
+    @workgroup_size(8, 8, 1)
+    fn grad(
+        @builtin(global_invocation_id) global_invocation_id : vec3u,
+    ) {
+        if (global_invocation_id.x >= image_dimensions.x - 1 || global_invocation_id.x == 0 || global_invocation_id.y == 0 || global_invocation_id.y >= image_dimensions.y - 1) {
+            return;
+        }
+        let index = global_invocation_id.x + global_invocation_id.y * image_dimensions.x;
+        let origin = points[index];
+
+        if (origin.x < 0.0 || origin.z < 0.0 || origin.w == 0.0) {
+            return;
+        }
+
+        let x_index = u32(origin.x / CELL_SIZE);
+        let z_index = u32(origin.z / CELL_SIZE);
+
+        if (x_index >= HEIGHTMAP_WIDTH || z_index >= CELL_COUNT / HEIGHTMAP_WIDTH) {
+            return;
+        }
+
+        let points = array<vec4f, 8>(
+            points[index + 1],
+            points[index + 1 - image_dimensions.x],
+            points[index - image_dimensions.x],
+            points[index - 1 - image_dimensions.x],
+            points[index - 1],
+            points[index - 1 + image_dimensions.x],
+            points[index + image_dimensions.x],
+            points[index + 1 + image_dimensions.x],
+        );
+        var sum = vec3f(0.0, 0.0, 0.0);
+        var count = 0;
+        var crosses = array<vec4f, 8>();
+        for (var i = 0; i < 8; i++) {
+            let next_i = (i + 1) % 8;
+            if (points[i].w == 0.0 || points[next_i].w == 0.0) {
+                continue;
+            }
+            let v1 = points[i].xyz - origin.xyz;
+            let v2 = points[next_i].xyz - origin.xyz;
+            let cross = normalize(cross(v1, v2));
+            crosses[i] = vec4f(cross, 1.0);
+            sum += cross;
+            count += 1;
+        }
+        if (count < 3) {
+            return;
+        }
+        let normal = normalize(sum);
+        var max_gradient = -1.0;
+        for (var i = 0; i < 8; i++) {
+            if (crosses[i].w == 0.0) {
+                continue;
+            }
+            let gradient = acos(dot(crosses[i].xyz, normal));
+            if (gradient > max_gradient) {
+                max_gradient = gradient;
+            }
+        }
+        let obstacle_index = z_index * HEIGHTMAP_WIDTH + x_index;
+        if (max_gradient > max_safe_gradient) {
+            atomicStore(&obstacle_map[obstacle_index], 2u);
+        } else {
+            atomicStore(&obstacle_map[obstacle_index], 1u);
+        }
     }
+    "#
+);
