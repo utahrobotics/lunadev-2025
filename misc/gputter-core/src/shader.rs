@@ -59,7 +59,7 @@ macro_rules! tuple_impl {
                 let _slices = ($(
                     self.$index.post_submission(),
                 )*);
-                device.poll(wgpu::Maintain::WaitForSubmissionIndex(idx));
+                device.poll(wgpu::PollType::WaitForSubmissionIndex(idx));
             }
         }
     }

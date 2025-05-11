@@ -31,11 +31,12 @@ pub async fn init_gputter() -> anyhow::Result<()> {
             force_fallback_adapter: false,
         })
         .await
-        .ok_or_else(|| anyhow::anyhow!("Failed to request adapter"))?;
+        .or_else(|e| Err(anyhow::anyhow!("Failed to request adapter: {e}")))?;
 
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
+                trace: wgpu::Trace::Off,
                 required_features: wgpu::Features::empty(),
                 // WebGL doesn't support all of wgpu's features, so if
                 // we're building for the web, we'll have to disable some.
@@ -46,8 +47,7 @@ pub async fn init_gputter() -> anyhow::Result<()> {
                 },
                 memory_hints: wgpu::MemoryHints::Performance,
                 label: None,
-            },
-            None, // Trace path
+            }
         )
         .await?;
     let _ = GPU_DEVICE.set(GpuDevice { device, queue });
