@@ -272,7 +272,7 @@ async fn read_sensors_loop(
                 imu0_readings[i] = FromIMU::NoDataReady;
             }
         }
-        
+        Timer::after_millis(1).await;
         let mut imu1_readings = [FromIMU::Error; 2];
         for (i,imu) in imu1.iter_mut().enumerate() {
             let mut error_occured = false;
@@ -322,8 +322,10 @@ async fn read_sensors_loop(
         );
 
         if class.dtr() {
-            let msg = &msg.serialize();
-            for chunk in msg.chunks(16) {
+            let serialized: [u8; FromPicoV3::SIZE] = msg.serialize();
+            let mut stuffed = [0u8; cobs::max_encoding_length(FromPicoV3::SIZE)+1];
+            let len = cobs::encode(&serialized, &mut stuffed);
+            for chunk in stuffed[..len+1].chunks(16) {
                 if let Err(e) = class.write_packet(chunk).await {
                     //error!("{:?}",e);
                 }
