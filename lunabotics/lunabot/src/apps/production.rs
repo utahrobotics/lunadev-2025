@@ -41,6 +41,7 @@ mod motors;
 mod rerun_viz;
 mod rp2040;
 mod streaming;
+mod frame_codec;
 
 pub use apriltag::Apriltag;
 
