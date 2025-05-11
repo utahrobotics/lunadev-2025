@@ -38,3 +38,4 @@ cyw43.workspace = true
 cyw43-pio.workspace = true
 rand.workspace = true
 embassy-sync.workspace = true
+cobs = { version = "0.3.0", features = ["defmt"], default-features = false }

@@ -1,6 +1,6 @@
 use std::{sync::{mpsc::{Receiver, Sender, RecvTimeoutError}, Arc}, time::Duration};
 
-use crate::localization::{IMUReading, LocalizerRef};
+use crate::{apps::production::frame_codec::CobsCodec, localization::{IMUReading, LocalizerRef}};
 use crossbeam::atomic::AtomicCell;
 use embedded_common::*;
 use nalgebra::Vector3;
@@ -13,9 +13,11 @@ use tasker::{
 };
 use tokio_serial::SerialPortBuilderExt;
 use tokio_serial::SerialPort;
+use tokio_util::codec::FramedRead;
 use tracing::{error, info, warn};
 use udev::{EventType, MonitorBuilder, Udev};
 use std::{fs, io, path::{Path, PathBuf}, thread};
+use futures_util::StreamExt;
 
 use super::udev_poll;
 
@@ -44,7 +46,6 @@ pub fn enumerate_v3picos(hinge_node: Node<&'static [NodeData]>, localizer_ref: L
                 pico.imus[3].node
             ],
             hinge_node,
-            first_startup: true
         };
         
         let mut task = V3PicoTask {
@@ -176,7 +177,6 @@ struct SharedState {
     /// imu node
     imus: [StaticImmutableNode; 4],
     hinge_node: Node<&'static [NodeData]>,
-    first_startup: bool
 }
 
 pub struct V3PicoTask {
@@ -211,26 +211,33 @@ impl V3PicoTask {
         }
 
         let port = BufStream::new(port);
-        let (mut reader, mut writer) = tokio::io::split(port);
-
+        let ( reader, mut writer) = tokio::io::split(port);
+        let mut reader = FramedRead::new(reader, CobsCodec{});
         let shared = Arc::clone(&self.shared);
         let (is_broken_tx, is_broken_rx) = tokio::sync::watch::channel(false);
         let path_str_clone = path_str.clone();
         let actuator_readings = self.actuator_readings;
         get_tokio_handle().spawn(async move {
             let mut guard = shared.lock().await;
-            if guard.first_startup {
-                guard.first_startup = false;
-                // power_cycle(&path_str_clone).unwrap();
-            }
+
             loop {
                 tokio::time::sleep(std::time::Duration::from_millis(IMU_READING_DELAY_MS)).await;
                 let mut reading = [0u8; FromPicoV3::SIZE];
-                if let Err(e) = reader.read_exact(&mut reading).await {
+                let reading = reader.next().await;
+                if let Some(Err(e)) = reading {
                     let _ = is_broken_tx.send(true);
                     error!("failed to read from pico: {}", e);
                     break;
                 }
+                if let None = reading {
+                    warn!("no reading yet");
+                    continue;
+                }
+                let reading = reading.unwrap().unwrap();
+                let Ok(reading) = reading.try_into() else {
+                    warn!("not 105 bytes");
+                    continue;
+                };
                 let Ok(reading) = FromPicoV3::deserialize(reading) else {
                     error!("Failed to deserialize message from picov3 serial port");
                     let _ = is_broken_tx.send(true);
@@ -243,6 +250,7 @@ impl V3PicoTask {
                     }
                     break;
                 };
+                info!("{:?}", reading);
                 if let FromPicoV3::Reading(imu_readings, actuators) = reading {
                     let lift_hinge_angle = (actuators.m1_reading as f64 * 0.00743033 - 2.19192);
                     actuator_readings.store(Some(actuators));

@@ -48,6 +48,7 @@ tokio-util = {version = "0.7.15", optional = true, features = ["codec"]}
 # fix for https://github.com/apache/arrow-rs/issues/7196
 chrono = "= 0.4.39"
 bytes = "1.10.1"
+futures-util = "0.3.31"
 
 [features]
 production = [

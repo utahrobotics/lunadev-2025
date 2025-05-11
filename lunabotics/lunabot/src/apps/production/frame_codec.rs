@@ -1,3 +1,6 @@
+use std::io::Error;
+
+use bytes::Buf;
 use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite};
 use cobs::{encode_vec, decode_vec};
 
@@ -10,7 +13,8 @@ impl Decoder for CobsCodec {
         if let Some(pos) = src.iter().position(|b| *b == 0) {
             let frame = src.split_to(pos);
             src.advance(1);                       // drop sentinel
-            return Ok(Some(decode_vec(&frame)?));
+            return Ok(Some(decode_vec(&frame).map_err(|e| {
+                std::io::Error::new(std::io::ErrorKind::Other, "failed to decode")})?));
         }
         Ok(None)
     }
