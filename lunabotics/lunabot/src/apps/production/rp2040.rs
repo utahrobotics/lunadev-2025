@@ -250,12 +250,12 @@ impl V3PicoTask {
                     }
                     break;
                 };
-                info!("{:?}", reading);
+                // info!("{:?}", reading);
                 if let FromPicoV3::Reading(imu_readings, actuators) = reading {
-                    let lift_hinge_angle = (actuators.m1_reading as f64 * 0.00743033 - 2.19192);
+                    // let lift_hinge_angle = (actuators.m1_reading as f64 * 0.00743033 - 2.19192);
                     actuator_readings.store(Some(actuators));
                     // tracing::info!("lift angle: {}", lift_hinge_angle);
-		            guard.hinge_node.set_angle_one_axis(lift_hinge_angle.to_radians());
+		            // guard.hinge_node.set_angle_one_axis(lift_hinge_angle.to_radians());
                     for (i,(msg, node)) in imu_readings.into_iter().zip(guard.imus).enumerate() {
                         match msg {
                             FromIMU::Reading(rate, accel) => {
@@ -266,12 +266,12 @@ impl V3PicoTask {
                                 let accel = Vector3::new(accel.x, -accel.z, -accel.y);
 
                                 let transformed_accel = rotation * accel * 9.8;
-                                // info!("imu{} {:?}",i ,transformed_accel);
+                                // info!("imu{} {:?}", i, transformed_accel);
 
                                 guard.localizer_ref.set_imu_reading(
                                     i,
                                     IMUReading {
-                                        angular_velocity: transformed_rate.cast(),
+                                        angular_velocity: transformed_rate.cast() * 0.0,
                                         acceleration: transformed_accel.cast(),
                                     }
                                 );

@@ -258,23 +258,23 @@ pub fn spawn_thalassic_pipeline(
 
             pipeline.process(expanded_obstacle_map);
 
-            #[cfg(feature = "production")]
-            if let Some(recorder) = crate::apps::RECORDER.get() {
-                if recorder.level.is_all() {
-                    if let Err(e) = recorder.recorder.log(
-                        format!("{}/heightmap", crate::apps::ROBOT),
-                        &rerun::Points3D::new(heightmap.iter().enumerate().map(|(i, &height)| {
-                            rerun::Position3D::new(
-                                (i % THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE,
-                                height,
-                                (i / THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE,
-                            )
-                        })),
-                    ) {
-                        tracing::error!("Failed to log heightmap: {e}");
-                    }
-                }
-            }
+            // #[cfg(feature = "production")]
+            // if let Some(recorder) = crate::apps::RECORDER.get() {
+            //     if recorder.level.is_all() {
+            //         if let Err(e) = recorder.recorder.log(
+            //             format!("{}/heightmap", crate::apps::ROBOT),
+            //             &rerun::Points3D::new(heightmap.iter().enumerate().map(|(i, &height)| {
+            //                 rerun::Position3D::new(
+            //                     (i % THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE,
+            //                     height,
+            //                     (i / THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE,
+            //                 )
+            //             })),
+            //         ) {
+            //             tracing::error!("Failed to log heightmap: {e}");
+            //         }
+            //     }
+            // }
 
             #[cfg(feature="production")]
             if let Some(recorder) = crate::apps::RECORDER.get() {
