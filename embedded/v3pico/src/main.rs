@@ -273,8 +273,7 @@ async fn read_sensors_loop(
             }
         }
         
-        // negligible ammount of time but it does trigger a context switch so the usb task can take a moment to write over the cable
-        Timer::after_nanos(1).await; 
+        embassy_futures::yield_now().await;
         let mut imu1_readings = [FromIMU::Error; 2];
         for (i,imu) in imu1.iter_mut().enumerate() {
             let mut error_occured = false;
