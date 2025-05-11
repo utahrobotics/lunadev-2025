@@ -99,6 +99,14 @@ dependencies = [
     "build_lunabase_prod",
 ]
 
+# Fast lunabase production build
+[tasks.fluna2]
+workspace = false
+command = "godot"
+args = ["--path", "godot/lunabase", "-d", "--", "192.168.0.103"]
+dependencies = [
+    "build_lunabase_prod",
+]
 
 # collects imu readings for 10 seconds then runs calibration code from misc/imu-calib
 [tasks.calibrate]
