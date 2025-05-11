@@ -8,11 +8,10 @@ use simple_motion::{StaticImmutableNode, Node, NodeData};
 use tasker::{
     get_tokio_handle, tokio::{
         self,
-        io::{AsyncReadExt, AsyncWriteExt, BufStream}, sync::Mutex,
+        io::{AsyncWriteExt, BufStream}, sync::Mutex, time::timeout,
     }, BlockOn
 };
 use tokio_serial::SerialPortBuilderExt;
-use tokio_serial::SerialPort;
 use tokio_util::codec::FramedRead;
 use tracing::{error, info, warn};
 use udev::{EventType, MonitorBuilder, Udev};
@@ -215,22 +214,30 @@ impl V3PicoTask {
         let mut reader = FramedRead::new(reader, CobsCodec{});
         let shared = Arc::clone(&self.shared);
         let (is_broken_tx, is_broken_rx) = tokio::sync::watch::channel(false);
-        let path_str_clone = path_str.clone();
         let actuator_readings = self.actuator_readings;
         get_tokio_handle().spawn(async move {
-            let mut guard = shared.lock().await;
-
+            let guard = shared.lock().await;
+            let mut no_reading_count = 0;
             loop {
-                tokio::time::sleep(std::time::Duration::from_millis(IMU_READING_DELAY_MS)).await;
-                let mut reading = [0u8; FromPicoV3::SIZE];
-                let reading = reader.next().await;
+                //TODO: figure out some way to check if the pico is disconnected here
+                tokio::time::sleep(std::time::Duration::from_millis(IMU_READING_DELAY_MS-1)).await;
+                let Ok(reading) = timeout(Duration::from_millis(200), reader.next()).await else {
+                    error!("Pico has become unresponsive.");
+                    let _ = is_broken_tx.send(true);
+                    break;
+                };
                 if let Some(Err(e)) = reading {
                     let _ = is_broken_tx.send(true);
                     error!("failed to read from pico: {}", e);
                     break;
                 }
                 if let None = reading {
-                    warn!("no reading yet");
+                    no_reading_count += 1;
+                    if no_reading_count <= 5 {
+                        let _ = is_broken_tx.send(true);
+                        error!("Pico has become unresponsive. (no reading count)"); 
+                        break;
+                    }
                     continue;
                 }
                 let reading = reading.unwrap().unwrap();
@@ -250,18 +257,18 @@ impl V3PicoTask {
                     }
                     break;
                 };
-                // info!("{:?}", reading);
+               
                 if let FromPicoV3::Reading(imu_readings, actuators) = reading {
-                    // let lift_hinge_angle = (actuators.m1_reading as f64 * 0.00743033 - 2.19192);
+                    let lift_hinge_angle = actuators.m1_reading as f64 * 0.00743033 - 2.19192;
                     actuator_readings.store(Some(actuators));
-                    // tracing::info!("lift angle: {}", lift_hinge_angle);
-		            // guard.hinge_node.set_angle_one_axis(lift_hinge_angle.to_radians());
+                    //tracing::info!("lift angle: {}", lift_hinge_angle);
+		                guard.hinge_node.set_angle_one_axis(lift_hinge_angle.to_radians());
                     for (i,(msg, node)) in imu_readings.into_iter().zip(guard.imus).enumerate() {
                         match msg {
                             FromIMU::Reading(rate, accel) => {
                                 let rotation = node.get_isometry_from_base().rotation.cast();
                                 let angular_velocity = Vector3::new(-rate.x, rate.z, rate.y);
-                                let transformed_rate = (rotation * angular_velocity);
+                                let transformed_rate = rotation * angular_velocity;
 
                                 let accel = Vector3::new(accel.x, -accel.z, -accel.y);
 
@@ -327,7 +334,7 @@ impl V3PicoTask {
 }
 
 /// gets the "…/authorized" for `/dev/ttyACM*`.
-fn authorized_path(tty: &str) -> io::Result<PathBuf> {
+fn _authorized_path(tty: &str) -> io::Result<PathBuf> {
     let path = Path::new("/sys/class/tty")
         .join(Path::new(tty).file_name().unwrap())
         .join("device");
@@ -344,8 +351,8 @@ fn authorized_path(tty: &str) -> io::Result<PathBuf> {
     Ok(dev_path.join("authorized"))
 }
 
-pub fn power_cycle(tty: &str) -> io::Result<()> {
-    let auth = authorized_path(tty)?;
+pub fn _power_cycle(tty: &str) -> io::Result<()> {
+    let auth = _authorized_path(tty)?;
 
     fs::write(&auth, b"0")?;
     info!("disabled port");
@@ -356,7 +363,7 @@ pub fn power_cycle(tty: &str) -> io::Result<()> {
 
 
 pub fn powercycle_ioctl() -> Result<(), std::io::Error> {
-    let output = std::process::Command::new("usb-reset").spawn()?;
+    let _ = std::process::Command::new("usb-reset").spawn()?;
     std::thread::sleep(Duration::from_secs_f32(0.02));
     Ok(())
 }

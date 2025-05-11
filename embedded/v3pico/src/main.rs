@@ -272,7 +272,9 @@ async fn read_sensors_loop(
                 imu0_readings[i] = FromIMU::NoDataReady;
             }
         }
-        Timer::after_millis(1).await;
+        
+        // negligible ammount of time but it does trigger a context switch so the usb task can take a moment to write over the cable
+        Timer::after_nanos(1).await; 
         let mut imu1_readings = [FromIMU::Error; 2];
         for (i,imu) in imu1.iter_mut().enumerate() {
             let mut error_occured = false;

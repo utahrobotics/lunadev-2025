@@ -11,7 +11,7 @@ mod gyro;
 pub mod register;
 pub mod types;
 
-use core::cell::RefCell;
+use core::{cell::RefCell, hint::black_box};
 use embassy_sync::blocking_mutex::{raw::CriticalSectionRawMutex, Mutex};
 pub use register::*;
 pub use types::*;
@@ -42,8 +42,11 @@ where
     I2C: I2c,
     Delay: DelayNs,
 {
-    /// added for usb testing purposes so Matthew doesnt need access to the robot to test protocols built on CDC-ACM
     pub fn dummy_angular_rate(&self) -> Result<AngularRate, Error> {
+        let mut x = 0;
+        while x <= 100000 {
+            black_box(x += 1);
+        }
         Ok(AngularRate {
             x: measurements::AngularVelocity::from_rpm(1.1).into(),
             y: measurements::AngularVelocity::from_rpm(2.2).into(),
@@ -51,8 +54,11 @@ where
         })
     }
     
-    /// added for usb testing purposes so Matthew doesnt need access to the robot to test protocols built on CDC-ACM
     pub fn dummy_accel_norm(&self) -> Result<F32x3, accelerometer::Error<Error>> {
+        let mut x = 0;
+        while x <= 100000 {
+            black_box(x += 1);
+        }
         Ok(F32x3 {
             x: 1.5,
             y: 2.5,
