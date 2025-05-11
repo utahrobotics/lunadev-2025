@@ -47,7 +47,7 @@ build_shader!(
         );
         var sum = vec3f(0.0, 0.0, 0.0);
         var count = 0;
-        var crosses = array<vec3f, 8>();
+        var crosses = array<vec4f, 8>();
         for (var i = 0; i < 8; i++) {
             let next_i = (i + 1) % 8;
             if (points[i].w == 0.0 || points[next_i].w == 0.0) {
@@ -56,17 +56,20 @@ build_shader!(
             let v1 = points[i].xyz - origin.xyz;
             let v2 = points[next_i].xyz - origin.xyz;
             let cross = normalize(cross(v1, v2));
-            crosses[i] = cross;
+            crosses[i] = vec4f(cross, 1.0);
             sum += cross;
             count += 1;
         }
-        if (count < 6) {
+        if (count < 3) {
             return;
         }
         let normal = normalize(sum);
         var max_gradient = -1.0;
         for (var i = 0; i < 8; i++) {
-            let gradient = acos(dot(crosses[i], normal));
+            if (crosses[i].w == 0.0) {
+                continue;
+            }
+            let gradient = acos(dot(crosses[i].xyz, normal));
             if (gradient > max_gradient) {
                 max_gradient = gradient;
             }
