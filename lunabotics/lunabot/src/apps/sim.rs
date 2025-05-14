@@ -1,9 +1,16 @@
 use std::{
-    cmp::Ordering, collections::VecDeque, net::{IpAddr, SocketAddr}, num::NonZeroU32, process::Stdio, sync::{Arc, Mutex}
+    cmp::Ordering,
+    collections::VecDeque,
+    net::{IpAddr, SocketAddr},
+    num::NonZeroU32,
+    process::Stdio,
+    sync::{Arc, Mutex},
 };
 
 use common::{
-    cell_to_world_point, lunasim::{FromLunasim, FromLunasimbot}, CellsRect, LunabotStage
+    cell_to_world_point,
+    lunasim::{FromLunasim, FromLunasimbot},
+    CellsRect, LunabotStage,
 };
 use crossbeam::atomic::AtomicCell;
 use gputter::{
@@ -12,9 +19,7 @@ use gputter::{
 };
 use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
-use nalgebra::{
-    Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4
-};
+use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4};
 use simple_motion::{ChainBuilder, NodeSerde};
 use tasker::shared::OwnedData;
 use tasker::tokio;
@@ -32,7 +37,9 @@ use thalassic::DepthProjectorBuilder;
 use tracing::{error, info, warn};
 
 use crate::{
-    localization::{IMUReading, Localizer}, pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline}, utils::SteeringLerper
+    localization::{IMUReading, Localizer},
+    pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline},
+    utils::SteeringLerper,
 };
 use crate::{pathfinding::DefaultPathfinder, pipelines::thalassic::ThalassicData};
 
@@ -393,7 +400,7 @@ impl LunasimbotApp {
             lunasim_stdin2.write(bytes);
         });
         let mut bitcode_buffer = bitcode::Buffer::new();
-        
+
         run_ai(
             robot_chain.into(),
             |action, inputs| match action {
@@ -408,7 +415,9 @@ impl LunasimbotApp {
                     if let Ok(path) = pathfinder.find_path(&shared_thalassic_data, from, to, kind) {
                         let bytes = bitcode_buffer.encode(&FromLunasimbot::Path(
                             path.iter()
-                                .map(|p|  cell_to_world_point(p.cell, 0.).coords.cast::<f32>().data.0[0]) // if the y value was needed here, sorry
+                                .map(|p| {
+                                    cell_to_world_point(p.cell, 0.).coords.cast::<f32>().data.0[0]
+                                }) // if the y value was needed here, sorry
                                 .collect(),
                         ));
                         lunasim_stdin.write(bytes);
@@ -420,9 +429,7 @@ impl LunasimbotApp {
                 Action::AvoidCell(cell) => {
                     pathfinder.avoid_cell(cell);
                 }
-                Action::LiftShake => {
-                    
-                }
+                Action::LiftShake => {}
                 Action::ClearPointsToAvoid => {
                     pathfinder.clear_cells_to_avoid();
                 }
@@ -492,39 +499,53 @@ impl LunasimbotApp {
     }
 }
 
-pub fn next_dig_site_candidate(prev_site: (usize, usize), dig_area: CellsRect, gap: usize) -> Option<(usize, usize)> {
+pub fn next_dig_site_candidate(
+    prev_site: (usize, usize),
+    dig_area: CellsRect,
+    gap: usize,
+) -> Option<(usize, usize)> {
     let (x, y) = prev_site;
-    
-    // no more room in this row
-    let res = if x + gap > dig_area.left  { 
-    
-        // no more rows!
-        if y - gap < dig_area.bottom { None }
-        
-        // start next row
-        else { Some((dig_area.right + gap / 2, y - gap)) }
-    }
 
+    // no more room in this row
+    let res = if x + gap > dig_area.left {
+        // no more rows!
+        if y - gap < dig_area.bottom {
+            None
+        }
+        // start next row
+        else {
+            Some((dig_area.right + gap / 2, y - gap))
+        }
+    }
     // continue with this row
-    else { Some((x + gap, y)) };
-    
+    else {
+        Some((x + gap, y))
+    };
+
     res
 }
-pub fn next_dump_site_candidate(prev_site: (usize, usize), dump_area: CellsRect, gap: usize) -> Option<(usize, usize)> {
+pub fn next_dump_site_candidate(
+    prev_site: (usize, usize),
+    dump_area: CellsRect,
+    gap: usize,
+) -> Option<(usize, usize)> {
     let (x, y) = prev_site;
-    
-    // no more room in this row
-    let res = if x + gap > dump_area.left  { 
-    
-        // no more rows!
-        if y + gap > dump_area.top { None }
-        
-        // start next row
-        else { Some((dump_area.right + gap / 2, y + gap)) }
-    }
 
+    // no more room in this row
+    let res = if x + gap > dump_area.left {
+        // no more rows!
+        if y + gap > dump_area.top {
+            None
+        }
+        // start next row
+        else {
+            Some((dump_area.right + gap / 2, y + gap))
+        }
+    }
     // continue with this row
-    else { Some((x + gap, y)) };
-    
+    else {
+        Some((x + gap, y))
+    };
+
     res
 }

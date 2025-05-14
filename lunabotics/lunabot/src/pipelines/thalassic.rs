@@ -9,7 +9,7 @@ use crossbeam::atomic::AtomicCell;
 use gputter::is_gputter_initialized;
 use nalgebra::Vector2;
 
-#[cfg(feature="production")]
+#[cfg(feature = "production")]
 use rerun::Points3D;
 
 use tasker::shared::OwnedData;
@@ -60,7 +60,7 @@ impl ThalassicData {
     const MAP_WIDTH: usize = THALASSIC_WIDTH as usize;
     const MAP_HEIGHT: usize = THALASSIC_HEIGHT as usize;
 
-    #[cfg(feature="production")]
+    #[cfg(feature = "production")]
     fn index_to_xy(index: usize) -> (usize, usize) {
         (index % Self::MAP_WIDTH, index / Self::MAP_WIDTH)
     }
@@ -98,16 +98,18 @@ impl ThalassicData {
         }
 
         let robot_cell_radius = (self.current_robot_radius_meters / THALASSIC_CELL_SIZE).ceil();
-        
-        let robot_is_standing_on = |cell: (usize, usize)| {
-            match robot_cell_pos {
-                Some(robot_cell_pos) => distance_between_tuples(robot_cell_pos, cell) <= robot_cell_radius,
-                None => false,
+
+        let robot_is_standing_on = |cell: (usize, usize)| match robot_cell_pos {
+            Some(robot_cell_pos) => {
+                distance_between_tuples(robot_cell_pos, cell) <= robot_cell_radius
             }
+            None => false,
         };
-        
-        if robot_is_standing_on(target_cell_pos) { return Ok(()) }
-        
+
+        if robot_is_standing_on(target_cell_pos) {
+            return Ok(());
+        }
+
         if self.get_cell_state(target_cell_pos) != CellState::GREEN {
             return Err(target_cell_pos);
         }
@@ -144,8 +146,7 @@ impl ThalassicData {
                 q.push_back((x, y - 1));
 
                 // if a cell is not inside the robot AND and unknown then target cell is dangerous
-                if !robot_is_standing_on(nearby_cell_usize) && !self.is_known(nearby_cell_usize)
-                {
+                if !robot_is_standing_on(nearby_cell_usize) && !self.is_known(nearby_cell_usize) {
                     return Err(nearby_cell_usize);
                 }
             }
@@ -178,7 +179,7 @@ impl ThalassicData {
             _ => CellState::UNKNOWN,
         }
     }
-    
+
     pub fn is_known(&self, pos: (usize, usize)) -> bool {
         self.get_cell_state(pos) != CellState::UNKNOWN
     }
@@ -208,23 +209,22 @@ pub fn spawn_thalassic_pipeline(
         .build();
 
         let reference = pipeline.get_ref();
-        
+
         #[cfg(feature = "production")]
         if let Some(recorder) = crate::apps::RECORDER.get() {
             let initial_map = Points3D::new((0..THALASSIC_CELL_COUNT).map(|i| {
                 let i = i as usize;
                 rerun::Position3D::new(
-                    (i % THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE, 
-                    0.0, 
-                    (i / THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE
+                    (i % THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE,
+                    0.0,
+                    (i / THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE,
                 )
-            })).with_radii(
-                (0..THALASSIC_CELL_COUNT).map(|_| {
-                    0.01
-                })
-            );
+            }))
+            .with_radii((0..THALASSIC_CELL_COUNT).map(|_| 0.01));
             if let Err(e) = recorder.recorder.log_static(
-                format!("{}/expanded_obstacle_map",crate::apps::ROBOT), &initial_map) {
+                format!("{}/expanded_obstacle_map", crate::apps::ROBOT),
+                &initial_map,
+            ) {
                 tracing::error!("Couldnt log expanded obstacle map: {e}");
             }
         }
@@ -276,26 +276,21 @@ pub fn spawn_thalassic_pipeline(
             //     }
             // }
 
-            #[cfg(feature="production")]
+            #[cfg(feature = "production")]
             if let Some(recorder) = crate::apps::RECORDER.get() {
                 if let Err(e) = recorder.recorder.log(
-                    format!("{}/expanded_obstacle_map",crate::apps::ROBOT),
-                    &rerun::Points3D::update_fields()
-                    .with_colors((0..THALASSIC_CELL_COUNT).map(|i| {
-                        let pos = ThalassicData::index_to_xy(i as usize);
-                        let color = match (&owned).get_cell_state(pos) {
-                            CellState::GREEN => {
-                                rerun::Color::from_rgb(0,255,0)
-                            }
-                            CellState::RED => {
-                                rerun::Color::from_rgb(255,0,0)
-                            }
-                            CellState::UNKNOWN => {
-                                rerun::Color::from_rgb(77, 77, 77)
-                            }
-                        };
-                        color
-                    }))
+                    format!("{}/expanded_obstacle_map", crate::apps::ROBOT),
+                    &rerun::Points3D::update_fields().with_colors((0..THALASSIC_CELL_COUNT).map(
+                        |i| {
+                            let pos = ThalassicData::index_to_xy(i as usize);
+                            let color = match (&owned).get_cell_state(pos) {
+                                CellState::GREEN => rerun::Color::from_rgb(0, 255, 0),
+                                CellState::RED => rerun::Color::from_rgb(255, 0, 0),
+                                CellState::UNKNOWN => rerun::Color::from_rgb(77, 77, 77),
+                            };
+                            color
+                        },
+                    )),
                 ) {
                     tracing::error!("Failed to log expanded obstacle map: {e}");
                 }

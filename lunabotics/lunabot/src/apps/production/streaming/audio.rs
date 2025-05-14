@@ -1,9 +1,18 @@
-use std::{io::ErrorKind, net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket}};
+use std::{
+    io::ErrorKind,
+    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
+};
 
 use common::AUDIO_FRAME_SIZE;
-use rodio::{cpal::{default_host, traits::{HostTrait, StreamTrait}, StreamConfig}, DeviceTrait};
+use rodio::{
+    cpal::{
+        default_host,
+        traits::{HostTrait, StreamTrait},
+        StreamConfig,
+    },
+    DeviceTrait,
+};
 use tracing::{error, info};
-
 
 pub fn audio_streaming(mut lunabase_address: Option<IpAddr>) {
     std::thread::spawn(move || {
@@ -22,16 +31,20 @@ pub fn audio_streaming(mut lunabase_address: Option<IpAddr>) {
             return;
         }
         let host = default_host();
-        let audio_input = match host
-            .default_input_device() {
-                Some(x) => x,
-                None => {
-                    error!("Failed to get default audio input device");
-                    return;
-                }
+        let audio_input = match host.default_input_device() {
+            Some(x) => x,
+            None => {
+                error!("Failed to get default audio input device");
+                return;
+            }
         };
-    
-        let mut enc = opus::Encoder::new(common::AUDIO_SAMPLE_RATE, opus::Channels::Mono, opus::Application::LowDelay).unwrap();
+
+        let mut enc = opus::Encoder::new(
+            common::AUDIO_SAMPLE_RATE,
+            opus::Channels::Mono,
+            opus::Application::LowDelay,
+        )
+        .unwrap();
         // enc.set_inband_fec(true).unwrap();
         enc.set_bitrate(opus::Bitrate::Bits(96000)).unwrap();
         let mut encoded = [0u8; 4096];
@@ -55,10 +68,16 @@ pub fn audio_streaming(mut lunabase_address: Option<IpAddr>) {
                 };
                 samples_vec.extend_from_slice(samples);
                 while samples_vec.len() >= AUDIO_FRAME_SIZE as usize {
-                    match enc.encode(&samples_vec[0..AUDIO_FRAME_SIZE as usize], &mut encoded[4..]) {
+                    match enc.encode(
+                        &samples_vec[0..AUDIO_FRAME_SIZE as usize],
+                        &mut encoded[4..],
+                    ) {
                         Ok(n) => {
                             encoded[..4].copy_from_slice(&i.to_le_bytes());
-                            if let Err(e) = udp.send_to(&encoded[..n + 4], SocketAddr::new(ip, common::ports::AUDIO)) {
+                            if let Err(e) = udp.send_to(
+                                &encoded[..n + 4],
+                                SocketAddr::new(ip, common::ports::AUDIO),
+                            ) {
                                 if e.kind() == ErrorKind::ConnectionRefused {
                                     if let Some(ip) = lunabase_address {
                                         if ip.is_loopback() {
@@ -69,7 +88,7 @@ pub fn audio_streaming(mut lunabase_address: Option<IpAddr>) {
                                 lunabase_address = None;
                                 error!("Failed to send audio data to lunabase: {e}");
                             }
-                        },
+                        }
                         Err(e) => {
                             error!("Error encoding audio: {}", e);
                         }
@@ -81,7 +100,7 @@ pub fn audio_streaming(mut lunabase_address: Option<IpAddr>) {
             |e| {
                 error!("Error in audio input stream: {}", e);
             },
-            None
+            None,
         );
         match result {
             Ok(stream) => {
@@ -89,7 +108,12 @@ pub fn audio_streaming(mut lunabase_address: Option<IpAddr>) {
                     error!("Error playing audio input stream: {}", e);
                     return;
                 }
-                info!("Audio streaming started with device: {}", audio_input.name().unwrap_or_else(|_| "unknown device".to_string()));
+                info!(
+                    "Audio streaming started with device: {}",
+                    audio_input
+                        .name()
+                        .unwrap_or_else(|_| "unknown device".to_string())
+                );
                 // Dropping the stream will stop it
                 std::mem::forget(stream);
             }

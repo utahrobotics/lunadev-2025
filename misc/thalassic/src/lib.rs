@@ -4,10 +4,7 @@ use bytemuck::{Pod, Zeroable};
 use depth2pcl::Depth2Pcl;
 use gputter::{
     buffers::{
-        storage::{
-            HostReadOnly, HostWriteOnly, ShaderReadOnly,
-            ShaderReadWrite, StorageBuffer,
-        },
+        storage::{HostReadOnly, HostWriteOnly, ShaderReadOnly, ShaderReadWrite, StorageBuffer},
         uniform::UniformBuffer,
         GpuBufferSet,
     },
@@ -41,24 +38,24 @@ type DepthBindGrp = (
     // UniformBuffer<u32>,
 );
 
-type PointCloudGrp = (
-    StorageBuffer<[AlignedVec4<f32>], HostReadOnly, ShaderReadWrite>,
-);
+type PointCloudGrp = (StorageBuffer<[AlignedVec4<f32>], HostReadOnly, ShaderReadWrite>,);
 
 /// The set of bind groups used by the DepthProjector
 type AlphaBindGroups = (GpuBufferSet<DepthBindGrp>, GpuBufferSet<PointCloudGrp>);
 
-type Pcl2ObstacleBindGrp = (UniformBuffer<AlignedVec2<u32>>, UniformBuffer<f32>,);
+type Pcl2ObstacleBindGrp = (UniformBuffer<AlignedVec2<u32>>, UniformBuffer<f32>);
 
 type UnfilteredObstacleMapBindGrp = (StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,);
 
 type FilteredObstacleMapBindGrp = (StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,);
 
-
 /// 1. The radius of the robot in meters
 ///
 /// This bind group is the input to the expander.
-type ExpanderBindGrp = (StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>, UniformBuffer<u32>,);
+type ExpanderBindGrp = (
+    StorageBuffer<[u32], HostReadOnly, ShaderReadWrite>,
+    UniformBuffer<u32>,
+);
 
 /// The set of bind groups used by the rest of the thalassic pipeline
 type BetaBindGroups = (
@@ -95,20 +92,18 @@ impl DepthProjectorBuilder {
         .compile();
 
         let mut pipeline = ComputePipeline::new([&depth_fn]);
-        pipeline.workgroups = [
-            Vector3::new(self.image_size.x.get() / 8, self.image_size.y.get() / 8, 1),
-        ];
-        thalassic_ref
-            .shared
-            .lock()
-            .0
-            .replace(Shared {
-                points: GpuBufferSet::from((StorageBuffer::new_dyn(pixel_count as usize).unwrap(),)),
-                image_dimensions: AlignedVec2::from(Vector2::new(
-                    self.image_size.x.get(),
-                    self.image_size.y.get(),
-                )),
-            });
+        pipeline.workgroups = [Vector3::new(
+            self.image_size.x.get() / 8,
+            self.image_size.y.get() / 8,
+            1,
+        )];
+        thalassic_ref.shared.lock().0.replace(Shared {
+            points: GpuBufferSet::from((StorageBuffer::new_dyn(pixel_count as usize).unwrap(),)),
+            image_dimensions: AlignedVec2::from(Vector2::new(
+                self.image_size.x.get(),
+                self.image_size.y.get(),
+            )),
+        });
         DepthProjector {
             image_size: self.image_size,
             pipeline,
@@ -223,11 +218,7 @@ impl ThalassicBuilder {
         }
         .compile();
 
-        let mut pipeline = ComputePipeline::new([
-            &pcl2obstacle,
-            &obstacle_filter,
-            &expand_fn,
-        ]);
+        let mut pipeline = ComputePipeline::new([&pcl2obstacle, &obstacle_filter, &expand_fn]);
         pipeline.workgroups = [Vector3::new(
             self.heightmap_dimensions.x.get() / 8,
             self.heightmap_dimensions.y.get() / 8,
@@ -238,7 +229,10 @@ impl ThalassicBuilder {
             GpuBufferSet::from((UniformBuffer::new(), UniformBuffer::new())),
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
             GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),)),
-            GpuBufferSet::from((StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(), UniformBuffer::new(),)),
+            GpuBufferSet::from((
+                StorageBuffer::new_dyn(cell_count.get() as usize).unwrap(),
+                UniformBuffer::new(),
+            )),
         );
 
         ThalassicPipeline {
@@ -248,10 +242,7 @@ impl ThalassicBuilder {
             new_radius: Some(0.25),
             new_max_gradient: Some(45.0f32.to_radians()),
             thalassic_ref: ThalassicPipelineRef {
-                shared: Arc::new(Mutex::new((
-                    None,
-                    false,
-                ))),
+                shared: Arc::new(Mutex::new((None, false))),
             },
             cell_count,
         }
@@ -311,10 +302,7 @@ impl ThalassicPipeline {
         self.thalassic_ref.shared.lock().1
     }
 
-    pub fn process(
-        &mut self,
-        out_expanded_obstacles: &mut [Occupancy],
-    ) {
+    pub fn process(&mut self, out_expanded_obstacles: &mut [Occupancy]) {
         let mut shared_lock = self.thalassic_ref.shared.lock();
 
         if !shared_lock.1 {
@@ -345,9 +333,13 @@ impl ThalassicPipeline {
 
         self.pipeline
             .new_pass(|mut lock| {
-                bind_grps.1.write::<0, _>(&shared.image_dimensions.into(), &mut lock);
+                bind_grps
+                    .1
+                    .write::<0, _>(&shared.image_dimensions.into(), &mut lock);
                 if let Some(new_radius) = self.new_radius.take() {
-                    bind_grps.4.write::<1, _>(&((new_radius / self.cell_size).ceil() as u32), &mut lock);
+                    bind_grps
+                        .4
+                        .write::<1, _>(&((new_radius / self.cell_size).ceil() as u32), &mut lock);
                 }
                 if let Some(new_max_gradient) = self.new_max_gradient.take() {
                     bind_grps.1.write::<1, _>(&new_max_gradient, &mut lock);
@@ -361,7 +353,7 @@ impl ThalassicPipeline {
             pcl2obstacle_input_grp,
             unfiltered_obstacle_map,
             filtered_obstacle_map,
-            expander_input_grp
+            expander_input_grp,
         ) = bind_grps;
 
         expander_input_grp

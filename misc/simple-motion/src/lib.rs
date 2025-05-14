@@ -332,7 +332,8 @@ impl Transformable {
                     new_angle = new_angle.min(*max_angle);
                 }
                 let new = OneAxisDynamicState {
-                    current_rotation: start_rotation * UnitQuaternion::from_axis_angle(&axis, new_angle),
+                    current_rotation: start_rotation
+                        * UnitQuaternion::from_axis_angle(&axis, new_angle),
                     current_angle: new_angle,
                 };
                 dynamic.store(new);
@@ -420,7 +421,7 @@ impl<S: Deref<Target = [NodeData]> + Clone> ImmutableNode<S> {
                 })
             } else {
                 None
-            }        // let mut pathfinder = DefaultPathfinder::new(world_to_grid, grid_to_world);
+            } // let mut pathfinder = DefaultPathfinder::new(world_to_grid, grid_to_world);
         })
     }
 
@@ -430,7 +431,7 @@ impl<S: Deref<Target = [NodeData]> + Clone> ImmutableNode<S> {
         };
         parent.get_global_isometry() * self.arena[self.index].transformable.get_local_isometry()
     }
-    
+
     pub fn get_isometry_from_base(&self) -> Isometry3<f64> {
         let Some(parent) = self.get_parent() else {
             return Isometry3::identity();

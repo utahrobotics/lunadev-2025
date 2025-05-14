@@ -188,16 +188,17 @@ impl From<EternalStatus> for Status {
     }
 }
 
-
 pub struct RunningOnce<B> {
     ran_already: bool,
-    phantom: PhantomData<fn() -> B>
+    phantom: PhantomData<fn() -> B>,
 }
-
 
 impl<B> Default for RunningOnce<B> {
     fn default() -> Self {
-        Self { ran_already: false, phantom: PhantomData }
+        Self {
+            ran_already: false,
+            phantom: PhantomData,
+        }
     }
 }
 
@@ -218,7 +219,6 @@ impl<B> CancelSafe for RunningOnce<B> {
         self.ran_already = false;
     }
 }
-
 
 #[cfg(test)]
 mod tests {

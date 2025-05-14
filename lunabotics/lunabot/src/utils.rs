@@ -165,11 +165,9 @@ impl SteeringLerper {
             }
         });
 
-        Self {
-            steering,
-        }
+        Self { steering }
     }
-    
+
     pub fn set_steering(&self, steering: Steering) {
         self.steering.store(Some(steering));
     }

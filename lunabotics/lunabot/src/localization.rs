@@ -34,7 +34,7 @@ struct LocalizerRefInner {
     imu_readings: Box<[AtomicCell<Option<IMUReading>>]>,
 
     #[cfg(feature = "production")]
-    imu_correction: AtomicCell<Option<CalibrationParameters>>
+    imu_correction: AtomicCell<Option<CalibrationParameters>>,
 }
 
 #[derive(Clone)]
@@ -43,7 +43,6 @@ pub struct LocalizerRef {
 }
 
 impl LocalizerRef {
-
     #[cfg(feature = "production")]
     pub fn set_imu_correction_parameters(&self, correction: Option<CalibrationParameters>) {
         self.inner.imu_correction.store(correction);
@@ -130,7 +129,7 @@ impl Localizer {
                 }),
             },
             packet_builder,
-            isometry_sync_delta: 0.1
+            isometry_sync_delta: 0.1,
         }
     }
 
@@ -155,8 +154,8 @@ impl Localizer {
         // let mut sum_gyro = Vector3::zeros();
         // let mut iterations = 0;
         loop {
-
-            #[cfg(not(feature = "calibrate"))] // allow the loop to speed up if calibrating to collect samples faster
+            #[cfg(not(feature = "calibrate"))]
+            // allow the loop to speed up if calibrating to collect samples faster
             spin_sleeper.sleep(Duration::from_secs_f64(LOCALIZATION_DELTA));
 
             let mut isometry = self.root_node.get_global_isometry();
@@ -198,16 +197,14 @@ impl Localizer {
                 angular_velocity: tmp_angular_velocity,
             }) = self.localizer_ref.take_imu_readings()
             {
-
                 if tmp_angular_velocity.x.is_finite()
                     && tmp_angular_velocity.y.is_finite()
                     && tmp_angular_velocity.z.is_finite()
                 {
-                    
-                    #[cfg(feature="calibrate")]
+                    #[cfg(feature = "calibrate")]
                     calibrator.add_static_sample(acceleration, tmp_angular_velocity);
-                    
-                    #[cfg(feature="production")]
+
+                    #[cfg(feature = "production")]
                     if let Some(correction) = self.localizer_ref.inner.imu_correction.load() {
                         let corrected = correction.correct_gyroscope(&tmp_angular_velocity);
                         angular_velocity = Some(corrected);
@@ -215,30 +212,35 @@ impl Localizer {
                         angular_velocity = Some(tmp_angular_velocity);
                     }
 
-                    #[cfg(not(feature="production"))]
+                    #[cfg(not(feature = "production"))]
                     {
                         angular_velocity = Some(tmp_angular_velocity);
                     }
                 }
 
                 #[cfg(feature = "production")]
-                let acceleration = if let Some(correction) = self.localizer_ref.inner.imu_correction.load() {                    
-                    let corrected = correction.correct_accelerometer(&acceleration);
-                    corrected
-                } else {
-                    acceleration
-                };
+                let acceleration =
+                    if let Some(correction) = self.localizer_ref.inner.imu_correction.load() {
+                        let corrected = correction.correct_accelerometer(&acceleration);
+                        corrected
+                    } else {
+                        acceleration
+                    };
 
-
-                #[cfg(feature="calibrate")]
+                #[cfg(feature = "calibrate")]
                 if start_time.elapsed().as_secs() > 10 {
                     println!("Calibrating, this may take a while...");
                     println!("Number of Samples: {}", calibrator.sample_count());
-                    // calibrate without trying to find scaling biases 
+                    // calibrate without trying to find scaling biases
                     match calibrator.calibrate(false) {
                         Ok(correction) => {
                             // expect is ok here because worst case the calibration fails.
-                            println!("Correction parameters: {}", correction.serialize_to_string().expect("couldn't serialize correction params"));
+                            println!(
+                                "Correction parameters: {}",
+                                correction
+                                    .serialize_to_string()
+                                    .expect("couldn't serialize correction params")
+                            );
                             std::process::exit(0);
                         }
                         Err(e) => {
@@ -248,7 +250,8 @@ impl Localizer {
                     };
                 }
 
-                let acceleration = UnitVector3::new_normalize(isometry.transform_vector(&acceleration));
+                let acceleration =
+                    UnitVector3::new_normalize(isometry.transform_vector(&acceleration));
                 if acceleration.x.is_finite()
                     && acceleration.y.is_finite()
                     && acceleration.z.is_finite()
@@ -297,8 +300,12 @@ impl Localizer {
                         origin: isometry.translation.vector.cast().data.0[0],
                         quat: isometry.rotation.as_vector().cast().data.0[0],
                     });
-                    let packet = self.packet_builder.new_unreliable(PacketBody { data }).unwrap();
-                    self.packet_builder.send_packet(cakap2::packet::Action::SendUnreliable(packet));
+                    let packet = self
+                        .packet_builder
+                        .new_unreliable(PacketBody { data })
+                        .unwrap();
+                    self.packet_builder
+                        .send_packet(cakap2::packet::Action::SendUnreliable(packet));
                 }
 
                 crate::apps::RECORDER.get().map(|recorder| {

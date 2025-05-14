@@ -1,22 +1,26 @@
+use actions::dump;
 use ares_bt::{
-    action::AlwaysSucceed, branching::{IfElse, TryCatch}, converters::{AssertCancelSafe, Invert}, looping::WhileLoop, sequence::{ParallelAny, Sequence}, Behavior, CancelSafe, Status
+    action::AlwaysSucceed,
+    branching::{IfElse, TryCatch},
+    converters::{AssertCancelSafe, Invert},
+    looping::WhileLoop,
+    sequence::{ParallelAny, Sequence},
+    Behavior, CancelSafe, Status,
 };
 use common::{FromLunabase, LunabotStage};
-use nalgebra::Point2;
-use tracing::{error, warn};
 use find_path::find_path;
 use follow_path::follow_path;
-use actions::dump;
+use nalgebra::Point2;
+use tracing::{error, warn};
 use traverse::traverse;
 
 use crate::{blackboard::LunabotBlackboard, Action};
 
+mod actions;
 mod find_path;
 mod follow_path;
-mod actions;
-mod traverse;
 mod move_actuator;
-
+mod traverse;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum AutonomyState {
@@ -25,66 +29,48 @@ pub enum AutonomyState {
     None,
 }
 
-
 pub fn autonomy() -> impl Behavior<LunabotBlackboard> {
-    
-        
     ParallelAny::new((
-        
         // exit autonomy upon interruption
         fail_if_autonomy_interrupted(),
-        
         IfElse::new(
             autonomy_is_active(),
-            
             TryCatch::new(
                 Sequence::new((
-                    
                     // repeat until success
                     Invert(WhileLoop::new(
                         AlwaysSucceed,
-                        Invert(
-                            
-                            IfElse::new(
-                                going_to_excavation_zone(),
-                                traverse(),
-                                dump()
-                            )
-                            
-                        ),
+                        Invert(IfElse::new(going_to_excavation_zone(), traverse(), dump())),
                     )),
-                    
                     AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
                         warn!("finished {:?}", blackboard.get_autonomy_state());
                         blackboard.set_autonomy_state(AutonomyState::None);
                         Status::Success
-                    })
-                    
+                    }),
                 )),
-                AlwaysSucceed
+                AlwaysSucceed,
             ),
-            
-            AlwaysSucceed
+            AlwaysSucceed,
         ),
     ))
 }
 
 fn going_to_excavation_zone() -> impl Behavior<LunabotBlackboard> + CancelSafe {
-    AssertCancelSafe(
-        |blackboard: &mut LunabotBlackboard| {
-            (matches!(blackboard.get_autonomy_state(), AutonomyState::ToExcavationZone(_))).into()
-        }
-    )
+    AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+        (matches!(
+            blackboard.get_autonomy_state(),
+            AutonomyState::ToExcavationZone(_)
+        ))
+        .into()
+    })
 }
 fn autonomy_is_active() -> impl Behavior<LunabotBlackboard> + CancelSafe {
-    AssertCancelSafe(
-        |blackboard: &mut LunabotBlackboard| {
-            (blackboard.get_autonomy_state() != AutonomyState::None).into()
-        }
-    )
+    AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
+        (blackboard.get_autonomy_state() != AutonomyState::None).into()
+    })
 }
 
-/// stop if received stop or steering input 
+/// stop if received stop or steering input
 fn fail_if_autonomy_interrupted() -> impl Behavior<LunabotBlackboard> + CancelSafe {
     AssertCancelSafe(|blackboard: &mut LunabotBlackboard| {
         if *blackboard.lunabase_disconnected() {
@@ -119,4 +105,3 @@ fn reset_steering() -> impl Behavior<LunabotBlackboard> + CancelSafe {
         Status::Success
     })
 }
-

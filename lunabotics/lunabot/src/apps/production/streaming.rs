@@ -182,7 +182,7 @@ pub fn start_streaming(mut lunabase_address: Option<IpAddr>) {
             error!("Failed to set UDP socket to non-blocking: {e}");
             return;
         }
-        
+
         let mut yuv_buffer = YUVBuffer::new(
             CAMERA_RESOLUTION.x as usize * CAMERA_COL_COUNT,
             CAMERA_RESOLUTION.y as usize * CAMERA_ROW_COUNT,
