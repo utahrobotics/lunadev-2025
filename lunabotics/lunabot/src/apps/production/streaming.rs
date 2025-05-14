@@ -11,7 +11,7 @@ use std::{
 use audio::audio_streaming;
 use nalgebra::Vector2;
 use openh264::{
-    encoder::{Encoder, EncoderConfig},
+    encoder::{BitRate, Encoder, EncoderConfig, FrameRate},
     formats::{RgbSliceU8, YUVBuffer},
     OpenH264API,
 };
@@ -156,11 +156,13 @@ pub fn start_streaming(mut lunabase_address: Option<IpAddr>) {
         let mut h264_enc = match Encoder::with_api_config(
             OpenH264API::from_source(),
             EncoderConfig::new()
-                .set_bitrate_bps(400_000)
+                .bitrate(BitRate::from_bps(400_000))
                 // .enable_skip_frame(true)
-                .max_frame_rate(20.0)
+                .max_frame_rate(FrameRate::from_hz(20.0))
                 // .rate_control_mode(RateControlMode::Timestamp)
-                .set_multiple_thread_idc(4), // .sps_pps_strategy(SpsPpsStrategy::IncreasingId)
+                .num_threads(4)
+                .scene_change_detect(false)
+                .background_detection(false)
         ) {
             Ok(x) => x,
             Err(e) => {
