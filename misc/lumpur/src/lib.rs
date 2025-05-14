@@ -134,11 +134,11 @@ impl LumpurBuilder {
                 .expect("Invalid level");
             regex.push_str("=(");
             regex.push_str(&level.to_string());
-            for level in LEVELS.iter().skip(index + 1) {
-                regex.push('|');
-                regex.push_str(&level.to_string());
+            for i in (index + 1)..LEVELS.len() {
+                regex.push_str("|");
+                regex.push_str(&LEVELS[i].to_string());
             }
-            regex.push(')');
+            regex.push_str(")");
             regex
         }))
         .expect("Failed to create regex set")
@@ -463,11 +463,10 @@ impl LumpurBuilder {
 
             siv.call_on_name(LOG_VIEW, |log_view: &mut LinearLayout| {
                 for i in 0..log_view.len() {
-                    if log_view
+                    if let Some(_) = log_view
                         .get_child_mut(i)
                         .unwrap()
                         .downcast_mut::<TextView>()
-                        .is_some()
                     {
                         continue;
                     }
@@ -551,22 +550,24 @@ impl LumpurBuilder {
                 let current_message_aggregate = log.aggregate();
 
                 siv.call_on_name::<LinearLayout, _, _>(LOG_VIEW, |log_view| {
-                    if !log_view.is_empty() && current_message_aggregate == last_message_aggregate {
-                        last_message_count += 1;
-                        let line: &mut ThemedView<NamedView<LinearLayout>> =
-                            log_view.get_child_mut(log_view.len() - 1).unwrap().downcast_mut().unwrap();
-                        let line = &mut *line.get_inner_mut().get_mut();
-                        let top: &mut LinearLayout = line.get_child_mut(0).unwrap().downcast_mut().unwrap();
-                        let repetition_text: &mut TextView =
-                            top.get_child_mut(1).unwrap().downcast_mut().unwrap();
-                        let mut style = Style::inherit_parent();
-                        style.effects.insert(Effect::Bold);
-                        repetition_text.set_content(StyledString::styled(format!(" x{: <4}", last_message_count), style));
-                        let message_text: &mut TextView =
-                            top.get_child_mut(2).unwrap().downcast_mut().unwrap();
-                        // This will update the timestamp if needed
-                        message_text.set_content(log.create_ui_message());
-                        return;
+                    if !log_view.is_empty() {
+                        if current_message_aggregate == last_message_aggregate {
+                            last_message_count += 1;
+                            let line: &mut ThemedView<NamedView<LinearLayout>> =
+                                log_view.get_child_mut(log_view.len() - 1).unwrap().downcast_mut().unwrap();
+                            let line = &mut *line.get_inner_mut().get_mut();
+                            let top: &mut LinearLayout = line.get_child_mut(0).unwrap().downcast_mut().unwrap();
+                            let repetition_text: &mut TextView =
+                                top.get_child_mut(1).unwrap().downcast_mut().unwrap();
+                            let mut style = Style::inherit_parent();
+                            style.effects.insert(Effect::Bold);
+                            repetition_text.set_content(StyledString::styled(format!(" x{: <4}", last_message_count), style));
+                            let message_text: &mut TextView =
+                                top.get_child_mut(2).unwrap().downcast_mut().unwrap();
+                            // This will update the timestamp if needed
+                            message_text.set_content(log.create_ui_message());
+                            return;
+                        }
                     }
                     last_message_aggregate = current_message_aggregate;
                     last_message_count = 1;

@@ -1,6 +1,6 @@
 use crate::{
     Behavior, CancelSafe, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus,
-    InfallibleBehavior, InfallibleStatus, Status,
+    InfallibleBehavior, InfallibleStatus, IntoRon, Status,
 };
 
 impl<F: FnMut(&mut B) -> Status, B> Behavior<B> for F {
@@ -42,6 +42,12 @@ impl<B> InfallibleBehavior<B> for AlwaysSucceed {
     }
 }
 
+impl IntoRon for AlwaysSucceed {
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::String("AlwaysSucceed".to_string())
+    }
+}
+
 impl CancelSafe for AlwaysSucceed {
     fn reset(&mut self) {}
 }
@@ -58,6 +64,12 @@ impl<B> Behavior<B> for AlwaysFail {
 impl<B> FallibleBehavior<B> for AlwaysFail {
     fn run_fallible(&mut self, _blackboard: &mut B) -> FallibleStatus {
         FallibleStatus::Failure
+    }
+}
+
+impl IntoRon for AlwaysFail {
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::String("AlwaysFail".to_string())
     }
 }
 
@@ -94,6 +106,12 @@ impl<B> EternalBehavior<B> for AlwaysRunning {
 
 impl CancelSafe for AlwaysRunning {
     fn reset(&mut self) {}
+}
+
+impl IntoRon for AlwaysRunning {
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::String("AlwaysRunning".to_string())
+    }
 }
 
 // pub struct RunOnce<F> {

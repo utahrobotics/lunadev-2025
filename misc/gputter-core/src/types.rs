@@ -13,7 +13,7 @@ pub trait GpuType {
     type Size: BufferSize;
 
     fn to_bytes(&self) -> &[u8];
-    fn copy_bytes(&mut self, bytes: &[u8]);
+    fn from_bytes(&mut self, bytes: &[u8]);
 }
 
 macro_rules! bytemuck_impl {
@@ -25,7 +25,7 @@ macro_rules! bytemuck_impl {
                 bytes_of(self)
             }
 
-            fn copy_bytes(&mut self, bytes: &[u8]) {
+            fn from_bytes(&mut self, bytes: &[u8]) {
                 *self = *from_bytes(bytes);
             }
         }
@@ -137,7 +137,7 @@ macro_rules! define_aligned {
                 bytes_of(self)
             }
 
-            fn copy_bytes(&mut self, bytes: &[u8]) {
+            fn from_bytes(&mut self, bytes: &[u8]) {
                 bytes_of_mut(self).copy_from_slice(bytes);
             }
         }
@@ -158,7 +158,7 @@ where
         bytes_of(self)
     }
 
-    fn copy_bytes(&mut self, bytes: &[u8]) {
+    fn from_bytes(&mut self, bytes: &[u8]) {
         bytes_of_mut(self).copy_from_slice(bytes);
     }
 }
@@ -173,7 +173,7 @@ where
         cast_slice(self)
     }
 
-    fn copy_bytes(&mut self, bytes: &[u8]) {
+    fn from_bytes(&mut self, bytes: &[u8]) {
         cast_slice_mut::<_, u8>(self).copy_from_slice(bytes);
     }
 }
@@ -203,7 +203,7 @@ where
         bytes_of(self)
     }
 
-    fn copy_bytes(&mut self, bytes: &[u8]) {
+    fn from_bytes(&mut self, bytes: &[u8]) {
         bytes_of_mut(self).copy_from_slice(bytes);
     }
 }

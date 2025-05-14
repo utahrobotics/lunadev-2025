@@ -9,7 +9,7 @@ use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
 #[cfg(feature = "production")]
 pub use production::{
-    Apriltag, CameraInfo, DepthCameraInfo, LunabotApp, RerunViz, V3PicoInfo, Vesc, RECORDER, ROBOT,
+    Apriltag, CameraInfo, DepthCameraInfo, V3PicoInfo, LunabotApp, RerunViz, Vesc, RECORDER, ROBOT,
     ROBOT_STRUCTURE,
 };
 #[cfg(not(feature = "production"))]

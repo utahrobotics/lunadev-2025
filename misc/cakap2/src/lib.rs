@@ -20,6 +20,7 @@ use std::{
     num::NonZeroU64,
     sync::{atomic::AtomicU64, Arc},
     time::{Duration, Instant},
+    u64,
 };
 
 use error::CakapError;

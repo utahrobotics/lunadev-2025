@@ -42,14 +42,7 @@ pub struct VescIDs {
 }
 
 impl VescIDs {
-    pub fn add_dual_vesc(
-        &mut self,
-        id1: u8,
-        id2: u8,
-        mask1: MotorMask,
-        mask2: MotorMask,
-        command_both: bool,
-    ) -> bool {
+    pub fn add_dual_vesc(&mut self, id1: u8, id2: u8, mask1: MotorMask, mask2: MotorMask, command_both: bool) -> bool {
         if self.motor_masks.contains_key(&id1) || self.motor_masks.contains_key(&id2) {
             return true;
         }
@@ -370,13 +363,14 @@ impl MotorTask {
                             ),
                         }))
                         .await?;
-                    motor_port.write_all(self.vesc_packer.pack(&Alive)).await?;
+                    motor_port
+                        .write_all(self.vesc_packer.pack(&Alive))
+                        .await?;
                 }
                 motor_port
-                    .write_all(
-                        self.vesc_packer
-                            .pack(&SetRPM(master_mask.mask(values) * self.speed_multiplier)),
-                    )
+                    .write_all(self.vesc_packer.pack(&SetRPM(
+                        master_mask.mask(values) * self.speed_multiplier,
+                    )))
                     .await?;
                 // motor_port
                 //     .write_all(self.vesc_packer.pack(&Alive))

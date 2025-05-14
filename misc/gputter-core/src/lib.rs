@@ -31,22 +31,24 @@ pub async fn init_gputter() -> anyhow::Result<()> {
             force_fallback_adapter: false,
         })
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to request adapter: {e}"))?;
+        .or_else(|e| Err(anyhow::anyhow!("Failed to request adapter: {e}")))?;
 
     let (device, queue) = adapter
-        .request_device(&wgpu::DeviceDescriptor {
-            trace: wgpu::Trace::Off,
-            required_features: wgpu::Features::empty(),
-            // WebGL doesn't support all of wgpu's features, so if
-            // we're building for the web, we'll have to disable some.
-            required_limits: if cfg!(target_arch = "wasm32") {
-                wgpu::Limits::downlevel_webgl2_defaults()
-            } else {
-                wgpu::Limits::default()
-            },
-            memory_hints: wgpu::MemoryHints::Performance,
-            label: None,
-        })
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                trace: wgpu::Trace::Off,
+                required_features: wgpu::Features::empty(),
+                // WebGL doesn't support all of wgpu's features, so if
+                // we're building for the web, we'll have to disable some.
+                required_limits: if cfg!(target_arch = "wasm32") {
+                    wgpu::Limits::downlevel_webgl2_defaults()
+                } else {
+                    wgpu::Limits::default()
+                },
+                memory_hints: wgpu::MemoryHints::Performance,
+                label: None,
+            }
+        )
         .await?;
     let _ = GPU_DEVICE.set(GpuDevice { device, queue });
     Ok(())

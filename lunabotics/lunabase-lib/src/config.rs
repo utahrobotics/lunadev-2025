@@ -4,13 +4,14 @@ use godot::global::{godot_error, godot_warn};
 use serde::Deserialize;
 use simple_motion::{ChainBuilder, Node, NodeData, NodeSerde};
 
+
 #[derive(Deserialize)]
 struct CameraInfo {
     link_name: String,
     stream_index: usize,
     #[serde(default = "default_image_width")]
     image_width: f64,
-    focal_length_x_px: f64,
+    focal_length_x_px: f64
 }
 
 fn default_image_width() -> f64 {
@@ -65,15 +66,13 @@ pub fn load_config() -> Option<AppConfig> {
     let file = match std::fs::File::open(&main.robot_layout) {
         Ok(file) => file,
         Err(e) => {
-            godot_error!(
-                "Failed to open robot layout file {}: {}",
-                main.robot_layout,
-                e
-            );
+            godot_error!("Failed to open robot layout file {}: {}", main.robot_layout, e);
             return None;
         }
     };
-    let robot_chain = match NodeSerde::from_reader(file) {
+    let robot_chain = match NodeSerde::from_reader(
+        file,
+    ) {
         Ok(chain) => chain,
         Err(e) => {
             godot_error!("Failed to parse robot chain: {}", e);
@@ -83,16 +82,7 @@ pub fn load_config() -> Option<AppConfig> {
     let robot_chain = ChainBuilder::from(robot_chain).finish_static();
     let mut camera_nodes = Vec::new();
 
-    for (
-        _port,
-        CameraInfo {
-            stream_index,
-            link_name,
-            focal_length_x_px,
-            image_width,
-        },
-    ) in main.cameras.into_iter().chain(main.depth_cameras)
-    {
+    for (_port, CameraInfo { stream_index, link_name, focal_length_x_px, image_width }) in main.cameras.into_iter().chain(main.depth_cameras) {
         let Some(node) = robot_chain.get_node_with_name(&link_name) else {
             godot_error!("Camera link {} not found in robot chain", link_name);
             continue;
@@ -103,7 +93,10 @@ pub fn load_config() -> Option<AppConfig> {
             }
         }
         if camera_nodes[stream_index].is_some() {
-            godot_error!("Camera stream index {} already occupied", stream_index,);
+            godot_error!(
+                "Camera stream index {} already occupied",
+                stream_index,
+            );
             continue;
         }
         let fov = 2.0 * (image_width / 2.0).atan2(focal_length_x_px).to_degrees();

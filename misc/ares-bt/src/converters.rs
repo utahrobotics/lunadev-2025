@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use crate::{
     Behavior, CancelSafe, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus,
-    InfallibleBehavior, InfallibleStatus, Status,
+    InfallibleBehavior, InfallibleStatus, IntoRon, Status,
 };
 
 pub struct InfallibleShim<A>(pub A);
@@ -16,6 +16,22 @@ where
             InfallibleStatus::Running => Status::Running,
             InfallibleStatus::Success => Status::Success,
         }
+    }
+}
+
+impl<A> IntoRon for InfallibleShim<A>
+where
+    A: IntoRon,
+{
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::Map(
+            [(
+                ron::Value::String("infallible".to_string()),
+                self.0.into_ron(),
+            )]
+            .into_iter()
+            .collect(),
+        )
     }
 }
 
@@ -50,6 +66,23 @@ where
         self.0.reset();
     }
 }
+
+impl<A> IntoRon for FallibleShim<A>
+where
+    A: IntoRon,
+{
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::Map(
+            [(
+                ron::Value::String("fallible".to_string()),
+                self.0.into_ron(),
+            )]
+            .into_iter()
+            .collect(),
+        )
+    }
+}
+
 pub struct EternalShim<A>(pub A);
 
 impl<A, B> Behavior<B> for EternalShim<A>
@@ -67,6 +100,19 @@ where
 {
     fn reset(&mut self) {
         self.0.reset();
+    }
+}
+
+impl<A> IntoRon for EternalShim<A>
+where
+    A: IntoRon,
+{
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::Map(
+            [(ron::Value::String("eternal".to_string()), self.0.into_ron())]
+                .into_iter()
+                .collect(),
+        )
     }
 }
 
@@ -91,6 +137,19 @@ where
 {
     fn reset(&mut self) {
         self.0.reset();
+    }
+}
+
+impl<A> IntoRon for Invert<A>
+where
+    A: IntoRon,
+{
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::Map(
+            [(ron::Value::String("invert".to_string()), self.0.into_ron())]
+                .into_iter()
+                .collect(),
+        )
     }
 }
 
@@ -163,6 +222,23 @@ where
         }
     }
 }
+
+impl<A> IntoRon for CatchPanic<A>
+where
+    A: IntoRon,
+{
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::Map(
+            [(
+                ron::Value::String("catch_panic".to_string()),
+                self.0.into_ron(),
+            )]
+            .into_iter()
+            .collect(),
+        )
+    }
+}
+
 pub struct Rename<A> {
     pub name: Cow<'static, str>,
     pub behavior: A,
@@ -174,6 +250,12 @@ impl<A> Rename<A> {
             name: name.into(),
             behavior,
         }
+    }
+}
+
+impl<A> IntoRon for Rename<A> {
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::String(self.name.to_string())
     }
 }
 

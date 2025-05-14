@@ -1,9 +1,5 @@
 use core::ffi;
-use std::{
-    fs,
-    io::Error,
-    os::fd::{AsRawFd, IntoRawFd},
-};
+use std::{fs, io::Error, os::fd::{AsRawFd, IntoRawFd}};
 
 use udev::{Device, Enumerator};
 
@@ -13,16 +9,9 @@ fn main() {
     let mut enumerator = Enumerator::new().expect("failed to create enumerator");
     for device in enumerator.scan_devices().expect("failed to scan devices") {
         for property in device.properties() {
-            if property.name() == "ID_SERIAL"
-                && property.value().to_string_lossy().contains("USR_V3PICO")
-            {
+            if property.name() == "ID_SERIAL" && property.value().to_string_lossy().contains("USR_V3PICO") {
                 println!("attempting to reset device");
-                let fd = fs::OpenOptions::new()
-                    .read(true)
-                    .write(true)
-                    .open(device.devnode().unwrap())
-                    .expect("couldn't open device")
-                    .into_raw_fd();
+                let fd = fs::OpenOptions::new().read(true).write(true).open(device.devnode().unwrap()).expect("couldn't open device").into_raw_fd();
                 unsafe {
                     let result = ioctl(fd, USBDEVFS_RESET, 0);
                     println!("ioctl result: {result}");
@@ -34,6 +23,6 @@ fn main() {
 }
 
 unsafe extern "C" {
-    fn ioctl(fd: ffi::c_int, o: ffi::c_uint, arg: ffi::c_int) -> ffi::c_int;
+    fn ioctl(fd: ffi::c_int, o: ffi::c_uint, arg: ffi::c_int) ->  ffi::c_int;
     // fn close(fd: ffi::c_int);
 }

@@ -224,7 +224,7 @@ impl AprilTagDetector {
                     tag_local_isometry,
                     decision_margin: detection.decision_margin(),
                     tag_global_isometry: known.pose,
-                    tag_id: detection.id(),
+                    tag_id: detection.id()
                 });
             }
         }

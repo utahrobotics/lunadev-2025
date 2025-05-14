@@ -1,45 +1,28 @@
-use std::{
-    sync::{
-        mpsc::{Receiver, RecvTimeoutError, Sender},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{sync::{mpsc::{Receiver, Sender, RecvTimeoutError}, Arc}, time::Duration};
 
-use crate::{
-    apps::production::frame_codec::CobsCodec,
-    localization::{IMUReading, LocalizerRef},
-};
+use crate::{apps::production::frame_codec::CobsCodec, localization::{IMUReading, LocalizerRef}};
 use crossbeam::atomic::AtomicCell;
 use embedded_common::*;
-use futures_util::StreamExt;
 use nalgebra::Vector3;
-use simple_motion::{Node, NodeData, StaticImmutableNode};
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-    thread,
-};
+use simple_motion::{StaticImmutableNode, Node, NodeData};
 use tasker::{
-    get_tokio_handle,
-    tokio::{
+    get_tokio_handle, tokio::{
         self,
-        io::{AsyncWriteExt, BufStream},
-        sync::Mutex,
-        time::timeout,
-    },
-    BlockOn,
+        io::{AsyncWriteExt, BufStream}, sync::Mutex, time::timeout,
+    }, BlockOn
 };
 use tokio_serial::SerialPortBuilderExt;
 use tokio_util::codec::FramedRead;
 use tracing::{error, info, warn};
 use udev::{EventType, MonitorBuilder, Udev};
+use std::{fs, io, path::{Path, PathBuf}, thread};
+use futures_util::StreamExt;
 
 use super::udev_poll;
 
 pub struct V3PicoInfo {
     pub serial: String,
-    pub imus: [IMUInfo; 4],
+    pub imus: [IMUInfo; 4]
 }
 
 pub struct IMUInfo {
@@ -48,11 +31,7 @@ pub struct IMUInfo {
 }
 
 /// find pico connected to the v3 pcb.
-pub fn enumerate_v3picos(
-    hinge_node: Node<&'static [NodeData]>,
-    localizer_ref: LocalizerRef,
-    pico: V3PicoInfo,
-) -> ActuatorController {
+pub fn enumerate_v3picos(hinge_node: Node<&'static [NodeData]>, localizer_ref: LocalizerRef, pico: V3PicoInfo) -> ActuatorController {
     let (path_tx, path_rx) = std::sync::mpsc::sync_channel::<String>(1);
     let (actuator_cmd_tx, actuator_cmd_rx) = std::sync::mpsc::channel();
     let actuator_readings: &_ = Box::leak(Box::new(AtomicCell::new(None)));
@@ -63,16 +42,16 @@ pub fn enumerate_v3picos(
                 pico.imus[0].node,
                 pico.imus[1].node,
                 pico.imus[2].node,
-                pico.imus[3].node,
+                pico.imus[3].node
             ],
             hinge_node,
         };
-
+        
         let mut task = V3PicoTask {
             path: path_rx,
             actuator_command_rx: actuator_cmd_rx,
             shared: Arc::new(Mutex::new(shared)),
-            actuator_readings,
+            actuator_readings
         };
         loop {
             task.v3pico_task().block_on();
@@ -171,13 +150,13 @@ pub fn enumerate_v3picos(
     });
     ActuatorController {
         command_tx: actuator_cmd_tx,
-        actuator_readings,
+        actuator_readings
     }
 }
 
 pub struct ActuatorController {
     command_tx: Sender<ActuatorCommand>,
-    pub actuator_readings: &'static AtomicCell<Option<ActuatorReading>>,
+    pub actuator_readings: &'static AtomicCell<Option<ActuatorReading>>
 }
 
 impl ActuatorController {
@@ -203,7 +182,7 @@ pub struct V3PicoTask {
     path: Receiver<String>,
     actuator_command_rx: std::sync::mpsc::Receiver<ActuatorCommand>,
     shared: Arc<tokio::sync::Mutex<SharedState>>,
-    actuator_readings: &'static AtomicCell<Option<ActuatorReading>>,
+    actuator_readings: &'static AtomicCell<Option<ActuatorReading>>
 }
 
 impl V3PicoTask {
@@ -231,8 +210,8 @@ impl V3PicoTask {
         }
 
         let port = BufStream::new(port);
-        let (reader, mut writer) = tokio::io::split(port);
-        let mut reader = FramedRead::new(reader, CobsCodec {});
+        let ( reader, mut writer) = tokio::io::split(port);
+        let mut reader = FramedRead::new(reader, CobsCodec{});
         let shared = Arc::clone(&self.shared);
         let (is_broken_tx, is_broken_rx) = tokio::sync::watch::channel(false);
         let actuator_readings = self.actuator_readings;
@@ -241,8 +220,7 @@ impl V3PicoTask {
             let mut no_reading_count = 0;
             loop {
                 //TODO: figure out some way to check if the pico is disconnected here
-                tokio::time::sleep(std::time::Duration::from_millis(IMU_READING_DELAY_MS - 1))
-                    .await;
+                tokio::time::sleep(std::time::Duration::from_millis(IMU_READING_DELAY_MS-1)).await;
                 let Ok(reading) = timeout(Duration::from_millis(200), reader.next()).await else {
                     error!("Pico has become unresponsive.");
                     let _ = is_broken_tx.send(true);
@@ -257,7 +235,7 @@ impl V3PicoTask {
                     no_reading_count += 1;
                     if no_reading_count <= 5 {
                         let _ = is_broken_tx.send(true);
-                        error!("Pico has become unresponsive. (no reading count)");
+                        error!("Pico has become unresponsive. (no reading count)"); 
                         break;
                     }
                     continue;
@@ -271,22 +249,21 @@ impl V3PicoTask {
                     error!("Failed to deserialize message from picov3 serial port");
                     let _ = is_broken_tx.send(true);
                     match powercycle_ioctl() {
-                        Ok(_) => {}
+                        Ok(_) => {
+                        }
                         Err(e) => {
                             error!("ioctl failed: {}", e);
                         }
                     }
                     break;
                 };
-
+               
                 if let FromPicoV3::Reading(imu_readings, actuators) = reading {
                     let lift_hinge_angle = actuators.m1_reading as f64 * 0.00743033 - 2.19192;
                     actuator_readings.store(Some(actuators));
                     //tracing::info!("lift angle: {}", lift_hinge_angle);
-                    guard
-                        .hinge_node
-                        .set_angle_one_axis(lift_hinge_angle.to_radians());
-                    for (i, (msg, node)) in imu_readings.into_iter().zip(guard.imus).enumerate() {
+		                guard.hinge_node.set_angle_one_axis(lift_hinge_angle.to_radians());
+                    for (i,(msg, node)) in imu_readings.into_iter().zip(guard.imus).enumerate() {
                         match msg {
                             FromIMU::Reading(rate, accel) => {
                                 let rotation = node.get_isometry_from_base().rotation.cast();
@@ -303,7 +280,7 @@ impl V3PicoTask {
                                     IMUReading {
                                         angular_velocity: transformed_rate.cast() * 0.0,
                                         acceleration: transformed_accel.cast(),
-                                    },
+                                    }
                                 );
                             }
                             FromIMU::NoDataReady => {
@@ -328,9 +305,7 @@ impl V3PicoTask {
             if *is_broken_rx.borrow() {
                 break;
             }
-            let cmd_result = self
-                .actuator_command_rx
-                .recv_timeout(Duration::from_secs(1));
+            let cmd_result = self.actuator_command_rx.recv_timeout(Duration::from_secs(1));
             let Ok(cmd) = cmd_result else {
                 if cmd_result.err().unwrap() != RecvTimeoutError::Timeout {
                     tracing::error!("Actuator command thread channel closed");
@@ -368,7 +343,7 @@ fn _authorized_path(tty: &str) -> io::Result<PathBuf> {
     let dev_path: PathBuf = match iface_path.file_name().and_then(|n| n.to_str()) {
         Some(name) if name.contains(":") => iface_path
             .parent()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "no parent dir"))?
+            .ok_or_else(||{ io::Error::new(io::ErrorKind::Other, "no parent dir")})?
             .to_path_buf(),
         _ => iface_path,
     };
@@ -385,6 +360,7 @@ pub fn _power_cycle(tty: &str) -> io::Result<()> {
     fs::write(&auth, b"1")?;
     Ok(())
 }
+
 
 pub fn powercycle_ioctl() -> Result<(), std::io::Error> {
     let _ = std::process::Command::new("usb-reset").spawn()?;

@@ -66,7 +66,7 @@ fn main() {
             ("mio.*", Level::INFO),
             ("naga.*", Level::INFO),
             ("re_sdk.*", Level::INFO),
-            ("re_chunk.*", Level::INFO),
+            ("re_chunk.*", Level::INFO)
         ])
         .set_console_ignores([
             ("wgpu_hal::gles::egl", Level::WARN),
@@ -101,7 +101,7 @@ fn main() {
             vesc,
             rerun_viz,
             imu_correction,
-            v3pico,
+            v3pico
         } => {
             apps::LunabotApp {
                 lunabase_address,
@@ -114,7 +114,7 @@ fn main() {
                     .unwrap_or_else(|| "robot-layout/lunabot.json".to_string()),
                 rerun_viz,
                 imu_correction,
-                v3pico,
+                v3pico
             }
             .run();
         }

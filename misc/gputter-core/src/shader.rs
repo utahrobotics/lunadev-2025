@@ -75,7 +75,11 @@ pub struct BufferGroupBinding<B, S> {
 
 impl<B, S> Clone for BufferGroupBinding<B, S> {
     fn clone(&self) -> Self {
-        *self
+        Self {
+            group_index: self.group_index,
+            binding_index: self.binding_index,
+            phantom: PhantomData,
+        }
     }
 }
 

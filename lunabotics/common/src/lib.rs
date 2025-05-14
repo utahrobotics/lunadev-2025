@@ -14,36 +14,33 @@ pub const THALASSIC_WIDTH: u32 = 128;
 pub const THALASSIC_HEIGHT: u32 = 256;
 pub const THALASSIC_CELL_COUNT: u32 = THALASSIC_WIDTH * THALASSIC_HEIGHT;
 
+
 /// cells don't have a y value but world points do, so please provide one one
 pub fn cell_to_world_point((x, z): (usize, usize), y: f64) -> Point3<f64> {
-    Point3::new(
-        x as f64 * THALASSIC_CELL_SIZE as f64,
-        y,
-        z as f64 * THALASSIC_CELL_SIZE as f64,
-    )
+    Point3::new(x as f64 * THALASSIC_CELL_SIZE as f64, y, z as f64 * THALASSIC_CELL_SIZE as f64)
 }
 pub fn world_point_to_cell(point: Point3<f64>) -> (usize, usize) {
     (
-        (point.x / THALASSIC_CELL_SIZE as f64) as usize,
-        (point.z / THALASSIC_CELL_SIZE as f64) as usize,
+        (point.x / THALASSIC_CELL_SIZE as f64) as usize, 
+        (point.z / THALASSIC_CELL_SIZE as f64) as usize
     )
 }
 
 #[derive(Debug, Clone, Copy)]
 /// a rectangular area on the thalassic cell map
-///
+/// 
 /// larger x = further left, so `left` should have a larger numeric value than `right`
 pub struct CellsRect {
     pub top: usize,
     pub bottom: usize,
     pub left: usize,
-    pub right: usize,
+    pub right: usize
 }
 impl CellsRect {
     pub fn new((left, bottom): (f64, f64), width_meters: f64, height_meters: f64) -> Self {
         let left = left / THALASSIC_CELL_SIZE as f64;
         let bottom = bottom / THALASSIC_CELL_SIZE as f64;
-
+        
         Self {
             left: left.round() as usize,
             bottom: bottom.round() as usize,
@@ -51,7 +48,7 @@ impl CellsRect {
             top: (bottom + (height_meters / THALASSIC_CELL_SIZE as f64)).round() as usize,
         }
     }
-
+    
     /// ensure this rect is at least `padding` cells away from each world border
     pub fn pad_from_world_border(&self, padding: usize) -> Self {
         Self {
@@ -63,10 +60,11 @@ impl CellsRect {
     }
 }
 
-#[cfg(feature = "lunabase_sync")]
-pub mod lunabase_sync;
+
 pub mod lunasim;
 pub mod ports;
+#[cfg(feature = "lunabase_sync")]
+pub mod lunabase_sync;
 
 #[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]
 pub enum LunabotStage {
@@ -87,7 +85,7 @@ pub enum FromLunabase {
     Dump((f32, f32)),
     SoftStop,
     StartPercuss,
-    StopPercuss,
+    StopPercuss
 }
 
 impl FromLunabase {
@@ -97,7 +95,7 @@ impl FromLunabase {
         for b in bytes {
             write!(w, "{b:x}")?;
         }
-        writeln!(w)
+        writeln!(w, "")
     }
 
     pub fn write_code_sheet(mut w: impl Write) -> std::io::Result<()> {
@@ -134,34 +132,38 @@ impl FromLunabase {
 
     pub fn get_lift_actuator_commands(self) -> Option<[ActuatorCommand; 2]> {
         match self {
-            FromLunabase::LiftActuators(value) => Some(if value < 0 {
-                [
-                    ActuatorCommand::backward(Actuator::Lift),
-                    ActuatorCommand::set_speed(value as f64 / i8::MIN as f64, Actuator::Lift),
-                ]
-            } else {
-                [
-                    ActuatorCommand::forward(Actuator::Lift),
-                    ActuatorCommand::set_speed(value as f64 / i8::MAX as f64, Actuator::Lift),
-                ]
-            }),
+            FromLunabase::LiftActuators(value) => {
+                Some(if value < 0 {
+                    [
+                        ActuatorCommand::backward(Actuator::Lift),
+                        ActuatorCommand::set_speed(value as f64 / i8::MIN as f64, Actuator::Lift),
+                    ]
+                } else {
+                    [
+                        ActuatorCommand::forward(Actuator::Lift),
+                        ActuatorCommand::set_speed(value as f64 / i8::MAX as f64, Actuator::Lift),
+                    ]
+                })
+            }
             _ => None,
         }
     }
 
     pub fn get_bucket_actuator_commands(self) -> Option<[ActuatorCommand; 2]> {
         match self {
-            FromLunabase::BucketActuators(value) => Some(if value < 0 {
-                [
-                    ActuatorCommand::forward(Actuator::Bucket),
-                    ActuatorCommand::set_speed(value as f64 / i8::MIN as f64, Actuator::Bucket),
-                ]
-            } else {
-                [
-                    ActuatorCommand::backward(Actuator::Bucket),
-                    ActuatorCommand::set_speed(value as f64 / i8::MAX as f64, Actuator::Bucket),
-                ]
-            }),
+            FromLunabase::BucketActuators(value) => {
+                Some(if value < 0 {
+                    [
+                        ActuatorCommand::forward(Actuator::Bucket),
+                        ActuatorCommand::set_speed(value as f64 / i8::MIN as f64, Actuator::Bucket),
+                    ]
+                } else {
+                    [
+                        ActuatorCommand::backward(Actuator::Bucket),
+                        ActuatorCommand::set_speed(value as f64 / i8::MAX as f64, Actuator::Bucket),
+                    ]
+                })
+            }
             _ => None,
         }
     }
@@ -169,7 +171,10 @@ impl FromLunabase {
 
 #[derive(Debug, Encode, Decode, Clone, Copy)]
 pub enum FromLunabot {
-    RobotIsometry { origin: [f32; 3], quat: [f32; 4] },
+    RobotIsometry {
+        origin: [f32; 3],
+        quat: [f32; 4],
+    },
     Ping(LunabotStage),
 }
 
@@ -180,7 +185,7 @@ impl FromLunabot {
         for b in bytes {
             write!(w, "{b:x}")?;
         }
-        writeln!(w)
+        writeln!(w, "")
     }
 
     pub fn write_code_sheet(mut w: impl Write) -> std::io::Result<()> {
@@ -195,7 +200,7 @@ impl FromLunabot {
 pub struct Steering {
     left: i8,
     right: i8,
-    weight: u16,
+    weight: u16
 }
 
 impl std::fmt::Debug for Steering {
@@ -222,7 +227,7 @@ impl Steering {
                 -(self.right as f64) / i8::MIN as f64
             } else {
                 self.right as f64 / i8::MAX as f64
-            },
+            }
         )
     }
 
@@ -231,8 +236,8 @@ impl Steering {
     }
 
     pub fn new(mut left: f64, mut right: f64, weight: f64) -> Self {
-        left = left.clamp(-1.0, 1.0);
-        right = right.clamp(-1.0, 1.0);
+        left = left.max(-1.0).min(1.0);
+        right = right.max(-1.0).min(1.0);
 
         let left = if left < 0.0 {
             (-left * i8::MIN as f64) as i8
@@ -249,7 +254,7 @@ impl Steering {
         Self {
             left,
             right,
-            weight,
+            weight
         }
     }
 }
@@ -260,17 +265,18 @@ impl Default for Steering {
     }
 }
 
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PathKind {
     MoveOntoTarget,
-    StopInFrontOfTarget,
+    StopInFrontOfTarget
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PathInstruction {
     MoveTo,
     FaceTowards,
-    MoveToBackwards,
+    MoveToBackwards
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -284,10 +290,10 @@ impl PathPoint {
 
     /// min radians gap between robot  for robot to be considered facing towards a point
     const FACING_TOWARDS_THRESHOLD: f64 = 0.2;
-
+    
     pub fn is_finished(&self, robot_pos: &Point2<f64>, robot_heading: &Point2<f64>) -> bool {
         let world_pos = cell_to_world_point(self.cell, 0.).xz();
-
+        
         match self.instruction {
             PathInstruction::MoveTo | PathInstruction::MoveToBackwards => {
                 distance(&world_pos, robot_pos) < Self::AT_POINT_THRESHOLD
@@ -306,54 +312,43 @@ pub struct Ellipse {
     h: f64,
     k: f64,
     radius_x: f64,
-    radius_y: f64,
+    radius_y: f64
 }
 
 /// units are in cells
 #[derive(Debug, Clone)]
-pub enum Obstacle {
-    Rect(CellsRect),
-    Ellipse(Ellipse),
-}
+pub enum Obstacle { Rect(CellsRect), Ellipse(Ellipse) }
 impl Obstacle {
+    
     /// width and height must be positive
     pub fn new_rect(left_bottom: (f64, f64), width_meters: f64, height_meters: f64) -> Obstacle {
         Obstacle::Rect(CellsRect::new(left_bottom, width_meters, height_meters))
     }
-
+    
     pub fn new_ellipse(center: (f64, f64), radius_x_meters: f64, radius_y_meters: f64) -> Obstacle {
-        Obstacle::Ellipse(Ellipse {
-            h: center.0 / THALASSIC_CELL_SIZE as f64,
-            k: center.1 / THALASSIC_CELL_SIZE as f64,
-            radius_x: radius_x_meters / THALASSIC_CELL_SIZE as f64,
-            radius_y: radius_y_meters / THALASSIC_CELL_SIZE as f64,
+        Obstacle::Ellipse(Ellipse { 
+            h: center.0 / THALASSIC_CELL_SIZE as f64, 
+            k: center.1 / THALASSIC_CELL_SIZE as f64, 
+            radius_x: radius_x_meters / THALASSIC_CELL_SIZE as f64, 
+            radius_y: radius_y_meters / THALASSIC_CELL_SIZE as f64, 
         })
     }
-
+    
     pub fn new_circle(center: (f64, f64), radius_meters: f64) -> Obstacle {
         Self::new_ellipse(center, radius_meters, radius_meters)
     }
-
+    
     pub fn contains_cell(&self, (x, y): (usize, usize)) -> bool {
+        
         match self {
-            Obstacle::Rect(CellsRect {
-                top,
-                bottom,
-                left,
-                right,
-            }) => {
-                *right <= x && x <= *left && *bottom <= y && y <= *top // larger x = further left
-            }
-            Obstacle::Ellipse(Ellipse {
-                h,
-                k,
-                radius_x,
-                radius_y,
-            }) => {
-                (((x as f64 - h) * (x as f64 - h)) / (radius_x * radius_x))
-                    + (((y as f64 - k) * (y as f64 - k)) / (radius_y * radius_y))
-                    <= 1.0
-            }
+            Obstacle::Rect(CellsRect{top, bottom, left, right}) => {
+                *right <= x && x <= *left && *bottom <= y && y <= *top  // larger x = further left
+            },
+            Obstacle::Ellipse(Ellipse{h, k, radius_x, radius_y}) => {
+                ( ((x as f64 - h) * (x as f64 - h))  / (radius_x * radius_x) ) + 
+                ( ((y as f64 - k) * (y as f64 - k))  / (radius_y * radius_y) )
+                <= 1.0
+            },
         }
     }
 }

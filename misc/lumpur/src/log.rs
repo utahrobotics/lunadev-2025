@@ -13,21 +13,21 @@ use tracing::Level;
 
 #[derive(serde::Deserialize, Clone, Copy, Debug)]
 enum SerdeLevel {
-    Error,
-    Warn,
-    Info,
-    Debug,
-    Trace,
+    ERROR,
+    WARN,
+    INFO,
+    DEBUG,
+    TRACE,
 }
 
 impl From<SerdeLevel> for Level {
     fn from(level: SerdeLevel) -> Self {
         match level {
-            SerdeLevel::Error => Level::ERROR,
-            SerdeLevel::Warn => Level::WARN,
-            SerdeLevel::Info => Level::INFO,
-            SerdeLevel::Debug => Level::DEBUG,
-            SerdeLevel::Trace => Level::TRACE,
+            SerdeLevel::ERROR => Level::ERROR,
+            SerdeLevel::WARN => Level::WARN,
+            SerdeLevel::INFO => Level::INFO,
+            SerdeLevel::DEBUG => Level::DEBUG,
+            SerdeLevel::TRACE => Level::TRACE,
         }
     }
 }
@@ -156,7 +156,7 @@ pub(crate) fn make_line_f(
                     .canonicalize()
                     .unwrap_or_else(|_| PathBuf::from(&log.filename));
                 filename
-                    .strip_prefix(current_dir)
+                    .strip_prefix(&current_dir)
                     .unwrap_or(&filename)
                     .to_string_lossy()
                     .into_owned()
@@ -165,8 +165,10 @@ pub(crate) fn make_line_f(
             fields: log.fields,
         });
 
-        if level <= Level::INFO && !console_ignores.is_match(&statement) {
-            let _ = console_tx.send(log.clone());
+        if level <= Level::INFO {
+            if !console_ignores.is_match(&statement) {
+                let _ = console_tx.send(log.clone());
+            }
         }
         let _ = write_tx.send(log);
     }

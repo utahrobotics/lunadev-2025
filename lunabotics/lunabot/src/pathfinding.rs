@@ -1,5 +1,5 @@
 use crate::utils::distance_between_tuples;
-use common::{Obstacle, PathInstruction, PathKind, PathPoint, THALASSIC_HEIGHT, THALASSIC_WIDTH};
+use common::{Obstacle, PathInstruction, PathKind, PathPoint, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
 use pathfinding::{grid::Grid, prelude::astar};
 use tasker::shared::{SharedData, SharedDataReceiver};
 use tracing::error;
@@ -14,9 +14,9 @@ pub struct DefaultPathfinder {
     pub cell_grid: Grid,
 
     current_robot_radius_meters: f32,
-
+    
     additional_obstacles: Vec<Obstacle>,
-
+    
     /// - cleared once destination is reached
     cells_to_avoid: Vec<(usize, usize)>,
 
@@ -33,44 +33,42 @@ impl DefaultPathfinder {
             cell_grid: Grid::new(THALASSIC_WIDTH as usize, THALASSIC_HEIGHT as usize),
 
             current_robot_radius_meters: 0.5,
-
+            
             additional_obstacles: hardcoded_obstacles,
-
+            
             cells_to_avoid: vec![],
-
+            
             unscannable_cells: vec![],
             last_unknown_cell: (0, 0),
             times_blocked_here_in_a_row: 0,
         }
     }
-
+    
     pub fn current_robot_radius_cells(&self) -> f32 {
         self.current_robot_radius_meters / common::THALASSIC_CELL_SIZE
     }
-
+    
     /// iterator of `unscannable_cells` and `cells_to_avoid`
     fn all_unsafe_cells(&self) -> impl Iterator<Item = &(usize, usize)> {
-        self.unscannable_cells
-            .iter()
-            .chain(self.cells_to_avoid.iter())
+        self.unscannable_cells.iter().chain(self.cells_to_avoid.iter())
     }
-
+    
     pub fn avoid_cell(&mut self, cell: (usize, usize)) {
         self.cells_to_avoid.push(cell);
     }
-
+    
     pub fn clear_cells_to_avoid(&mut self) {
         self.cells_to_avoid.clear();
     }
-
+    
     pub fn add_additional_obstacle(&mut self, obstacle: Obstacle) {
         self.additional_obstacles.push(obstacle);
     }
-
+    
     pub fn within_additional_obstacle(&self, cell: (usize, usize)) -> bool {
         for obstacle in &self.additional_obstacles {
             if obstacle.contains_cell(cell) {
-                return true;
+                return true
             }
         }
         false
@@ -106,7 +104,7 @@ impl DefaultPathfinder {
 
         map_data
     }
-
+    
     fn find_raw_path(
         &self,
         mut start_cell: (usize, usize),
@@ -114,34 +112,30 @@ impl DefaultPathfinder {
         map_data: &SharedData<ThalassicData>,
     ) -> Option<Vec<(usize, usize)>> {
         tracing::info!("finding path {:?} -> {:?}", start_cell, end_cell);
-
+        
         // allows checking if position is known inside `move || {}` closures without moving `map_data`
         let is_known = |pos: (usize, usize)| map_data.is_known(pos);
-
+        
         // a cell is valid if:
-        //  - not red
+        //  - not red 
         //  - far away from any of the cells in `all_unsafe_cells()`
         //  - not in any `additional_obstacles`
         let is_valid_path_point = |pos: (usize, usize)| {
-            if map_data.get_cell_state(pos) == CellState::RED {
-                return false;
-            }
-
+            if map_data.get_cell_state(pos) == CellState::RED { return false; }
+                        
             let robot_radius_in_cells = self.current_robot_radius_cells();
-
+            
             for unsafe_cell in self.all_unsafe_cells() {
                 if distance_between_tuples(pos, *unsafe_cell) < robot_radius_in_cells {
                     return false;
                 }
             }
-
-            if self.within_additional_obstacle(pos) {
-                return false;
-            }
-
+            
+            if self.within_additional_obstacle(pos) { return false }
+            
             true
         };
-
+        
         macro_rules! neighbours {
             ($p: ident) => {
                 self.cell_grid
@@ -172,11 +166,10 @@ impl DefaultPathfinder {
             };
         }
 
-        let heuristic =
-            move |p: &(usize, usize)| (distance_between_tuples(*p, end_cell) * 10000.0) as usize;
+        let heuristic = move |p: &(usize, usize)| (distance_between_tuples(*p, end_cell) * 10000.0) as usize;
 
         let mut path = vec![];
-
+        
         // prepend a path to safety
         if !is_valid_path_point(start_cell) {
             println!("Current cell is occupied, finding closest safe cell");
@@ -217,7 +210,7 @@ impl DefaultPathfinder {
         };
 
         path.append(&mut path_to_goal);
-
+        
         Some(path)
     }
 
@@ -228,8 +221,9 @@ impl DefaultPathfinder {
         end_cell: (usize, usize),
         path_kind: PathKind,
     ) -> Result<Vec<PathPoint>, ()> {
+        
         let mut res: Vec<PathPoint> = vec![];
-
+        
         loop {
             let map_data = self.get_map_data(shared_thalassic_data);
 
@@ -255,22 +249,20 @@ impl DefaultPathfinder {
 
                 continue;
             };
-
+            
             if path_kind == PathKind::StopInFrontOfTarget {
                 let mut i = raw_path.len();
                 for cell in raw_path.iter().rev() {
-                    if distance_between_tuples(end_cell, *cell) > self.current_robot_radius_cells()
-                    {
+                    if distance_between_tuples(end_cell, *cell) > self.current_robot_radius_cells() {
                         break;
                     }
                     i -= 1;
                 }
                 raw_path.truncate(i);
             }
+            
 
-            if let Err((i, unknown_cell)) =
-                map_data.is_path_safe_for_robot(start_cell, &mut raw_path)
-            {
+            if let Err((i, unknown_cell)) = map_data.is_path_safe_for_robot(start_cell, &mut raw_path) {
                 // path got blocked due to this unknown point again
                 if self.last_unknown_cell == unknown_cell {
                     self.times_blocked_here_in_a_row += 1;
@@ -290,36 +282,30 @@ impl DefaultPathfinder {
 
                     raw_path.truncate(i);
 
-                    res.extend(raw_path.iter().map(|pos| PathPoint {
-                        cell: *pos,
-                        instruction: PathInstruction::MoveTo,
-                    }));
-                    res.push(PathPoint {
-                        cell: unknown_cell,
-                        instruction: PathInstruction::FaceTowards,
-                    });
+                    res.extend(
+                        raw_path.iter()
+                            .map(|pos| PathPoint {cell: *pos, instruction: PathInstruction::MoveTo}),
+                    );
+                    res.push(PathPoint {cell: unknown_cell, instruction: PathInstruction::FaceTowards});
                     break;
                 }
             }
             // path is safe
             else {
                 self.times_blocked_here_in_a_row = 0;
-                res.extend(raw_path.iter().map(|pos| PathPoint {
-                    cell: *pos,
-                    instruction: PathInstruction::MoveTo,
-                }));
-
+                res.extend(
+                    raw_path.iter()
+                        .map(|pos| PathPoint {cell: *pos, instruction: PathInstruction::MoveTo}),
+                );
+                
                 if path_kind == PathKind::StopInFrontOfTarget {
-                    res.push(PathPoint {
-                        cell: end_cell,
-                        instruction: PathInstruction::FaceTowards,
-                    });
+                    res.push(PathPoint {cell: end_cell, instruction: PathInstruction::FaceTowards});
                 }
-
+                
                 break;
             }
         }
-
+        
         Ok(res)
     }
 }

@@ -184,7 +184,7 @@ impl<A: ?Sized, B: ?Sized> RawCallbackStorage<A, B> {
             }
         } else {
             let storage = self.storage.read();
-            storage.iter().for_each(&mut f);
+            storage.iter().for_each(|callback| f(callback));
             for _ in 0..self.incoming.len() {
                 let callback = self.incoming.pop().unwrap();
                 RETAIN_CALLBACK.with(|cell| cell.set(true));

@@ -1,12 +1,32 @@
 use crate::{
     Behavior, CancelSafe, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus,
-    InfallibleBehavior, InfallibleStatus, Status,
+    InfallibleBehavior, InfallibleStatus, IntoRon, Status,
 };
 
 pub struct WhileLoop<A, B> {
     pub condition: A,
     pub body: B,
     check_condition: bool,
+}
+
+impl<A, B> IntoRon for WhileLoop<A, B>
+where
+    A: IntoRon,
+    B: IntoRon,
+{
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::Map(
+            [
+                (
+                    ron::Value::String("condition".to_string()),
+                    self.condition.into_ron(),
+                ),
+                (ron::Value::String("body".to_string()), self.body.into_ron()),
+            ]
+            .into_iter()
+            .collect(),
+        )
+    }
 }
 
 impl<A, B, D> Behavior<D> for WhileLoop<A, B>
@@ -53,17 +73,19 @@ where
     B: FallibleBehavior<D>,
 {
     fn run_fallible(&mut self, blackboard: &mut D) -> FallibleStatus {
-        if self.check_condition {
-            match self.condition.run_infallible(blackboard) {
-                InfallibleStatus::Running => return FallibleStatus::Running,
-                InfallibleStatus::Success => self.check_condition = false,
+        loop {
+            if self.check_condition {
+                match self.condition.run_infallible(blackboard) {
+                    InfallibleStatus::Running => return FallibleStatus::Running,
+                    InfallibleStatus::Success => self.check_condition = false,
+                }
             }
-        }
-        match self.body.run_fallible(blackboard) {
-            FallibleStatus::Running => FallibleStatus::Running,
-            FallibleStatus::Failure => {
-                self.check_condition = true;
-                FallibleStatus::Failure
+            match self.body.run_fallible(blackboard) {
+                FallibleStatus::Running => return FallibleStatus::Running,
+                FallibleStatus::Failure => {
+                    self.check_condition = true;
+                    return FallibleStatus::Failure;
+                }
             }
         }
     }

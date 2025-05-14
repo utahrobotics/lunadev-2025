@@ -1,6 +1,6 @@
 use crate::{
     Behavior, CancelSafe, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus,
-    InfallibleBehavior, InfallibleStatus, Status,
+    InfallibleBehavior, InfallibleStatus, IntoRon, Status,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -15,6 +15,34 @@ pub struct IfElse<A, B, C> {
     pub if_true: B,
     pub if_false: C,
     state: IfElseState,
+}
+
+impl<A, B, C> IntoRon for IfElse<A, B, C>
+where
+    A: IntoRon,
+    B: IntoRon,
+    C: IntoRon,
+{
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::Map(
+            [
+                (
+                    ron::Value::String("condition".to_string()),
+                    self.condition.into_ron(),
+                ),
+                (
+                    ron::Value::String("success".to_string()),
+                    self.if_true.into_ron(),
+                ),
+                (
+                    ron::Value::String("failure".to_string()),
+                    self.if_false.into_ron(),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        )
+    }
 }
 
 impl<A, B, C, D> Behavior<D> for IfElse<A, B, C>
@@ -133,7 +161,7 @@ where
     fn run_eternal(&mut self, blackboard: &mut D) -> EternalStatus {
         match self.state {
             IfElseState::Condition => match self.condition.run(blackboard) {
-                Status::Running => EternalStatus::Running,
+                Status::Running => return EternalStatus::Running,
                 Status::Success => {
                     self.state = IfElseState::IfTrue;
                     self.if_true.run_eternal(blackboard)
@@ -165,6 +193,30 @@ pub struct TryCatch<A, B> {
     pub catch: B,
     trying: bool,
 }
+
+impl<A, B> IntoRon for TryCatch<A, B>
+where
+    A: IntoRon,
+    B: IntoRon,
+{
+    fn into_ron(&self) -> ron::Value {
+        ron::Value::Map(
+            [
+                (
+                    ron::Value::String("try".to_string()),
+                    self.try_behavior.into_ron(),
+                ),
+                (
+                    ron::Value::String("catch".to_string()),
+                    self.catch.into_ron(),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        )
+    }
+}
+
 impl<A, B, D> Behavior<D> for TryCatch<A, B>
 where
     A: Behavior<D>,

@@ -11,12 +11,12 @@ use depth::enumerate_depth_cameras;
 use file_lock::FileLock;
 use fxhash::FxHashMap;
 use gputter::init_gputter_blocking;
-use imu_calib::*;
 use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use mio::{Events, Interest, Poll, Token};
 use motors::{enumerate_motors, MotorMask, VescIDs};
 use rerun_viz::init_rerun;
+use imu_calib::*;
 use rp2040::*;
 use serde::Deserialize;
 use simple_motion::{ChainBuilder, NodeSerde};
@@ -37,11 +37,11 @@ use super::create_packet_builder;
 mod apriltag;
 mod camera;
 mod depth;
-mod frame_codec;
 mod motors;
 mod rerun_viz;
 mod rp2040;
 mod streaming;
+mod frame_codec;
 
 pub use apriltag::Apriltag;
 
@@ -60,7 +60,7 @@ pub struct DepthCameraInfo {
     ignore_apriltags: bool,
     stream_index: Option<usize>,
     #[serde(default = "default_depth_enabled")]
-    depth_enabled: bool,
+    depth_enabled: bool
 }
 
 fn default_depth_enabled() -> bool {
@@ -75,12 +75,12 @@ pub struct IMUInfo {
 #[derive(Deserialize, Debug)]
 pub struct V3PicoInfo {
     serial: String,
-    imus: [IMUInfo; 4],
+    imus: [IMUInfo; 4]
 }
 
 #[derive(Deserialize, Debug)]
 pub struct ActuatorControllerInfo {
-    serial: String,
+    serial: String
 }
 
 #[derive(Deserialize, Debug)]
@@ -90,7 +90,7 @@ pub struct VescPair {
     mask1: MotorMask,
     mask2: MotorMask,
     #[serde(default = "default_command_both")]
-    command_both: bool,
+    command_both: bool
 }
 
 fn default_command_both() -> bool {
@@ -122,7 +122,7 @@ pub struct LunabotApp {
     pub vesc: Vesc,
     pub rerun_viz: RerunViz,
     pub imu_correction: Option<CalibrationParameters>,
-    pub v3pico: V3PicoInfo,
+    pub v3pico: V3PicoInfo
 }
 
 impl LunabotApp {
@@ -227,13 +227,11 @@ impl LunabotApp {
 
         common::lunabase_sync::lunabot_task(move |_path, thalassic_data| {
             let raw_data = shared_thalassic_data2.get();
-            thalassic_data
-                .heightmap
-                .iter_mut()
-                .zip(&raw_data.heightmap)
-                .for_each(|(dst, &src)| {
+            thalassic_data.heightmap.iter_mut().zip(&raw_data.heightmap).for_each(
+                |(dst, &src)| {
                     *dst = src as f16;
-                });
+                }
+            );
             (false, true)
         });
 
@@ -247,7 +245,7 @@ impl LunabotApp {
                         link_name,
                         ignore_apriltags: observe_apriltags,
                         stream_index,
-                        depth_enabled,
+                        depth_enabled
                     },
                 )| {
                     (
@@ -285,7 +283,7 @@ impl LunabotApp {
             id2,
             mask1,
             mask2,
-            command_both,
+            command_both
         } in self.vesc.pairs
         {
             if vesc_ids.add_dual_vesc(id1, id2, mask1, mask2, command_both) {
@@ -295,54 +293,48 @@ impl LunabotApp {
         }
 
         let motor_ref = enumerate_motors(vesc_ids, self.vesc.speed_multiplier.unwrap_or(1.0));
-
-        let hinge_node = robot_chain
-            .get_node_with_name("lift_hinge")
-            .expect("lift_hinge not defined in robot layout");
-
+        
+        let hinge_node = robot_chain.get_node_with_name("lift_hinge").expect("lift_hinge not defined in robot layout");
+        
         let mut actuator_controller = enumerate_v3picos(hinge_node, localizer_ref.clone(), {
-            rp2040::V3PicoInfo {
+            rp2040::V3PicoInfo{
                 serial: self.v3pico.serial,
                 imus: [
                     rp2040::IMUInfo {
-                        node: robot_chain
-                            .get_node_with_name(&self.v3pico.imus[0].link_name)
+                        node: robot_chain.get_node_with_name(&self.v3pico.imus[0].link_name)
                             .context("Failed to find IMU link")
-                            .unwrap()
-                            .into(),
+                                .unwrap()
+                                .into(),
                         link_name: self.v3pico.imus[0].link_name.clone(),
                     },
                     rp2040::IMUInfo {
-                        node: robot_chain
-                            .get_node_with_name(&self.v3pico.imus[1].link_name)
+                        node: robot_chain.get_node_with_name(&self.v3pico.imus[1].link_name)
                             .context("Failed to find IMU link")
-                            .unwrap()
-                            .into(),
+                                .unwrap()
+                                .into(),
                         link_name: self.v3pico.imus[1].link_name.clone(),
                     },
                     rp2040::IMUInfo {
-                        node: robot_chain
-                            .get_node_with_name(&self.v3pico.imus[2].link_name)
+                        node: robot_chain.get_node_with_name(&self.v3pico.imus[2].link_name)
                             .context("Failed to find IMU link")
-                            .unwrap()
-                            .into(),
+                                .unwrap()
+                                .into(),
                         link_name: self.v3pico.imus[2].link_name.clone(),
                     },
                     rp2040::IMUInfo {
-                        node: robot_chain
-                            .get_node_with_name(&self.v3pico.imus[3].link_name)
+                        node: robot_chain.get_node_with_name(&self.v3pico.imus[3].link_name)
                             .context("Failed to find IMU link")
-                            .unwrap()
-                            .into(),
+                                .unwrap()
+                                .into(),
                         link_name: self.v3pico.imus[3].link_name.clone(),
                     },
-                ],
+                ]
             }
         });
 
         let mut pathfinder = DefaultPathfinder::new(vec![]);
         let readings = actuator_controller.actuator_readings;
-
+        
         run_ai(
             robot_chain.into(),
             |action, inputs| match action {
@@ -368,32 +360,31 @@ impl LunabotApp {
                 }
                 Action::ClearPointsToAvoid => {
                     pathfinder.clear_cells_to_avoid();
-                }
+                },
                 Action::LiftShake => {
-                    let _ =
-                        actuator_controller.send_command(embedded_common::ActuatorCommand::Shake);
+                    let _ = actuator_controller.send_command(embedded_common::ActuatorCommand::Shake);
                 }
                 // Action::CheckIfExplored { area, robot_cell_pos } => {
                 //     let x_lo = area.right as usize;
                 //     let x_hi = area.left as usize;
                 //     let y_lo = area.bottom as usize;
                 //     let y_hi = area.top as usize;
-
+                    
                 //     let map_data = pathfinder.get_map_data(&shared_thalassic_data);
-
+                    
                 //     for x in x_lo..x_hi {
                 //         for y in y_lo..y_hi {
-
+                            
                 //             // cells need to be explored if theyre unknown AND the robot isn't on top of it
-                //             if
-                //                 !map_data.is_known((x, y)) &&
-                //                 crate::utils::distance_between_tuples(robot_cell_pos, (x, y)) > pathfinder.current_robot_radius_cells()
+                //             if 
+                //                 !map_data.is_known((x, y)) && 
+                //                 crate::utils::distance_between_tuples(robot_cell_pos, (x, y)) > pathfinder.current_robot_radius_cells() 
                 //             {
                 //                 return inputs.push(Input::NotDoneExploring((x, y)));
                 //             }
                 //         }
                 //     }
-
+                    
                 //     inputs.push(Input::DoneExploring);
                 // }
                 Action::AvoidCell(cell) => {
@@ -413,10 +404,7 @@ impl LunabotApp {
                 };
 
                 if let Some(reading) = readings.take() {
-                    inputs.push(Input::ActuatorReadings {
-                        lift: reading.m1_reading,
-                        tilt: reading.m2_reading,
-                    })
+                    inputs.push(Input::ActuatorReadings { lift: reading.m1_reading, tilt: reading.m2_reading })
                 }
 
                 match poll_when {

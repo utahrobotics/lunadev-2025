@@ -44,12 +44,6 @@ impl<T: GpuType + ?Sized> GpuBuffer for UniformBuffer<T> {
     fn post_submission(&self) -> Self::PostSubmission<'_> {}
 }
 
-impl<T: GpuType<Size = StaticSize<T>>> Default for UniformBuffer<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<T: GpuType<Size = StaticSize<T>>> UniformBuffer<T> {
     pub fn new() -> Self {
         const {
