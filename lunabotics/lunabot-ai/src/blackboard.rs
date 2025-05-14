@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, time::Instant};
 
-use common::{world_point_to_cell, FromLunabase, PathPoint, PathKind};
+use common::{world_point_to_cell, FromLunabase, PathKind, PathPoint};
 use nalgebra::{Isometry3, Point3, UnitQuaternion, Vector2, Vector3};
 use simple_motion::StaticImmutableNode;
 
@@ -9,17 +9,14 @@ use crate::{autonomy::AutonomyState, Action, PollWhen};
 pub enum Input {
     FromLunabase(FromLunabase),
     LunabaseDisconnected,
-    
+
     PathCalculated(Vec<PathPoint>),
     FailedToCalculatePath,
-    
+
     NextActionSite((usize, usize)),
     NoActionSite,
 
-    ActuatorReadings {
-        lift: u16,
-        tilt: u16
-    }
+    ActuatorReadings { lift: u16, tilt: u16 },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -35,10 +32,8 @@ pub(crate) enum FindActionSiteState {
     #[allow(dead_code)]
     Pending,
     FoundSite((usize, usize)),
-    NotFound
+    NotFound,
 }
-
-
 
 pub(crate) struct LunabotBlackboard {
     now: Instant,
@@ -48,11 +43,11 @@ pub(crate) struct LunabotBlackboard {
     lunabase_disconnected: bool,
     actions: Vec<Action>,
     poll_when: PollWhen,
-    
+
     autonomy_state: AutonomyState,
     pathfinding_state: PathfindingState,
     find_action_site_state: FindActionSiteState,
-    
+
     /// (position, rotation, timestamp)
     latest_transform: Option<(Point3<f64>, UnitQuaternion<f64>, Instant)>,
     backing_away_from: Option<Point3<f64>>,
@@ -64,8 +59,7 @@ pub(crate) struct LunabotBlackboard {
     tilt_travel_positive: bool,
 
     target_lift: u16,
-    target_tilt: u16
-    
+    target_tilt: u16,
 }
 
 impl LunabotBlackboard {
@@ -78,11 +72,11 @@ impl LunabotBlackboard {
             lunabase_disconnected: true,
             actions: vec![],
             poll_when: PollWhen::NoDelay,
-            
+
             autonomy_state: AutonomyState::None,
             pathfinding_state: PathfindingState::Idle,
             find_action_site_state: FindActionSiteState::Start,
-            
+
             backing_away_from: None,
             latest_transform: None,
 
@@ -157,7 +151,7 @@ impl LunabotBlackboard {
     pub fn get_path_mut(&mut self) -> &mut Vec<PathPoint> {
         &mut self.path
     }
-    
+
     pub fn lunabase_disconnected(&mut self) -> &mut bool {
         &mut self.lunabase_disconnected
     }
@@ -169,23 +163,23 @@ impl LunabotBlackboard {
     pub(crate) fn update_now(&mut self) {
         self.now = Instant::now();
     }
-    
+
     pub fn backing_away_from(&mut self) -> &mut Option<Point3<f64>> {
         &mut self.backing_away_from
     }
-    
+
     pub fn get_latest_transform(&self) -> Option<(Point3<f64>, UnitQuaternion<f64>, Instant)> {
         self.latest_transform
     }
-    
+
     pub fn set_latest_transform(&mut self, pos: Point3<f64>, heading: UnitQuaternion<f64>) {
         self.latest_transform = Some((pos, heading, self.now));
     }
-    
+
     pub fn clear_latest_transform(&mut self) {
         self.latest_transform = None;
     }
-    
+
     pub fn digest_input(&mut self, input: Input) {
         match input {
             Input::FromLunabase(msg) => self.from_lunabase.push_back(msg),
@@ -210,12 +204,13 @@ impl LunabotBlackboard {
             }
         }
     }
-    
+
     pub fn get_target_cell(&self) -> Option<(usize, usize)> {
-        
         // TODO set hardcoded traverse/dump positions
         match self.get_autonomy_state() {
-            AutonomyState::ToExcavationZone(p) => Some(world_point_to_cell(Point3::new(p.x, 0.0, p.y))),
+            AutonomyState::ToExcavationZone(p) => {
+                Some(world_point_to_cell(Point3::new(p.x, 0.0, p.y)))
+            }
             AutonomyState::Dump(p) => Some(world_point_to_cell(Point3::new(p.x, 0.0, p.y))),
             AutonomyState::None => None,
         }
@@ -229,7 +224,7 @@ impl LunabotBlackboard {
     pub fn pathfinding_state(&self) -> PathfindingState {
         self.pathfinding_state
     }
-    
+
     pub fn enqueue_action(&mut self, action: Action) {
         self.actions.push(action);
     }

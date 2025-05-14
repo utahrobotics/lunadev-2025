@@ -169,7 +169,7 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                 return Some((const_name, None));
             }
 
-            let Ok(n) = u32::from_str(&const_val) else {
+            let Ok(n) = u32::from_str(const_val) else {
                 panic!(r#"Constant "{const_name}" is not a valid u32 (was {const_val})"#);
             };
             Some((const_name, Some(n)))
@@ -252,21 +252,16 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
                 const_types.push(type_resolver(type_name, &uint_consts));
                 const_names.push(const_name.to_owned());
                 // panic!("A {:?}", caps.next());
-                const_custom_sub.push(
-                    caps.next()
-                        .flatten()
-                        .map(|_| {
-                            // If the outer capture group is present, the inner capture group is also present
-                            // refer to regex for proof
-                            let cap = caps.next().unwrap().unwrap().as_str().trim();
-                            if cap.is_empty() {
-                                None
-                            } else {
-                                Some(cap.to_owned())
-                            }
-                        })
-                        .flatten(),
-                )
+                const_custom_sub.push(caps.next().flatten().and_then(|_| {
+                    // If the outer capture group is present, the inner capture group is also present
+                    // refer to regex for proof
+                    let cap = caps.next().unwrap().unwrap().as_str().trim();
+                    if cap.is_empty() {
+                        None
+                    } else {
+                        Some(cap.to_owned())
+                    }
+                }))
             });
             let mut const_index = 0usize;
             let splitted: Vec<_> = re
@@ -350,12 +345,12 @@ pub fn build_shader(input: TokenStream) -> TokenStream {
     let shader: String = shader
         .iter()
         .map(|s| {
-            if let Some(_) = unformat!("<<GRP_SUBSTITUTE{}>>", s) {
+            if unformat!("<<GRP_SUBSTITUTE{}>>", s).is_some() {
                 // let out = format!("@group({{{}}}) @binding({{{}.binding_index()}})", binding_index, buffer_names[binding_index]);
                 // binding_index += 1;
                 // out
                 "@group({}) @binding({})".into()
-            } else if let Some(_) = unformat!("<<SUBSTITUTE{}>>", s) {
+            } else if unformat!("<<SUBSTITUTE{}>>", s).is_some() {
                 let out = format!("{{{}}}", const_names[const_index]);
                 const_index += 1;
                 out

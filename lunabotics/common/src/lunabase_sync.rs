@@ -1,4 +1,7 @@
-use std::{io::{Read, Write}, net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream}};
+use std::{
+    io::{Read, Write},
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream},
+};
 
 use brotli::{CompressorWriter, Decompressor};
 use bytemuck::{Pod, Zeroable};
@@ -42,19 +45,28 @@ impl TryFrom<u8> for SyncDataTypes {
 
 const BROTLI_BUFFER_SIZE: usize = 4096;
 
-pub fn lunabot_task(request_data: impl Fn(&mut Vec<Vector3<f16>>, &mut ThalassicData) -> (bool, bool) + Sync + 'static) {
+pub fn lunabot_task(
+    request_data: impl Fn(&mut Vec<Vector3<f16>>, &mut ThalassicData) -> (bool, bool) + Sync + 'static,
+) {
     let request_data: &_ = Box::leak(Box::new(request_data));
     std::thread::spawn(move || {
-        let listener = match TcpListener::bind(SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), crate::ports::LUNABASE_SYNC_DATA)) {
+        let listener = match TcpListener::bind(SocketAddr::new(
+            Ipv4Addr::UNSPECIFIED.into(),
+            crate::ports::LUNABASE_SYNC_DATA,
+        )) {
             Ok(listener) => listener,
             Err(e) => {
-                tracing::error!("Failed to bind to port {}: {}", crate::ports::LUNABASE_SYNC_DATA, e);
+                tracing::error!(
+                    "Failed to bind to port {}: {}",
+                    crate::ports::LUNABASE_SYNC_DATA,
+                    e
+                );
                 return;
             }
         };
 
         tracing::info!("Started lunabase sync data task");
-    
+
         loop {
             match listener.accept() {
                 Ok((peer, _)) => {
@@ -64,7 +76,8 @@ pub fn lunabot_task(request_data: impl Fn(&mut Vec<Vector3<f16>>, &mut Thalassic
                         let mut thalassic_data = ThalassicData::default();
 
                         loop {
-                            let (path_updated, thalassic_updated) = request_data(&mut path, &mut thalassic_data);
+                            let (path_updated, thalassic_updated) =
+                                request_data(&mut path, &mut thalassic_data);
 
                             let result: std::io::Result<()> = try {
                                 if path_updated {
@@ -83,11 +96,10 @@ pub fn lunabot_task(request_data: impl Fn(&mut Vec<Vector3<f16>>, &mut Thalassic
                                 peer.flush()?;
                             };
 
-                            if let Err(_) = result {
+                            if result.is_err() {
                                 break;
                             }
                         }
-                        
                     });
                 }
                 Err(e) => {
@@ -98,12 +110,20 @@ pub fn lunabot_task(request_data: impl Fn(&mut Vec<Vector3<f16>>, &mut Thalassic
     });
 }
 
-pub fn lunabase_task(lunabot_addr: IpAddr, mut on_thalassic: impl FnMut(&ThalassicData) + Send + 'static, mut on_path: impl FnMut(&[[f32; 3]]) + Send + 'static, mut on_error: impl FnMut(std::io::Error) + Send + 'static) {
+pub fn lunabase_task(
+    lunabot_addr: IpAddr,
+    mut on_thalassic: impl FnMut(&ThalassicData) + Send + 'static,
+    mut on_path: impl FnMut(&[[f32; 3]]) + Send + 'static,
+    mut on_error: impl FnMut(std::io::Error) + Send + 'static,
+) {
     std::thread::spawn(move || {
         let mut thalassic_data = ThalassicData::default();
         let mut path = Vec::new();
         loop {
-            let stream = match TcpStream::connect(SocketAddr::new(lunabot_addr, crate::ports::LUNABASE_SYNC_DATA)) {
+            let stream = match TcpStream::connect(SocketAddr::new(
+                lunabot_addr,
+                crate::ports::LUNABASE_SYNC_DATA,
+            )) {
                 Ok(stream) => stream,
                 Err(e) => {
                     on_error(e);
@@ -128,17 +148,20 @@ pub fn lunabase_task(lunabot_addr: IpAddr, mut on_thalassic: impl FnMut(&Thalass
                             let len = u16::from_le_bytes(buf) as usize;
                             path.resize(len, [0.0; 3]);
                             let mut tmp_f = [0u8; 2];
-                            
+
                             for point in path.iter_mut() {
-                                for i in 0..3 {
+                                for c in point {
                                     stream.read_exact(&mut tmp_f)?;
-                                    point[i] = f16::from_le_bytes(tmp_f) as f32;
+                                    *c = f16::from_le_bytes(tmp_f) as f32;
                                 }
                             }
                             on_path(&path);
                         }
                         Err(()) => {
-                            on_error(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid sync data type"));
+                            on_error(std::io::Error::new(
+                                std::io::ErrorKind::InvalidData,
+                                "Invalid sync data type",
+                            ));
                         }
                     }
                 };

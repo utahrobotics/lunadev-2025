@@ -42,7 +42,10 @@ pub fn camera_streaming(
                     stream.extend_from_slice(&buf[..n]);
                 }
                 Err(e) => {
-                    if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) {
+                    if matches!(
+                        e.kind(),
+                        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                    ) {
                         if let Some(ip) = lunabot_address {
                             let _ = stream_udp
                                 .send_to(&[0u8; 1], SocketAddr::new(ip, common::ports::CAMERAS));

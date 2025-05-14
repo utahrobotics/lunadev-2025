@@ -455,6 +455,11 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.48517, 4.40416, -2.61809)
 script = ExtResource("3_5i5qc")
 index = 5
 
+[node name="Rock13" type="Node3D" parent="Arena/Rocks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.673671, 4.40416, -1.26912)
+script = ExtResource("3_5i5qc")
+index = 8
+
 [node name="Robot" parent="." instance=ExtResource("1_y4wm8")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0.54, -1)
 

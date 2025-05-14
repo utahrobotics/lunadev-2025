@@ -1,8 +1,10 @@
 #![allow(unused_parens)]
 use nalgebra::{Quaternion, UnitQuaternion, UnitVector3, Vector3, Vector4};
-use optimization::{Function, Minimizer, Evaluation, GradientDescent, ArmijoLineSearch, NumericalDifferentiation};
-use std::vec::Vec;
+use optimization::{
+    ArmijoLineSearch, Evaluation, Function, GradientDescent, Minimizer, NumericalDifferentiation,
+};
 use serde::{Deserialize, Serialize};
+use std::vec::Vec;
 
 const G_ACCEL: f64 = 9.81;
 const NUM_PARAMS: usize = 16;
@@ -15,7 +17,7 @@ pub struct CalibrationParameters {
     pub accelerometer_scale: Vector3<f64>,
     pub gyroscope_scale: Vector3<f64>,
     pub with_scaling: bool,
-    pub misalignment: UnitQuaternion<f64>
+    pub misalignment: UnitQuaternion<f64>,
 }
 
 impl CalibrationParameters {
@@ -26,7 +28,7 @@ impl CalibrationParameters {
         accelerometer_scale: Vector3<f64>,
         gyroscope_scale: Vector3<f64>,
         misalignment: UnitQuaternion<f64>,
-        with_scaling: bool
+        with_scaling: bool,
     ) -> Self {
         Self {
             accelerometer_bias,
@@ -34,7 +36,7 @@ impl CalibrationParameters {
             accelerometer_scale,
             gyroscope_scale,
             with_scaling,
-            misalignment
+            misalignment,
         }
     }
 
@@ -50,19 +52,22 @@ impl CalibrationParameters {
             Vector3::new(1.0, 1.0, 1.0),
             Vector3::new(1.0, 1.0, 1.0),
             UnitQuaternion::identity(),
-            with_scaling
+            with_scaling,
         )
     }
 
     /// Creates parameters with a specified initial misalignment.
-    pub fn with_initial_misalignment(initial_misalignment: UnitQuaternion<f64>, with_scaling: bool) -> Self {
-         Self::new(
+    pub fn with_initial_misalignment(
+        initial_misalignment: UnitQuaternion<f64>,
+        with_scaling: bool,
+    ) -> Self {
+        Self::new(
             Vector3::zeros(),
             Vector3::zeros(),
             Vector3::new(1.0, 1.0, 1.0),
             Vector3::new(1.0, 1.0, 1.0),
             initial_misalignment,
-            with_scaling
+            with_scaling,
         )
     }
 
@@ -90,7 +95,7 @@ impl CalibrationParameters {
             accelerometer_scale: Vector3::new(params[6], params[7], params[8]),
             gyroscope_scale: Vector3::new(params[9], params[10], params[11]),
             misalignment,
-            with_scaling
+            with_scaling,
         })
     }
 
@@ -114,7 +119,7 @@ impl CalibrationParameters {
     pub fn correct_gyroscope(&self, raw: &Vector3<f64>) -> Vector3<f64> {
         // YOU CANT JUST APPLY A ROTATION TO EULER ANGLES. Ugh so obvious.
         let bias_corrected = (raw - self.gyroscope_bias);
-        // TODO: figure out if the "convention" of the raw reading because depending on the correspondence between pitch roll and yaw, 
+        // TODO: figure out if the "convention" of the raw reading because depending on the correspondence between pitch roll and yaw,
         // then convert it to a quaternion and apply the rotation
         if !self.with_scaling {
             return bias_corrected;
@@ -131,6 +136,12 @@ impl CalibrationParameters {
 /// Provides functionality for using a Gradient Descent algorithm to to find the additive and scaling biases of the IMU.
 pub struct Calibrator {
     static_readings: Vec<(Vector3<f64>, Vector3<f64>)>,
+}
+
+impl Default for Calibrator {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Calibrator {
@@ -174,7 +185,7 @@ impl Calibrator {
         self.static_readings.clear()
     }
 
-    /// Applies a moving average filter 
+    /// Applies a moving average filter
     /// `window_size` must be an odd number to have a symmetric window.
     pub fn smooth(&mut self, window_size: usize) -> Result<(), String> {
         let n = self.static_readings.len();
@@ -185,15 +196,17 @@ impl Calibrator {
             return Err("window_size must be a non-zero odd number".to_string());
         }
         if window_size >= n {
-             if let (Some(avg_accel), Some(avg_gyro)) = (self.avg_accel_vector(), self.avg_gyro_vector()) {
-                 self.static_readings = vec![(avg_accel, avg_gyro); n];
-             }
-             return Ok(());
+            if let (Some(avg_accel), Some(avg_gyro)) =
+                (self.avg_accel_vector(), self.avg_gyro_vector())
+            {
+                self.static_readings = vec![(avg_accel, avg_gyro); n];
+            }
+            return Ok(());
         }
         let half_window = window_size / 2;
         let mut smoothed = Vec::with_capacity(n);
         for i in 0..n {
-            let start = if i >= half_window { i - half_window } else { 0 };
+            let start = i.saturating_sub(half_window);
             let end = std::cmp::min(n, i + half_window + 1);
             let count = (end - start) as f64;
             let mut sum_accel = Vector3::zeros();
@@ -221,8 +234,11 @@ impl Calibrator {
         let ideal_gravity_direction = UnitVector3::new_normalize(Vector3::new(0.0, -G_ACCEL, 0.0));
         if let Some(avg_accel) = self.avg_accel_vector() {
             if let Some(measured_direction) = UnitVector3::try_new(avg_accel, 1e-6) {
-               return UnitQuaternion::rotation_between(&measured_direction, &ideal_gravity_direction)
-                    .unwrap_or_else(UnitQuaternion::identity);
+                return UnitQuaternion::rotation_between(
+                    &measured_direction,
+                    &ideal_gravity_direction,
+                )
+                .unwrap_or_else(UnitQuaternion::identity);
             }
         }
         UnitQuaternion::identity()
@@ -231,7 +247,9 @@ impl Calibrator {
     /// Performs the calibration using the collected static samples.
     pub fn calibrate(&mut self, with_scaling: bool) -> Result<CalibrationParameters, String> {
         if self.static_readings.len() < 6 {
-            return Err("Insufficient static samples for calibration (need at least 6)".to_string());
+            return Err(
+                "Insufficient static samples for calibration (need at least 6)".to_string(),
+            );
         }
         self.smooth(15)?;
         let initial_misalignment = UnitQuaternion::identity();
@@ -245,10 +263,14 @@ impl Calibrator {
             .line_search(line_search)
             .gradient_tolerance(1e-9)
             .max_iterations(Some(20_000));
-        
-        let initial_params = CalibrationParameters::with_initial_misalignment(initial_misalignment, with_scaling);
+
+        let initial_params =
+            CalibrationParameters::with_initial_misalignment(initial_misalignment, with_scaling);
         let initial_params_vec = initial_params.to_vec();
-        println!("Starting optimization with initial params: {:?}", initial_params);
+        println!(
+            "Starting optimization with initial params: {:?}",
+            initial_params
+        );
         let result = minimizer.minimize(&cost_function_nd, initial_params_vec);
         let best_params_vec = result.position();
         println!("Optimization finished");
@@ -282,9 +304,9 @@ impl<'a> Function for ImuCostFunction<'a> {
             let accel_corrected = params.correct_accelerometer(accel_raw);
             let gyro_corrected = params.correct_gyroscope(gyro_raw);
             let accel_diff = accel_corrected - ideal_accel;
-            let accel_error = (accel_diff.norm_squared()*w_a).powi(2);
+            let accel_error = (accel_diff.norm_squared() * w_a).powi(2);
             let gyro_diff = gyro_corrected - ideal_gyro;
-            let gyro_error = (gyro_diff.norm_squared()*w_g).powi(2);
+            let gyro_error = (gyro_diff.norm_squared() * w_g).powi(2);
             total_error += accel_error + gyro_error;
         }
         total_error / num_readings
@@ -308,12 +330,20 @@ mod tests {
         accel_noise_stddev: f64,
         gyro_noise_stddev: f64,
         rng: &mut impl Rng,
-    ) -> (Vector3<f64>, Vector3<f64>)
-    {
+    ) -> (Vector3<f64>, Vector3<f64>) {
         let noise_dist = Uniform::new_inclusive(-accel_noise_stddev, accel_noise_stddev).unwrap();
-        let accel_noise = Vector3::new(rng.sample(noise_dist), rng.sample(noise_dist), rng.sample(noise_dist));
-        let gyro_noise_dist = Uniform::new_inclusive(-gyro_noise_stddev, gyro_noise_stddev).unwrap();
-        let gyro_noise = Vector3::new(rng.sample(gyro_noise_dist), rng.sample(gyro_noise_dist), rng.sample(gyro_noise_dist));
+        let accel_noise = Vector3::new(
+            rng.sample(noise_dist),
+            rng.sample(noise_dist),
+            rng.sample(noise_dist),
+        );
+        let gyro_noise_dist =
+            Uniform::new_inclusive(-gyro_noise_stddev, gyro_noise_stddev).unwrap();
+        let gyro_noise = Vector3::new(
+            rng.sample(gyro_noise_dist),
+            rng.sample(gyro_noise_dist),
+            rng.sample(gyro_noise_dist),
+        );
         let noisy_accel = ideal_accel + accel_noise;
         let noisy_gyro = ideal_gyro + gyro_noise;
         let scaled_accel = Vector3::new(
@@ -321,7 +351,7 @@ mod tests {
             noisy_accel.y * accel_scale.y,
             noisy_accel.z * accel_scale.z,
         );
-         let scaled_gyro = Vector3::new(
+        let scaled_gyro = Vector3::new(
             noisy_gyro.x * gyro_scale.x,
             noisy_gyro.y * gyro_scale.y,
             noisy_gyro.z * gyro_scale.z,
@@ -336,19 +366,18 @@ mod tests {
     #[test]
     fn test_calib_with_noise_rotation_no_scaling() {
         let mut calibrator = Calibrator::new();
-        let true_misalignment_quat = UnitQuaternion::from_euler_angles(
-            0.1,
-           -0.05,
-            0.15
-        );
-        
+        let true_misalignment_quat = UnitQuaternion::from_euler_angles(0.1, -0.05, 0.15);
+
         let true_accel_bias = Vector3::new(0.05, -0.42, 0.03);
         let true_gyro_bias = Vector3::new(0.005, 0.01, -0.008);
         let true_accel_scale = Vector3::new(1., 1., 1.0);
         let true_gyro_scale = Vector3::new(1., 1.0, 1.0);
         println!("----- GROUND TRUTHS -----");
         println!("Misalignment (Quaternion): {:?}", true_misalignment_quat);
-        println!("Misalignment (Euler): {:?}", true_misalignment_quat.euler_angles());
+        println!(
+            "Misalignment (Euler): {:?}",
+            true_misalignment_quat.euler_angles()
+        );
         println!("Accelerometer Bias: {}", true_accel_bias);
         println!("Gyroscope Bias: {}", true_gyro_bias);
         println!("Accelerometer Scale: {}", true_accel_scale);
@@ -379,7 +408,10 @@ mod tests {
         let result = calibrator.calibrate(false).expect("Calibration failed");
         println!("----- ESTIMATED BIASES -----");
         println!("Misalignment (Quaternion): {:?}", result.misalignment);
-        println!("Misalignment (Euler): {:?}", result.misalignment.euler_angles());
+        println!(
+            "Misalignment (Euler): {:?}",
+            result.misalignment.euler_angles()
+        );
         println!("Accelerometer Bias: {}", result.accelerometer_bias);
         println!("Gyroscope Bias: {}", result.gyroscope_bias);
         if with_scaling {
@@ -405,18 +437,39 @@ mod tests {
         println!("Corrected Accel: {:.6}", corrected_accel);
         println!("Ideal Gyro: {:.6}", ideal_gyro);
         println!("Corrected Gyro: {:.6}", corrected_gyro);
-        println!("Gyro Error Norm: {:.6}", (corrected_gyro - ideal_gyro).norm());
+        println!(
+            "Gyro Error Norm: {:.6}",
+            (corrected_gyro - ideal_gyro).norm()
+        );
         let tolerance = 0.1;
-        assert!((result.accelerometer_bias - true_accel_bias).norm() < tolerance, "Accel bias mismatch");
-        assert!((result.gyroscope_bias - true_gyro_bias).norm() < tolerance, "Gyro bias mismatch");
+        assert!(
+            (result.accelerometer_bias - true_accel_bias).norm() < tolerance,
+            "Accel bias mismatch"
+        );
+        assert!(
+            (result.gyroscope_bias - true_gyro_bias).norm() < tolerance,
+            "Gyro bias mismatch"
+        );
         if with_scaling {
-             assert!((result.accelerometer_scale - true_accel_scale).norm() < tolerance, "Accel scale mismatch");
-             assert!((result.gyroscope_scale - true_gyro_scale).norm() < tolerance, "Gyro scale mismatch");
+            assert!(
+                (result.accelerometer_scale - true_accel_scale).norm() < tolerance,
+                "Accel scale mismatch"
+            );
+            assert!(
+                (result.gyroscope_scale - true_gyro_scale).norm() < tolerance,
+                "Gyro scale mismatch"
+            );
         }
         let angle_diff = result.misalignment.angle_to(&true_misalignment_quat);
         println!("Misalignment Angle Difference (radians): {:.6}", angle_diff);
         assert!(angle_diff < 0.1, "Misalignment mismatch");
-        assert!((corrected_accel - ideal_accel).norm() < 0.1, "Corrected accel verification failed");
-        assert!((corrected_gyro - ideal_gyro).norm() < 0.05, "Corrected gyro verification failed");
+        assert!(
+            (corrected_accel - ideal_accel).norm() < 0.1,
+            "Corrected accel verification failed"
+        );
+        assert!(
+            (corrected_gyro - ideal_gyro).norm() < 0.05,
+            "Corrected gyro verification failed"
+        );
     }
 }

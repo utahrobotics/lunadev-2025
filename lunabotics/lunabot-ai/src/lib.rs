@@ -31,12 +31,12 @@ pub enum Action {
     CalculatePath {
         from: (usize, usize),
         to: (usize, usize),
-        kind: PathKind
+        kind: PathKind,
     },
     LiftShake,
     AvoidCell((usize, usize)),
     ClearPointsToAvoid,
-    AvoidObstacle(Obstacle)
+    AvoidObstacle(Obstacle),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -58,41 +58,40 @@ pub fn run_ai(
     let mut b = WhileLoop::new(
         AlwaysSucceed,
         Sequence::new((
-            
-            // reset 
+            // reset
             |blackboard: &mut LunabotBlackboard| {
                 blackboard.enqueue_action(Action::SetStage(LunabotStage::SoftStop));
-                blackboard.enqueue_action(Action::SetActuators(ActuatorCommand::set_speed(0.0, Actuator::Lift)));
-                blackboard.enqueue_action(Action::SetActuators(ActuatorCommand::set_speed(0.0, Actuator::Bucket)));
+                blackboard.enqueue_action(Action::SetActuators(ActuatorCommand::set_speed(
+                    0.0,
+                    Actuator::Lift,
+                )));
+                blackboard.enqueue_action(Action::SetActuators(ActuatorCommand::set_speed(
+                    0.0,
+                    Actuator::Bucket,
+                )));
                 blackboard.enqueue_action(Action::SetActuators(ActuatorCommand::StopPercuss));
                 blackboard.enqueue_action(Action::SetSteering(Steering::default()));
                 InfallibleStatus::Success
             },
-            
             // wait until receive "continue mission" from lunabase
             Invert(WhileLoop::new(
                 AlwaysSucceed,
                 |blackboard: &mut LunabotBlackboard| {
                     while let Some(msg) = blackboard.pop_from_lunabase() {
-                        match msg {
-                            FromLunabase::ContinueMission => {
-                                warn!("Continuing mission");
-                                *blackboard.lunabase_disconnected() = false;
-                                return FallibleStatus::Failure;
-                            }
-                            _ => {}
+                        if msg == FromLunabase::ContinueMission {
+                            warn!("Continuing mission");
+                            *blackboard.lunabase_disconnected() = false;
+                            return FallibleStatus::Failure;
                         }
                     }
                     *blackboard.get_poll_when() = PollWhen::ReceivedLunabase;
                     FallibleStatus::Running
                 },
             )),
-            
-            
             TryCatch::new(
                 WhileLoop::new(
                     AlwaysSucceed,
-                    Sequence::new(( CatchPanic(teleop()), CatchPanic(autonomy()), )), 
+                    Sequence::new((CatchPanic(teleop()), CatchPanic(autonomy()))),
                 ),
                 AlwaysSucceed,
             ),

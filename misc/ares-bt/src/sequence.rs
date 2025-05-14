@@ -1,6 +1,6 @@
 use crate::{
     Behavior, CancelSafe, EternalBehavior, EternalStatus, FallibleBehavior, FallibleStatus,
-    InfallibleBehavior, InfallibleStatus, IntoRon, Status,
+    InfallibleBehavior, InfallibleStatus, Status,
 };
 
 pub struct Sequence<A> {
@@ -87,25 +87,6 @@ macro_rules! impl_seq {
             fn run_eternal(&mut self, blackboard: &mut C1) -> EternalStatus {
                 self.index = 0;
                 self.body.0.run_eternal(blackboard)
-            }
-        }
-
-        impl<$($name,)+> IntoRon for Sequence<($($name,)+)>
-        where
-            $($name: IntoRon,)+
-        {
-            fn into_ron(&self) -> ron::Value {
-                ron::Value::Map(
-                    [
-                        (ron::Value::String("sequence".to_string()), ron::Value::Seq(
-                            vec![
-                                $(
-                                    self.body.$num.into_ron(),
-                                )+
-                            ].into_iter().collect()
-                        ))
-                    ].into_iter().collect()
-                )
             }
         }
     }
@@ -209,25 +190,6 @@ macro_rules! impl_sel {
             fn run_eternal(&mut self, blackboard: &mut C1) -> EternalStatus {
                 self.index = 0;
                 self.body.0.run_eternal(blackboard)
-            }
-        }
-
-        impl<$($name,)+> IntoRon for Select<($($name,)+)>
-        where
-            $($name: IntoRon,)+
-        {
-            fn into_ron(&self) -> ron::Value {
-                ron::Value::Map(
-                    [
-                        (ron::Value::String("select".to_string()), ron::Value::Seq(
-                            vec![
-                                $(
-                                    self.body.$num.into_ron(),
-                                )+
-                            ].into_iter().collect()
-                        ))
-                    ].into_iter().collect()
-                )
             }
         }
     }
@@ -381,25 +343,6 @@ macro_rules! impl_seq {
                         }
                     }
                 }
-            }
-        }
-
-        impl<$($name,)+> IntoRon for ParallelSequence<($($name,)+)>
-        where
-            $($name: IntoRon,)+
-        {
-            fn into_ron(&self) -> ron::Value {
-                ron::Value::Map(
-                    [
-                        (ron::Value::String("sequence".to_string()), ron::Value::Seq(
-                            vec![
-                                $(
-                                    self.body.$num.into_ron(),
-                                )+
-                            ].into_iter().collect()
-                        ))
-                    ].into_iter().collect()
-                )
             }
         }
     }
@@ -559,25 +502,6 @@ macro_rules! impl_sel {
                 }
             }
         }
-
-        impl<$($name,)+> IntoRon for ParallelSelect<($($name,)+)>
-        where
-            $($name: IntoRon,)+
-        {
-            fn into_ron(&self) -> ron::Value {
-                ron::Value::Map(
-                    [
-                        (ron::Value::String("select".to_string()), ron::Value::Seq(
-                            vec![
-                                $(
-                                    self.body.$num.into_ron(),
-                                )+
-                            ].into_iter().collect()
-                        ))
-                    ].into_iter().collect()
-                )
-            }
-        }
     }
 }
 
@@ -722,25 +646,6 @@ macro_rules! impl_sel {
                         }
                     }
                 }
-            }
-        }
-
-        impl<$($name,)+> IntoRon for ParallelAny<($($name,)+)>
-        where
-            $($name: IntoRon,)+
-        {
-            fn into_ron(&self) -> ron::Value {
-                ron::Value::Map(
-                    [
-                        (ron::Value::String("select".to_string()), ron::Value::Seq(
-                            vec![
-                                $(
-                                    self.body.$num.into_ron(),
-                                )+
-                            ].into_iter().collect()
-                        ))
-                    ].into_iter().collect()
-                )
             }
         }
     }

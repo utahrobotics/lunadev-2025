@@ -1,10 +1,13 @@
 #![feature(backtrace_frames)]
 
 use std::{
-    collections::VecDeque, net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket}, sync::{
+    collections::VecDeque,
+    net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
+    sync::{
         atomic::{AtomicBool, Ordering},
         Once,
-    }, time::{Duration, Instant}
+    },
+    time::{Duration, Instant},
 };
 
 use bitcode::encode;
@@ -12,24 +15,27 @@ use cakap2::{
     packet::{Action, ReliableIndex},
     Event, PeerStateMachine, RecommendedAction,
 };
-use crossbeam::atomic::AtomicCell;
-#[cfg(feature = "production")]
-use nalgebra::{Isometry3, Quaternion, Vector3, UnitQuaternion};
-use common::{FromLunabase, FromLunabot, LunabotStage, Steering, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
 #[cfg(feature = "production")]
 use common::lunabase_sync::ThalassicData;
+use common::{
+    FromLunabase, FromLunabot, LunabotStage, Steering, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT,
+    THALASSIC_WIDTH,
+};
+use crossbeam::atomic::AtomicCell;
 use godot::{
     classes::{image::Format, Engine, Image, Os},
     prelude::*,
 };
+#[cfg(feature = "production")]
+use nalgebra::{Isometry3, Quaternion, UnitQuaternion, Vector3};
 use tasker::shared::{OwnedData, SharedDataReceiver};
 
 #[cfg(feature = "audio")]
 mod audio;
 #[cfg(feature = "production")]
-mod stream;
-#[cfg(feature = "production")]
 mod config;
+#[cfg(feature = "production")]
+mod stream;
 
 const STREAM_WIDTH: u32 = 1920;
 const STREAM_HEIGHT: u32 = 1080;
@@ -170,14 +176,13 @@ impl INode for LunabotConn {
         };
 
         if let Some(lunabot_address) = lunabot_address {
-            common::lunabase_sync::lunabase_task(lunabot_address,
+            common::lunabase_sync::lunabase_task(
+                lunabot_address,
                 |thalassic| {
-                    thalassic_data.store(Some(thalassic.clone()));
+                    thalassic_data.store(Some(*thalassic));
                     // godot_print!("Thalassic data received {:?}", thalassic.heightmap.iter().filter(|&&h| h as f32 != 0.0).count());
                 },
-                |_path| {
-
-                },
+                |_path| {},
                 |e| {
                     if e.kind() == std::io::ErrorKind::ConnectionRefused {
                         return;
@@ -482,8 +487,10 @@ impl INode for LunabotConn {
 
         #[cfg(feature = "production")]
         if let Some(thalassic) = self.thalassic_data.take() {
-            let heightmap: PackedFloat32Array = thalassic.heightmap.into_iter().map(|x| x as f32).collect();
-            self.base_mut().emit_signal("heightmap_received", &[heightmap.to_variant()]);
+            let heightmap: PackedFloat32Array =
+                thalassic.heightmap.into_iter().map(|x| x as f32).collect();
+            self.base_mut()
+                .emit_signal("heightmap_received", &[heightmap.to_variant()]);
         }
     }
 }
@@ -524,7 +531,10 @@ impl LunabotConn {
                 Ok(packet) => {
                     inner.last_steering = Some((new_steering, packet.get_index()));
                     inner.steering_to_lunabot = if let Some(old_idx) = last_steering_reliable_idx {
-                        Some((Action::CancelReliable(old_idx), Some(Action::SendReliable(packet))))
+                        Some((
+                            Action::CancelReliable(old_idx),
+                            Some(Action::SendReliable(packet)),
+                        ))
                     } else {
                         Some((Action::SendReliable(packet), None))
                     };
@@ -554,7 +564,10 @@ impl LunabotConn {
                 Ok(packet) => {
                     inner.last_lift = Some((lift, packet.get_index()));
                     inner.lift_to_lunabot = if let Some(old_idx) = last_lift_reliable_idx {
-                        Some((Action::CancelReliable(old_idx), Some(Action::SendReliable(packet))))
+                        Some((
+                            Action::CancelReliable(old_idx),
+                            Some(Action::SendReliable(packet)),
+                        ))
                     } else {
                         Some((Action::SendReliable(packet), None))
                     };
@@ -584,7 +597,10 @@ impl LunabotConn {
                 Ok(packet) => {
                     inner.last_bucket = Some((bucket, packet.get_index()));
                     inner.tilt_to_lunabot = if let Some(old_idx) = last_bucket_reliable_idx {
-                        Some((Action::CancelReliable(old_idx), Some(Action::SendReliable(packet))))
+                        Some((
+                            Action::CancelReliable(old_idx),
+                            Some(Action::SendReliable(packet)),
+                        ))
                     } else {
                         Some((Action::SendReliable(packet), None))
                     };
@@ -665,7 +681,12 @@ impl LunabotConn {
         let [x, y, z] = isometry.translation.vector.cast().data.0[0];
         let [i, j, k, w] = isometry.rotation.coords.cast().data.0[0];
         Transform3D {
-            basis: Basis::from_quat(godot::prelude::Quaternion { x: i, y: j, z: k, w }),
+            basis: Basis::from_quat(godot::prelude::Quaternion {
+                x: i,
+                y: j,
+                z: k,
+                w,
+            }),
             origin: godot::prelude::Vector3 { x, y, z },
         }
     }
@@ -725,9 +746,9 @@ impl LunabotConn {
 
     #[func]
     fn is_stream_corrupted(&self) -> bool {
-        self.inner.as_ref().map_or(false, |inner| {
-            inner.stream_corrupted.load(Ordering::Relaxed)
-        })
+        self.inner
+            .as_ref()
+            .is_some_and(|inner| inner.stream_corrupted.load(Ordering::Relaxed))
     }
 
     #[func]

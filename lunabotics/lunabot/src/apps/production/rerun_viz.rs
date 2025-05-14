@@ -29,7 +29,7 @@ pub enum Level {
     #[default]
     Minimal,
     /// Logs everything including height maps and depth camera point cloud.
-    All
+    All,
 }
 
 impl Level {
@@ -45,22 +45,26 @@ pub fn init_rerun(rerun_viz: RerunViz) {
         ..Default::default()
     };
     let (recorder, level) = match rerun_viz {
-        RerunViz::Viz(level) => (match rerun::RecordingStreamBuilder::new("lunabot").spawn_opts(&opts, None) {
-            Ok(x) => x,
-            Err(e) => {
-                error!("Failed to start rerun process: {e}");
-                return;
-            }
-        }, level),
-        RerunViz::Log(level) => {
-            (match rerun::RecordingStreamBuilder::new("lunabot").save("recording.rrd") {
+        RerunViz::Viz(level) => (
+            match rerun::RecordingStreamBuilder::new("lunabot").spawn_opts(&opts, None) {
+                Ok(x) => x,
+                Err(e) => {
+                    error!("Failed to start rerun process: {e}");
+                    return;
+                }
+            },
+            level,
+        ),
+        RerunViz::Log(level) => (
+            match rerun::RecordingStreamBuilder::new("lunabot").save("recording.rrd") {
                 Ok(x) => x,
                 Err(e) => {
                     error!("Failed to start rerun file logging: {e}");
                     return;
                 }
-            }, level)
-        }
+            },
+            level,
+        ),
         RerunViz::Disabled => {
             return;
         }
@@ -77,7 +81,7 @@ pub fn init_rerun(rerun_viz: RerunViz) {
         error!("Failed to setup rerun environment: {e}");
     }
 
-    let _ = RECORDER.set(RecorderData { recorder , level});
+    let _ = RECORDER.set(RecorderData { recorder, level });
 
     std::thread::spawn(|| {
         let recorder = &RECORDER.get().unwrap().recorder;

@@ -135,7 +135,9 @@ impl INode for Lunasim {
         while let Some(msg) = self.shared.from_lunasimbot.pop() {
             match msg {
                 FromLunasimbot::Quit => {
-                    self.base().get_tree().map(|mut tree| tree.quit());
+                    if let Some(mut tree) = self.base().get_tree() {
+                        tree.quit()
+                    }
                 }
                 FromLunasimbot::PointCloud(points) => {
                     let points: Vec<_> = Box::into_iter(points)

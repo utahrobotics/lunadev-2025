@@ -80,6 +80,17 @@ pub struct StorageBuffer<T: GpuType + ?Sized, HM, SM> {
     read_buffer: Option<wgpu::Buffer>,
 }
 
+impl<T, HM, SM> Default for StorageBuffer<T, HM, SM>
+where
+    T: GpuType<Size = StaticSize<T>>,
+    HM: HostStorageBufferMode,
+    SM: ShaderStorageBufferMode,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T, HM, SM> StorageBuffer<T, HM, SM>
 where
     T: GpuType<Size = StaticSize<T>>,
@@ -356,7 +367,7 @@ where
     HM: HostStorageBufferMode<HOST_CAN_READ = true>,
 {
     pub fn read(&self, into: &mut T) {
-        into.from_bytes(
+        into.copy_bytes(
             &self
                 .read_buffer
                 .as_ref()

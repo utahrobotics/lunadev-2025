@@ -11,9 +11,9 @@ pub(crate) const EMBEDDED_KEY: &str = "__LUMPUR_EMBEDDED";
 pub(crate) const EMBEDDED_VAL: &str = "1";
 pub(crate) const SHMEM_VAR_KEY: &str = "__LUMPUR_SHMEM_FLINK";
 
-static ON_EXIT: Mutex<Option<Box<dyn FnOnce() -> () + Send>>> = Mutex::new(None);
+static ON_EXIT: Mutex<Option<Box<dyn FnOnce() + Send>>> = Mutex::new(None);
 
-pub fn set_on_exit(f: impl FnOnce() -> () + Send + 'static) {
+pub fn set_on_exit(f: impl FnOnce() + Send + 'static) {
     *ON_EXIT.lock().unwrap() = Some(Box::new(f));
 }
 

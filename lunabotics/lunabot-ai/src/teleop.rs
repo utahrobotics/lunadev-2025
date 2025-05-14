@@ -1,15 +1,14 @@
-use std::{sync::atomic::{AtomicBool, Ordering}, time::Duration};
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 
 use ares_bt::{sequence::Sequence, Behavior, Status};
 use common::{FromLunabase, LunabotStage, Steering};
 use embedded_common::ActuatorCommand;
 use tracing::{error, warn};
 
-use crate::{
-    autonomy::AutonomyState,
-    blackboard::LunabotBlackboard,
-    Action, PollWhen,
-};
+use crate::{autonomy::AutonomyState, blackboard::LunabotBlackboard, Action, PollWhen};
 
 pub fn teleop() -> impl Behavior<LunabotBlackboard> {
     let mut last_steering = Steering::default();
@@ -33,7 +32,7 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard> {
                 last_lift_actuator = None;
                 last_bucket_actuator = None;
             }
-            
+
             macro_rules! handle {
                 ($msg: ident) => {
                     match $msg {
@@ -52,18 +51,25 @@ pub fn teleop() -> impl Behavior<LunabotBlackboard> {
                         }
                         FromLunabase::StartPercuss => {
                             // warn!("Start percussor");
-                            blackboard.enqueue_action(Action::SetActuators(ActuatorCommand::StartPercuss));
+                            blackboard.enqueue_action(Action::SetActuators(
+                                ActuatorCommand::StartPercuss,
+                            ));
                         }
                         FromLunabase::StopPercuss => {
                             // warn!("Stop percussor");
-                            blackboard.enqueue_action(Action::SetActuators(ActuatorCommand::StopPercuss));
+                            blackboard
+                                .enqueue_action(Action::SetActuators(ActuatorCommand::StopPercuss));
                         }
                         FromLunabase::ToExcavationZone(x) => {
-                            blackboard.set_autonomy_state(AutonomyState::ToExcavationZone(nalgebra::Point2::new(x.0 as f64, x.1 as f64)));
+                            blackboard.set_autonomy_state(AutonomyState::ToExcavationZone(
+                                nalgebra::Point2::new(x.0 as f64, x.1 as f64),
+                            ));
                             return Status::Success;
                         }
                         FromLunabase::Dump(x) => {
-                            blackboard.set_autonomy_state(AutonomyState::Dump(nalgebra::Point2::new(x.0 as f64, x.1 as f64)));
+                            blackboard.set_autonomy_state(AutonomyState::Dump(
+                                nalgebra::Point2::new(x.0 as f64, x.1 as f64),
+                            ));
                             return Status::Success;
                         }
                         _ => {}
