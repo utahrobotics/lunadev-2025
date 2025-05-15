@@ -246,7 +246,7 @@ impl Calibrator {
             );
         }
         self.smooth(15)?;
-        let initial_misalignment = UnitQuaternion::identity();
+        let initial_misalignment = self.estimate_initial_misalignment();
         let cost_function = ImuCostFunction {
             readings: &self.static_readings,
             with_scaling,
