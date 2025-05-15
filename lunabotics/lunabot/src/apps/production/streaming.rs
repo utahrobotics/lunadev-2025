@@ -158,7 +158,7 @@ pub fn start_streaming(mut lunabase_address: Option<IpAddr>) {
             EncoderConfig::new()
                 .set_bitrate_bps(400_000)
                 // .enable_skip_frame(true)
-                .max_frame_rate(20.0)
+                .max_frame_rate(24.0)
                 // .rate_control_mode(RateControlMode::Timestamp)
                 .set_multiple_thread_idc(4), // .sps_pps_strategy(SpsPpsStrategy::IncreasingId)
         ) {

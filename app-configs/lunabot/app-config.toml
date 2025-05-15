@@ -13,7 +13,7 @@ focal_length_x_px = 1100
 focal_length_y_px = 1100
 # stream_index = 0
 
-[Main.cameras."pci-0000:34:00.4-usb-0:2.4:1.0"]
+[Main.cameras."pci-0000:35:00.0-usb-0:1:1.0"]
 link_name = "right_arm_camera"
 focal_length_x_px = 600
 focal_length_y_px = 600
@@ -31,7 +31,7 @@ focal_length_x_px = 1100
 focal_length_y_px = 1100
 # stream_index = 5
 
-[Main.cameras."pci-0000:35:00.0-usb-0:1:1.0"]
+[Main.cameras."pci-0000:34:00.4-usb-0:2.4:1.0"]
 link_name = "back_camera"
 focal_length_x_px = 600
 focal_length_y_px = 600
@@ -51,10 +51,10 @@ depth_enabled = false
 # forward_axis = [0.0, 0.0, 1.0]
 # tag_width = 0.104775
 
-[Main.apriltags."13"]
-tag_position = [0.0, 0.0, 6.98]
-forward_axis = [1.0, 0.0, 0.0]
-tag_width = 0.15
+[Main.apriltags."82"]
+tag_position = [2.0, 0.0, 3.0]
+forward_axis = [0.0, 0.0, 1.0]
+tag_width = 0.161
 
 # [Main.apriltags."26"]
 # tag_position = [0.3, 0.0, 0.0]
