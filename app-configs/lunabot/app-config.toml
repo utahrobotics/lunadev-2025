@@ -1,7 +1,11 @@
 [Main]
 robot_layout = "robot-layout/lunabot.json"
 
-# [Main.rerun_viz."Log"."All"]
+[Main.rerun_viz]
+Grpc = [
+  "Minimal",
+  "rerun+http://192.168.0.113:9876/proxy",
+]
 
 [Main.cameras."pci-0000:34:00.3-usb-0:4:1.0"]
 link_name = "left_arm_camera"

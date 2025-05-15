@@ -17,6 +17,7 @@ pub struct RecorderData {
 
 #[derive(Deserialize, Default, Debug)]
 pub enum RerunViz {
+    Grpc(Level,String),
     Log(Level),
     Viz(Level),
     #[default]
@@ -50,6 +51,16 @@ pub fn init_rerun(rerun_viz: RerunViz) {
                 Ok(x) => x,
                 Err(e) => {
                     error!("Failed to start rerun process: {e}");
+                    return;
+                }
+            },
+            level,
+        ),
+        RerunViz::Grpc(level, url) => (
+            match rerun::RecordingStreamBuilder::new("lunabot").connect_grpc_opts(&url, None) {
+                Ok(x) => x,
+                Err(e) => {
+                    error!("Failed to make recording stream: {e}");
                     return;
                 }
             },
