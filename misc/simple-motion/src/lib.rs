@@ -332,8 +332,8 @@ impl Transformable {
                     new_angle = new_angle.min(*max_angle);
                 }
                 let new = OneAxisDynamicState {
-                    current_rotation: start_rotation
-                        * UnitQuaternion::from_axis_angle(&axis, new_angle),
+                    current_rotation: 
+                        UnitQuaternion::from_axis_angle(&axis, new_angle) * start_rotation,
                     current_angle: new_angle,
                 };
                 dynamic.store(new);
