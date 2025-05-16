@@ -88,6 +88,7 @@ impl DepthProjectorBuilder {
             principal_point_px: self.principal_point_px.into(),
             pixel_count: NonZeroU32::new(pixel_count).unwrap(),
             half_pixel_count: NonZeroU32::new(pixel_count.div_ceil(2)).unwrap(),
+            stride: NonZeroU32::new(5).unwrap(),
         }
         .compile();
 

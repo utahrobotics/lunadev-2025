@@ -14,19 +14,31 @@ const PRINCIPAL_POINT_PX: vec2f = {{principal_point_px}};
 const PIXEL_COUNT: NonZeroU32 = {{pixel_count}};
 const HALF_PIXEL_COUNT: NonZeroU32 = {{half_pixel_count}};
 const MAX_DEPTH: f32 = {{max_depth}};
+const STRIDE: NonZeroU32 = {{stride}};
 
 @compute
 @workgroup_size(8, 8, 1)
 fn depth(
     @builtin(global_invocation_id) global_invocation_id : vec3u,
 ) {
-    let i = global_invocation_id.x + global_invocation_id.y * IMAGE_WIDTH;
-    if i >= PIXEL_COUNT {
+    let strided_x = global_invocation_id.x * STRIDE;
+    let strided_y = global_invocation_id.y * STRIDE;
+
+    if strided_x >= IMAGE_WIDTH {
         return;
     }
-    let double_depth = depths[i / 2];
+
+    let original_i = strided_x + strided_y * IMAGE_WIDTH;
+    let width_over_STRIDE = select(IMAGE_WIDTH / STRIDE, IMAGE_WIDTH, STRIDE == 0u);
+    let i = global_invocation_id.x + global_invocation_id.y * width_over_STRIDE;
+
+    if original_i >= PIXEL_COUNT {
+        return;
+    }
+
+    let double_depth = depths[original_i / 2];
     var depthu: u32;
-    if i % 2 == 1 {
+    if original_i % 2 == 1 {
         depthu = double_depth >> 16;
     } else {
         depthu = double_depth & 0xFFFF;
@@ -37,8 +49,8 @@ fn depth(
         return;
     }
 
-    let x = f32(global_invocation_id.x) - PRINCIPAL_POINT_PX.x;
-    let y = f32(global_invocation_id.y) - PRINCIPAL_POINT_PX.y;
+    let x = f32(strided_x) - PRINCIPAL_POINT_PX.x;
+    let y = f32(strided_y) - PRINCIPAL_POINT_PX.y;
     let depth = f32(depthu) * depth_scale;
 
     if depth > MAX_DEPTH {
