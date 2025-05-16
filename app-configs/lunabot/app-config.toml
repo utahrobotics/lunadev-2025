@@ -37,29 +37,29 @@ focal_length_x_px = 600
 focal_length_y_px = 600
 stream_index = 7
 
-[Main.depth_cameras."309622300683"]
+[Main.depth_cameras."044422250424"]
 link_name = "upper_depth_camera"
 stream_index = 1
 
-[Main.depth_cameras."044422250424"]
+[Main.depth_cameras."309622300683"]
 link_name = "lower_depth_camera"
 stream_index = 4
 depth_enabled = false
 
-# [Main.apriltags."1"]
-# tag_position = [0.0, 0.6477, 0.0]
-# forward_axis = [0.0, 0.0, 1.0]
-# tag_width = 0.104775
+[Main.apriltags."70"]
+tag_position = [0.0, 0.6477, 0.0]
+forward_axis = [0.0, 0.0, 1.0]
+tag_width = 0.198
 
 [Main.apriltags."82"]
 tag_position = [2.0, 0.0, 3.0]
 forward_axis = [0.0, 0.0, 1.0]
 tag_width = 0.161
 
-# [Main.apriltags."26"]
-# tag_position = [0.3, 0.0, 0.0]
-# forward_axis = [0.0, 0.0, 1.0]
-# tag_width = 0.152
+[Main.apriltags."95"]
+tag_position = [0.3, 0.0, 0.0]
+forward_axis = [0.0, 0.0, 1.0]
+tag_width = 0.18
 
 [Main.v3pico]
 serial = "1"
@@ -92,9 +92,9 @@ mask1 = "Left"
 mask2 = "Left"
 
 [Main.imu_correction]
-accelerometer_bias = [0.002869858146309696, -0.08067873552815495, -0.0025943965753459372]
-gyroscope_bias = [0.004513707719003271, 0.0075341566480292815, -0.0029502912069554643]
+accelerometer_bias = [0.002709543940755004, -0.22645730987989818, -0.004565496211130569]
+gyroscope_bias = [-0.000000000000000027465820312500003, -0.000000000000000027465820312500003, -0.000000000000000027465820312500003]
 accelerometer_scale = [1.0, 1.0, 1.0]
 gyroscope_scale = [1.0, 1.0, 1.0]
 with_scaling = false
-misalignment = [-0.012216332334421338, 0.000022896094152066673, -0.013622732692822232, 0.9998325769117766]
+misalignment = [-0.010071734378705816, -0.0000005474737870781548, -0.005931499949072841, 0.999931686403956]
