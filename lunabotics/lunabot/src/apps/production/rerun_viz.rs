@@ -1,9 +1,10 @@
-use std::{f32::consts::PI, sync::OnceLock};
+use std::{f32::consts::PI, sync::{OnceLock, RwLock}, time::Instant};
 
+use crossbeam::atomic::AtomicCell;
 use nalgebra::{UnitQuaternion, Vector3};
 use rerun::{Asset3D, RecordingStream, RecordingStreamResult, SpawnOptions, ViewCoordinates};
 use serde::Deserialize;
-use tracing::error;
+use tracing::{error, info};
 
 pub const ROBOT: &str = "/robot";
 pub const ROBOT_STRUCTURE: &str = "/robot/structure";
@@ -13,6 +14,7 @@ pub static RECORDER: OnceLock<RecorderData> = OnceLock::new();
 pub struct RecorderData {
     pub recorder: RecordingStream,
     pub level: Level,
+    pub last_logged_obstacle_map: AtomicCell<Instant> // used to throttle the logging to conserve bandwidth
 }
 
 #[derive(Deserialize, Default, Debug)]
@@ -58,7 +60,10 @@ pub fn init_rerun(rerun_viz: RerunViz) {
         ),
         RerunViz::Grpc(level, url) => (
             match rerun::RecordingStreamBuilder::new("lunabot").connect_grpc_opts(&url, None) {
-                Ok(x) => x,
+                Ok(x) => {
+                    info!("Streaming to rerun on: {url}");
+                    x
+                },
                 Err(e) => {
                     error!("Failed to make recording stream: {e}");
                     return;
@@ -92,7 +97,7 @@ pub fn init_rerun(rerun_viz: RerunViz) {
         error!("Failed to setup rerun environment: {e}");
     }
 
-    let _ = RECORDER.set(RecorderData { recorder, level });
+    let _ = RECORDER.set(RecorderData { recorder, level, last_logged_obstacle_map: AtomicCell::new(Instant::now())});
 
     std::thread::spawn(|| {
         let recorder = &RECORDER.get().unwrap().recorder;

@@ -77,6 +77,7 @@ pub struct DepthProjectorBuilder {
 impl DepthProjectorBuilder {
     pub fn build(self, thalassic_ref: ThalassicPipelineRef) -> DepthProjector {
         let pixel_count = self.image_size.x.get() * self.image_size.y.get();
+        let stride = std::env::var("STRIDE").expect("SET THE STRIDE ENV VAR TO 4").parse::<u32>().expect("STRIDE MUST BE A U32");
         let [depth_fn] = Depth2Pcl {
             depths: BufferGroupBinding::<_, AlphaBindGroups>::get::<0, 0>(),
             points: BufferGroupBinding::<_, AlphaBindGroups>::get::<1, 0>(),
@@ -88,7 +89,7 @@ impl DepthProjectorBuilder {
             principal_point_px: self.principal_point_px.into(),
             pixel_count: NonZeroU32::new(pixel_count).unwrap(),
             half_pixel_count: NonZeroU32::new(pixel_count.div_ceil(2)).unwrap(),
-            stride: NonZeroU32::new(5).unwrap(),
+            stride: NonZeroU32::new(stride).unwrap(),
         }
         .compile();
 

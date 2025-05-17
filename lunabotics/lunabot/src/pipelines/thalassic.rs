@@ -1,7 +1,7 @@
 use std::{
     collections::{HashSet, VecDeque},
     num::NonZeroU32,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, Ordering}, time::Instant,
 };
 
 use common::{THALASSIC_CELL_COUNT, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT, THALASSIC_WIDTH};
@@ -278,24 +278,27 @@ pub fn spawn_thalassic_pipeline(
 
             #[cfg(feature = "production")]
             if let Some(recorder) = crate::apps::RECORDER.get() {
-                if let Err(e) = recorder.recorder.log(
-                    format!("{}/expanded_obstacle_map", crate::apps::ROBOT),
-                    &rerun::Points3D::update_fields().with_colors((0..THALASSIC_CELL_COUNT).map(
-                        |i| {
-                            let pos = ThalassicData::index_to_xy(i as usize);
-                            let color = match (&owned).get_cell_state(pos) {
-                                CellState::GREEN => rerun::Color::from_rgb(0, 255, 0),
-                                CellState::RED => rerun::Color::from_rgb(255, 0, 0),
-                                CellState::UNKNOWN => rerun::Color::from_rgb(77, 77, 77),
-                            };
-                            color
-                        },
-                    )),
-                ) {
-                    tracing::error!("Failed to log expanded obstacle map: {e}");
+
+                if recorder.last_logged_obstacle_map.load().elapsed().as_millis() > 500 {
+                    if let Err(e) = recorder.recorder.log(
+                        format!("{}/expanded_obstacle_map", crate::apps::ROBOT),
+                        &rerun::Points3D::update_fields().with_colors((0..THALASSIC_CELL_COUNT).map(
+                            |i| {
+                                let pos = ThalassicData::index_to_xy(i as usize);
+                                let color = match (&owned).get_cell_state(pos) {
+                                    CellState::GREEN => rerun::Color::from_rgb(0, 255, 0),
+                                    CellState::RED => rerun::Color::from_rgb(255, 0, 0),
+                                    CellState::UNKNOWN => rerun::Color::from_rgb(77, 77, 77),
+                                };
+                                color
+                            },
+                        )),
+                    ) {
+                        tracing::error!("Failed to log expanded obstacle map: {e}");
+                    }
+                    recorder.last_logged_obstacle_map.store(Instant::now())
                 }
             }
-
             buffer = owned.pessimistic_share();
         });
 

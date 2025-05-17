@@ -16,6 +16,7 @@ use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use mio::{Events, Interest, Poll, Token};
 use motors::{enumerate_motors, MotorMask, VescIDs};
+use rerun::{Points3D, Position3D};
 use rerun_viz::init_rerun;
 use rp2040::*;
 use serde::Deserialize;
@@ -26,6 +27,7 @@ use tracing::error;
 use udev::Event;
 
 pub use rerun_viz::{RerunViz, RECORDER, ROBOT, ROBOT_STRUCTURE};
+use common::THALASSIC_CELL_SIZE;
 
 use crate::{
     apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,
@@ -358,6 +360,25 @@ impl LunabotApp {
                 }
                 Action::CalculatePath { from, to, kind } => {
                     if let Ok(path) = pathfinder.find_path(&shared_thalassic_data, from, to, kind) {
+                        if let Some(rerun) = RECORDER.get() {
+                            let _ = rerun.recorder.log("/calculated_path", &Points3D::new(
+                                path.iter().map(|point| {
+                                    Position3D::new(
+                                        point.cell.0 as f32 * THALASSIC_CELL_SIZE,
+                                        0.07,
+                                        point.cell.1 as f32 * THALASSIC_CELL_SIZE,
+                                    )
+                                })
+                            ).with_radii(
+                                path.iter().map(|_| {
+                                    0.2
+                                })
+                            ).with_colors(
+                                path.iter().map(|_| {
+                                    (0,240,20)
+                                })
+                            ));
+                        }
                         inputs.push(Input::PathCalculated(path));
                     } else {
                         inputs.push(Input::FailedToCalculatePath);
@@ -396,9 +417,6 @@ impl LunabotApp {
 
                 //     inputs.push(Input::DoneExploring);
                 // }
-                Action::AvoidCell(cell) => {
-                    pathfinder.avoid_cell(cell);
-                }
                 Action::AvoidObstacle(obstacle) => {
                     pathfinder.add_additional_obstacle(obstacle);
                 }
