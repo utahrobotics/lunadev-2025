@@ -9,8 +9,7 @@ use std::{
 
 use common::{
     cell_to_world_point,
-    lunasim::{FromLunasim, FromLunasimbot},
-    CellsRect, LunabotStage,
+    lunasim::{FromLunasim, FromLunasimbot}, LunabotStage,
 };
 use crossbeam::atomic::AtomicCell;
 use gputter::{
@@ -499,53 +498,53 @@ impl LunasimbotApp {
     }
 }
 
-pub fn next_dig_site_candidate(
-    prev_site: (usize, usize),
-    dig_area: CellsRect,
-    gap: usize,
-) -> Option<(usize, usize)> {
-    let (x, y) = prev_site;
+// pub fn next_dig_site_candidate(
+//     prev_site: (usize, usize),
+//     dig_area: CellsRect,
+//     gap: usize,
+// ) -> Option<(usize, usize)> {
+//     let (x, y) = prev_site;
 
-    // no more room in this row
-    let res = if x + gap > dig_area.left {
-        // no more rows!
-        if y - gap < dig_area.bottom {
-            None
-        }
-        // start next row
-        else {
-            Some((dig_area.right + gap / 2, y - gap))
-        }
-    }
-    // continue with this row
-    else {
-        Some((x + gap, y))
-    };
+//     // no more room in this row
+//     let res = if x + gap > dig_area.left {
+//         // no more rows!
+//         if y - gap < dig_area.bottom {
+//             None
+//         }
+//         // start next row
+//         else {
+//             Some((dig_area.right + gap / 2, y - gap))
+//         }
+//     }
+//     // continue with this row
+//     else {
+//         Some((x + gap, y))
+//     };
 
-    res
-}
-pub fn next_dump_site_candidate(
-    prev_site: (usize, usize),
-    dump_area: CellsRect,
-    gap: usize,
-) -> Option<(usize, usize)> {
-    let (x, y) = prev_site;
+//     res
+// }
+// pub fn next_dump_site_candidate(
+//     prev_site: (usize, usize),
+//     dump_area: CellsRect,
+//     gap: usize,
+// ) -> Option<(usize, usize)> {
+//     let (x, y) = prev_site;
 
-    // no more room in this row
-    let res = if x + gap > dump_area.left {
-        // no more rows!
-        if y + gap > dump_area.top {
-            None
-        }
-        // start next row
-        else {
-            Some((dump_area.right + gap / 2, y + gap))
-        }
-    }
-    // continue with this row
-    else {
-        Some((x + gap, y))
-    };
+//     // no more room in this row
+//     let res = if x + gap > dump_area.left {
+//         // no more rows!
+//         if y + gap > dump_area.top {
+//             None
+//         }
+//         // start next row
+//         else {
+//             Some((dump_area.right + gap / 2, y + gap))
+//         }
+//     }
+//     // continue with this row
+//     else {
+//         Some((x + gap, y))
+//     };
 
-    res
-}
+//     res
+// }

@@ -396,9 +396,9 @@ impl LunabotApp {
 
                 //     inputs.push(Input::DoneExploring);
                 // }
-                Action::AvoidCell(cell) => {
-                    pathfinder.avoid_cell(cell);
-                }
+                // Action::AvoidCell(cell) => {
+                //     pathfinder.avoid_cell(cell);
+                // }
                 Action::AvoidObstacle(obstacle) => {
                     pathfinder.add_additional_obstacle(obstacle);
                 }
