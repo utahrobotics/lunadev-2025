@@ -3,6 +3,7 @@
 use std::io::Write;
 
 use bitcode::{Decode, Encode};
+use bytemuck::{Pod, Zeroable};
 use embedded_common::{Actuator, ActuatorCommand};
 use nalgebra::{distance, Point2, Point3};
 
@@ -191,7 +192,8 @@ impl FromLunabot {
     }
 }
 
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, Pod, Zeroable)]
 pub struct Steering {
     left: i8,
     right: i8,
