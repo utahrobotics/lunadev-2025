@@ -48,7 +48,9 @@ lumpur::define_configuration! {
         Main {},
         Sim {
             lunabase_address: Option<IpAddr>,
-            max_pong_delay_ms: Option<u64>
+            max_pong_delay_ms: Option<u64>,
+            #[serde(default)]
+            new_ai: bool
         }
     }
 }
@@ -79,10 +81,12 @@ fn main() {
         Commands::Sim {
             lunabase_address,
             max_pong_delay_ms,
+            new_ai
         } => {
             apps::LunasimbotApp {
                 lunabase_address,
                 max_pong_delay_ms: max_pong_delay_ms.unwrap_or_else(default_max_pong_delay_ms),
+                new_ai
             }
             .run();
         }

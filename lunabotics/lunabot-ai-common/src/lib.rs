@@ -1,11 +1,11 @@
 use std::{io::Write, time::Duration};
 
-use common::{FromLunabase, Steering};
+use common::{FromLunabase, LunabotStage, Steering};
 use embedded_common::ActuatorCommand;
 use nalgebra::{Isometry3, Quaternion, UnitQuaternion, Vector3};
 
 pub const AI_HEARTBEAT_RATE: Duration = Duration::from_millis(50);
-pub const HOST_HEARTBEAT_LISTEN_RATE: Duration = Duration::from_millis(100);
+pub const HOST_HEARTBEAT_LISTEN_RATE: Duration = Duration::from_millis(500);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ParseError {
@@ -22,7 +22,7 @@ enum FromHostHeader {
     ActuatorReadings = 2
 }
 
-
+#[derive(Debug)]
 pub enum FromHost {
     BaseIsometry {
         isometry: Isometry3<f64>
@@ -32,7 +32,7 @@ pub enum FromHost {
     },
     ActuatorReadings {
         lift: u16,
-        tilt: u16
+        bucket: u16
     }
 }
 
@@ -46,9 +46,11 @@ impl FromHost {
             }
             FromHost::FromLunabase { msg } => {
                 writer.write_all(&[FromHostHeader::FromLunabase as u8])?;
-                writer.write_all(&bitcode::encode(msg))?;
+                let bytes = bitcode::encode(msg);
+                writer.write_all(&(bytes.len() as u16).to_ne_bytes())?;
+                writer.write_all(&bytes)?;
             }
-            FromHost::ActuatorReadings { lift, tilt } => {
+            FromHost::ActuatorReadings { lift, bucket: tilt } => {
                 writer.write_all(&[FromHostHeader::ActuatorReadings as u8])?;
                 writer.write_all(&lift.to_ne_bytes())?;
                 writer.write_all(&tilt.to_ne_bytes())?;
@@ -80,7 +82,7 @@ impl FromHost {
                     return Err(ParseError::NotEnoughBytes { bytes_needed: 3 });
                 }
                 let size = u16::from_ne_bytes([bytes[1], bytes[2]]) as usize;
-                if bytes.len() < size + 1 {
+                if bytes.len() < size + 3 {
                     return Err(ParseError::NotEnoughBytes { bytes_needed: size + 1 });
                 }
 
@@ -90,7 +92,7 @@ impl FromHost {
 
                 Ok((
                     Self::FromLunabase { msg },
-                    29
+                    size + 3
                 ))
             }
             x if x == FromHostHeader::ActuatorReadings as u8 => {
@@ -101,7 +103,7 @@ impl FromHost {
                 let tilt = u16::from_ne_bytes([bytes[3], bytes[4]]);
 
                 Ok((
-                    Self::ActuatorReadings { lift, tilt },
+                    Self::ActuatorReadings { lift, bucket: tilt },
                     5
                 ))
             }
@@ -116,13 +118,20 @@ impl FromHost {
 enum FromAIHeader {
     SetSteering = 0,
     SetActuators = 1,
-    Heartbeat = 2
+    Heartbeat = 2,
+    StartPercuss = 3,
+    StopPercuss = 4,
+    SetStage = 5
 }
 
+#[derive(Debug)]
 pub enum FromAI {
     SetSteering(Steering),
     SetActuators(ActuatorCommand),
-    Heartbeat
+    Heartbeat,
+    StartPercuss,
+    StopPercuss,
+    SetStage(LunabotStage)
 }
 
 impl FromAI {
@@ -138,6 +147,16 @@ impl FromAI {
             }
             FromAI::Heartbeat => {
                 writer.write_all(&[FromAIHeader::Heartbeat as u8])?;
+            }
+            FromAI::StartPercuss => {
+                writer.write_all(&[FromAIHeader::StartPercuss as u8])?;
+            }
+            FromAI::StopPercuss => {
+                writer.write_all(&[FromAIHeader::StopPercuss as u8])?;
+            }
+            FromAI::SetStage(stage) => {
+                writer.write_all(&[FromAIHeader::SetStage as u8])?;
+                writer.write_all(&[*stage as u8])?;
             }
         }
         writer.flush()
@@ -179,6 +198,27 @@ impl FromAI {
                 Ok((
                     Self::Heartbeat,
                     1
+                ))
+            }
+            x if x == FromAIHeader::StartPercuss as u8 => {
+                Ok((
+                    Self::StartPercuss,
+                    1
+                ))
+            }
+            x if x == FromAIHeader::StopPercuss as u8 => {
+                Ok((
+                    Self::StopPercuss,
+                    1
+                ))
+            }
+            x if x == FromAIHeader::SetStage as u8 => {
+                if bytes.len() < 2 {
+                    return Err(ParseError::NotEnoughBytes { bytes_needed: 2 });
+                }
+                Ok((
+                    Self::SetStage(LunabotStage::try_from(bytes[1]).map_err(|_| ParseError::InvalidData)?),
+                    2
                 ))
             }
             _ => {

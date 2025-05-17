@@ -69,11 +69,25 @@ pub mod lunabase_sync;
 pub mod lunasim;
 pub mod ports;
 
+#[repr(u8)]
 #[derive(Debug, Encode, Decode, Clone, Copy, PartialEq, Eq)]
 pub enum LunabotStage {
-    TeleOp,
-    SoftStop,
-    Autonomy,
+    TeleOp = 0,
+    SoftStop = 1,
+    Autonomy = 2,
+}
+
+impl TryFrom<u8> for LunabotStage {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::TeleOp),
+            1 => Ok(Self::SoftStop),
+            2 => Ok(Self::Autonomy),
+            _ => Err(())
+        }
+    }
 }
 
 #[derive(Debug, Encode, Decode, Clone, Copy, PartialEq)]
@@ -84,8 +98,8 @@ pub enum FromLunabase {
     LiftActuators(i8),
     BucketActuators(i8),
     LiftShake,
-    ToExcavationZone((f32, f32)),
-    Dump((f32, f32)),
+    Navigate((f32, f32)),
+    DigDump((f32, f32)),
     SoftStop,
     StartPercuss,
     StopPercuss,

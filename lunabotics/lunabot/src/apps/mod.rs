@@ -3,10 +3,11 @@ mod production;
 #[cfg(not(feature = "production"))]
 mod sim;
 
-use std::{fs::File, net::SocketAddr, sync::Arc, time::Duration};
+use std::{fs::File, net::SocketAddr, process::Stdio, sync::Arc, time::Duration};
 
 use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
+use lunabot_ai_common::{FromAI, FromHost, ParseError};
 #[cfg(feature = "production")]
 pub use production::{
     Apriltag, CameraInfo, DepthCameraInfo, LunabotApp, RerunViz, V3PicoInfo, Vesc, RECORDER, ROBOT,
@@ -14,7 +15,7 @@ pub use production::{
 };
 #[cfg(not(feature = "production"))]
 pub use sim::{LunasimStdin, LunasimbotApp};
-use tasker::tokio::sync::{mpsc, watch};
+use tasker::tokio::{self, io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter}, sync::{mpsc::{self, UnboundedReceiver}, watch}, time::Instant};
 use tracing::error;
 
 use crate::teleop::{LunabaseConn, PacketBuilder};
@@ -104,4 +105,121 @@ fn create_packet_builder(
     };
 
     (packet_builder, from_lunabase_rx, connected)
+}
+
+async fn new_ai(mut from_ai: impl FnMut(FromAI), mut from_lunabase_rx: UnboundedReceiver<FromLunabase>) -> ! {
+    loop {
+        let mut child = tokio::process::Command::new("cargo")
+            .args(["run", "-p", "lunabot-ai2"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap();
+
+        let mut stdin = BufWriter::new(child.stdin.take().unwrap());
+        let mut stdout = BufReader::new(child.stdout.take().unwrap());
+        let (from_ai_tx, mut from_ai_rx) = tokio::sync::mpsc::channel(32);
+
+        tokio::spawn(async move {
+            let mut bytes = vec![];
+            let mut buf = [0u8; 256];
+            let mut necessary_bytes = 1usize;
+
+            'main: loop {
+                match stdout.read(&mut buf).await {
+                    Ok(n) => {
+                        bytes.extend_from_slice(&buf[0..n]);
+                        loop {
+                            if bytes.len() < necessary_bytes {
+                                break;
+                            }
+                            match FromAI::parse(&bytes) {
+                                Ok((msg, n)) => {
+                                    bytes.drain(0..n);
+                                    necessary_bytes = 1;
+                                    if let Err(e) = from_ai_tx.try_send(msg) {
+                                        tracing::error!("Maxed out queue");
+                                        if from_ai_tx.send(e.into_inner()).await.is_err() {
+                                            break 'main;
+                                        }
+                                    }
+                                }
+                                Err(ParseError::InvalidData) => {
+                                    tracing::error!("AI passed invalid data");
+                                    break 'main;
+                                }
+                                Err(ParseError::NotEnoughBytes { bytes_needed }) => {
+                                    necessary_bytes = bytes_needed;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("AI terminated with {e}");
+                        break;
+                    }
+                }
+            }
+        });
+
+        let mut last_heartbeat = Instant::now() + std::time::Duration::from_millis(3000);
+
+        let read_fut = async {
+            loop {
+                tokio::select! {
+                    option = from_ai_rx.recv() => {
+                        let Some(msg) = option else {
+                            break;
+                        };
+                        last_heartbeat = Instant::now();
+                        from_ai(msg);
+                    },
+                    _ = tokio::time::sleep_until(last_heartbeat + lunabot_ai_common::HOST_HEARTBEAT_LISTEN_RATE) => {
+                        tracing::error!("AI timed out");
+                        break;
+                    }
+                };
+                
+            }
+        };
+
+        let write_fut = async {
+            let mut bytes = vec![];
+            loop {
+                let Some(msg) = from_lunabase_rx.recv().await else {
+                    std::future::pending::<()>().await;
+                    unreachable!();
+                };
+                FromHost::FromLunabase { msg }.write_into(&mut bytes).unwrap();
+                if let Err(e) = stdin.write_all(&bytes).await {
+                    tracing::error!("AI terminated with {e}");
+                    break;
+                }
+                if let Err(e) = stdin.flush().await {
+                    tracing::error!("AI terminated with {e}");
+                    break;
+                }
+                bytes.clear();
+            }
+        };
+
+        tokio::select! {
+            result = child.wait() => {
+                match result {
+                    Ok(status) => if !status.success() {
+                        tracing::error!("AI terminated with {status}");
+                    }
+                    Err(e) => tracing::error!("AI terminated with {e}"),
+                }
+                continue;
+            }
+            _ = read_fut => {}
+            _ = write_fut => {}
+        }
+        if let Err(e) = child.kill().await {
+            tracing::error!("Failed to kill AI: {e}")
+        }
+    }
 }
