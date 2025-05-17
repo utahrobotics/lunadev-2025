@@ -1,19 +1,17 @@
 use std::{
-    cell::OnceCell,
     io::Cursor,
     path::PathBuf,
-    sync::mpsc::{Receiver, SyncSender},
+    sync::mpsc::{Receiver, Sender, SyncSender},
 };
 
 use super::apriltag::{
     image::{self, ImageBuffer, ImageDecoder, Luma},
-    AprilTagDetector,
+    AprilTagDetector, TagObservation, Apriltag,
 };
 use chrono::SubsecRound;
 use fxhash::FxHashMap;
 use rerun::Boxes3D;
 use simple_motion::StaticImmutableNode;
-use tasker::shared::{MaybeOwned, OwnedData};
 use tracing::{error, info, warn};
 use udev::{EventType, MonitorBuilder, Udev};
 use v4l::{buffer::Type, io::traits::CaptureStream, prelude::MmapStream, video::Capture};
@@ -21,7 +19,6 @@ use v4l::{buffer::Type, io::traits::CaptureStream, prelude::MmapStream, video::C
 use crate::{apps::production::udev_poll, localization::LocalizerRef};
 
 use super::{
-    apriltag::Apriltag,
     streaming::{CameraStream, DownscaleRgbImageReader},
 };
 
@@ -64,7 +61,6 @@ pub fn enumerate_cameras(
                         path: rx,
                         port,
                         camera_stream,
-                        image: OnceCell::new(),
                         focal_length_x_px,
                         focal_length_y_px,
                         apriltags,
@@ -184,7 +180,6 @@ struct CameraTask {
     path: Receiver<PathBuf>,
     port: String,
     camera_stream: Option<CameraStream>,
-    image: OnceCell<MaybeOwned<ImageBuffer<Luma<u8>, Vec<u8>>>>,
     focal_length_x_px: f64,
     focal_length_y_px: f64,
     apriltags: &'static [(usize, Apriltag)],
@@ -214,101 +209,82 @@ impl CameraTask {
                 return;
             }
         };
-        let image = if let Some(image) = self.image.get_mut() {
-            if image.width() != format.width || image.height() != format.height {
-                warn!("Camera {} format changed", self.port);
-                return;
-            }
-            image
-        } else {
-            let mut image = OwnedData::from(ImageBuffer::from_pixel(
-                format.width,
-                format.height,
-                Luma([0]),
-            ));
-            let mut det = AprilTagDetector::new(
-                self.focal_length_x_px,
-                self.focal_length_y_px,
-                format.width,
-                format.height,
-                image.create_lendee(),
-            );
-            for (tag_id, tag) in self.apriltags {
-                det.add_tag(tag.tag_position, tag.get_quat(), tag.tag_width, *tag_id);
-            }
-            let localizer_ref = self.localizer_ref.clone();
-            let mut inverse_local = self.node.get_isometry_from_base();
-            // println!(
-            //     "pos: [{:.2}, {:.2}, {:.2}] angle: {}deg axis: [{:.2}, {:.2}, {:.2}]",
-            //     inverse_local.translation.x,
-            //     inverse_local.translation.y,
-            //     inverse_local.translation.z,
-            //     (inverse_local.rotation.angle() / std::f64::consts::PI * 180.0).round() as i32,
-            //     inverse_local.rotation.axis().unwrap().x,
-            //     inverse_local.rotation.axis().unwrap().y,
-            //     inverse_local.rotation.axis().unwrap().z,
-            // );
-            inverse_local.inverse_mut();
-            det.detection_callbacks_ref().add_fn(move |observation| {
-                // println!(
-                //     "pos: [{:.2}, {:.2}, {:.2}] angle: {}deg axis: [{:.2}, {:.2}, {:.2}]",
-                //     observation.tag_local_isometry.translation.x,
-                //     observation.tag_local_isometry.translation.y,
-                //     observation.tag_local_isometry.translation.z,
-                //     (observation.tag_local_isometry.rotation.angle() / std::f64::consts::PI * 180.0).round() as i32,
-                //     observation.tag_local_isometry.rotation.axis().unwrap().x,
-                //     observation.tag_local_isometry.rotation.axis().unwrap().y,
-                //     observation.tag_local_isometry.rotation.axis().unwrap().z,
-                // );
-                // let pose = observation.get_isometry_of_observer();
-                // println!(
-                //     "pos: [{:.2}, {:.2}, {:.2}] angle: {}deg axis: [{:.2}, {:.2}, {:.2}]",
-                //     pose.translation.x,
-                //     pose.translation.y,
-                //     pose.translation.z,
-                //     (pose.rotation.angle() / std::f64::consts::PI * 180.0).round() as i32,
-                //     pose.rotation.axis().unwrap().x,
-                //     pose.rotation.axis().unwrap().y,
-                //     pose.rotation.axis().unwrap().z,
-                // );
-
-                if let Some(rec) = crate::apps::RECORDER.get() {
-                    let location = (
-                        observation.tag_global_isometry.translation.x as f32,
-                        observation.tag_global_isometry.translation.y as f32,
-                        observation.tag_global_isometry.translation.z as f32,
-                    );
-                    let seen_at = chrono::Local::now().time().trunc_subsecs(0);
-                    let quaterion = observation
-                        .tag_global_isometry
-                        .rotation
-                        .quaternion()
-                        .as_vector()
-                        .iter()
-                        .map(|val| *val as f32)
-                        .collect::<Vec<f32>>();
-                    if let Err(e) = rec.recorder.log(
-                        format!("apriltags/{}/location", observation.tag_id),
-                        &Boxes3D::from_centers_and_half_sizes([(location)], [(0.1, 0.1, 0.01)])
-                            .with_quaternions([[
-                                quaterion[0],
-                                quaterion[1],
-                                quaterion[2],
-                                quaterion[3],
-                            ]])
-                            .with_labels([format!("{}", seen_at)]),
-                    ) {
-                        error!("Couldn't log april tag: {e}")
-                    }
+        
+        // Create channels for image sharing with the AprilTag detector
+        let (image_tx, image_rx) = std::sync::mpsc::channel();
+        let (tag_tx, tag_rx) = std::sync::mpsc::channel();
+        
+        // Initialize detector
+        let mut det = AprilTagDetector::new(
+            self.focal_length_x_px,
+            self.focal_length_y_px,
+            format.width,
+            format.height,
+            image_rx,
+            tag_tx,
+        );
+        
+        for (tag_id, tag) in self.apriltags {
+            det.add_tag(tag.tag_position, tag.get_quat(), tag.tag_width, *tag_id);
+        }
+        
+        // Processing thread for apriltag detections
+        let localizer_ref = self.localizer_ref.clone();
+        let mut inverse_local = self.node.get_isometry_from_base();
+        inverse_local.inverse_mut();
+        
+        let detection_thread = std::thread::spawn(move || {
+            loop {
+                match tag_rx.recv() {
+                    Ok(observation) => {
+                        info!("Tag {} detected", observation.tag_id);
+                        if let Some(rec) = crate::apps::RECORDER.get() {
+                            let location = (
+                                observation.tag_global_isometry.translation.x as f32,
+                                observation.tag_global_isometry.translation.y as f32,
+                                observation.tag_global_isometry.translation.z as f32,
+                            );
+                            let seen_at = chrono::Local::now().time().trunc_subsecs(0);
+                            let quaterion = observation
+                                .tag_global_isometry
+                                .rotation
+                                .quaternion()
+                                .as_vector()
+                                .iter()
+                                .map(|val| *val as f32)
+                                .collect::<Vec<f32>>();
+                            if let Err(e) = rec.recorder.log(
+                                format!("apriltags/{}/location", observation.tag_id),
+                                &Boxes3D::from_centers_and_half_sizes([(location)], [(0.1, 0.1, 0.01)])
+                                    .with_quaternions([[
+                                        quaterion[0],
+                                        quaterion[1],
+                                        quaterion[2],
+                                        quaterion[3],
+                                    ]])
+                                    .with_labels([format!("{}", seen_at)]),
+                            ) {
+                                error!("Couldn't log april tag: {e}")
+                            }
+                        }
+                        localizer_ref.set_april_tag_isometry(observation.get_isometry_of_observer() * inverse_local);
+                    },
+                    Err(_) => break,
                 }
-                localizer_ref
-                    .set_april_tag_isometry(observation.get_isometry_of_observer() * inverse_local);
-            });
-            std::thread::spawn(move || det.run());
-            let _ = self.image.set(image.into());
-            self.image.get_mut().unwrap()
-        };
+            }
+        });
+        
+        // Start the detector in a separate thread
+        std::thread::spawn(move || det.run());
+        
         info!("Camera {} opened", self.port);
+        
+        // Create and initialize an empty image buffer
+        let mut image_buffer = ImageBuffer::from_pixel(
+            format.width,
+            format.height,
+            Luma([0]),
+        );
 
         let mut stream = match MmapStream::with_buffers(&mut camera, Type::VideoCapture, 4) {
             Ok(x) => x,
@@ -351,19 +327,25 @@ impl CameraTask {
                     .unwrap();
             }
 
-            if image.try_recall() {
-                let owned_image: &mut ImageBuffer<Luma<u8>, Vec<u8>> = image.get_mut().unwrap();
-                owned_image
-                    .iter_mut()
-                    .zip(rgb_img.array_chunks::<3>().map(|[r, g, b]| {
-                        (0.299 * *r as f64 + 0.587 * *g as f64 + 0.114 * *b as f64) as u8
-                    }))
-                    .for_each(|(dst, new)| {
-                        *dst = new;
-                    });
-                image.share();
+            // Convert RGB to grayscale and send to apriltag detector
+            image_buffer
+                .iter_mut()
+                .zip(rgb_img.array_chunks::<3>().map(|[r, g, b]| {
+                    (0.299 * *r as f64 + 0.587 * *g as f64 + 0.114 * *b as f64) as u8
+                }))
+                .for_each(|(dst, new)| {
+                    *dst = new;
+                });
+                
+            // Clone the image buffer and send it to the detector
+            if let Err(e) = image_tx.send(image_buffer.clone()) {
+                error!("Failed to send image to detector: {e}");
+                break;
             }
         }
+        
+        // The end of the loop means camera failure, but we don't need to explicitly drop the channel
+        // as it will be dropped when this function returns
         error!("Camera {} task exited", self.port);
     }
 }

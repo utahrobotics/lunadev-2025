@@ -1,4 +1,6 @@
 use std::f64::consts::PI;
+use std::sync::mpsc::{Receiver, Sender, RecvTimeoutError};
+use std::time::{Duration, Instant};
 
 use apriltag::{families::TagStandard41h12, DetectorBuilder, Family, Image, TagParams};
 use apriltag_image::{image::ImageBuffer, ImageExt};
@@ -39,13 +41,7 @@ impl Apriltag {
 
 // Legacy code from urobotics-apriltag
 pub use apriltag_image::image;
-use tasker::{define_callbacks, fn_alias, shared::SharedDataReceiver};
 use tracing::{error, warn};
-
-define_callbacks!(DetectionCallbacks => Fn(detection: TagObservation) + Send + Sync);
-fn_alias! {
-    pub type DetectionCallbacksRef = CallbacksRef(TagObservation) + Send + Sync
-}
 
 /// An observation of the global orientation and position
 /// of the camera that observed an apriltag.
@@ -108,8 +104,8 @@ struct KnownTag {
 /// Actual detection does not occur until the node
 /// is running.
 pub struct AprilTagDetector {
-    img_subscriber: SharedDataReceiver<ImageBuffer<image::Luma<u8>, Vec<u8>>>,
-    detection_callbacks: DetectionCallbacks,
+    img_receiver: Receiver<ImageBuffer<image::Luma<u8>, Vec<u8>>>,
+    detection_sender: Sender<TagObservation>,
     known_tags: FxHashMap<usize, KnownTag>,
     pub focal_length_x_px: f64,
     pub focal_length_y_px: f64,
@@ -120,23 +116,21 @@ pub struct AprilTagDetector {
 impl AprilTagDetector {
     /// Creates a new detector for a specific camera.
     ///
-    /// The given `image_sub` must produce images that
+    /// The given `image_receiver` must produce images that
     /// have a width of `image_width` and a height of
     /// `image_height`, and the camera that produced it
     /// must have a focal length, in pixels, of `focal_length_px`.
-    ///
-    /// As such, it is strongly encouraged that the subscription
-    /// should not be a sum of multiple subscriptions.
     pub fn new(
         focal_length_x_px: f64,
         focal_length_y_px: f64,
         image_width: u32,
         image_height: u32,
-        img_subscriber: SharedDataReceiver<ImageBuffer<image::Luma<u8>, Vec<u8>>>,
+        img_receiver: Receiver<ImageBuffer<image::Luma<u8>, Vec<u8>>>,
+        detection_sender: Sender<TagObservation>,
     ) -> Self {
         Self {
-            img_subscriber,
-            detection_callbacks: DetectionCallbacks::default(),
+            img_receiver,
+            detection_sender,
             known_tags: Default::default(),
             focal_length_x_px,
             focal_length_y_px,
@@ -171,22 +165,47 @@ impl AprilTagDetector {
             },
         );
     }
-
-    pub fn detection_callbacks_ref(&self) -> DetectionCallbacksRef {
-        self.detection_callbacks.get_ref()
-    }
 }
 
 impl AprilTagDetector {
-    pub fn run(mut self) {
+    pub fn run(self) {
         let mut detector = DetectorBuilder::new()
             .add_family_bits(TagStandard41h12::default(), 1)
             .add_family_bits(Family::Tag36h11(Default::default()), 1)
             .build()
             .unwrap();
 
+        tracing::info!("AprilTag detector started");
+        let mut frame_count = 0;
+        let start_time = Instant::now();
+
         loop {
-            let img = self.img_subscriber.get();
+            tracing::info!("Waiting for image...");
+            let recv_start = Instant::now();
+            
+            // Use a timeout to avoid blocking indefinitely
+            let img = match self.img_receiver.recv_timeout(Duration::from_secs(1)) {
+                Ok(img) => {
+                    let recv_duration = recv_start.elapsed();
+                    tracing::info!("Received image from detector (took {:.3}ms)", recv_duration.as_secs_f64() * 1000.0);
+                    img
+                },
+                Err(RecvTimeoutError::Timeout) => {
+                    tracing::warn!("Timeout waiting for image - no image received for 1 second");
+                    continue;
+                },
+                Err(RecvTimeoutError::Disconnected) => {
+                    error!("Image channel closed, stopping detector");
+                    break;
+                }
+            };
+            
+            frame_count += 1;
+            if frame_count % 10 == 0 {
+                let fps = frame_count as f64 / start_time.elapsed().as_secs_f64();
+                tracing::info!("Processing {:.2} FPS ({} frames)", fps, frame_count);
+            }
+            
             if img.width() != self.image_width || img.height() != self.image_height {
                 error!(
                     "Received incorrectly sized image: {}x{}",
@@ -195,38 +214,109 @@ impl AprilTagDetector {
                 );
                 continue;
             }
+            
+            let processing_start = Instant::now();
             let img = Image::from_image_buffer(&img);
+            tracing::info!("Image converted in {:.3}ms", processing_start.elapsed().as_secs_f64() * 1000.0);
 
-            for detection in detector.detect(&img) {
+            let detection_start = Instant::now();
+            let detections = detector.detect(&img);
+            let detection_time = detection_start.elapsed();
+            
+            tracing::info!("AprilTag detection took {:.3}ms, found {} tags", 
+                         detection_time.as_secs_f64() * 1000.0,
+                         detections.len());
+
+            for detection in detections {
                 if detection.decision_margin() < 130.0 {
+                    tracing::info!("Tag {} decision margin: {}", detection.id(), detection.decision_margin());
                     continue;
                 }
+                tracing::info!("getting known tag");
                 let Some(known) = self.known_tags.get(&detection.id()) else {
                     continue;
                 };
+                tracing::info!("got known tag");
+                let pose_start = Instant::now();
+                tracing::info!("estimating pose");
                 let Some(tag_local_isometry) = detection.estimate_tag_pose(&known.tag_params)
                 else {
                     warn!("Failed to estimate pose of {}", detection.id());
                     continue;
                 };
-                let mut tag_local_isometry = tag_local_isometry.to_na();
+                tracing::info!("got tag local isometry");
+                
+                // Create a direct conversion function instead of using to_na()
+                fn apriltag_pose_to_nalgebra(pose: &apriltag::Pose) -> Isometry3<f64> {
+                    let r: &[f64] = &pose.rotation().data();
+                    let t: &[f64] = &pose.translation().data();
+                    
+                    tracing::info!("got pose rotation and translation");
+                    // Extract rotation matrix values from flattened array (assuming column-major order)
+                    let rot_matrix = nalgebra::Matrix3::new(
+                        r[0], r[3], r[6],
+                        r[1], r[4], r[7],
+                        r[2], r[5], r[8],
+                    );
+                    
+                    tracing::info!("made rotation matrix");
+                    // Convert to UnitQuaternion
+                    let rotation = if rot_matrix.is_special_orthogonal(1e-5) {
+                        UnitQuaternion::from_matrix(&rot_matrix)
+                    } else {
+                        // Provide a fallback or log warning
+                        tracing::warn!("Invalid rotation matrix detected");
+                        UnitQuaternion::identity()
+                    };
+                    
+                    tracing::info!("made the quat");
+                    // Create translation vector
+                    let translation = Vector3::new(t[0], t[1], t[2]);
+                    
+                    tracing::info!("made the translation");
+                    // Create isometry from components
+                    let iso = Isometry3::from_parts(translation.into(), rotation);
+
+                    tracing::info!("made isometry from parts");
+
+                    iso
+                }
+                
+                // Convert directly without using to_na()
+                let mut tag_local_isometry = apriltag_pose_to_nalgebra(&tag_local_isometry);
+                tracing::info!("transformed tag local isometry");
                 tag_local_isometry.translation.y *= -1.0;
                 tag_local_isometry.translation.z *= -1.0;
                 let mut scaled_axis = tag_local_isometry.rotation.scaled_axis();
                 scaled_axis.y *= -1.0;
                 scaled_axis.z *= -1.0;
+                tracing::info!("scaled axis");
                 tag_local_isometry.rotation = UnitQuaternion::from_scaled_axis(scaled_axis);
                 tag_local_isometry.rotation = UnitQuaternion::from_scaled_axis(
                     tag_local_isometry.rotation * Vector3::new(0.0, PI, 0.0),
                 ) * tag_local_isometry.rotation;
+                
+                tracing::info!("Pose estimation took {:.3}ms", pose_start.elapsed().as_secs_f64() * 1000.0);
 
-                self.detection_callbacks.call(TagObservation {
+                let send_start = Instant::now();
+                match self.detection_sender.send(TagObservation {
                     tag_local_isometry,
                     decision_margin: detection.decision_margin(),
                     tag_global_isometry: known.pose,
                     tag_id: detection.id(),
-                });
+                }) {
+                    Ok(_) => {
+                        tracing::info!("Sent detection (took {:.3}ms)", send_start.elapsed().as_secs_f64() * 1000.0);
+                    },
+                    Err(_) => {
+                        error!("Detection channel closed, stopping detector");
+                        break;
+                    }
+                }
             }
+            
+            let total_processing_time = processing_start.elapsed();
+            tracing::info!("Total frame processing took {:.3}ms", total_processing_time.as_secs_f64() * 1000.0);
         }
     }
 }

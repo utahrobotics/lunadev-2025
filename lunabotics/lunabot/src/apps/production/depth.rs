@@ -9,7 +9,7 @@ use std::{
 use super::{
     apriltag::{
         image::{ImageBuffer, Luma},
-        AprilTagDetector, Apriltag,
+        AprilTagDetector, TagObservation, Apriltag,
     },
     streaming::CameraStream,
     RECORDER, ROBOT, ROBOT_STRUCTURE,
@@ -116,6 +116,7 @@ pub fn enumerate_depth_cameras(
                         thalassic_ref,
                         init_tx,
                         depth_enabled,
+                        image_tx: None,
                     };
                     loop {
                         camera_task.depth_camera_task();
@@ -295,6 +296,7 @@ struct DepthCameraTask {
     thalassic_ref: ThalassicPipelineRef,
     init_tx: Sender<&'static str>,
     depth_enabled: bool,
+    image_tx: Option<Sender<ImageBuffer<Luma<u8>, Vec<u8>>>>,
 }
 
 impl DepthCameraTask {
@@ -376,58 +378,80 @@ impl DepthCameraTask {
                 color_format.height() as u32,
                 Luma([0]),
             ));
+            
             if !self.ignore_apriltags {
+                let (img_tx, img_rx) = std::sync::mpsc::channel();
+                let (tag_tx, tag_rx) = std::sync::mpsc::channel();
+                
                 let mut det = AprilTagDetector::new(
                     color_format.fx() as f64,
                     color_format.fy() as f64,
                     color_format.width() as u32,
                     color_format.height() as u32,
-                    image.create_lendee(),
+                    img_rx,
+                    tag_tx,
                 );
+                
                 for (tag_id, tag) in self.apriltags {
                     det.add_tag(tag.tag_position, tag.get_quat(), tag.tag_width, *tag_id);
                 }
+                
                 let localizer_ref = self.localizer_ref.clone();
                 let mut inverse_local = self.node.get_isometry_from_base();
                 inverse_local.inverse_mut();
-                det.detection_callbacks_ref().add_fn(move |observation| {
-                    if let Some(rec) = crate::apps::RECORDER.get() {
-                        let location = (
-                            observation.tag_global_isometry.translation.x as f32,
-                            observation.tag_global_isometry.translation.y as f32,
-                            observation.tag_global_isometry.translation.z as f32,
-                        );
-                        let seen_at = chrono::Local::now().time().trunc_subsecs(0);
-                        let quaterion = observation
-                            .tag_global_isometry
-                            .rotation
-                            .quaternion()
-                            .as_vector()
-                            .iter()
-                            .map(|val| *val as f32)
-                            .collect::<Vec<f32>>();
-                        if let Err(e) = rec.recorder.log(
-                            format!("apriltags/{}/location", observation.tag_id),
-                            &rerun::Boxes3D::from_centers_and_half_sizes(
-                                [(location)],
-                                [(0.1, 0.1, 0.01)],
-                            )
-                            .with_quaternions([[
-                                quaterion[0],
-                                quaterion[1],
-                                quaterion[2],
-                                quaterion[3],
-                            ]])
-                            .with_labels([format!("{}", seen_at)]),
-                        ) {
-                            error!("Couldn't log april tag: {e}")
+                
+                let detection_thread = std::thread::spawn(move || {
+                    loop {
+                        match tag_rx.recv() {
+                            Ok(observation) => {
+                                if let Some(rec) = crate::apps::RECORDER.get() {
+                                    let location = (
+                                        observation.tag_global_isometry.translation.x as f32,
+                                        observation.tag_global_isometry.translation.y as f32,
+                                        observation.tag_global_isometry.translation.z as f32,
+                                    );
+                                    let seen_at = chrono::Local::now().time().trunc_subsecs(0);
+                                    let quaterion = observation
+                                        .tag_global_isometry
+                                        .rotation
+                                        .quaternion()
+                                        .as_vector()
+                                        .iter()
+                                        .map(|val| *val as f32)
+                                        .collect::<Vec<f32>>();
+                                    if let Err(e) = rec.recorder.log(
+                                        format!("apriltags/{}/location", observation.tag_id),
+                                        &rerun::Boxes3D::from_centers_and_half_sizes(
+                                            [(location)],
+                                            [(0.1, 0.1, 0.01)],
+                                        )
+                                        .with_quaternions([[
+                                            quaterion[0],
+                                            quaterion[1],
+                                            quaterion[2],
+                                            quaterion[3],
+                                        ]])
+                                        .with_labels([format!("{}", seen_at)]),
+                                    ) {
+                                        error!("Couldn't log april tag: {e}")
+                                    }
+                                }
+                                localizer_ref.set_april_tag_isometry(
+                                    observation.get_isometry_of_observer() * inverse_local,
+                                );
+                            },
+                            Err(_) => break,
                         }
                     }
-                    localizer_ref.set_april_tag_isometry(
-                        observation.get_isometry_of_observer() * inverse_local,
-                    );
                 });
+                
                 std::thread::spawn(move || det.run());
+                
+                self.image_tx = Some(img_tx);
+            } else {
+                let localizer_ref = self.localizer_ref.clone();
+                let mut inverse_local = self.node.get_isometry_from_base();
+                inverse_local.inverse_mut();
             }
 
             let focal_length_px;
@@ -522,6 +546,16 @@ impl DepthCameraTask {
                         .for_each(|(dst, new)| {
                             *dst = new;
                         });
+                    
+                    if let Some(img_tx) = &self.image_tx {
+                        if let Err(e) = img_tx.send(owned_image.clone()) {
+                            error!("Failed to send image to detector: {e}");
+                            self.image_tx = None;
+                        } else {
+                            tracing::info!("Sent image to detector");
+                        }
+                    }
+                    
                     image.share();
                 }
 
