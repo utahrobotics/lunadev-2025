@@ -205,26 +205,7 @@ impl DefaultPathfinder {
                 error!("Failed to find path to safety");
                 return None;
             };
-            #[cfg(feature = "production")]
-            if let Some(rec) = crate::apps::RECORDER.get() {
-                let _ = rec.recorder.log("/new_start", &rerun::Points3D::new(
-                    [
-                        (
-                            start_cell.0 as f32 * common::THALASSIC_CELL_SIZE,
-                            0.2,
-                            start_cell.1 as f32 * common::THALASSIC_CELL_SIZE,
-                        )
-                    ]
-                ).with_labels(
-                    [
-                        "NEW START"
-                    ]
-                ).with_radii(
-                    [
-                        0.08
-                    ]
-                ));
-            }
+
             start_cell = *path_to_safety.last().unwrap();
             path.append(&mut path_to_safety);
         }

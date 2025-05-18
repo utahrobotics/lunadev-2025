@@ -362,7 +362,28 @@ impl LunabotApp {
                         lunabot_stage.store(stage);
                     }
                     FromAI::RequestThalassic => set_observe_depth(true),
-                    FromAI::PathFound(_) => {}
+                    FromAI::PathFound(path) => {
+                        if let Some(rerun) = RECORDER.get() {
+                            let _ = rerun.recorder.log("/calculated_path", &Points3D::new(
+                                path.iter().map(|point| {
+                                    tracing::info!("x, y: {:?}", point);
+                                    Position3D::new(
+                                        point.x as f32 * THALASSIC_CELL_SIZE,
+                                        0.07,
+                                        point.y as f32 * THALASSIC_CELL_SIZE,
+                                    )
+                                })
+                            ).with_radii(
+                                path.iter().map(|_| {
+                                    0.02
+                                })
+                            ).with_colors(
+                                path.iter().map(|_| {
+                                    (0,20,240)
+                                })
+                            ));
+                        }
+                    }
                     _ => {}
                 }
             }, from_lunabase_rx, robot_chain.into(), shared_thalassic_data).block_on();
