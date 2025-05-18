@@ -201,7 +201,7 @@ func _on_pressed() -> void:
 		push_error(\"Not a valid Y float\")
 		return
 	
-	Lunabot.move_to_dig_site(Vector2(
+	Lunabot.navigate(Vector2(
 		float(x_input.text),
 		float(y_input.text)
 	))

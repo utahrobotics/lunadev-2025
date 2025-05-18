@@ -37,7 +37,7 @@ use thalassic::DepthProjectorBuilder;
 use tracing::{error, info, warn};
 
 use crate::{
-    apps::new_ai, localization::{IMUReading, Localizer}, pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline}, utils::SteeringLerper
+    apps::new_ai, localization::{IMUReading, Localizer}, pipelines::thalassic::{get_observe_depth, set_observe_depth, spawn_thalassic_pipeline}, utils::SteeringLerper
 };
 use crate::{pathfinding::DefaultPathfinder, pipelines::thalassic::ThalassicData};
 
@@ -411,9 +411,23 @@ impl LunasimbotApp {
                     FromAI::SetStage(stage) => {
                         lunabot_stage.store(stage);
                     }
+                    FromAI::RequestThalassic => set_observe_depth(true),
+                    FromAI::PathFound(path) => {
+                        let lunasim_stdin = lunasim_stdin.clone();
+                        std::thread::spawn(move || {
+                            let bytes = bitcode::encode(&FromLunasimbot::Path(
+                                path.iter()
+                                    .map(|p| {
+                                        [p.x as f32, 0.0, p.y as f32]
+                                    })
+                                    .collect(),
+                            ));
+                            lunasim_stdin.write(&bytes);
+                        });
+                    }
                     _ => {}
                 }
-            }, from_lunabase_rx).block_on();
+            }, from_lunabase_rx, robot_chain.into(), shared_thalassic_data).block_on();
 
         } else {
             run_ai(

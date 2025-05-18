@@ -2966,6 +2966,7 @@ dependencies = [
  "common",
  "embedded_common",
  "nalgebra",
+ "thalassic",
 ]
 
 [[package]]
@@ -2974,7 +2975,11 @@ version = "0.1.0"
 dependencies = [
  "common",
  "embedded_common",
+ "fxhash",
+ "indexmap 2.9.0",
  "lunabot-ai-common",
+ "nalgebra",
+ "thalassic",
  "tokio",
 ]
 

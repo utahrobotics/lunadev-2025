@@ -9,3 +9,4 @@ bytemuck.workspace = true
 common = { path = "../common" }
 embedded_common = { path = "../../embedded/embedded_common" }
 nalgebra.workspace = true
+thalassic.workspace = true

@@ -1,8 +1,9 @@
-use std::{io::Write, time::Duration};
+use std::{io::Write, ops::Deref, time::Duration};
 
-use common::{FromLunabase, LunabotStage, Steering};
+use common::{FromLunabase, LunabotStage, Steering, THALASSIC_CELL_COUNT};
 use embedded_common::ActuatorCommand;
-use nalgebra::{Isometry3, Quaternion, UnitQuaternion, Vector3};
+use nalgebra::{Isometry3, Quaternion, UnitQuaternion, Vector2, Vector3};
+use thalassic::Occupancy;
 
 pub const AI_HEARTBEAT_RATE: Duration = Duration::from_millis(50);
 pub const HOST_HEARTBEAT_LISTEN_RATE: Duration = Duration::from_millis(500);
@@ -19,7 +20,8 @@ pub enum ParseError {
 enum FromHostHeader {
     BaseIsometry = 0,
     FromLunabase = 1,
-    ActuatorReadings = 2
+    ActuatorReadings = 2,
+    ThalassicData = 3
 }
 
 #[derive(Debug)]
@@ -33,6 +35,9 @@ pub enum FromHost {
     ActuatorReadings {
         lift: u16,
         bucket: u16
+    },
+    ThalassicData {
+        obstacle_map: Box<[Occupancy; THALASSIC_CELL_COUNT as usize]>
     }
 }
 
@@ -55,6 +60,10 @@ impl FromHost {
                 writer.write_all(&lift.to_ne_bytes())?;
                 writer.write_all(&tilt.to_ne_bytes())?;
             }
+            FromHost::ThalassicData { obstacle_map } => {
+                writer.write_all(&[FromHostHeader::ThalassicData as u8])?;
+                writer.write_all(bytemuck::bytes_of(obstacle_map.deref()))?;
+            }
         }
         writer.flush()
     }
@@ -65,16 +74,16 @@ impl FromHost {
         }
         match bytes[0] {
             x if x == FromHostHeader::BaseIsometry as u8 => {
-                if bytes.len() < 29 {
-                    return Err(ParseError::NotEnoughBytes { bytes_needed: 29 });
+                if bytes.len() < 57 {
+                    return Err(ParseError::NotEnoughBytes { bytes_needed: 57 });
                 }
                 let mut origin = Vector3::<f64>::default();
-                bytemuck::bytes_of_mut(&mut origin).copy_from_slice(&bytes[1..13]);
+                bytemuck::bytes_of_mut(&mut origin).copy_from_slice(&bytes[1..25]);
                 let mut quat = Quaternion::<f64>::default();
-                bytemuck::bytes_of_mut(&mut quat).copy_from_slice(&bytes[13..29]);
+                bytemuck::bytes_of_mut(&mut quat).copy_from_slice(&bytes[25..57]);
                 Ok((
                     Self::BaseIsometry { isometry: Isometry3::from_parts(origin.into(), UnitQuaternion::new_unchecked(quat))},
-                    29
+                    57
                 ))
             }
             x if x == FromHostHeader::FromLunabase as u8 => {
@@ -107,6 +116,19 @@ impl FromHost {
                     5
                 ))
             }
+            x if x == FromHostHeader::ThalassicData as u8 => {
+                if bytes.len() < THALASSIC_CELL_COUNT as usize * 4 + 1 {
+                    return Err(ParseError::NotEnoughBytes { bytes_needed: THALASSIC_CELL_COUNT as usize * 4 + 1 });
+                }
+
+                let mut obstacle_map = Box::new([Occupancy::UNKNOWN; THALASSIC_CELL_COUNT as usize]);
+                bytemuck::bytes_of_mut(&mut *obstacle_map).copy_from_slice(&bytes[1..THALASSIC_CELL_COUNT as usize * 4 + 1]);
+
+                Ok((
+                    Self::ThalassicData { obstacle_map },
+                    THALASSIC_CELL_COUNT as usize * 4 + 1
+                ))
+            }
             _ => {
                 Err(ParseError::InvalidData)
             }
@@ -121,7 +143,9 @@ enum FromAIHeader {
     Heartbeat = 2,
     StartPercuss = 3,
     StopPercuss = 4,
-    SetStage = 5
+    SetStage = 5,
+    RequestThalassic = 6,
+    PathFound = 7
 }
 
 #[derive(Debug)]
@@ -131,7 +155,9 @@ pub enum FromAI {
     Heartbeat,
     StartPercuss,
     StopPercuss,
-    SetStage(LunabotStage)
+    SetStage(LunabotStage),
+    RequestThalassic,
+    PathFound(Vec<Vector2<f64>>)
 }
 
 impl FromAI {
@@ -157,6 +183,16 @@ impl FromAI {
             FromAI::SetStage(stage) => {
                 writer.write_all(&[FromAIHeader::SetStage as u8])?;
                 writer.write_all(&[*stage as u8])?;
+            }
+            FromAI::RequestThalassic => {
+                writer.write_all(&[FromAIHeader::RequestThalassic as u8])?;
+            }
+            FromAI::PathFound(path) => {
+                writer.write_all(&[FromAIHeader::PathFound as u8])?;
+                writer.write_all(&(path.len() as u16).to_ne_bytes())?;
+                for p in path {
+                    writer.write_all(bytemuck::bytes_of(p))?;
+                }
             }
         }
         writer.flush()
@@ -219,6 +255,33 @@ impl FromAI {
                 Ok((
                     Self::SetStage(LunabotStage::try_from(bytes[1]).map_err(|_| ParseError::InvalidData)?),
                     2
+                ))
+            }
+            x if x == FromAIHeader::RequestThalassic as u8 => {
+                Ok((
+                    Self::RequestThalassic,
+                    1
+                ))
+            }
+            x if x == FromAIHeader::PathFound as u8 => {
+                if bytes.len() < 3 {
+                    return Err(ParseError::NotEnoughBytes { bytes_needed: 3 });
+                }
+                let count = u16::from_ne_bytes([bytes[1], bytes[2]]) as usize;
+                if bytes.len() < 3 + count * 16 {
+                    return Err(ParseError::NotEnoughBytes { bytes_needed: 3 + count * 16 });
+                }
+                let mut path = Vec::<Vector2<f64>>::with_capacity(count);
+                let mut bytes = bytes;
+                for _ in 0..count {
+                    let mut p = Vector2::new(0.0, 0.0);
+                    bytemuck::bytes_of_mut(&mut p).copy_from_slice(&bytes[0..16]);
+                    bytes = &bytes[16..];
+                    path.push(p);
+                }
+                Ok((
+                    Self::PathFound(path),
+                    3 + count * 16
                 ))
             }
             _ => {

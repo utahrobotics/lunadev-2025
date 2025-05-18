@@ -15,10 +15,11 @@ pub use production::{
 };
 #[cfg(not(feature = "production"))]
 pub use sim::{LunasimStdin, LunasimbotApp};
-use tasker::tokio::{self, io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter}, sync::{mpsc::{self, UnboundedReceiver}, watch}, time::Instant};
+use simple_motion::StaticImmutableNode;
+use tasker::{shared::SharedDataReceiver, tokio::{self, io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter}, sync::{mpsc::{self, UnboundedReceiver}, watch}, time::Instant}};
 use tracing::error;
 
-use crate::teleop::{LunabaseConn, PacketBuilder};
+use crate::{pipelines::thalassic::{set_observe_depth, ThalassicData}, teleop::{LunabaseConn, PacketBuilder}};
 
 pub fn default_max_pong_delay_ms() -> u64 {
     1500
@@ -107,7 +108,7 @@ fn create_packet_builder(
     (packet_builder, from_lunabase_rx, connected)
 }
 
-async fn new_ai(mut from_ai: impl FnMut(FromAI), mut from_lunabase_rx: UnboundedReceiver<FromLunabase>) -> ! {
+async fn new_ai(mut from_ai: impl FnMut(FromAI), mut from_lunabase_rx: UnboundedReceiver<FromLunabase>, robot_chain: StaticImmutableNode, shared_thalassic_data: SharedDataReceiver<ThalassicData>) -> ! {
     loop {
         let mut child = tokio::process::Command::new("cargo")
             .args(["run", "-p", "lunabot-ai2"])
@@ -187,12 +188,34 @@ async fn new_ai(mut from_ai: impl FnMut(FromAI), mut from_lunabase_rx: Unbounded
 
         let write_fut = async {
             let mut bytes = vec![];
+            let mut instant = Instant::now();
             loop {
-                let Some(msg) = from_lunabase_rx.recv().await else {
-                    std::future::pending::<()>().await;
-                    unreachable!();
+                tokio::select! {
+                    option = from_lunabase_rx.recv() => {
+                        let Some(msg) = option else {
+                            std::future::pending::<()>().await;
+                            unreachable!();
+                        };
+                        FromHost::FromLunabase { msg }.write_into(&mut bytes).unwrap();
+                    },
+                    _ = tokio::time::sleep_until(instant + Duration::from_millis(50)) => {
+                        let isometry = robot_chain.get_global_isometry();
+                        FromHost::BaseIsometry { isometry }.write_into(&mut bytes).unwrap();
+                        instant = Instant::now();
+                    }
+                    data = async {
+                        loop {
+                            let Some(data) = shared_thalassic_data.try_get() else {
+                                tokio::time::sleep(Duration::from_millis(100)).await;
+                                continue;
+                            };
+                            break data;
+                        }
+                    } => {
+                        set_observe_depth(false);
+                        FromHost::ThalassicData { obstacle_map: Box::new(data.expanded_obstacle_map) }.write_into(&mut bytes).unwrap();
+                    }
                 };
-                FromHost::FromLunabase { msg }.write_into(&mut bytes).unwrap();
                 if let Err(e) = stdin.write_all(&bytes).await {
                     tracing::error!("AI terminated with {e}");
                     break;

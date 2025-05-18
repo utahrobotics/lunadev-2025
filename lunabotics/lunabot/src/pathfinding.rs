@@ -1,10 +1,9 @@
-use crate::{utils::distance_between_tuples, apps::RECORDER};
+use crate::{utils::distance_between_tuples, };
 use common::{
-    Obstacle, PathInstruction, PathKind, PathPoint, THALASSIC_CELL_SIZE, THALASSIC_HEIGHT,
+    Obstacle, PathInstruction, PathKind, PathPoint, THALASSIC_HEIGHT,
     THALASSIC_WIDTH,
 };
 use pathfinding::{grid::Grid, prelude::astar};
-use rerun::Points3D;
 use tasker::shared::{SharedData, SharedDataReceiver};
 use tracing::error;
 
@@ -206,13 +205,14 @@ impl DefaultPathfinder {
                 error!("Failed to find path to safety");
                 return None;
             };
-            if let Some(rec) = RECORDER.get() {
-                let _ = rec.recorder.log("/new_start", &Points3D::new(
+            #[cfg(feature = "production")]
+            if let Some(rec) = apps::RECORDER.get() {
+                let _ = rec.recorder.log("/new_start", &rerun::Points3D::new(
                     [
                         (
-                            start_cell.0 as f32 * THALASSIC_CELL_SIZE,
+                            start_cell.0 as f32 * common::THALASSIC_CELL_SIZE,
                             0.2,
-                            start_cell.1 as f32 * THALASSIC_CELL_SIZE,
+                            start_cell.1 as f32 * common::THALASSIC_CELL_SIZE,
                         )
                     ]
                 ).with_labels(
