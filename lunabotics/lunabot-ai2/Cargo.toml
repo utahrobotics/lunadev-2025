@@ -1,0 +1,14 @@
+[package]
+name = "lunabot-ai2"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio.workspace = true
+lunabot-ai-common.path = "../lunabot-ai-common"
+common.path = "../common"
+embedded_common = { path = "../../embedded/embedded_common" }
+indexmap.workspace = true
+nalgebra.workspace = true
+fxhash.workspace = true
+thalassic.workspace = true

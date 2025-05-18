@@ -17,7 +17,8 @@ members = [
     "misc/vesc-translator",
     "misc/imu-calib",
     "misc/usb-reset",
-    "lunabotics/lunabot-ai2", "lunabotics/lunabot-ai-common",
+    "lunabotics/lunabot-ai2",
+    "lunabotics/lunabot-ai-common",
 ]
 resolver = "2"
 exclude = ["output/", "embedded/", "lunaserver-web/", "misc/camera-benchy"]
