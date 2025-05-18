@@ -7,6 +7,9 @@ use fxhash::FxHashMap;
 use nalgebra::{Isometry3, Point3, UnitQuaternion, Vector3};
 use serde::Deserialize;
 
+// Import the apriltag_pose module so we can use the estimate_tag_pose function
+use crate::apps::production::apriltag_pose::{estimate_tag_pose, TagPose};
+
 #[derive(Deserialize, Clone, Copy)]
 pub struct Apriltag {
     pub tag_position: Point3<f64>,
@@ -186,30 +189,52 @@ impl AprilTagDetector {
             .unwrap();
 
         loop {
-            let img = self.img_subscriber.get();
-            if img.width() != self.image_width || img.height() != self.image_height {
+            let img1 = self.img_subscriber.get();
+            if img1.width() != self.image_width || img1.height() != self.image_height {
                 error!(
                     "Received incorrectly sized image: {}x{}",
-                    img.width(),
-                    img.height()
+                    img1.width(),
+                    img1.height()
                 );
                 continue;
             }
-            let img = Image::from_image_buffer(&img);
-
+            let img = Image::from_image_buffer(&img1);
+            drop(img1);
             for detection in detector.detect(&img) {
-                if detection.decision_margin() < 130.0 {
+                if detection.decision_margin() < 100.0 {
                     continue;
                 }
                 let Some(known) = self.known_tags.get(&detection.id()) else {
                     continue;
                 };
-                let Some(tag_local_isometry) = detection.estimate_tag_pose(&known.tag_params)
-                else {
-                    warn!("Failed to estimate pose of {}", detection.id());
-                    continue;
-                };
-                let mut tag_local_isometry = tag_local_isometry.to_na();
+                
+                // Extract the corner points from the detection
+                let corners = detection.corners();
+                let img_pts_px = [
+                    [corners[0][0], corners[0][1]],
+                    [corners[1][0], corners[1][1]],
+                    [corners[2][0], corners[2][1]],
+                    [corners[3][0], corners[3][1]],
+                ];
+                
+                // Use our custom pose estimation function
+                let (_, tag_pose) = estimate_tag_pose(
+                    &img_pts_px,
+                    known.tag_params.tagsize,
+                    known.tag_params.fx,
+                    known.tag_params.fy,
+                    known.tag_params.cx,
+                    known.tag_params.cy,
+                    10, // Use 10 iterations for the orthogonal iteration
+                );
+                
+                // Convert the tag pose to an isometry
+                let mut tag_local_isometry = Isometry3::from_parts(
+                    tag_pose.t.into(),
+                    UnitQuaternion::from_matrix(&tag_pose.r),
+                );
+                
+                // Apply the same transformations as in the original code
                 tag_local_isometry.translation.y *= -1.0;
                 tag_local_isometry.translation.z *= -1.0;
                 let mut scaled_axis = tag_local_isometry.rotation.scaled_axis();

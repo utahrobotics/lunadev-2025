@@ -2922,7 +2922,6 @@ dependencies = [
  "lumpur",
  "lunabot-ai",
  "lunabot-ai-common",
- "lunabot-ai2",
  "mio",
  "nalgebra",
  "openh264",
@@ -2932,6 +2931,7 @@ dependencies = [
  "realsense-rust",
  "rerun",
  "rodio",
+ "roots",
  "serde",
  "simple-motion",
  "spin_sleep",
@@ -2966,16 +2966,6 @@ dependencies = [
  "common",
  "embedded_common",
  "nalgebra",
-]
-
-[[package]]
-name = "lunabot-ai2"
-version = "0.1.0"
-dependencies = [
- "common",
- "embedded_common",
- "lunabot-ai-common",
- "tokio",
 ]
 
 [[package]]
@@ -3862,7 +3852,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.101",
@@ -4960,6 +4950,12 @@ dependencies = [
  "serde",
  "serde_derive",
 ]
+
+[[package]]
+name = "roots"
+version = "0.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "082f11ffa03bbef6c2c6ea6bea1acafaade2fd9050ae0234ab44a2153742b058"
 
 [[package]]
 name = "rust-format"
