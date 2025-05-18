@@ -51,7 +51,7 @@ bytes = "1.10.1"
 futures-util = "0.3.31"
 chrono.workspace = true
 
-lunabot-ai2.path = "../lunabot-ai2"
+# lunabot-ai2.path = "../lunabot-ai2"
 lunabot-ai-common.path = "../lunabot-ai-common"
 
 [features]

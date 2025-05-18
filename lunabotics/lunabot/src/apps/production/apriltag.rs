@@ -40,7 +40,7 @@ impl Apriltag {
 // Legacy code from urobotics-apriltag
 pub use apriltag_image::image;
 use tasker::{define_callbacks, fn_alias, shared::SharedDataReceiver};
-use tracing::{error, warn};
+use tracing::{error, warn, info};
 
 define_callbacks!(DetectionCallbacks => Fn(detection: TagObservation) + Send + Sync);
 fn_alias! {
@@ -204,21 +204,21 @@ impl AprilTagDetector {
                 let Some(known) = self.known_tags.get(&detection.id()) else {
                     continue;
                 };
-                let Some(tag_local_isometry) = detection.estimate_tag_pose(&known.tag_params)
-                else {
-                    warn!("Failed to estimate pose of {}", detection.id());
-                    continue;
+                let mut tag_local_isometry = match simple_tag_pose_estimation(&detection, &known.tag_params) {
+                    Some(iso) => iso,
+                    None => {
+                        warn!("Failed to estimate pose of {}", detection.id());
+                        continue;
+                    }
                 };
-                let mut tag_local_isometry = tag_local_isometry.to_na();
+
+                // Now it's mutable so we can modify it
                 tag_local_isometry.translation.y *= -1.0;
                 tag_local_isometry.translation.z *= -1.0;
-                let mut scaled_axis = tag_local_isometry.rotation.scaled_axis();
-                scaled_axis.y *= -1.0;
-                scaled_axis.z *= -1.0;
-                tag_local_isometry.rotation = UnitQuaternion::from_scaled_axis(scaled_axis);
-                tag_local_isometry.rotation = UnitQuaternion::from_scaled_axis(
-                    tag_local_isometry.rotation * Vector3::new(0.0, PI, 0.0),
-                ) * tag_local_isometry.rotation;
+
+                // Print result to verify
+                info!("Simple pose estimation: trans={:?}, rot={:?}", 
+                       tag_local_isometry.translation, tag_local_isometry.rotation);
 
                 self.detection_callbacks.call(TagObservation {
                     tag_local_isometry,
@@ -229,4 +229,40 @@ impl AprilTagDetector {
             }
         }
     }
+}
+
+fn simple_tag_pose_estimation(
+    detection: &apriltag::Detection,
+    params: &TagParams,
+) -> Option<Isometry3<f64>> {
+    // Get tag corners in image coordinates
+    let corners = detection.corners();
+    if corners.len() != 4 {
+        return None;
+    }
+
+    // Calculate the center of the tag in image coordinates
+    let img_center_x = corners.iter().map(|c| c[0]).sum::<f64>() / 4.0;
+    let img_center_y = corners.iter().map(|c| c[1]).sum::<f64>() / 4.0;
+    
+    // Estimate the scale of the tag in the image
+    let diag1 = ((corners[0][0] - corners[2][0]).powi(2) + (corners[0][1] - corners[2][1]).powi(2)).sqrt();
+    let diag2 = ((corners[1][0] - corners[3][0]).powi(2) + (corners[1][1] - corners[3][1]).powi(2)).sqrt();
+    let avg_diag = (diag1 + diag2) / 2.0;
+    
+    // Estimate depth based on tag size and focal length
+    let depth = params.fx * params.tagsize / avg_diag;
+    
+    // Calculate x and y positions based on image center offset
+    let x = (img_center_x - params.cx) * depth / params.fx;
+    let y = (img_center_y - params.cy) * depth / params.fy;
+    
+    // Create translation vector
+    let translation = Vector3::new(x, y, depth);
+    
+    // Simple rotation estimation - assume tag is roughly facing the camera
+    // This is a basic approximation
+    let rotation = UnitQuaternion::identity();
+    
+    Some(Isometry3::from_parts(translation.into(), rotation))
 }

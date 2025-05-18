@@ -2922,7 +2922,6 @@ dependencies = [
  "lumpur",
  "lunabot-ai",
  "lunabot-ai-common",
- "lunabot-ai2",
  "mio",
  "nalgebra",
  "openh264",
@@ -2966,16 +2965,6 @@ dependencies = [
  "common",
  "embedded_common",
  "nalgebra",
-]
-
-[[package]]
-name = "lunabot-ai2"
-version = "0.1.0"
-dependencies = [
- "common",
- "embedded_common",
- "lunabot-ai-common",
- "tokio",
 ]
 
 [[package]]
