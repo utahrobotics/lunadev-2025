@@ -14,13 +14,17 @@ use tracing::error;
 use crate::apps::LunasimStdin;
 #[cfg(feature = "production")]
 use crate::teleop::PacketBuilder;
-use crate::utils::{lerp_value, swing_twist_decomposition};
+use crate::utils::{lerp, lerp_value, swing_twist_decomposition};
+
+use std::time::Instant;
 
 #[cfg(feature = "production")]
 use imu_calib::*;
 
 const ACCELEROMETER_LERP_SPEED: f64 = 150.0;
 const LOCALIZATION_DELTA: f64 = 1.0 / 60.0;
+
+const APRILTAG_LERP_ALPHA: f64 = 0.01;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct IMUReading {
@@ -35,6 +39,7 @@ struct LocalizerRefInner {
 
     #[cfg(feature = "production")]
     imu_correction: AtomicCell<Option<CalibrationParameters>>,
+
 }
 
 #[derive(Clone)]
@@ -51,7 +56,6 @@ impl LocalizerRef {
     pub fn set_april_tag_isometry(&self, isometry: Isometry3<f64>) {
         self.inner.april_tag_isometry.store(Some(isometry));
     }
-
     pub fn set_imu_reading(&self, index: usize, imu: IMUReading) {
         if let Some(cell) = self.inner.imu_readings.get(index) {
             cell.store(Some(imu));
@@ -272,7 +276,13 @@ impl Localizer {
             down_axis = isometry.rotation * down_axis;
 
             if let Some(tag_isometry) = self.localizer_ref.april_tag_isometry() {
-                isometry.translation = tag_isometry.translation;
+                // Lerp the translation
+                isometry.translation.vector = lerp(
+                    isometry.translation.vector,
+                    tag_isometry.translation.vector,
+                    LOCALIZATION_DELTA,
+                    ACCELEROMETER_LERP_SPEED,
+                );
 
                 let (_, new_twist) = swing_twist_decomposition(&tag_isometry.rotation, &down_axis);
                 let (old_swing, _) = swing_twist_decomposition(&isometry.rotation, &down_axis);
@@ -282,7 +292,13 @@ impl Localizer {
                     && new_rotation.j.is_finite()
                     && new_rotation.k.is_finite()
                 {
-                    isometry.rotation = new_rotation;
+                    // Use lerp for the quaternion interpolation
+                    isometry.rotation = UnitQuaternion::new_normalize(lerp(
+                        isometry.rotation.into_inner(),
+                        new_rotation.into_inner(),
+                        LOCALIZATION_DELTA,
+                        ACCELEROMETER_LERP_SPEED,
+                    ));
                 }
             } else if let Some(angular_velocity) = angular_velocity {
                 isometry.append_rotation_wrt_center_mut(&UnitQuaternion::from_axis_angle(
