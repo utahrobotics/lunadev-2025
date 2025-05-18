@@ -138,6 +138,7 @@ impl Localizer {
     }
 
     pub fn run(self) {
+        let lift_hinge_node = self.root_node.get_node_with_name("lift_hinge");
         let spin_sleeper = SpinSleeper::default();
         #[cfg(not(feature = "production"))]
         let mut bitcode_buffer = bitcode::Buffer::new();
@@ -306,6 +307,15 @@ impl Localizer {
                         .unwrap();
                     self.packet_builder
                         .send_packet(cakap2::packet::Action::SendUnreliable(packet));
+                    if let Some(lift_hinge_node) = lift_hinge_node {
+                        let data = bitcode::encode(&FromLunabot::ArmAngle(lift_hinge_node.get_local_angle_one_axis().unwrap()));
+                        let packet = self
+                            .packet_builder
+                            .new_unreliable(PacketBody { data })
+                            .unwrap();
+                        self.packet_builder
+                            .send_packet(cakap2::packet::Action::SendUnreliable(packet));
+                    }
                 }
 
                 crate::apps::RECORDER.get().map(|recorder| {

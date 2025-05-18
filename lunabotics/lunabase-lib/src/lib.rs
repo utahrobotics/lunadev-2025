@@ -296,6 +296,10 @@ impl INode for LunabotConn {
                         }
                         #[cfg(not(feature = "production"))]
                         FromLunabot::RobotIsometry { .. } => {}
+                        FromLunabot::ArmAngle(angle) => {
+                            self.base_mut().emit_signal("arm_angle_received", &[angle.to_variant()]);
+                            inner = self.inner.as_mut().unwrap();
+                        }
                         FromLunabot::Ping(stage) => {
                             match stage {
                                 LunabotStage::TeleOp => {
@@ -638,6 +642,8 @@ impl LunabotConn {
     fn entered_autonomy(&self);
     #[signal]
     fn heightmap_received(&self, heightmap: PackedFloat32Array);
+    #[signal]
+    fn arm_angle_received(&self, angle: f32);
 
     #[constant]
     const CAMERA_STREAMING: bool = cfg!(feature = "production");
