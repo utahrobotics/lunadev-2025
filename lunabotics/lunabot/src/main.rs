@@ -38,7 +38,9 @@ lumpur::define_configuration! {
             #[serde(default)]
             rerun_viz: apps::RerunViz,
             imu_correction: Option<imu_calib::CalibrationParameters>,
-            v3pico: apps::V3PicoInfo
+            v3pico: apps::V3PicoInfo,
+            #[serde(default)]
+            new_ai: bool
         },
     }
 }
@@ -106,6 +108,7 @@ fn main() {
             rerun_viz,
             imu_correction,
             v3pico,
+            new_ai
         } => {
             apps::LunabotApp {
                 lunabase_address,
@@ -119,6 +122,7 @@ fn main() {
                 rerun_viz,
                 imu_correction,
                 v3pico,
+                new_ai
             }
             .run();
         }

@@ -206,7 +206,7 @@ impl DefaultPathfinder {
                 return None;
             };
             #[cfg(feature = "production")]
-            if let Some(rec) = apps::RECORDER.get() {
+            if let Some(rec) = crate::apps::RECORDER.get() {
                 let _ = rec.recorder.log("/new_start", &rerun::Points3D::new(
                     [
                         (

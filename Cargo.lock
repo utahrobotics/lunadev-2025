@@ -2922,7 +2922,6 @@ dependencies = [
  "lumpur",
  "lunabot-ai",
  "lunabot-ai-common",
- "lunabot-ai2",
  "mio",
  "nalgebra",
  "openh264",

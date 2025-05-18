@@ -308,7 +308,7 @@ impl Localizer {
                     self.packet_builder
                         .send_packet(cakap2::packet::Action::SendUnreliable(packet));
                     if let Some(lift_hinge_node) = lift_hinge_node {
-                        let data = bitcode::encode(&FromLunabot::ArmAngle(lift_hinge_node.get_local_angle_one_axis().unwrap()));
+                        let data = bitcode::encode(&FromLunabot::ArmAngle(lift_hinge_node.get_local_angle_one_axis().unwrap() as f32));
                         let packet = self
                             .packet_builder
                             .new_unreliable(PacketBody { data })

@@ -14,6 +14,7 @@ use gputter::init_gputter_blocking;
 use imu_calib::*;
 use lumpur::set_on_exit;
 use lunabot_ai::{run_ai, Action, Input, PollWhen};
+use lunabot_ai_common::FromAI;
 use mio::{Events, Interest, Poll, Token};
 use motors::{enumerate_motors, MotorMask, VescIDs};
 use rerun::{Points3D, Position3D};
@@ -23,15 +24,15 @@ use serde::Deserialize;
 use simple_motion::{ChainBuilder, NodeSerde};
 use streaming::start_streaming;
 use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn};
-use tracing::error;
+use tracing::{error, warn};
 use udev::Event;
 
 pub use rerun_viz::{RerunViz, RECORDER, ROBOT, ROBOT_STRUCTURE};
 use common::THALASSIC_CELL_SIZE;
 
 use crate::{
-    apps::log_teleop_messages, localization::Localizer, pathfinding::DefaultPathfinder,
-    pipelines::thalassic::ThalassicData,
+    apps::{log_teleop_messages, new_ai}, localization::Localizer, pathfinding::DefaultPathfinder,
+    pipelines::thalassic::{set_observe_depth, ThalassicData},
 };
 
 use super::create_packet_builder;
@@ -125,6 +126,7 @@ pub struct LunabotApp {
     pub rerun_viz: RerunViz,
     pub imu_correction: Option<CalibrationParameters>,
     pub v3pico: V3PicoInfo,
+    pub new_ai: bool,
 }
 
 impl LunabotApp {
@@ -345,104 +347,144 @@ impl LunabotApp {
         let mut pathfinder = DefaultPathfinder::new(vec![]);
         let readings = actuator_controller.actuator_readings;
 
-        run_ai(
-            robot_chain.into(),
-            |action, inputs| match action {
-                Action::SetStage(stage) => {
-                    lunabot_stage.store(stage);
-                }
-                Action::SetSteering(steering) => {
-                    let (left, right) = steering.get_left_and_right();
-                    motor_ref.set_speed(left as f32, right as f32);
-                }
-                Action::SetActuators(actuator_cmd) => {
-                    let _ = actuator_controller.send_command(actuator_cmd);
-                }
-                Action::CalculatePath { from, to, kind } => {
-                    if let Ok(path) = pathfinder.find_path(&shared_thalassic_data, from, to, kind) {
-                        if let Some(rerun) = RECORDER.get() {
-                            let _ = rerun.recorder.log("/calculated_path", &Points3D::new(
-                                path.iter().map(|point| {
-                                    Position3D::new(
-                                        point.cell.0 as f32 * THALASSIC_CELL_SIZE,
-                                        0.07,
-                                        point.cell.1 as f32 * THALASSIC_CELL_SIZE,
-                                    )
-                                })
-                            ).with_radii(
-                                path.iter().map(|_| {
-                                    0.2
-                                })
-                            ).with_colors(
-                                path.iter().map(|_| {
-                                    (0,240,20)
-                                })
-                            ));
-                        }
-                        inputs.push(Input::PathCalculated(path));
-                    } else {
-                        inputs.push(Input::FailedToCalculatePath);
+        if self.new_ai {
+            warn!("Running new AI");
+            new_ai(|msg| {
+                match msg {
+                    FromAI::SetSteering(steering) => {
+                        let (left, right) = steering.get_left_and_right();
+                        motor_ref.set_speed(left as f32, right as f32);
                     }
-                }
-                Action::AvoidCell(cell) => {
-                    pathfinder.avoid_cell(cell);
-                }
-                Action::ClearPointsToAvoid => {
-                    pathfinder.clear_cells_to_avoid();
-                }
-                Action::LiftShake => {
-                    let _ =
-                        actuator_controller.send_command(embedded_common::ActuatorCommand::Shake);
-                }
-                // Action::CheckIfExplored { area, robot_cell_pos } => {
-                //     let x_lo = area.right as usize;
-                //     let x_hi = area.left as usize;
-                //     let y_lo = area.bottom as usize;
-                //     let y_hi = area.top as usize;
-
-                //     let map_data = pathfinder.get_map_data(&shared_thalassic_data);
-
-                //     for x in x_lo..x_hi {
-                //         for y in y_lo..y_hi {
-
-                //             // cells need to be explored if theyre unknown AND the robot isn't on top of it
-                //             if
-                //                 !map_data.is_known((x, y)) &&
-                //                 crate::utils::distance_between_tuples(robot_cell_pos, (x, y)) > pathfinder.current_robot_radius_cells()
-                //             {
-                //                 return inputs.push(Input::NotDoneExploring((x, y)));
-                //             }
-                //         }
-                //     }
-
-                //     inputs.push(Input::DoneExploring);
-                // }
-                Action::AvoidObstacle(obstacle) => {
-                    pathfinder.add_additional_obstacle(obstacle);
-                }
-            },
-            |poll_when, inputs| {
-                let wait_disconnect = async {
-                    if lunabot_stage.load() == LunabotStage::SoftStop {
-                        std::future::pending::<()>().await;
-                    } else {
-                        connected.wait_disconnect().await;
+                    FromAI::SetActuators(actuator_cmd) => {
+                        let _ = actuator_controller.send_command(actuator_cmd);
                     }
-                };
-
-                if let Some(reading) = readings.take() {
-                    inputs.push(Input::ActuatorReadings {
-                        lift: reading.m1_reading,
-                        tilt: reading.m2_reading,
-                    })
+                    FromAI::SetStage(stage) => {
+                        lunabot_stage.store(stage);
+                    }
+                    FromAI::RequestThalassic => set_observe_depth(true),
+                    FromAI::PathFound(_) => {}
+                    _ => {}
                 }
+            }, from_lunabase_rx, robot_chain.into(), shared_thalassic_data).block_on();
 
-                match poll_when {
-                    PollWhen::ReceivedLunabase => {
-                        while let Ok(msg) = from_lunabase_rx.try_recv() {
-                            inputs.push(Input::FromLunabase(msg));
+        } else {
+            run_ai(
+                robot_chain.into(),
+                |action, inputs| match action {
+                    Action::SetStage(stage) => {
+                        lunabot_stage.store(stage);
+                    }
+                    Action::SetSteering(steering) => {
+                        let (left, right) = steering.get_left_and_right();
+                        motor_ref.set_speed(left as f32, right as f32);
+                    }
+                    Action::SetActuators(actuator_cmd) => {
+                        let _ = actuator_controller.send_command(actuator_cmd);
+                    }
+                    Action::CalculatePath { from, to, kind } => {
+                        if let Ok(path) = pathfinder.find_path(&shared_thalassic_data, from, to, kind) {
+                            if let Some(rerun) = RECORDER.get() {
+                                let _ = rerun.recorder.log("/calculated_path", &Points3D::new(
+                                    path.iter().map(|point| {
+                                        Position3D::new(
+                                            point.cell.0 as f32 * THALASSIC_CELL_SIZE,
+                                            0.07,
+                                            point.cell.1 as f32 * THALASSIC_CELL_SIZE,
+                                        )
+                                    })
+                                ).with_radii(
+                                    path.iter().map(|_| {
+                                        0.2
+                                    })
+                                ).with_colors(
+                                    path.iter().map(|_| {
+                                        (0,240,20)
+                                    })
+                                ));
+                            }
+                            inputs.push(Input::PathCalculated(path));
+                        } else {
+                            inputs.push(Input::FailedToCalculatePath);
                         }
-                        if inputs.is_empty() {
+                    }
+                    Action::AvoidCell(cell) => {
+                        pathfinder.avoid_cell(cell);
+                    }
+                    Action::ClearPointsToAvoid => {
+                        pathfinder.clear_cells_to_avoid();
+                    }
+                    Action::LiftShake => {
+                        let _ =
+                            actuator_controller.send_command(embedded_common::ActuatorCommand::Shake);
+                    }
+                    // Action::CheckIfExplored { area, robot_cell_pos } => {
+                    //     let x_lo = area.right as usize;
+                    //     let x_hi = area.left as usize;
+                    //     let y_lo = area.bottom as usize;
+                    //     let y_hi = area.top as usize;
+
+                    //     let map_data = pathfinder.get_map_data(&shared_thalassic_data);
+
+                    //     for x in x_lo..x_hi {
+                    //         for y in y_lo..y_hi {
+
+                    //             // cells need to be explored if theyre unknown AND the robot isn't on top of it
+                    //             if
+                    //                 !map_data.is_known((x, y)) &&
+                    //                 crate::utils::distance_between_tuples(robot_cell_pos, (x, y)) > pathfinder.current_robot_radius_cells()
+                    //             {
+                    //                 return inputs.push(Input::NotDoneExploring((x, y)));
+                    //             }
+                    //         }
+                    //     }
+
+                    //     inputs.push(Input::DoneExploring);
+                    // }
+                    Action::AvoidObstacle(obstacle) => {
+                        pathfinder.add_additional_obstacle(obstacle);
+                    }
+                },
+                |poll_when, inputs| {
+                    let wait_disconnect = async {
+                        if lunabot_stage.load() == LunabotStage::SoftStop {
+                            std::future::pending::<()>().await;
+                        } else {
+                            connected.wait_disconnect().await;
+                        }
+                    };
+
+                    if let Some(reading) = readings.take() {
+                        inputs.push(Input::ActuatorReadings {
+                            lift: reading.m1_reading,
+                            tilt: reading.m2_reading,
+                        })
+                    }
+
+                    match poll_when {
+                        PollWhen::ReceivedLunabase => {
+                            while let Ok(msg) = from_lunabase_rx.try_recv() {
+                                inputs.push(Input::FromLunabase(msg));
+                            }
+                            if inputs.is_empty() {
+                                async {
+                                    tokio::select! {
+                                        result = from_lunabase_rx.recv() => {
+                                            let Some(msg) = result else {
+                                                error!("Lunabase message channel closed");
+                                                std::future::pending::<()>().await;
+                                                unreachable!();
+                                            };
+                                            inputs.push(Input::FromLunabase(msg));
+                                        }
+                                        _ = wait_disconnect => {
+                                            inputs.push(Input::LunabaseDisconnected);
+                                        }
+                                    }
+                                }
+                                .block_on();
+                            }
+                        }
+                        PollWhen::Instant(deadline) => {
                             async {
                                 tokio::select! {
                                     result = from_lunabase_rx.recv() => {
@@ -453,6 +495,7 @@ impl LunabotApp {
                                         };
                                         inputs.push(Input::FromLunabase(msg));
                                     }
+                                    _ = tokio::time::sleep_until(deadline.into()) => {}
                                     _ = wait_disconnect => {
                                         inputs.push(Input::LunabaseDisconnected);
                                     }
@@ -460,33 +503,14 @@ impl LunabotApp {
                             }
                             .block_on();
                         }
-                    }
-                    PollWhen::Instant(deadline) => {
-                        async {
-                            tokio::select! {
-                                result = from_lunabase_rx.recv() => {
-                                    let Some(msg) = result else {
-                                        error!("Lunabase message channel closed");
-                                        std::future::pending::<()>().await;
-                                        unreachable!();
-                                    };
-                                    inputs.push(Input::FromLunabase(msg));
-                                }
-                                _ = tokio::time::sleep_until(deadline.into()) => {}
-                                _ = wait_disconnect => {
-                                    inputs.push(Input::LunabaseDisconnected);
-                                }
-                            }
+                        PollWhen::NoDelay => {
+                            // Helps prevent freezing when `NoDelay` is used frequently
+                            std::thread::yield_now();
                         }
-                        .block_on();
                     }
-                    PollWhen::NoDelay => {
-                        // Helps prevent freezing when `NoDelay` is used frequently
-                        std::thread::yield_now();
-                    }
-                }
-            },
-        );
+                },
+            );
+        }
     }
 }
 
