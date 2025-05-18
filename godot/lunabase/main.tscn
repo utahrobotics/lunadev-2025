@@ -1,4 +1,4 @@
-[gd_scene load_steps=24 format=3 uid="uid://53po1wtuhcem"]
+[gd_scene load_steps=25 format=3 uid="uid://53po1wtuhcem"]
 
 [ext_resource type="PackedScene" uid="uid://bteyw33qt0xtm" path="res://camera_feed.tscn" id="1_qoli6"]
 
@@ -73,6 +73,17 @@ func _ready() -> void:
 				return
 			get_parent().hide_all_states()
 			show()
+	)
+"
+
+[sub_resource type="GDScript" id="GDScript_pbmdh"]
+script/source = "extends Label
+
+
+func _ready() -> void:
+	Lunabot.arm_angle_received.connect(
+		func(x: float):
+			text = str(roundf(rad_to_deg(x) * 10) / 10) + \"°\"
 	)
 "
 
@@ -374,6 +385,24 @@ grow_horizontal = 0
 text = "Tele-Operated"
 label_settings = SubResource("LabelSettings_wrpx5")
 horizontal_alignment = 2
+
+[node name="Label3" type="Label" parent="VBoxContainer/States/Tele-Operated"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.471338
+anchor_top = 0.0814558
+anchor_right = 0.479299
+anchor_bottom = 0.154246
+offset_left = -236.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = 65.0
+grow_horizontal = 0
+text = "0°"
+label_settings = SubResource("LabelSettings_wrpx5")
+horizontal_alignment = 1
+script = SubResource("GDScript_pbmdh")
+metadata/_edit_use_anchors_ = true
 
 [node name="CenterContainer2" type="CenterContainer" parent="VBoxContainer/States/Tele-Operated"]
 visible = false
