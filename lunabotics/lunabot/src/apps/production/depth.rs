@@ -33,7 +33,7 @@ use thalassic::{DepthProjector, DepthProjectorBuilder, ThalassicPipelineRef};
 use tracing::{error, info, warn};
 
 use crate::{
-    apps::production::streaming::DownscaleRgbImageReader,
+    apps::production::{streaming::DownscaleRgbImageReader, rerun_viz},
     localization::LocalizerRef,
     pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline, ThalassicData},
 };
@@ -541,7 +541,7 @@ impl DepthCameraTask {
                 if !self.depth_enabled {
                     break;
                 }
-                if !observe_depth && RECORDER.get().is_none() {
+                if !observe_depth {
                     continue;
                 }
                 if !matches!(frame.get(0, 0), Some(PixelKind::Z16 { .. })) {
