@@ -116,11 +116,15 @@ pub fn init_rerun(rerun_viz: RerunViz) {
         }
         let rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI / 2.0)
             * UnitQuaternion::from_axis_angle(&Vector3::x_axis(), -PI / 2.0);
+
+        let translation = rerun::Vec3D::new(-0.20, 0.0, 0.50); // not actual measurements, just to make mesh look centered
+        
         if let Err(e) = recorder.log(
             format!("{ROBOT_STRUCTURE}/mesh"),
-            &rerun::Transform3D::from_rotation(rerun::Quaternion::from_xyzw(
-                rotation.as_vector().cast::<f32>().data.0[0],
-            )),
+            &rerun::Transform3D::from_translation_rotation(
+                translation,
+                rerun::Quaternion::from_xyzw(rotation.as_vector().cast::<f32>().data.0[0]),
+            ),
         ) {
             error!("Failed to log mesh transform: {e}");
         }
