@@ -185,7 +185,10 @@ impl FromLunabase {
 #[derive(Debug, Encode, Decode, Clone, Copy)]
 pub enum FromLunabot {
     RobotIsometry { origin: [f32; 3], quat: [f32; 4] },
-    ArmAngle(f32),
+    ArmAngles {
+        hinge: f32,
+        bucket: f32
+    },
     Ping(LunabotStage),
 }
 

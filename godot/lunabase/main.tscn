@@ -1,6 +1,7 @@
-[gd_scene load_steps=25 format=3 uid="uid://53po1wtuhcem"]
+[gd_scene load_steps=30 format=3 uid="uid://53po1wtuhcem"]
 
 [ext_resource type="PackedScene" uid="uid://bteyw33qt0xtm" path="res://camera_feed.tscn" id="1_qoli6"]
+[ext_resource type="PackedScene" uid="uid://cpabno0vwp660" path="res://imu_repr.tscn" id="2_vmlsc"]
 
 [sub_resource type="GDScript" id="GDScript_2pc2q"]
 script/source = "extends Label
@@ -81,9 +82,10 @@ script/source = "extends Label
 
 
 func _ready() -> void:
-	Lunabot.arm_angle_received.connect(
-		func(x: float):
-			text = str(roundf(rad_to_deg(x) * 10) / 10) + \"°\"
+	Lunabot.arm_angles_received.connect(
+		func(hinge: float, bucket: float):
+			text = \"Hinge: \" + str(roundf(rad_to_deg(hinge) * 10) / 10) + \"°\"
+			text += \"\\nBucket: \" + str(roundf(rad_to_deg(bucket) * 10) / 10) + \"°\"
 	)
 "
 
@@ -238,6 +240,18 @@ func _on_pressed() -> void:
 		float(y_input.text)
 	))
 "
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_83ycb"]
+
+[sub_resource type="Sky" id="Sky_o6ld3"]
+sky_material = SubResource("ProceduralSkyMaterial_83ycb")
+
+[sub_resource type="Environment" id="Environment_u1j68"]
+background_mode = 2
+sky = SubResource("Sky_o6ld3")
+
+[sub_resource type="World3D" id="World3D_ktuhl"]
+environment = SubResource("Environment_u1j68")
 
 [sub_resource type="GDScript" id="GDScript_76vp5"]
 script/source = "extends Control
@@ -398,7 +412,8 @@ offset_top = 20.0
 offset_right = -20.0
 offset_bottom = 65.0
 grow_horizontal = 0
-text = "0°"
+text = "Hinge: 0°
+Bucket: 0°"
 label_settings = SubResource("LabelSettings_wrpx5")
 horizontal_alignment = 1
 script = SubResource("GDScript_pbmdh")
@@ -560,6 +575,28 @@ placeholder_text = "X"
 layout_mode = 2
 text = "6.0"
 placeholder_text = "Y"
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="VBoxContainer/States/Tele-Operated"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = -0.0143312
+anchor_top = 0.17851
+anchor_right = 0.58314
+anchor_bottom = 0.705314
+offset_right = -0.212036
+offset_bottom = 0.0339966
+stretch = true
+metadata/_edit_use_anchors_ = true
+
+[node name="SubViewport" type="SubViewport" parent="VBoxContainer/States/Tele-Operated/SubViewportContainer"]
+own_world_3d = true
+world_3d = SubResource("World3D_ktuhl")
+transparent_bg = true
+handle_input_locally = false
+size = Vector2i(375, 304)
+render_target_update_mode = 0
+
+[node name="Node3D" parent="VBoxContainer/States/Tele-Operated/SubViewportContainer/SubViewport" instance=ExtResource("2_vmlsc")]
 
 [node name="Autonomy" type="Control" parent="VBoxContainer/States"]
 visible = false

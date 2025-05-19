@@ -1,0 +1,32 @@
+[gd_scene load_steps=4 format=3 uid="uid://cpabno0vwp660"]
+
+[ext_resource type="PackedScene" uid="uid://cxrxtrp1uxpec" path="res://lunabot.glb" id="1_xrua8"]
+
+[sub_resource type="GDScript" id="GDScript_ommnm"]
+script/source = "extends Node3D
+
+
+func _process(delta: float) -> void:
+	var robot_transform := Lunabot.get_robot_transform()
+	robot_transform.origin = Vector3.ZERO
+	transform = robot_transform
+"
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_5yna6"]
+
+[node name="Node3D" type="Node3D"]
+
+[node name="lunabot2" parent="." instance=ExtResource("1_xrua8")]
+script = SubResource("GDScript_ommnm")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 2.52)
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.707945, 0.649174, -0.278183, 0, 0.393878, 0.919163, 0.706267, -0.650717, 0.278844, -0.585965, 1.02901, 0.492013)
+shadow_enabled = true
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.32, 0)
+mesh = SubResource("PlaneMesh_5yna6")
+skeleton = NodePath("../..")

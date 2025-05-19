@@ -25,7 +25,7 @@
         {
           "name": "v3_board",
           "origin": [0,0,0],
-          "euler": [90.0, 0.0, 0.0],
+          "euler": [-90.0, 0.0, 0.0],
           "children": [
             {
                 "name": "imu0",

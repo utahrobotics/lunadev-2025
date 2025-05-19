@@ -296,8 +296,8 @@ impl INode for LunabotConn {
                         }
                         #[cfg(not(feature = "production"))]
                         FromLunabot::RobotIsometry { .. } => {}
-                        FromLunabot::ArmAngle(angle) => {
-                            self.base_mut().emit_signal("arm_angle_received", &[angle.to_variant()]);
+                        FromLunabot::ArmAngles { hinge, bucket } => {
+                            self.base_mut().emit_signal("arm_angles_received", &[hinge.to_variant(), bucket.to_variant()]);
                             inner = self.inner.as_mut().unwrap();
                         }
                         FromLunabot::Ping(stage) => {
@@ -643,7 +643,7 @@ impl LunabotConn {
     #[signal]
     fn heightmap_received(&self, heightmap: PackedFloat32Array);
     #[signal]
-    fn arm_angle_received(&self, angle: f32);
+    fn arm_angles_received(&self, hinge: f32, bucket: f32);
 
     #[constant]
     const CAMERA_STREAMING: bool = cfg!(feature = "production");
@@ -666,6 +666,26 @@ impl LunabotConn {
     #[func]
     fn get_default_steering_weight() -> f64 {
         Steering::DEFAULT_WEIGHT
+    }
+
+    #[cfg(feature = "production")]
+    #[func]
+    fn get_robot_transform(&self) -> Transform3D {
+        let Some(app_config) = &self.app_config else {
+            return Transform3D::default();
+        };
+        let isometry = app_config.robot_chain.get_global_isometry();
+        let [x, y, z] = isometry.translation.vector.cast().data.0[0];
+        let [i, j, k, w] = isometry.rotation.coords.cast().data.0[0];
+        Transform3D {
+            basis: Basis::from_quat(godot::prelude::Quaternion {
+                x: i,
+                y: j,
+                z: k,
+                w,
+            }),
+            origin: godot::prelude::Vector3 { x, y, z },
+        }
     }
 
     #[cfg(feature = "production")]
@@ -730,6 +750,12 @@ impl LunabotConn {
             return false;
         };
         true
+    }
+
+    #[cfg(not(feature = "production"))]
+    #[func]
+    fn get_robot_transform(&self) -> Transform3D {
+        Transform3D::default()
     }
 
     #[cfg(not(feature = "production"))]
