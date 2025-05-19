@@ -142,6 +142,7 @@ impl Localizer {
     }
 
     pub fn run(self) {
+        #[cfg(feature = "production")]
         let lift_hinge_node = self.root_node.get_node_with_name("lift_hinge");
         let spin_sleeper = SpinSleeper::default();
         #[cfg(not(feature = "production"))]
