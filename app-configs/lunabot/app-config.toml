@@ -61,6 +61,16 @@ tag_position = [0.3, 0.0, 0.0]
 forward_axis = [0.0, 0.0, 1.0]
 tag_width = 0.18
 
+[Main.apriltags."16"]
+tag_position = [0,0,0]
+forward_axis = [0,1,0]
+tag_width = 0.215
+
+[Main.apriltags."25"]
+tag_position = [0,0,0]
+forward_axis = [0,1,0]
+tag_width = 0.215
+
 [Main.v3pico]
 serial = "1"
 
