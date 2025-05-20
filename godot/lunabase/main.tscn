@@ -593,7 +593,7 @@ own_world_3d = true
 world_3d = SubResource("World3D_ktuhl")
 transparent_bg = true
 handle_input_locally = false
-size = Vector2i(375, 304)
+size = Vector2i(2, 2)
 render_target_update_mode = 0
 
 [node name="Node3D" parent="VBoxContainer/States/Tele-Operated/SubViewportContainer/SubViewport" instance=ExtResource("2_vmlsc")]

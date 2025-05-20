@@ -331,7 +331,7 @@ async fn read_sensors_loop(
                     //error!("{:?}",e);
                 }
             }
-            // info!("{}", msg);
+            info!("{}", msg);
         } else {
             warn!("data terminal not ready");
         }

@@ -44,7 +44,7 @@ pub async fn navigate(host_handle: &mut HostHandle, target: Vector2<f64>) -> Sof
     };
 
     'main: loop {
-        let read_fut = async {
+        let mut read_fut = async || {
             loop {
                 let msg = host_handle.read_from_host().await;
                 let FromHost::FromLunabase { msg } = msg else {
@@ -56,14 +56,40 @@ pub async fn navigate(host_handle: &mut HostHandle, target: Vector2<f64>) -> Sof
                 }
             }
         };
-        let path = tokio::select! {
-            _ = read_fut => return SoftStopped { called: true },
-            (path, _) = astar(Vector2::new(isometry.translation.x, isometry.translation.z), target, |cell| {
-                obstacle_map[cell.x + cell.y * THALASSIC_WIDTH as usize] != Occupancy::OCCUPIED
-            }) => path
+        let start = Vector2::new((isometry.translation.x / THALASSIC_CELL_SIZE as f64) as usize, (isometry.translation.y / THALASSIC_CELL_SIZE as f64) as usize);
+        let end = Vector2::new((target.x / THALASSIC_CELL_SIZE as f64) as usize, (target.y / THALASSIC_CELL_SIZE as f64) as usize);
+    
+        let mut obstacle_path = if obstacle_map[start.x + start.y * THALASSIC_WIDTH as usize] == Occupancy::OCCUPIED {
+            tokio::select! {
+                _ = read_fut() => return SoftStopped { called: true },
+                (path, _) = astar(
+                    start,
+                    end,
+                    |cell| {
+                        obstacle_map[cell.x + cell.y * THALASSIC_WIDTH as usize] != Occupancy::OCCUPIED
+                    },
+                    |_| true
+                ) => path
+            }
+        } else {
+            vec![]
         };
-        host_handle.write_to_host(FromAI::PathFound(path.clone()));
-        let mut path = VecDeque::from(path);
+
+        let safe_path = tokio::select! {
+            _ = read_fut() => return SoftStopped { called: true },
+            (path, _) = astar(
+                start,
+                end,
+                |cell| cell == end,
+                |cell| {
+                    obstacle_map[cell.x + cell.y * THALASSIC_WIDTH as usize] != Occupancy::OCCUPIED
+                }
+            ) => path
+        };
+        obstacle_path.extend_from_slice(&safe_path);
+
+        host_handle.write_to_host(FromAI::PathFound(obstacle_path.clone()));
+        let mut path = VecDeque::from(obstacle_path);
 
         loop {
             isometry = loop {
@@ -168,9 +194,12 @@ fn fast_integer_sqrt(n: usize) -> usize {
     return x
 }
 
-pub async fn astar(startf: Vector2<f64>, endf: Vector2<f64>, mut is_safe: impl FnMut(Vector2<usize>) -> bool) -> (Vec<Vector2<f64>>, f64) {
-    let start = Vector2::new((startf.x / THALASSIC_CELL_SIZE as f64) as usize, (startf.y / THALASSIC_CELL_SIZE as f64) as usize);
-    let end = Vector2::new((endf.x / THALASSIC_CELL_SIZE as f64) as usize, (endf.y / THALASSIC_CELL_SIZE as f64) as usize);
+pub async fn astar(
+    start: Vector2<usize>,
+    end: Vector2<usize>,
+    mut success: impl FnMut(Vector2<usize>) -> bool,
+    mut is_safe: impl FnMut(Vector2<usize>) -> bool,
+) -> (Vec<Vector2<f64>>, f64) {
     let mut to_see = BinaryHeap::new();
     to_see.push(SmallestCostHolder {
         estimated_cost: 0,
@@ -189,7 +218,7 @@ pub async fn astar(startf: Vector2<f64>, endf: Vector2<f64>, mut is_safe: impl F
         let successors = {
             let (node, &(_, c)) = parents.get_index(index).unwrap(); // Cannot fail
             let h = heuristic(*node);
-            if *node == end {
+            if success(*node) {
                 let path = reverse_path(&parents, |&(p, _)| p, index).map(|p| Vector2::new(p.x as f64 * THALASSIC_CELL_SIZE as f64, p.y as f64 * THALASSIC_CELL_SIZE as f64));
                 return (path.collect(), cost as f64 / 10.0);
             } else if closest_path.is_none() || closest_cost > h + c {
