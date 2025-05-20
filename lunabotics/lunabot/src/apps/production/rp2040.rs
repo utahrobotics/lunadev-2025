@@ -50,6 +50,7 @@ pub struct IMUInfo {
 /// find pico connected to the v3 pcb.
 pub fn enumerate_v3picos(
     hinge_node: Node<&'static [NodeData]>,
+    bucket_node: Node<&'static [NodeData]>,
     localizer_ref: LocalizerRef,
     pico: V3PicoInfo,
 ) -> ActuatorController {
@@ -66,6 +67,7 @@ pub fn enumerate_v3picos(
                 pico.imus[3].node,
             ],
             hinge_node,
+            bucket_node
         };
 
         let mut task = V3PicoTask {
@@ -197,6 +199,7 @@ struct SharedState {
     /// imu node
     imus: [StaticImmutableNode; 4],
     hinge_node: Node<&'static [NodeData]>,
+    bucket_node: Node<&'static [NodeData]>,
 }
 
 pub struct V3PicoTask {
@@ -282,10 +285,14 @@ impl V3PicoTask {
                 if let FromPicoV3::Reading(imu_readings, actuators) = reading {
                     let lift_hinge_angle = actuators.m1_reading as f64 * 0.00743033 - 2.19192;
                     actuator_readings.store(Some(actuators));
+                    let bucket_angle = -29.36-45.77*(0.00048836 * actuators.m2_reading - 1.079).tan();
                     //tracing::info!("lift angle: {}", lift_hinge_angle);
                     guard
                         .hinge_node
                         .set_angle_one_axis(lift_hinge_angle.to_radians());
+                    guard
+                        .bucket_node
+                        .set_angle_one_axis(bucket_angle.to_radians());
                     for (i, (msg, node)) in imu_readings.into_iter().zip(guard.imus).enumerate() {
                         match msg {
                             FromIMU::Reading(rate, accel) => {

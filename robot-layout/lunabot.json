@@ -52,6 +52,10 @@
             "rotation_axis": [1.0, 0.0, 0.0],
             "children": [
                 {
+                    "name": "bucket",
+                    "rotation_axis": [1.0, 0.0, 0.0]
+                },
+                {
                     "name": "split",
                     "origin": [0.0, 0.0, -0.615],
                     "euler": [0.0, 45.0, 0.0],
