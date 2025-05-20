@@ -11,8 +11,8 @@ use nalgebra::{distance, Point2, Point3};
 pub const AUDIO_FRAME_SIZE: u32 = 960;
 pub const AUDIO_SAMPLE_RATE: u32 = 48000;
 pub const THALASSIC_CELL_SIZE: f32 = 0.03125;
-pub const THALASSIC_WIDTH: u32 = 128;
-pub const THALASSIC_HEIGHT: u32 = 256;
+pub const THALASSIC_WIDTH: u32 = 160;
+pub const THALASSIC_HEIGHT: u32 = 224;
 pub const THALASSIC_CELL_COUNT: u32 = THALASSIC_WIDTH * THALASSIC_HEIGHT;
 
 /// cells don't have a y value but world points do, so please provide one one

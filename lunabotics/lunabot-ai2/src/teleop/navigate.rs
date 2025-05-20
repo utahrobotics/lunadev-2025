@@ -78,7 +78,7 @@ pub async fn navigate(host_handle: &mut HostHandle, target: Vector2<f64>) -> Sof
         let safe_path = tokio::select! {
             _ = read_fut() => return SoftStopped { called: true },
             (path, _) = astar(
-                start,
+                obstacle_path.last().map(|p| Vector2::new((p.x / THALASSIC_CELL_SIZE as f64) as usize, (p.y / THALASSIC_CELL_SIZE as f64) as usize)).unwrap_or(start),
                 end,
                 |cell| cell == end,
                 |cell| {
