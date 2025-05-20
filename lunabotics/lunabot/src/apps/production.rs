@@ -45,6 +45,7 @@ mod motors;
 mod rerun_viz;
 mod rp2040;
 mod streaming;
+mod heat_logger;
 
 pub use apriltag::Apriltag;
 
@@ -303,6 +304,8 @@ impl LunabotApp {
         let hinge_node = robot_chain
             .get_node_with_name("lift_hinge")
             .expect("lift_hinge not defined in robot layout");
+        
+        let _heat_logger_handle = heat_logger::start_heat_logger();
 
         let mut actuator_controller = enumerate_v3picos(hinge_node, localizer_ref.clone(), {
             rp2040::V3PicoInfo {
