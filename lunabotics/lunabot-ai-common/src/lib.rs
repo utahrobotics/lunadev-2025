@@ -191,7 +191,9 @@ impl FromAI {
                 writer.write_all(&[FromAIHeader::PathFound as u8])?;
                 writer.write_all(&(path.len() as u16).to_ne_bytes())?;
                 for p in path {
-                    writer.write_all(bytemuck::bytes_of(p))?;
+                    let bytes = bytemuck::bytes_of(p);
+
+                    writer.write_all(bytes)?;
                 }
             }
         }
@@ -272,9 +274,9 @@ impl FromAI {
                     return Err(ParseError::NotEnoughBytes { bytes_needed: 3 + count * 16 });
                 }
                 let mut path = Vec::<Vector2<f64>>::with_capacity(count);
-                let mut bytes = bytes;
+                let mut bytes = &bytes[3..];
                 for _ in 0..count {
-                    let mut p = Vector2::new(0.0, 0.0);
+                    let mut p: Vector2<f64> = Vector2::new(0.0, 0.0);
                     bytemuck::bytes_of_mut(&mut p).copy_from_slice(&bytes[0..16]);
                     bytes = &bytes[16..];
                     path.push(p);
