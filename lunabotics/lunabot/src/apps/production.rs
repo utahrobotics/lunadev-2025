@@ -375,9 +375,9 @@ impl LunabotApp {
                                 path.iter().map(|point| {
                                     tracing::info!("x, y: {:?}", point);
                                     Position3D::new(
-                                        point.x as f32 * THALASSIC_CELL_SIZE,
+                                        point.x as f32,
                                         0.07,
-                                        point.y as f32 * THALASSIC_CELL_SIZE,
+                                        point.y as f32,
                                     )
                                 })
                             ).with_radii(

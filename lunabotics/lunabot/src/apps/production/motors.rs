@@ -2,7 +2,7 @@ use core::f32;
 use crossbeam::{atomic::AtomicCell, utils::Backoff};
 use fxhash::FxHashMap;
 use serde::Deserialize;
-use std::sync::mpmc::Receiver;
+use std::{sync::mpmc::Receiver, time::{Duration, Instant}};
 use tasker::{
     get_tokio_handle,
     tokio::{
@@ -240,14 +240,6 @@ impl MotorTask {
                     .write_all(self.vesc_packer.pack(&GetValues))
                     .await?;
                 motor_port.flush().await?;
-                // let mut count = 0usize;
-                // let mut buf = vec![];
-                // loop {
-                //     let n = motor_port.read(&mut response).await.unwrap();
-                //     count += n;
-                //     buf.extend_from_slice(&response[..n]);
-                //     println!("{path_str} {count} {buf:?}");
-                // }
                 while response.len() < 63 || response.last() != Some(&3) {
                     let n = motor_port.read(&mut tmp_buf).await?;
                     response.extend_from_slice(&tmp_buf[..n]);
@@ -349,6 +341,10 @@ impl MotorTask {
             slave_can.map(|(can_id, _)| *self.vesc_ids.motor_masks.get(&can_id).unwrap());
 
         let backoff = Backoff::new();
+        let mut last_read_time = Instant::now();
+
+        let mut response = vec![];
+        let mut tmp_buf = [0u8; 128];
 
         loop {
             let values = loop {
@@ -359,6 +355,103 @@ impl MotorTask {
                 backoff.snooze();
             };
             backoff.reset();
+
+            if last_read_time.elapsed() > Duration::from_millis(500) {
+                last_read_time = Instant::now();
+                let task = async {
+                    motor_port
+                        .write_all(self.vesc_packer.pack(&GetValues))
+                        .await?;
+                    motor_port.flush().await?;
+                    while response.len() < 63 || response.last() != Some(&3) {
+                        let n = motor_port.read(&mut tmp_buf).await?;
+                        response.extend_from_slice(&tmp_buf[..n]);
+                    }
+                    std::io::Result::Ok(())
+                };
+
+                let task = async {
+                    tokio::select! {
+                        res = task => res,
+                        _ = tokio::time::sleep(std::time::Duration::from_millis(90)) => {
+                            Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "Timed out waiting for response"))
+                        }
+                    }
+                };
+
+                if let Err(e) = task.block_on() {
+                    error!("Failed to read/write to motor port {path_str}: {e}");
+                    return;
+                }
+
+                let Ok(buf) = MinLength::try_from(response.as_slice()) else {
+                    error!("Received too short of a message from motor port {path_str}");
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    continue;
+                };
+
+                let Ok(values) = GetValues::parse_response(&buf) else {
+                    error!("Received corrupt response from motor port {path_str}");
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    continue;
+                };
+                if values.temp_mos > 70.0 {
+                    tracing::warn!("TEMPERATURE WARNING {} => {:.1} °C", values.vesc_id, values.temp_mos);
+                }
+                if values.v_in < 24.0 {
+                    tracing::warn!("LOW VOLT WARNING {} => {:.1}", values.vesc_id, values.v_in);
+                }
+
+                if let Some((can_id, true)) = slave_can {
+                    let task = async {
+                        motor_port
+                            .write_all(self.vesc_packer.pack(&CanForwarded {
+                                can_id,
+                                payload: GetValues,
+                            }))
+                            .await?;
+                        motor_port.flush().await?;
+                        while response.len() < 63 || response.last() != Some(&3) {
+                            let n = motor_port.read(&mut tmp_buf).await?;
+                            response.extend_from_slice(&tmp_buf[..n]);
+                        }
+                        std::io::Result::Ok(())
+                    };
+
+                    let task = async {
+                        tokio::select! {
+                            res = task => res,
+                            _ = tokio::time::sleep(std::time::Duration::from_millis(90)) => {
+                                Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "Timed out waiting for response"))
+                            }
+                        }
+                    };
+
+                    if let Err(e) = task.block_on() {
+                        error!("Failed to read/write to motor port {path_str}: {e}");
+                        return;
+                    }
+
+                    let Ok(buf) = MinLength::try_from(response.as_slice()) else {
+                        error!("Received too short of a message from motor port {path_str}");
+                        std::thread::sleep(std::time::Duration::from_secs(1));
+                        continue;
+                    };
+
+                    let Ok(values) = GetValues::parse_response(&buf) else {
+                        error!("Received corrupt response from motor port {path_str}");
+                        std::thread::sleep(std::time::Duration::from_secs(1));
+                        continue;
+                    };
+
+                    if values.temp_mos > 70.0 {
+                        tracing::warn!("TEMPERATURE WARNING {can_id} => {:.1} °C", values.temp_mos);
+                    }
+                    if values.v_in < 24.0 {
+                        tracing::warn!("LOW VOLT WARNING {can_id} => {:.1}", values.v_in);
+                    }
+                }
+            }
 
             let task = async {
                 if let Some((can_id, true)) = slave_can {
