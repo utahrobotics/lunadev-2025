@@ -94,7 +94,7 @@ args = ["--path", "godot/lunabase", "-e"]
 [tasks.fluna]
 workspace = false
 command = "godot"
-args = ["--path", "godot/lunabase", "-d", "--", "192.168.0.18"]
+args = ["--path", "godot/lunabase", "-d", "--", "192.168.0.102"]
 dependencies = [
     "build_lunabase_prod",
 ]
