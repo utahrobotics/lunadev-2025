@@ -285,7 +285,7 @@ impl V3PicoTask {
                 if let FromPicoV3::Reading(imu_readings, actuators) = reading {
                     let lift_hinge_angle = actuators.m1_reading as f64 * 0.00743033 - 2.19192;
                     actuator_readings.store(Some(actuators));
-                    let bucket_angle = -29.36-45.77*(0.00048836 * actuators.m2_reading - 1.079).tan();
+                    let bucket_angle: f64 = -29.36-45.77*(0.00048836 * actuators.m2_reading as f64 - 1.079).tan();
                     //tracing::info!("lift angle: {}", lift_hinge_angle);
                     guard
                         .hinge_node

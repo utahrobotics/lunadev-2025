@@ -102,10 +102,10 @@ pub fn init_rerun(rerun_viz: RerunViz) {
     std::thread::spawn(|| {
         let recorder = &RECORDER.get().unwrap().recorder;
 
-        let asset = match Asset3D::from_file("3d-models/lunabot.stl") {
+        let asset = match Asset3D::from_file_path("3d-models/simplify_lunabot.stl") {
             Ok(x) => x,
             Err(e) => {
-                error!("Failed to open 3d-models/lunabot.stl: {e}");
+                error!("Failed to open 3d-models/simplify_lunabot.stl: {e}");
                 return;
             }
         };
