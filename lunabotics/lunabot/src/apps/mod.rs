@@ -140,7 +140,6 @@ async fn new_ai(mut from_ai: impl FnMut(FromAI), mut from_lunabase_rx: Unbounded
                                     bytes.drain(0..n);
                                     necessary_bytes = 1;
                                     if let Err(e) = from_ai_tx.try_send(msg) {
-                                        tracing::error!("Maxed out queue");
                                         if from_ai_tx.send(e.into_inner()).await.is_err() {
                                             break 'main;
                                         }

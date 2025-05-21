@@ -32,7 +32,6 @@ impl HostHandle {
                                 Ok((msg, n)) => {
                                     bytes.drain(0..n);
                                     if let Err(e) = from_host_tx.try_send(msg) {
-                                        eprintln!("Maxed out queue");
                                         if from_host_tx.blocking_send(e.into_inner()).is_err() {
                                             break 'main;
                                         }

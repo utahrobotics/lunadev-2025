@@ -12,52 +12,57 @@ use crate::context::HostHandle;
 use super::SoftStopped;
 
 const COMPLETION_DISTANCE: f64 = 0.2;
-const MAX_ARC_ANGLE_DEGREES: f64 = 30.0;
+const COMPLETION_ANGLE_DEGREES: f64 = 5.0;
+const MAX_ARC_ANGLE_DEGREES: f64 = 60.0;
+const SAFE_RADIUS: f64 = 0.5;
 
 pub async fn navigate(host_handle: &mut HostHandle, target: Vector2<f64>) -> SoftStopped {
     host_handle.write_to_host(FromAI::SetStage(common::LunabotStage::Autonomy));
     host_handle.write_to_host(FromAI::SetSteering(Steering::default()));
-    tokio::select! {
-        _ = tokio::time::sleep(Duration::from_millis(2000)) => {}
-        _ = async {
-            loop {
-                host_handle.write_to_host(FromAI::Heartbeat);
-                tokio::time::sleep(AI_HEARTBEAT_RATE).await;
-            }
-        } => {}
-    }
-    
-    host_handle.write_to_host(FromAI::RequestThalassic);
 
-    let mut maybe_obstacle_map = None;
-    for _ in 0..20 {
-        match host_handle.read_from_host().await {
-            FromHost::ThalassicData { obstacle_map } => {
-                maybe_obstacle_map = Some(obstacle_map);
-            }
-            _ => {}
+    loop {
+        eprintln!("Pausing to scan");
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_millis(2000)) => {}
+            _ = async {
+                loop {
+                    host_handle.write_to_host(FromAI::Heartbeat);
+                    tokio::time::sleep(AI_HEARTBEAT_RATE).await;
+                }
+            } => {}
         }
+        
+        eprintln!("Scanning");
         host_handle.write_to_host(FromAI::RequestThalassic);
-        tokio::time::sleep(Duration::from_millis(80)).await;
-    };
-    let obstacle_map = if maybe_obstacle_map.is_none() {loop {
-        match host_handle.read_from_host().await {
-            FromHost::ThalassicData { obstacle_map } => {
-                break obstacle_map;
+
+        let mut maybe_obstacle_map = None;
+        for _ in 0..20 {
+            match host_handle.read_from_host().await {
+                FromHost::ThalassicData { obstacle_map } => {
+                    maybe_obstacle_map = Some(obstacle_map);
+                }
+                _ => {}
             }
-            _ => {}
-        }
-    }} else {
-        maybe_obstacle_map.unwrap()
-    };
-
-    let mut isometry = loop {
-        if let FromHost::BaseIsometry { isometry } = host_handle.read_from_host().await {
-            break isometry;
+            host_handle.write_to_host(FromAI::RequestThalassic);
+            tokio::time::sleep(Duration::from_millis(80)).await;
         };
-    };
+        let obstacle_map = if maybe_obstacle_map.is_none() {loop {
+            match host_handle.read_from_host().await {
+                FromHost::ThalassicData { obstacle_map } => {
+                    break obstacle_map;
+                }
+                _ => {}
+            }
+        }} else {
+            maybe_obstacle_map.unwrap()
+        };
 
-    'main: loop {
+        let mut isometry = loop {
+            if let FromHost::BaseIsometry { isometry } = host_handle.read_from_host().await {
+                break isometry;
+            };
+        };
+
         let mut read_fut = async || {
             loop {
                 let msg = host_handle.read_from_host().await;
@@ -70,10 +75,11 @@ pub async fn navigate(host_handle: &mut HostHandle, target: Vector2<f64>) -> Sof
                 }
             }
         };
-        let start = Vector2::new((isometry.translation.x / THALASSIC_CELL_SIZE as f64) as usize, (isometry.translation.y / THALASSIC_CELL_SIZE as f64) as usize);
+        let start = Vector2::new((isometry.translation.x / THALASSIC_CELL_SIZE as f64) as usize, (isometry.translation.z / THALASSIC_CELL_SIZE as f64) as usize);
         let end = Vector2::new((target.x / THALASSIC_CELL_SIZE as f64) as usize, (target.y / THALASSIC_CELL_SIZE as f64) as usize);
     
-        let mut obstacle_path = if obstacle_map[start.x + start.y * THALASSIC_WIDTH as usize] == Occupancy::OCCUPIED {
+        eprintln!("Obstacle Pathfinding");
+        let mut path = if obstacle_map[start.x + start.y * THALASSIC_WIDTH as usize] == Occupancy::OCCUPIED {
             tokio::select! {
                 _ = read_fut() => return SoftStopped { called: true },
                 (path, _) = astar(
@@ -89,10 +95,11 @@ pub async fn navigate(host_handle: &mut HostHandle, target: Vector2<f64>) -> Sof
             vec![]
         };
 
+        eprintln!("Safe Pathfinding");
         let safe_path = tokio::select! {
             _ = read_fut() => return SoftStopped { called: true },
             (path, _) = astar(
-                obstacle_path.last().map(|p| Vector2::new((p.x / THALASSIC_CELL_SIZE as f64) as usize, (p.y / THALASSIC_CELL_SIZE as f64) as usize)).unwrap_or(start),
+                path.last().map(|p| Vector2::new((p.x / THALASSIC_CELL_SIZE as f64) as usize, (p.y / THALASSIC_CELL_SIZE as f64) as usize)).unwrap_or(start),
                 end,
                 |cell| cell == end,
                 |cell| {
@@ -100,10 +107,25 @@ pub async fn navigate(host_handle: &mut HostHandle, target: Vector2<f64>) -> Sof
                 }
             ) => path
         };
-        obstacle_path.extend_from_slice(&safe_path);
+        path.extend_from_slice(&safe_path);
 
-        host_handle.write_to_host(FromAI::PathFound(obstacle_path.clone()));
-        let mut path = VecDeque::from(obstacle_path);
+        let mut all_known = true;
+        for (i, &p) in path.iter().enumerate() {
+            if (Vector2::new(isometry.translation.x, isometry.translation.z) - p).magnitude() <= SAFE_RADIUS {
+                continue;
+            }
+            if obstacle_map[(p.x / THALASSIC_CELL_SIZE as f64) as usize + (p.y / THALASSIC_CELL_SIZE as f64) as usize * THALASSIC_WIDTH as usize] == Occupancy::UNKNOWN {
+                all_known = false;
+                if i < path.len() - 1 {
+                    path.drain((i + 1)..);
+                }
+                break;
+            }
+        }
+
+        host_handle.write_to_host(FromAI::PathFound(path.clone()));
+        let mut path = VecDeque::from(path);
+        eprintln!("Following Path");
 
         loop {
             isometry = loop {
@@ -126,10 +148,51 @@ pub async fn navigate(host_handle: &mut HostHandle, target: Vector2<f64>) -> Sof
             }).unwrap();
 
             if distance < COMPLETION_DISTANCE {
+                if !all_known && i >= path.len() - 2 {
+                    eprintln!("Aiming at unknown");
+                    let unknown = *path.get(path.len() - 1).unwrap();
+                    let known = *path.get(path.len() - 2).unwrap();
+
+                    loop {
+                        isometry = loop {
+                            match host_handle.read_from_host().await {
+                                FromHost::BaseIsometry { isometry } => {
+                                    break isometry;
+                                }
+                                FromHost::FromLunabase { msg: FromLunabase::SoftStop } => {
+                                    host_handle.write_to_host(FromAI::SetSteering(Steering::default()));
+                                    return SoftStopped { called: true };
+                                }
+                                _ => {}
+                            }
+                        };
+                        let travel = (unknown - known).normalize();
+
+                        let forward = isometry.rotation * - Vector3::z();
+                        let flat_forward = Vector2::new(forward.x, forward.z).normalize();
+                        let cross = flat_forward.x * travel.y - flat_forward.y * travel.x;
+                        let angle = flat_forward.angle(&travel).clamp(0.0, MAX_ARC_ANGLE_DEGREES.to_radians());
+
+                        if angle < COMPLETION_ANGLE_DEGREES.to_radians() {
+                            break;
+                        }
+
+                        let speed = angle / MAX_ARC_ANGLE_DEGREES.to_radians();
+
+                        if cross > 0.0 {
+                            host_handle.write_to_host(FromAI::SetSteering(Steering::new(speed, -speed, Steering::DEFAULT_WEIGHT)));
+                        } else {
+                            host_handle.write_to_host(FromAI::SetSteering(Steering::new(-speed, speed, Steering::DEFAULT_WEIGHT)));
+                        }
+                    }
+                    eprintln!("Finished");
+                    break;
+
+                }
                 path.drain(0..=i);
                 if path.is_empty() {
                     eprintln!("Finished");
-                    break 'main;
+                    break;
                 }
                 closest_point = path.front().unwrap();
             }
@@ -149,10 +212,12 @@ pub async fn navigate(host_handle: &mut HostHandle, target: Vector2<f64>) -> Sof
                 host_handle.write_to_host(FromAI::SetSteering(Steering::new(1.0, lesser_speed, Steering::DEFAULT_WEIGHT)));
             }
         }
-    }
 
-    host_handle.write_to_host(FromAI::SetSteering(Steering::default()));
-    SoftStopped { called: false }
+        host_handle.write_to_host(FromAI::SetSteering(Steering::default()));
+        if all_known {
+            break SoftStopped { called: false };
+        }
+    }
 }
 
 struct SmallestCostHolder {

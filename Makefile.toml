@@ -21,6 +21,7 @@ dependencies = [
 ]
 
 [tasks.sim]
+env = { "STRIDE" = "1" }
 workspace = false
 command = "cargo"
 args = ["run", "-p", "lunabot", "--", "sim"]
