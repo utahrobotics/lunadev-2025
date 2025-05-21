@@ -26,15 +26,29 @@ pub async fn navigate(host_handle: &mut HostHandle, target: Vector2<f64>) -> Sof
             }
         } => {}
     }
+    
     host_handle.write_to_host(FromAI::RequestThalassic);
 
-    let obstacle_map = loop {
+    let mut maybe_obstacle_map = None;
+    for _ in 0..20 {
+        match host_handle.read_from_host().await {
+            FromHost::ThalassicData { obstacle_map } => {
+                maybe_obstacle_map = Some(obstacle_map);
+            }
+            _ => {}
+        }
+        host_handle.write_to_host(FromAI::RequestThalassic);
+        tokio::time::sleep(Duration::from_millis(80)).await;
+    };
+    let obstacle_map = if maybe_obstacle_map.is_none() {loop {
         match host_handle.read_from_host().await {
             FromHost::ThalassicData { obstacle_map } => {
                 break obstacle_map;
             }
             _ => {}
         }
+    }} else {
+        maybe_obstacle_map.unwrap()
     };
 
     let mut isometry = loop {
