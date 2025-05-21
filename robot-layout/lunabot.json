@@ -63,7 +63,7 @@
                         {
                             "name": "left_arm_camera",
                             "origin": [-0.23, 0.0, -0.28],
-                            "euler": [0.0, 10.0, -190]
+                            "euler": [0.0, -10.0, 190]
                         },
                         {
                             "name": "right_arm_camera",
