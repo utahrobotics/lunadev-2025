@@ -393,7 +393,7 @@ impl LunabotApp {
                     }
                     _ => {}
                 }
-            }, from_lunabase_rx, robot_chain.into(), shared_thalassic_data).block_on();
+            }, from_lunabase_rx, robot_chain.into(), shared_thalassic_data, readings).block_on();
 
         } else {
             run_ai(

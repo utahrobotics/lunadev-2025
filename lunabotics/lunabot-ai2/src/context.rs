@@ -75,6 +75,10 @@ impl HostHandle {
         }
     }
 
+    pub fn try_read_from_host(&mut self) -> Option<FromHost> {
+        self.from_host.try_recv().ok()
+    }
+
     pub fn write_to_host(&mut self, msg: FromAI) {
         let _ = msg.write_into(&mut self.stdout);
     }

@@ -7,6 +7,7 @@ use std::{fs::File, net::SocketAddr, process::Stdio, sync::Arc, time::Duration};
 
 use common::{FromLunabase, FromLunabot, LunabotStage};
 use crossbeam::atomic::AtomicCell;
+use embedded_common::ActuatorReading;
 use lunabot_ai_common::{FromAI, FromHost, ParseError};
 #[cfg(feature = "production")]
 pub use production::{
@@ -108,7 +109,7 @@ fn create_packet_builder(
     (packet_builder, from_lunabase_rx, connected)
 }
 
-async fn new_ai(mut from_ai: impl FnMut(FromAI), mut from_lunabase_rx: UnboundedReceiver<FromLunabase>, robot_chain: StaticImmutableNode, shared_thalassic_data: SharedDataReceiver<ThalassicData>) -> ! {
+async fn new_ai(mut from_ai: impl FnMut(FromAI), mut from_lunabase_rx: UnboundedReceiver<FromLunabase>, robot_chain: StaticImmutableNode, shared_thalassic_data: SharedDataReceiver<ThalassicData>, readings: &'static AtomicCell<Option<ActuatorReading>>) -> ! {
     loop {
         let mut child = tokio::process::Command::new("cargo")
             .args(["run", "-p", "lunabot-ai2"])
@@ -201,6 +202,10 @@ async fn new_ai(mut from_ai: impl FnMut(FromAI), mut from_lunabase_rx: Unbounded
                         let isometry = robot_chain.get_global_isometry();
                         FromHost::BaseIsometry { isometry }.write_into(&mut bytes).unwrap();
                         instant = Instant::now();
+
+                        if let Some(reading) = readings.take() {
+                            FromHost::ActuatorReadings { lift: reading.m1_reading, bucket: reading.m2_reading }.write_into(&mut bytes).unwrap();
+                        }
                     }
                     data = async {
                         loop {

@@ -9,7 +9,9 @@ use tokio::time::Instant;
 use crate::context::HostHandle;
 
 mod navigate;
+mod traverse_simple;
 mod dig_dump;
+mod dig_dump_simple;
 
 struct SoftStopped {
     pub called: bool
@@ -66,8 +68,8 @@ pub async fn teleop(host_handle: &mut HostHandle) {
                 }
                 host_handle.write_to_host(FromAI::SetStage(LunabotStage::TeleOp));
             }
-            FromLunabase::DigDump((x, y)) => {
-                if dig_dump::dig_dump(host_handle, Vector2::new(x as f64, y as f64)).await.called {
+            FromLunabase::DigDump(_) => {
+                if dig_dump_simple::dig_dump_simple(host_handle).await.called {
                     break;
                 }
                 host_handle.write_to_host(FromAI::SetStage(LunabotStage::TeleOp));
@@ -80,9 +82,9 @@ pub async fn teleop(host_handle: &mut HostHandle) {
     }
 }
 
-const ACTUATOR_COMPLETION_THRESHOLD: u16 = 50;
+const ACTUATOR_COMPLETION_THRESHOLD: u16 = 100;
 
-async fn move_actuators(host_handle: &mut HostHandle, target_lift: Option<u16>, target_bucket: Option<u16>) -> SoftStopped {
+async fn move_actuators(host_handle: &mut HostHandle, mut target_lift: Option<u16>, mut target_bucket: Option<u16>) -> SoftStopped {
     loop {
         match host_handle.read_from_host().await {
             FromHost::FromLunabase { msg } => match msg {
@@ -90,25 +92,37 @@ async fn move_actuators(host_handle: &mut HostHandle, target_lift: Option<u16>, 
                 _ => {}
             },
             FromHost::ActuatorReadings { lift, bucket } => {
-                if let Some(target_lift) = target_lift {
-                    let mut lift_diff = target_lift.checked_signed_diff(lift).unwrap().clamp(-1000, 1000) as f64;
+                if let Some(target_lift_unwrapped) = target_lift {
+                    let mut lift_diff = target_lift_unwrapped.checked_signed_diff(lift).unwrap().clamp(-1000, 1000) as f64;
+                    eprintln!("Lift diff: {lift_diff}");
 
                     if lift_diff.abs() > ACTUATOR_COMPLETION_THRESHOLD as f64 {
-                        if lift_diff.abs() < 100.0 {
-                            lift_diff = 100.0 * lift_diff.signum();
+                        if lift_diff.abs() < 200.0 {
+                            lift_diff = 200.0 * lift_diff.signum();
                         }
-                        host_handle.write_to_host(FromAI::SetActuators(ActuatorCommand::set_speed(lift_diff / 1000.0, Actuator::Lift)));
+                        host_handle.write_to_host(FromAI::SetActuators(ActuatorCommand::set_speed(-lift_diff / 1000.0, Actuator::Lift)));
+                    } else {
+                        target_lift = None;
                     }
                 }
-                if let Some(target_bucket) = target_bucket {
-                    let mut bucket_diff = target_bucket.checked_signed_diff(bucket).unwrap().clamp(-1000, 1000) as f64;
+                if let Some(target_bucket_unwrapped) = target_bucket {
+                    let mut bucket_diff = target_bucket_unwrapped.checked_signed_diff(bucket).unwrap().clamp(-1000, 1000) as f64;
+                    eprintln!("Bucket diff: {bucket_diff}");
                     
                     if bucket_diff.abs() > ACTUATOR_COMPLETION_THRESHOLD as f64 {
-                        if bucket_diff.abs() < 100.0 {
-                            bucket_diff = 100.0 * bucket_diff.signum();
+                        if bucket_diff.abs() < 200.0 {
+                            bucket_diff = 200.0 * bucket_diff.signum();
                         }
                         host_handle.write_to_host(FromAI::SetActuators(ActuatorCommand::set_speed(bucket_diff / 1000.0, Actuator::Bucket)));
+                    } else {
+                        target_bucket = None;
                     }
+                }
+                if target_bucket.is_none() && target_lift.is_none() {
+                    eprintln!("Move actuators done");
+                        host_handle.write_to_host(FromAI::SetActuators(ActuatorCommand::set_speed(0.0, Actuator::Lift)));
+                        host_handle.write_to_host(FromAI::SetActuators(ActuatorCommand::set_speed(0.0, Actuator::Bucket)));
+                    return SoftStopped { called: false };
                 }
             }
             _ => {}
