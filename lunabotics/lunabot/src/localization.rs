@@ -295,10 +295,18 @@ impl Localizer {
                     && new_rotation.j.is_finite()
                     && new_rotation.k.is_finite()
                 {
-                    // Use lerp for the quaternion interpolation
+                    let dot_product = isometry.rotation.coords.dot(&new_rotation.coords);
+                    
+                    let target_quat = if dot_product < 0.0 {
+                        UnitQuaternion::new_normalize(-new_rotation.into_inner())
+                    } else {
+                        new_rotation
+                    };
+                    
+                    // Use lerp for the quaternion interpolation with proper direction
                     isometry.rotation = UnitQuaternion::new_normalize(lerp(
                         isometry.rotation.into_inner(),
-                        new_rotation.into_inner(),
+                        target_quat.into_inner(),
                         LOCALIZATION_DELTA,
                         ACCELEROMETER_LERP_SPEED,
                     ));

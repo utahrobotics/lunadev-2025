@@ -198,7 +198,7 @@ impl AprilTagDetector {
             let img = Image::from_image_buffer(&img);
 
             for detection in detector.detect(&img) {
-                if detection.decision_margin() < 130.0 {
+                if detection.decision_margin() < 60.0 {
                     continue;
                 }
                 let Some(known) = self.known_tags.get(&detection.id()) else {
