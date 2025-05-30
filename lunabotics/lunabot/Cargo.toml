@@ -54,6 +54,8 @@ futures-util = "0.3.31"
 chrono.workspace = true
 
 lunabot-ai-common.path = "../lunabot-ai-common"
+rerun-ipc-common.path = "../rerun-ipc-common"
+rerun-ipc-common.optional = true
 
 [features]
 production = [
@@ -75,7 +77,8 @@ production = [
     "cobs",
     "tokio-util",
     "apriltag-image",
-    "apriltag-nalgebra"
+    "apriltag-nalgebra",
+    "rerun-ipc-common",
 ]
 calibrate = [
     "production",

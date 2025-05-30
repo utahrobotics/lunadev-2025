@@ -19,6 +19,8 @@ members = [
     "misc/usb-reset",
     "lunabotics/lunabot-ai2",
     "lunabotics/lunabot-ai-common",
+    "lunabotics/rerun-ipc",
+    "lunabotics/rerun-ipc-common",
 ]
 resolver = "2"
 exclude = ["output/", "embedded/", "lunaserver-web/", "misc/camera-benchy"]
@@ -27,7 +29,7 @@ exclude = ["output/", "embedded/", "lunaserver-web/", "misc/camera-benchy"]
 fxhash = "0.2"
 chrono = "0.4"
 # static_assertions = "1"
-# image = "0.25"
+# image = "0.24.5"
 bitcode = "0.6.3"
 # ordered-float = "4.2.1"
 nalgebra = { version = "0.32", features = [
@@ -76,6 +78,7 @@ simple-motion = { path = "misc/simple-motion" }
 vesc-translator = { path = "misc/vesc-translator" }
 embedded_common = { path = "embedded/embedded_common" }
 imu-calib ={ path = "misc/imu-calib" }
+rerun-ipc-common = { path = "lunabotics/rerun-ipc-common" }
 
 [profile.dev.package.lunabot]
 opt-level = 2
@@ -98,3 +101,6 @@ debug-assertions = true
 inherits = "dev"
 opt-level = 3
 lto = "thin"
+
+# [patch.crates-io]
+# image = "0.24.5"

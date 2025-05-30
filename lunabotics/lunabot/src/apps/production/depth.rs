@@ -237,13 +237,13 @@ pub fn enumerate_depth_cameras(
                     continue;
                 }
 
-                if usb_val < 3.0 {
-                    error!(
-                        "Depth camera {} is connected to USB {usb_val}",
-                        current_serial
-                    );
-                    continue;
-                }
+                // if usb_val < 3.0 && {
+                //     error!(
+                //         "Depth camera {} is connected to USB {usb_val}",
+                //         current_serial
+                //     );
+                //     continue;
+                // }
 
                 let pipeline = match InactivePipeline::try_from(&context) {
                     Ok(x) => x,

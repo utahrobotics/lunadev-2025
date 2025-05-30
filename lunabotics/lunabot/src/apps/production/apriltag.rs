@@ -4,6 +4,7 @@ use apriltag::{families::TagStandard41h12, DetectorBuilder, Family, Image, TagPa
 use apriltag_image::{image::ImageBuffer, ImageExt};
 use apriltag_nalgebra::PoseExt;
 use fxhash::FxHashMap;
+
 use nalgebra::{Isometry3, Point3, UnitQuaternion, Vector3};
 use serde::Deserialize;
 
@@ -187,16 +188,7 @@ impl AprilTagDetector {
 
         loop {
             let img = self.img_subscriber.get();
-            if img.width() != self.image_width || img.height() != self.image_height {
-                error!(
-                    "Received incorrectly sized image: {}x{}",
-                    img.width(),
-                    img.height()
-                );
-                continue;
-            }
             let img = Image::from_image_buffer(&img);
-
             for detection in detector.detect(&img) {
                 if detection.decision_margin() < 60.0 {
                     continue;
