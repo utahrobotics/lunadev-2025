@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{sync::{Arc, RwLock}, time::Duration};
 
 #[cfg(feature = "production")]
 use cakap2::packet::PacketBody;
@@ -9,6 +9,7 @@ use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector3};
 use simple_motion::StaticNode;
 use spin_sleep::SpinSleeper;
 use tracing::error;
+use fxhash::FxHashMap;
 
 #[cfg(not(feature = "production"))]
 use crate::apps::LunasimStdin;
@@ -34,6 +35,7 @@ pub struct IMUReading {
 
 #[derive(Default)]
 struct LocalizerRefInner {
+    april_tag_isometries: RwLock<FxHashMap<usize, AtomicCell<(Isometry3<f64>, Instant)>>>,
     april_tag_isometry: AtomicCell<Option<Isometry3<f64>>>,
     imu_readings: Box<[AtomicCell<Option<IMUReading>>]>,
 
@@ -56,6 +58,85 @@ impl LocalizerRef {
     pub fn set_april_tag_isometry(&self, isometry: Isometry3<f64>) {
         self.inner.april_tag_isometry.store(Some(isometry));
     }
+
+    pub fn set_april_tag_isometry_with_id(&self, id: usize, isometry: Isometry3<f64>) {
+        let mut tags = self.inner.april_tag_isometries.write().unwrap();
+        if let Some(tag_cell) = tags.get_mut(&id) {
+            tag_cell.store((isometry, Instant::now()));
+        } else {
+            tags.insert(id, AtomicCell::new((isometry, Instant::now())));
+        }
+        
+        // Calculate average of recent isometries (within 1 second)
+        self.update_average_april_tag_isometry();
+    }
+    
+    fn update_average_april_tag_isometry(&self) {
+        let tags = self.inner.april_tag_isometries.read().unwrap();
+        let now = Instant::now();
+        let time_threshold = Duration::from_secs(300);
+        
+        let mut recent_isometries = Vec::new();
+        
+        for (_, tag_cell) in tags.iter() {
+            let (isometry, timestamp) = tag_cell.load();
+            if now.duration_since(timestamp) <= time_threshold {
+                recent_isometries.push(isometry);
+            }
+        }
+        
+        // Only average if we have at least one recent isometry
+        if recent_isometries.is_empty() {
+            return;
+        }
+        
+        if recent_isometries.len() == 1 {
+            // Just use the single isometry
+            self.inner.april_tag_isometry.store(Some(recent_isometries[0]));
+            return;
+        }
+        
+        // Average the translations
+        let mut avg_translation = Vector3::zeros();
+        for isometry in &recent_isometries {
+            avg_translation += isometry.translation.vector;
+        }
+        avg_translation /= recent_isometries.len() as f64;
+        
+        // Average the rotations
+        // Using a simple approach - convert to axis-angle, average, then convert back
+        let mut avg_axis = Vector3::zeros();
+        let mut avg_angle = 0.0;
+        
+        for isometry in &recent_isometries {
+            let (axis, angle) = isometry.rotation
+                .axis_angle()
+                .unwrap_or((UnitVector3::new_normalize(Vector3::z()), 0.0));
+                
+            avg_axis += axis.into_inner() * angle;
+        }
+        
+        let avg_rotation = if avg_axis.norm() > 1e-6 {
+            let avg_axis_norm = avg_axis.norm();
+            avg_angle = avg_axis_norm / recent_isometries.len() as f64;
+            UnitQuaternion::from_axis_angle(
+                &UnitVector3::new_normalize(avg_axis / avg_axis_norm), 
+                avg_angle
+            )
+        } else {
+            UnitQuaternion::identity()
+        };
+        
+        // Create and store the averaged isometry
+        let avg_isometry = Isometry3::from_parts(
+            nalgebra::Translation3::from(avg_translation),
+            avg_rotation
+        );
+        
+        self.inner.april_tag_isometry.store(Some(avg_isometry));
+    }
+
+
     pub fn set_imu_reading(&self, index: usize, imu: IMUReading) {
         if let Some(cell) = self.inner.imu_readings.get(index) {
             cell.store(Some(imu));

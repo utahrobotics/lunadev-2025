@@ -302,7 +302,7 @@ impl CameraTask {
                     }
                 }
                 localizer_ref
-                    .set_april_tag_isometry(observation.get_isometry_of_observer() * inverse_local);
+                    .set_april_tag_isometry_with_id(observation.tag_id, observation.get_isometry_of_observer() * inverse_local);
             });
             std::thread::spawn(move || det.run());
             let _ = self.image.set(image.into());

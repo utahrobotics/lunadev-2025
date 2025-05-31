@@ -20,7 +20,7 @@ members = [
     "lunabotics/lunabot-ai2",
     "lunabotics/lunabot-ai-common",
     "lunabotics/rerun-ipc",
-    "lunabotics/rerun-ipc-common",
+    "lunabotics/rerun-ipc-common", "lunabotics/ipc",
 ]
 resolver = "2"
 exclude = ["output/", "embedded/", "lunaserver-web/", "misc/camera-benchy"]

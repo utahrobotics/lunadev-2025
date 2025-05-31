@@ -1,11 +1,13 @@
 pub mod archetypes;
+pub mod recorder;
 use iceoryx2::prelude::ZeroCopySend;
 use iceoryx2_bb_container::byte_string::FixedSizeByteString;
 use iceoryx2_bb_container::vec::FixedSizeVec;
 use serde::{Serialize, Deserialize};
 use iceoryx2::prelude::*;
 use iceoryx2::port::publisher::Publisher;
-use std::sync::Arc;
+
+pub static RECORDER_SERVICE_PATH:&'static str = "rerun_ipc";
 
 #[derive(Serialize, Deserialize, Debug, ZeroCopySend)]
 #[repr(C)]

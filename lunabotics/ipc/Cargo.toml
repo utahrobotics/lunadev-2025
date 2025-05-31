@@ -1,0 +1,18 @@
+[package]
+name = "ipc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+iceoryx2 = "0.6.1"
+iceoryx2-bb-container = "0.6.1"
+serde = { version = "1.0.219", features = ["derive"] }
+bincode = "1.3.3"
+
+[[example]]
+name = "sender"
+path = "examples/sender.rs"
+
+[[example]]
+name = "receiver"
+path = "examples/receiver.rs"
