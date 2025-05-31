@@ -4,13 +4,15 @@
     iterator_try_collect,
     mpmc_channel,
     try_blocks,
-    f16
+    f16,
+    let_chains
 )]
 
 use std::net::IpAddr;
 
 use apps::default_max_pong_delay_ms;
 use lumpur::LumpurBuilder;
+use rerun_ipc_common::RerunViz;
 use tracing::Level;
 
 mod apps;
@@ -36,7 +38,7 @@ lumpur::define_configuration! {
             #[serde(default)]
             vesc: apps::Vesc,
             #[serde(default)]
-            rerun_viz: apps::RerunViz,
+            rerun_viz: RerunViz,
             imu_correction: Option<imu_calib::CalibrationParameters>,
             v3pico: apps::V3PicoInfo,
             #[serde(default)]

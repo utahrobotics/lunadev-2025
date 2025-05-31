@@ -17,7 +17,7 @@ use lunabot_ai::{run_ai, Action, Input, PollWhen};
 use lunabot_ai_common::FromAI;
 use mio::{Events, Interest, Poll, Token};
 use motors::{enumerate_motors, MotorMask, VescIDs};
-use rerun::{Points3D, Position3D};
+use rerun_ipc_common::{Points3D, Position3D, RerunViz};
 use rerun_viz::init_rerun;
 use rp2040::*;
 use serde::Deserialize;
@@ -27,7 +27,7 @@ use tasker::{get_tokio_handle, shared::OwnedData, tokio, BlockOn};
 use tracing::{error, warn};
 use udev::Event;
 
-pub use rerun_viz::{RerunViz, RECORDER, ROBOT, ROBOT_STRUCTURE};
+pub use rerun_viz::{ROBOT, ROBOT_STRUCTURE, get_recorder, get_obstacle_map_throttle};
 use common::THALASSIC_CELL_SIZE;
 
 use crate::{
@@ -370,8 +370,8 @@ impl LunabotApp {
                     }
                     FromAI::RequestThalassic => set_observe_depth(true),
                     FromAI::PathFound(path) => {
-                        if let Some(rerun) = RECORDER.get() {
-                            let _ = rerun.recorder.log("/calculated_path", &Points3D::new(
+                        if let Some(rec) = get_recorder() {
+                            let _ = rec.log("/calculated_path", Points3D::new(
                                 path.iter().map(|point| {
                                     tracing::info!("x, y: {:?}", point);
                                     Position3D::new(
@@ -386,7 +386,7 @@ impl LunabotApp {
                                 })
                             ).with_colors(
                                 path.iter().map(|_| {
-                                    (0,20,240)
+                                    [0,20,240]
                                 })
                             ));
                         }
@@ -411,8 +411,8 @@ impl LunabotApp {
                     }
                     Action::CalculatePath { from, to, kind } => {
                         if let Ok(path) = pathfinder.find_path(&shared_thalassic_data, from, to, kind) {
-                            if let Some(rerun) = RECORDER.get() {
-                                let _ = rerun.recorder.log("/calculated_path", &Points3D::new(
+                            if let Some(recorder) = get_recorder() {
+                                let _ = recorder.log("/calculated_path", Points3D::new(
                                     path.iter().map(|point| {
                                         Position3D::new(
                                             point.cell.0 as f32 * THALASSIC_CELL_SIZE,
@@ -426,7 +426,7 @@ impl LunabotApp {
                                     })
                                 ).with_colors(
                                     path.iter().map(|_| {
-                                        (0,240,20)
+                                        [0,240,20]
                                     })
                                 ));
                             }

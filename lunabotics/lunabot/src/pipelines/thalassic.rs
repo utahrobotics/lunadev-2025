@@ -9,13 +9,13 @@ use crossbeam::atomic::AtomicCell;
 use gputter::is_gputter_initialized;
 use nalgebra::Vector2;
 
+use rerun_ipc_common::Color;
 #[cfg(feature = "production")]
-use rerun::Points3D;
-
+use rerun_ipc_common::{Position3D, Points3D};
 use tasker::shared::OwnedData;
 use thalassic::{Occupancy, ThalassicBuilder, ThalassicPipelineRef};
 
-use crate::utils::distance_between_tuples;
+use crate::{apps::get_obstacle_map_throttle, utils::distance_between_tuples};
 
 static OBSERVE_DEPTH: AtomicBool = AtomicBool::new(false);
 
@@ -211,19 +211,19 @@ pub fn spawn_thalassic_pipeline(
         let reference = pipeline.get_ref();
 
         #[cfg(feature = "production")]
-        if let Some(recorder) = crate::apps::RECORDER.get() {
+        if let Some(recorder) = crate::apps::get_recorder() {
             let initial_map = Points3D::new((0..THALASSIC_CELL_COUNT).map(|i| {
                 let i = i as usize;
-                rerun::Position3D::new(
+                Position3D::new(
                     (i % THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE,
                     0.0,
                     (i / THALASSIC_WIDTH as usize) as f32 * THALASSIC_CELL_SIZE,
                 )
             }))
             .with_radii((0..THALASSIC_CELL_COUNT).map(|_| 0.01));
-            if let Err(e) = recorder.recorder.log_static(
-                format!("{}/expanded_obstacle_map", crate::apps::ROBOT),
-                &initial_map,
+            if let Err(e) = recorder.log_static(
+                &format!("{}/expanded_obstacle_map", crate::apps::ROBOT),
+                initial_map,
             ) {
                 tracing::error!("Couldnt log expanded obstacle map: {e}");
             }
@@ -277,18 +277,18 @@ pub fn spawn_thalassic_pipeline(
             // }
 
             #[cfg(feature = "production")]
-            if let Some(recorder) = crate::apps::RECORDER.get() {
-
-                if recorder.last_logged_obstacle_map.load().elapsed().as_millis() > 500 {
-                    if let Err(e) = recorder.recorder.log(
-                        format!("{}/expanded_obstacle_map", crate::apps::ROBOT),
-                        &rerun::Points3D::update_fields().with_colors((0..THALASSIC_CELL_COUNT).map(
+            if let Some(recorder) = crate::apps::get_recorder() {
+                let should_log = get_obstacle_map_throttle().map(|last| last.load().elapsed().as_millis() > 500).unwrap_or(false);
+                if should_log {
+                    if let Err(e) = recorder.log(
+                        &format!("{}/expanded_obstacle_map", crate::apps::ROBOT),
+                        Points3D::update_fields().with_colors((0..THALASSIC_CELL_COUNT).map(
                             |i| {
                                 let pos = ThalassicData::index_to_xy(i as usize);
                                 let color = match (&owned).get_cell_state(pos) {
-                                    CellState::GREEN => rerun::Color::from_rgb(0, 255, 0),
-                                    CellState::RED => rerun::Color::from_rgb(255, 0, 0),
-                                    CellState::UNKNOWN => rerun::Color::from_rgb(77, 77, 77),
+                                    CellState::GREEN => Color::new(0, 255, 0, 255),
+                                    CellState::RED => Color::new(255, 0, 0, 255),
+                                    CellState::UNKNOWN => Color::new(77, 77, 77, 255),
                                 };
                                 color
                             },
@@ -296,7 +296,7 @@ pub fn spawn_thalassic_pipeline(
                     ) {
                         tracing::error!("Failed to log expanded obstacle map: {e}");
                     }
-                    recorder.last_logged_obstacle_map.store(Instant::now())
+                    get_obstacle_map_throttle().map(|throttle| throttle.store(Instant::now()));
                 }
             }
             buffer = owned.pessimistic_share();

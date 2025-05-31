@@ -6,6 +6,7 @@ use cakap2::packet::PacketBody;
 use common::FromLunabot;
 use crossbeam::atomic::AtomicCell;
 use nalgebra::{Isometry3, UnitQuaternion, UnitVector3, Vector3};
+use rerun_ipc_common::{Quaternion, Transform3D};
 use simple_motion::StaticNode;
 use spin_sleep::SpinSleeper;
 use tracing::error;
@@ -426,12 +427,12 @@ impl Localizer {
                     // }
                 }
 
-                crate::apps::RECORDER.get().map(|recorder| {
-                    if let Err(e) = recorder.recorder.log(
+                crate::apps::get_recorder().map(|recorder| {
+                    if let Err(e) = recorder.log(
                         crate::apps::ROBOT_STRUCTURE,
-                        &rerun::Transform3D::from_translation_rotation(
+                        Transform3D::from_translation_rotation(
                             isometry.translation.vector.cast::<f32>().data.0[0],
-                            rerun::Quaternion::from_xyzw(
+                            Quaternion::from_xyzw(
                                 isometry.rotation.as_vector().cast::<f32>().data.0[0],
                             ),
                         ),

@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-iceoryx2 = "0.6.1"
-iceoryx2-bb-container = "0.6.1"
+ipc = { path = "../ipc" }
 serde = { version = "1.0.219", features = ["derive"] }
+crossbeam = "0.8"

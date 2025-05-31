@@ -1046,6 +1046,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -2972,6 +2973,8 @@ name = "ipc"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "chrono",
+ "ctrlc",
  "iceoryx2",
  "iceoryx2-bb-container",
  "serde",
@@ -3396,7 +3399,6 @@ dependencies = [
  "pathfinding",
  "rayon",
  "realsense-rust",
- "rerun",
  "rerun-ipc-common",
  "rodio",
  "serde",
@@ -5479,7 +5481,8 @@ dependencies = [
 name = "rerun-ipc"
 version = "0.1.0"
 dependencies = [
- "iceoryx2",
+ "ctrlc",
+ "ipc",
  "rerun",
  "rerun-ipc-common",
  "serde",
@@ -5489,8 +5492,8 @@ dependencies = [
 name = "rerun-ipc-common"
 version = "0.1.0"
 dependencies = [
- "iceoryx2",
- "iceoryx2-bb-container",
+ "crossbeam",
+ "ipc",
  "serde",
 ]
 

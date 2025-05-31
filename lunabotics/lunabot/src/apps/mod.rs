@@ -11,8 +11,8 @@ use embedded_common::ActuatorReading;
 use lunabot_ai_common::{FromAI, FromHost, ParseError};
 #[cfg(feature = "production")]
 pub use production::{
-    Apriltag, CameraInfo, DepthCameraInfo, LunabotApp, RerunViz, V3PicoInfo, Vesc, RECORDER, ROBOT,
-    ROBOT_STRUCTURE,
+    Apriltag, CameraInfo, DepthCameraInfo, LunabotApp, V3PicoInfo, Vesc, ROBOT,
+    ROBOT_STRUCTURE, get_recorder, get_obstacle_map_throttle,
 };
 #[cfg(not(feature = "production"))]
 pub use sim::{LunasimStdin, LunasimbotApp};

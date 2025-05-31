@@ -12,7 +12,7 @@ use super::{
         AprilTagDetector, Apriltag,
     },
     streaming::CameraStream,
-    RECORDER, ROBOT, ROBOT_STRUCTURE,
+    ROBOT, ROBOT_STRUCTURE,
 };
 use chrono::SubsecRound;
 use fxhash::FxHashMap;
@@ -26,14 +26,14 @@ use realsense_rust::{
     kind::{Rs2CameraInfo, Rs2Format, Rs2StreamKind},
     pipeline::{ActivePipeline, FrameWaitError, InactivePipeline},
 };
-use rerun::ImageFormat;
+use rerun_ipc_common::{Pinhole, Quaternion, RecordingStreamResult, Transform3D};
 use simple_motion::StaticImmutableNode;
 use tasker::shared::{MaybeOwned, OwnedData};
 use thalassic::{DepthProjector, DepthProjectorBuilder, ThalassicPipelineRef};
 use tracing::{error, info, warn};
 
 use crate::{
-    apps::production::{streaming::DownscaleRgbImageReader, rerun_viz},
+    apps::production::{rerun_viz::{self, get_recorder}, streaming::DownscaleRgbImageReader},
     localization::LocalizerRef,
     pipelines::thalassic::{get_observe_depth, spawn_thalassic_pipeline, ThalassicData},
 };
@@ -82,16 +82,16 @@ pub fn enumerate_depth_cameras(
                 // let (r, p, y) = isometry.rotation.euler_angles();
                 // tracing::info!("{} ({:.0}, {:.0}, {:.0})", isometry.translation, r.to_degrees(), p.to_degrees(), y.to_degrees());
 
-                if let Some(recorder) = RECORDER.get() {
-                    if recorder.level.is_all() {
+                if let Some(recorder) = get_recorder() {
+                    if let Some(level) = recorder.get_log_level() && level.is_all() {
                         let local_x = isometry.rotation * Vector3::x_axis();
                         let corrected_rotation =
                             UnitQuaternion::from_axis_angle(&local_x, PI) * isometry.rotation;
-                        if let Err(e) = recorder.recorder.log_static(
-                            format!("{ROBOT_STRUCTURE}/cameras/depth/{serial}"),
-                            &rerun::Transform3D::from_translation_rotation(
+                        if let Err(e) = recorder.log_static(
+                            &format!("{ROBOT_STRUCTURE}/cameras/depth/{serial}"),
+                            Transform3D::from_translation_rotation(
                                 isometry.translation.vector.cast::<f32>().data.0[0],
-                                rerun::Quaternion::from_xyzw(
+                                Quaternion::from_xyzw(
                                     corrected_rotation.as_vector().cast::<f32>().data.0[0],
                                 ),
                             ),
@@ -391,7 +391,7 @@ impl DepthCameraTask {
                 let mut inverse_local = self.node.get_isometry_from_base();
                 inverse_local.inverse_mut();
                 det.detection_callbacks_ref().add_fn(move |observation| {
-                    if let Some(rec) = crate::apps::RECORDER.get() {
+                    if let Some(rec) = get_recorder() {
                         let location = (
                             observation.tag_global_isometry.translation.x as f32,
                             observation.tag_global_isometry.translation.y as f32,
@@ -406,18 +406,20 @@ impl DepthCameraTask {
                             .iter()
                             .map(|val| *val as f32)
                             .collect::<Vec<f32>>();
-                        if let Err(e) = rec.recorder.log(
-                            format!("apriltags/{}/location", observation.tag_id),
-                            &rerun::Boxes3D::from_centers_and_half_sizes(
-                                [(location)],
+
+                        if let Err(e) = rec.log(
+                            &format!("apriltags/{}/location", observation.tag_id),
+                            
+                            rerun_ipc_common::archetypes::Boxes3D::from_centers_and_half_sizes(
+                                [location],
                                 [(0.1, 0.1, 0.01)],
                             )
-                            .with_quaternions([[
+                            .with_quaternions([rerun_ipc_common::Quaternion::new(
                                 quaterion[0],
                                 quaterion[1],
                                 quaterion[2],
                                 quaterion[3],
-                            ]])
+                            )])
                             .with_labels([format!("{}", seen_at)]),
                         ) {
                             error!("Couldn't log april tag: {e}")
@@ -439,14 +441,14 @@ impl DepthCameraTask {
                 focal_length_px = depth_format.fx();
             }
 
-            if let Some(recorder) = RECORDER.get() {
-                if recorder.level.is_all() {
-                    if let Err(e) = recorder.recorder.log(
-                        format!(
+            if let Some(recorder) = get_recorder() {
+                if let Some(level) = recorder.get_log_level() && level.is_all() {
+                    if let Err(e) = recorder.log(
+                        &format!(
                             "{ROBOT_STRUCTURE}/cameras/depth/{}/depth_image",
                             self.serial
                         ),
-                        &rerun::Pinhole::from_focal_length_and_resolution(
+                        Pinhole::from_focal_length_and_resolution(
                             [depth_format.fx(), depth_format.fy()],
                             [depth_format.width() as f32, depth_format.height() as f32],
                         ),
@@ -578,33 +580,36 @@ impl DepthCameraTask {
                     camera_transform.to_homogeneous().cast::<f32>().into();
                 depth_projector.project(slice, &camera_transform, depth_scale, Some(point_cloud));
 
-                if let Some(recorder) = RECORDER.get() {
-                    if recorder.level.is_all() {
-                        let result: rerun::RecordingStreamResult<()> = try {
-                            recorder.recorder.log(
-                                format!(
+                if let Some(recorder) = get_recorder() {
+                    if let Some(level) = recorder.get_log_level() && level.is_all(){
+                        let result: RecordingStreamResult<()> = try {
+                            recorder.log(
+                                &format!(
                                     "{ROBOT_STRUCTURE}/cameras/depth/{}/depth_image",
                                     self.serial
                                 ),
-                                &rerun::DepthImage::new(
-                                    bytes_slice,
-                                    ImageFormat::depth(
-                                        [frame.width() as u32, frame.height() as u32],
-                                        rerun::ChannelDatatype::U16,
-                                    ),
+                                rerun_ipc_common::archetypes::DepthImage::new(
+                                    bytes_slice.to_vec(),
+                                    rerun_ipc_common::ImageFormat {
+                                        resolution: [frame.width() as u32, frame.height() as u32],
+                                        channel_datatype: rerun_ipc_common::ChannelDatatype::U16,
+                                    },
                                 )
                                 .with_meter(1.0 / depth_scale)
                                 .with_depth_range([0.0, 2.0 / depth_scale as f64]),
                             )?;
-                            recorder.recorder.log(
-                                format!("{ROBOT}/point_clouds/{}", self.serial),
-                                &rerun::Points3D::new(
+                            recorder.log(
+                                &format!("{ROBOT}/point_clouds/{}", self.serial),
+                                rerun_ipc_common::archetypes::Points3D::new(
                                     point_cloud
                                         .iter()
                                         .filter(|point| point.w == 1.0)
                                         .map(|point| [point.x, point.y, point.z]),
                                 )
-                                .with_radii(std::iter::repeat_n(0.003, point_cloud.len())),
+                                .with_radii({
+                                    let filtered_count = point_cloud.iter().filter(|point| point.w == 1.0).count();
+                                    std::iter::repeat_n(0.003, filtered_count).collect::<Vec<_>>()
+                                }),
                             )?;
                         };
                         if let Err(e) = result {

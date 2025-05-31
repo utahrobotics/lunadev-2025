@@ -11,14 +11,14 @@ use super::apriltag::{
 };
 use chrono::SubsecRound;
 use fxhash::FxHashMap;
-use rerun::Boxes3D;
+use rerun_ipc_common::Boxes3D;
 use simple_motion::StaticImmutableNode;
 use tasker::shared::{MaybeOwned, OwnedData};
 use tracing::{error, info, warn};
 use udev::{EventType, MonitorBuilder, Udev};
 use v4l::{buffer::Type, io::traits::CaptureStream, prelude::MmapStream, video::Capture};
 
-use crate::{apps::production::udev_poll, localization::LocalizerRef};
+use crate::{apps::production::{rerun_viz::get_recorder, udev_poll}, localization::LocalizerRef};
 
 use super::{
     apriltag::Apriltag,
@@ -272,7 +272,7 @@ impl CameraTask {
                 //     pose.rotation.axis().unwrap().z,
                 // );
 
-                if let Some(rec) = crate::apps::RECORDER.get() {
+                if let Some(rec) = get_recorder() {
                     let location = (
                         observation.tag_global_isometry.translation.x as f32,
                         observation.tag_global_isometry.translation.y as f32,
@@ -287,9 +287,9 @@ impl CameraTask {
                         .iter()
                         .map(|val| *val as f32)
                         .collect::<Vec<f32>>();
-                    if let Err(e) = rec.recorder.log(
-                        format!("apriltags/{}/location", observation.tag_id),
-                        &Boxes3D::from_centers_and_half_sizes([(location)], [(0.1, 0.1, 0.01)])
+                    if let Err(e) = rec.log(
+                        &format!("apriltags/{}/location", observation.tag_id),
+                        Boxes3D::from_centers_and_half_sizes([location], [(0.1, 0.1, 0.01)])
                             .with_quaternions([[
                                 quaterion[0],
                                 quaterion[1],

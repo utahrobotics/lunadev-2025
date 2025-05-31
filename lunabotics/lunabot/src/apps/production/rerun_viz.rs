@@ -1,30 +1,17 @@
-use std::{f32::consts::PI, sync::{OnceLock, RwLock}, time::Instant};
+use std::{process::Command, sync::OnceLock, time::{Duration, Instant}};
 
 use crossbeam::atomic::AtomicCell;
-use nalgebra::{UnitQuaternion, Vector3};
-use rerun::{Asset3D, RecordingStream, RecordingStreamResult, SpawnOptions, ViewCoordinates};
+use rerun_ipc_common::{RerunViz, RerunLevel, QueuedRecorder};
 use serde::Deserialize;
-use tracing::{error, info};
+use tracing::{error, info, debug};
 
 pub const ROBOT: &str = "/robot";
 pub const ROBOT_STRUCTURE: &str = "/robot/structure";
 
-pub static RECORDER: OnceLock<RecorderData> = OnceLock::new();
+pub static RECORDER: OnceLock<QueuedRecorder> = OnceLock::new();
 
-pub struct RecorderData {
-    pub recorder: RecordingStream,
-    pub level: Level,
-    pub last_logged_obstacle_map: AtomicCell<Instant> // used to throttle the logging to conserve bandwidth
-}
-
-#[derive(Deserialize, Default, Debug)]
-pub enum RerunViz {
-    Grpc(Level,String),
-    Log(Level),
-    Viz(Level),
-    #[default]
-    Disabled,
-}
+// Global static to hold the rerun-ipc process ID
+static RERUN_IPC_PID: OnceLock<Option<u32>> = OnceLock::new();
 
 #[derive(Deserialize, Default, Debug, PartialEq)]
 pub enum Level {
@@ -42,91 +29,133 @@ impl Level {
     }
 }
 
+
 pub fn init_rerun(rerun_viz: RerunViz) {
-    let opts = SpawnOptions {
-        memory_limit: "25%".to_string(),
-        ..Default::default()
-    };
-    let (recorder, level) = match rerun_viz {
-        RerunViz::Viz(level) => (
-            match rerun::RecordingStreamBuilder::new("lunabot").spawn_opts(&opts, None) {
-                Ok(x) => x,
-                Err(e) => {
-                    error!("Failed to start rerun process: {e}");
-                    return;
-                }
-            },
-            level,
-        ),
-        RerunViz::Grpc(level, url) => (
-            match rerun::RecordingStreamBuilder::new("lunabot").connect_grpc_opts(&url, None) {
-                Ok(x) => {
-                    info!("Streaming to rerun on: {url}");
-                    x
-                },
-                Err(e) => {
-                    error!("Failed to make recording stream: {e}");
-                    return;
-                }
-            },
-            level,
-        ),
-        RerunViz::Log(level) => (
-            match rerun::RecordingStreamBuilder::new("lunabot").save("recording.rrd") {
-                Ok(x) => x,
-                Err(e) => {
-                    error!("Failed to start rerun file logging: {e}");
-                    return;
-                }
-            },
-            level,
-        ),
-        RerunViz::Disabled => {
-            return;
-        }
-    };
-    let result: RecordingStreamResult<()> = try {
-        recorder.log_static("/", &ViewCoordinates::RIGHT_HAND_Y_UP())?;
-        recorder.log_static(
-            format!("{ROBOT_STRUCTURE}/xyz"),
-            &rerun::Arrows3D::from_vectors([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-                .with_colors([[255, 0, 0], [0, 255, 0], [0, 0, 255]]),
-        )?;
-    };
-    if let Err(e) = result {
-        error!("Failed to setup rerun environment: {e}");
-    }
+    debug!("🔧 DEBUG: init_rerun called with rerun_viz: {:?}", rerun_viz);
+    
+    // Start the rerun-ipc process if visualization is enabled
+    let process_pid = match &rerun_viz {
+        RerunViz::Enabled(level) => {
+            debug!("🔧 DEBUG: Rerun enabled with level: {:?}", level);
+            // Try to run rerun-ipc using cargo from workspace root
+            let spawn_result = Command::new("cargo")
+                .args(&["run", "--release", "-p", "rerun-ipc"])
+                .current_dir(".")
+                .spawn()
+                .or_else(|_| {
+                    // Fallback: try running from target directory if cargo build was done
+                    info!("Cargo run failed, trying to run prebuilt binary...");
+                    Command::new("./target/release/rerun-ipc")
+                        .spawn()
+                })
+                .or_else(|_| {
+                    // Another fallback: try with full cargo path
+                    info!("Direct binary failed, trying with full cargo path...");
+                    Command::new("/usr/bin/cargo")
+                        .args(&["run", "--release", "-p", "rerun-ipc"])
+                        .current_dir(".")
+                        .spawn()
+                });
 
-    let _ = RECORDER.set(RecorderData { recorder, level, last_logged_obstacle_map: AtomicCell::new(Instant::now())});
-
-    std::thread::spawn(|| {
-        let recorder = &RECORDER.get().unwrap().recorder;
-
-        let asset = match Asset3D::from_file_path("3d-models/simplify_lunabot.stl") {
-            Ok(x) => x,
-            Err(e) => {
-                error!("Failed to open 3d-models/simplify_lunabot.stl: {e}");
-                return;
+            match spawn_result {
+                Ok(child) => {
+                    let pid = child.id();
+                    info!("Started rerun-ipc process with PID: {}", pid);
+                    debug!("🔧 DEBUG: Successfully started rerun-ipc process");
+                    Some(pid)
+                }
+                Err(e) => {
+                    error!("Failed to start rerun-ipc process: {e}");
+                    error!("Make sure cargo is in PATH and you're running from the workspace root");
+                    debug!("🔧 DEBUG: Failed to start rerun-ipc process: {}", e);
+                    None
+                }
             }
-        };
-
-        if let Err(e) = recorder.log_static(format!("{ROBOT_STRUCTURE}/mesh"), &asset) {
-            error!("Failed to log robot structure mesh: {e}");
-            return;
         }
-        let rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI / 2.0)
-            * UnitQuaternion::from_axis_angle(&Vector3::x_axis(), -PI / 2.0);
-
-        let translation = rerun::Vec3D::new(-0.20, 0.0, 0.50); // not actual measurements, just to make mesh look centered
-        
-        if let Err(e) = recorder.log(
-            format!("{ROBOT_STRUCTURE}/mesh"),
-            &rerun::Transform3D::from_translation_rotation(
-                translation,
-                rerun::Quaternion::from_xyzw(rotation.as_vector().cast::<f32>().data.0[0]),
-            ),
-        ) {
-            error!("Failed to log mesh transform: {e}");
+        RerunViz::Disabled => {
+            debug!("🔧 DEBUG: Rerun disabled");
+            None
         }
-    });
+    };
+
+    // Store the process ID
+    if let Err(_) = RERUN_IPC_PID.set(process_pid) {
+        error!("Failed to set global rerun-ipc process ID - already initialized");
+    }
+    
+    // Initialize the recorder as before
+    debug!("🔧 DEBUG: About to call rerun_ipc_common::init_rerun");
+    match rerun_ipc_common::init_rerun(rerun_viz) {
+        Ok(recorder) => {
+            debug!("🔧 DEBUG: Successfully created recorder from rerun_ipc_common::init_rerun");
+            debug!("🔧 DEBUG: Recorder enabled: {}", recorder.is_enabled());
+            debug!("🔧 DEBUG: Recorder log level: {:?}", recorder.get_log_level());
+            
+            if let Err(_) = RECORDER.set(recorder) {
+                error!("Failed to set global recorder - already initialized");
+                debug!("🔧 DEBUG: Failed to set global recorder - already initialized");
+            } else {
+                debug!("🔧 DEBUG: Successfully set global recorder");
+            }
+        },
+        Err(e) => {
+            error!("Failed to initialize rerun IPC recorder: {e}");
+            debug!("🔧 DEBUG: Failed to initialize rerun IPC recorder: {}", e);
+        }
+    }
+    
+    debug!("🔧 DEBUG: init_rerun completed");
+}
+
+/// Get the global recorder for logging, returns None if not initialized or disabled
+pub fn get_recorder() -> Option<&'static QueuedRecorder> {
+    let recorder = RECORDER.get();
+    debug!("🔧 DEBUG: get_recorder called, returning: {}", 
+           if recorder.is_some() { "Some(recorder)" } else { "None" });
+    
+    if let Some(rec) = recorder {
+        debug!("🔧 DEBUG: Recorder is enabled: {}", rec.is_enabled());
+        debug!("🔧 DEBUG: Recorder log level: {:?}", rec.get_log_level());
+    }
+    
+    recorder
+}
+
+/// Get the log level if recorder is available
+pub fn get_log_level() -> Option<RerunLevel> {
+    let level = RECORDER.get().and_then(|r| r.get_log_level());
+    debug!("🔧 DEBUG: get_log_level called, returning: {:?}", level);
+    level
+}
+
+/// Get the obstacle map throttle if recorder is available
+pub fn get_obstacle_map_throttle() -> Option<&'static AtomicCell<Instant>> {
+    let throttle = RECORDER.get().map(|r| r.get_obstacle_map_throttle());
+    debug!("🔧 DEBUG: get_obstacle_map_throttle called, returning: {}", 
+           if throttle.is_some() { "Some(throttle)" } else { "None" });
+    throttle
+}
+
+/// Cleanup function to terminate the rerun-ipc process
+pub fn cleanup_rerun() {
+    debug!("🔧 DEBUG: cleanup_rerun called");
+    if let Some(Some(pid)) = RERUN_IPC_PID.get() {
+        info!("Terminating rerun-ipc process with PID: {}...", pid);
+        debug!("🔧 DEBUG: About to terminate process with PID: {}", pid);
+        match Command::new("kill")
+            .args(&["-TERM", &pid.to_string()])
+            .output()
+        {
+            Ok(_) => {
+                info!("Successfully sent termination signal to rerun-ipc process");
+                debug!("🔧 DEBUG: Successfully sent termination signal");
+            }
+            Err(e) => {
+                error!("Failed to terminate rerun-ipc process: {e}");
+                debug!("🔧 DEBUG: Failed to terminate rerun-ipc process: {}", e);
+            }
+        }
+    } else {
+        debug!("🔧 DEBUG: No rerun-ipc process to terminate");
+    }
 }
