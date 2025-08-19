@@ -60,7 +60,7 @@ godot = { git = "https://github.com/godot-rust/gdext", branch = "master", featur
     "experimental-threads",
 ] }
 openh264 = "0.6.3"
-serde_json = "1.0.134"
+serde_json = "1.0.137"
 
 glidesort = "0.1.2"
 opus = "0.3.0"
