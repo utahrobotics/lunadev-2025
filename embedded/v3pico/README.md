@@ -13,6 +13,7 @@
 
 1. Actuator control
 2. Actuator length reading
+3. reading data from 4 imus
 
 
 ### Pre-reqs
@@ -27,10 +28,6 @@
 # /etc/udev/rules.d/99-usb-reset.rules
 # Allow ioctl-based resets on the C0DE:CAFE device
 SUBSYSTEM=="usb", ATTR{idVendor}=="c0de", ATTR{idProduct}=="cafe", MODE="0666"
-
-
-### Trouble Shooting
-Occasionally the pico becomes unresponsive and the only way to fix it is unplug and replug. I have no idea why this is.
 
 
 ### Installing reset tool
